@@ -128,7 +128,7 @@ export function WorkspaceActions({
       {rename && (
         <FormDialog
           title="Rename tab"
-          description="The name updates on every connected client."
+          description={<span className="sr-only">The name updates on every connected client.</span>}
           fields={[{ name: "name", label: "Tab name", value: tab.name }]}
           onClose={() => setRename(false)}
           onSubmit={(values) =>
@@ -151,11 +151,7 @@ export function WorkspaceActions({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Close tab?</DialogTitle>
-            <DialogDescription>
-              This closes this session’s pane on every connected device. Other panes stay open.
-              {tabPanes(tab).length === 1 && " Its empty desktop tab is also removed."} Machine
-              processes remain governed by the daemon's session lifecycle.
-            </DialogDescription>
+            <DialogDescription>This closes the tab on all your devices.</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" disabled={busy} onClick={() => setClosing(false)}>

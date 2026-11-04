@@ -884,15 +884,11 @@ function MobileWorkspaceContent({
                                     ? "Start a conversation"
                                     : !host.direct && !host.machines.length
                                       ? "Connect a machine to get started"
-                                      : "Your workspace, wherever you are"}
+                                      : "Open a workspace"}
                               </h1>
-                              <p>
-                                {!host.capabilities.remoteAccess
-                                  ? "Remote access is not available on this Concors server yet."
-                                  : !host.direct && !host.machines.length
-                                    ? "Your cloud machines appear in the selected organization. Check Machines in Settings or switch organizations from your profile."
-                                    : "Open a project from the sidebar or add one to get started."}
-                              </p>
+                              {!host.capabilities.remoteAccess && (
+                                <p>Remote access is not available on this Concors server yet.</p>
+                              )}
                               {project ? (
                                 <NewTabMenu
                                   empty
@@ -911,7 +907,7 @@ function MobileWorkspaceContent({
                               )}
                               {ready && !project && (
                                 <Button onClick={() => setAddingProject("open")}>
-                                  Open folder
+                                  Open folder…
                                 </Button>
                               )}
                             </div>

@@ -250,7 +250,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(account.getByRole("button", { name: /Add machine|Manage machines/ })).toHaveCount(
       0,
     );
-    await expect(account).toContainText("Sign in to your Concors account");
+    await expect(account).not.toContainText("Sign in to your Concors account");
     expect(profileRequests).toEqual([]);
     const socketsBeforeProfile = workspaceSockets.length;
     await account.getByRole("button", { name: "Sign in", exact: true }).click();
