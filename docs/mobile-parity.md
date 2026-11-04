@@ -86,7 +86,7 @@ Phone-specific behavior:
   desktop tabs) and a New Tab footer. Creation uses the shared new-session drawer and provider
   logos, always creating a new single-pane desktop tab. Close always sends `pane.close`, never
   `tab.close`, so siblings survive. Closing an inactive row preserves the current selection;
-  the last pane's confirmation explains that its empty desktop tab is removed too.
+  the confirmation reads "This closes the tab on all your devices."
   No local-only names or schema migrations are introduced. Desktop split siblings cannot be
   renamed independently, so mobile does not offer a misleading rename action for those rows.
 - Files opens full-screen from the right, with a directory tree and separate open-file strip.

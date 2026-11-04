@@ -300,7 +300,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(settings).toContainText(snapshot().machineId);
     await settings.getByRole("button", { name: "Add machine", exact: true }).click();
     const addMachine = ui.getByRole("dialog", { name: "Add machine", exact: true });
-    await expect(addMachine).toContainText("paired with one desktop daemon");
+    await expect(addMachine).toContainText("Add machines in the Concors desktop app.");
     await addMachine.getByRole("button", { name: "Close", exact: true }).click();
     await expect(settings.getByRole("button", { name: "Add machine", exact: true })).toBeFocused();
     await settings.getByRole("combobox", { name: "Settings section" }).click();

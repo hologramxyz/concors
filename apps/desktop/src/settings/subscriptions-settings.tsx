@@ -39,6 +39,7 @@ import {
 import { ProviderIcon } from "@/agents/provider-icon";
 import { MachineIcon } from "@/machines/machine-icon";
 import { useMachineList } from "@/machines/use-machines";
+import { CompactLayoutContext } from "@/components/compact-layout";
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { useDaemonConnection } from "@/daemon/use-daemon-connection";
 import { AccountConnectDialog } from "@/agents/account-connect-dialog";
@@ -93,6 +94,7 @@ export function SubscriptionsSettings({
   localEndpoint,
   hostScope = "",
 }: SubscriptionsSettingsProps) {
+  const compact = useContext(CompactLayoutContext);
   const selectedConnection = useContext(TerminalConnectionContext);
   const selectedState = useConnectionState(selectedConnection);
   const localHandle = useDaemonConnection(localEndpoint ?? null, "local", hostScope);
@@ -500,7 +502,8 @@ export function SubscriptionsSettings({
               onLabel={rememberLabel}
             />
           ))}
-          {machineList.data === null && !machineList.error && (
+          {/* The phone's drawer has no account, so its machine list never loads: this would never clear. */}
+          {!compact && machineList.data === null && !machineList.error && (
             <p role="status" className="text-sm text-muted-foreground">
               Loading machines…
             </p>

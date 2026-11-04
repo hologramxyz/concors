@@ -70,7 +70,7 @@ export function SettingsDrawer({
       <DialogContent className="mobile-settings-drawer">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="sr-only">
             {host.direct
               ? "Your connected desktop and this device."
               : "Your account and this device."}
@@ -179,13 +179,7 @@ export function SettingsDrawer({
                 {/* Where desktop has its banners: the phone's own notifications. */}
                 <div className="p-4">
                   <label className="flex items-center justify-between gap-6">
-                    <span>
-                      <span className="text-sm font-medium">Push notifications</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        When an agent finishes or needs your input. Code and prompts stay out of
-                        notifications.
-                      </span>
-                    </span>
+                    <span className="text-sm font-medium">Push notifications</span>
                     <input
                       type="checkbox"
                       aria-label="Push notifications"
@@ -236,7 +230,7 @@ export function SettingsDrawer({
           ) : null}
           {page === "account" && !host.direct && (
             <div className="px-4 pb-4">
-              <Section title="Help and privacy" description="Concors support and data practices.">
+              <Section title="Help and privacy">
                 <div className="flex gap-3 py-3">
                   <Button
                     variant="outline"
@@ -256,10 +250,7 @@ export function SettingsDrawer({
                   </Button>
                 </div>
               </Section>
-              <Section
-                title="Delete account"
-                description="Account deletion affects all devices. The server must explain retention, shared organizations and active subscriptions before deletion."
-              >
+              <Section title="Delete account">
                 {!host.capabilities.accountDeletion ? (
                   <p className="py-3 text-sm text-muted-foreground">
                     Account deletion is not available on this server yet.

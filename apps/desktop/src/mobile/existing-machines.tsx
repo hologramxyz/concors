@@ -2,6 +2,7 @@ import { useState } from "react";
 import { machineAvailability, machineStatusLabel, type MobileState } from "@concors/client-core";
 import { Button } from "@/components/ui/button";
 import { DaemonDetails, type DaemonConnectionInfo } from "@/machines/daemon-details";
+import { MachinesEmptyState, MachinesRefreshButton } from "@/machines/machines-view";
 import { Section } from "@/views/settings-primitives";
 import { hostAction } from "./bridge";
 import { api } from "@/auth/api";
@@ -36,17 +37,25 @@ export function ExistingMachines({
   const connected = host.machines.find((machine) => machine.id === host.machineId);
   return (
     <div className="space-y-4 p-4">
-      <Section title="Machines" description="Existing machines in your active organization.">
+      <Section
+        title="Machines"
+        actions={
+          host.machines.length > 0 && (
+            <MachinesRefreshButton busy={busy} onRefresh={() => void run()} />
+          )
+        }
+      >
         {error && (
           <p role="alert" className="py-3 text-sm text-destructive">
             {error}
           </p>
         )}
         {!host.machines.length && (
-          <p className="py-4 text-sm text-muted-foreground">
-            No machines are available in this organization. Switch organizations or refresh to check
-            again.
-          </p>
+          <MachinesEmptyState>
+            <Button variant="outline" disabled={busy} onClick={() => void run()}>
+              Refresh
+            </Button>
+          </MachinesEmptyState>
         )}
         <ul className="divide-y">
           {host.machines.map((machine) => (
@@ -92,7 +101,7 @@ export function ExistingMachines({
         </ul>
         {connected && (
           <div className="border-t py-4">
-            <p className="mb-3 text-sm font-medium">{connected.name} daemon</p>
+            <p className="mb-3 text-sm font-medium">{connected.name}</p>
             <DaemonDetails
               connection={connection}
               reportedVersion={connected.agentVersion}
@@ -100,9 +109,6 @@ export function ExistingMachines({
             />
           </div>
         )}
-        <Button variant="outline" disabled={busy} onClick={() => void run()}>
-          Refresh machines
-        </Button>
       </Section>
     </div>
   );

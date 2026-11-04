@@ -1131,7 +1131,7 @@ test("compact account footer and machine management live in settings", async ({ 
   const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
   // Desktop's Machines page, without buying, cancelling, prices or payment warnings.
   const machines = settings.getByRole("region", { name: "Machines", exact: true });
-  await expect(machines).toContainText("Add or cancel machines in the Concors desktop app.");
+  await expect(machines).toContainText("Your development machines.");
   await expect(machines.getByText("Development", { exact: true })).toBeVisible();
   await expect(machines.getByRole("button", { name: /^(Connect|Open)$/ })).toBeVisible();
   await expect(
@@ -1153,6 +1153,27 @@ test("compact account footer and machine management live in settings", async ({ 
     "machines",
   );
   await expect(settings.getByRole("region", { name: "Machines", exact: true })).toBeVisible();
+});
+
+test("focus that follows a tap shows no ring until a key is pressed", async ({ page }) => {
+  const ui = await enter(page);
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await ui.getByRole("button", { name: /^Account:/ }).click();
+  await ui
+    .getByRole("dialog", { name: "Account", exact: true })
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
+  const picker = ui
+    .getByRole("dialog", { name: "Settings", exact: true })
+    .getByRole("combobox", { name: "Settings section" });
+  await expect(picker).toBeFocused();
+  await expect(picker).toHaveAttribute("data-pointer-focus", "");
+  await expect(picker).toHaveCSS("outline-style", "none");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(picker).toBeFocused();
+  await expect(picker).not.toHaveAttribute("data-pointer-focus", "");
+  await expect(picker).toHaveCSS("outline-style", "solid");
 });
 
 test("machine sheet preserves the sidebar, selected status, and focus", async ({ page }) => {

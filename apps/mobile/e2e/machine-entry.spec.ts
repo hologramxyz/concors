@@ -41,6 +41,6 @@ test("an account with no machines gets machine setup navigation instead of proje
   await ui.getByRole("button", { name: "Manage machines", exact: true }).click();
   const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
   await expect(settings.getByRole("region", { name: "Machines", exact: true })).toBeVisible();
-  await expect(settings).toContainText("Add or cancel machines in the Concors desktop app.");
+  await expect(settings).toContainText("Your development machines.");
   await expect(settings.getByRole("button", { name: "Refresh", exact: true })).toBeVisible();
 });

@@ -95,7 +95,7 @@ body {
   font-weight: 400;
   color: var(--muted-foreground);
 }
-.mobile-files-directory:focus-visible {
+.mobile-files-directory:focus-visible:not([data-pointer-focus]) {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
@@ -399,8 +399,14 @@ body {
   border-radius: var(--radius-lg);
   text-align: left;
 }
-.mobile-account-actions button:is(:hover, :active) {
+/* Hover only where a pointer hovers: a tap leaves it stuck on whichever row opens under the finger. */
+.mobile-account-actions button:active {
   background: var(--muted);
+}
+@media (hover: hover) {
+  .mobile-account-actions button:hover {
+    background: var(--muted);
+  }
 }
 .mobile-account-actions svg {
   width: 20px;
@@ -561,7 +567,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mobile-select-trigger:focus-visible {
+.mobile-select-trigger:focus-visible:not([data-pointer-focus]) {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
@@ -652,8 +658,6 @@ body {
   color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 .mobile-select-option {
   width: 100%;
@@ -668,7 +672,7 @@ body {
   outline: none;
   overflow-wrap: anywhere;
 }
-.mobile-select-option:focus-visible,
+.mobile-select-option:focus-visible:not([data-pointer-focus]),
 .mobile-select-option:hover {
   background: var(--accent);
 }
@@ -691,8 +695,6 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  text-transform: none;
-  letter-spacing: 0;
   color: var(--foreground);
   font-size: 13px;
 }
