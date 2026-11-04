@@ -1062,7 +1062,7 @@ export function AgentComposer({
             {agent.queue.map((entry) => (
               <div
                 key={entry.id}
-                className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs"
+                className="mobile-queue-row flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs"
               >
                 <span className="text-muted-foreground">Queued</span>
                 <span className="min-w-0 flex-1 truncate">
@@ -1075,7 +1075,7 @@ export function AgentComposer({
                   >
                     <button
                       type="button"
-                      className="text-primary"
+                      className="mobile-tap-target text-primary"
                       disabled={!connected}
                       onClick={() =>
                         void queueAction({
@@ -1093,6 +1093,7 @@ export function AgentComposer({
                 <button
                   type="button"
                   aria-label="Remove queued message"
+                  className="mobile-tap-target flex items-center justify-center"
                   disabled={!connected}
                   onClick={() =>
                     void queueAction({ kind: "queue-remove", sessionId: agent.id, id: entry.id })
@@ -1112,7 +1113,7 @@ export function AgentComposer({
             {queue.map((entry, i) => (
               <div
                 key={i}
-                className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs"
+                className="mobile-queue-row flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs"
               >
                 <span className="text-muted-foreground">Queued</span>
                 <span className="min-w-0 flex-1 truncate">
@@ -1121,7 +1122,7 @@ export function AgentComposer({
                 {!active && !busy && !uncertain && (
                   <button
                     type="button"
-                    className="text-primary"
+                    className="mobile-tap-target text-primary"
                     onClick={() => void submit(entry, true)}
                   >
                     Send now
@@ -1137,7 +1138,7 @@ export function AgentComposer({
                     >
                       <button
                         type="button"
-                        className="text-primary"
+                        className="mobile-tap-target text-primary"
                         onClick={() => void submit(entry, true, true)}
                       >
                         Steer
@@ -1147,6 +1148,7 @@ export function AgentComposer({
                 <button
                   type="button"
                   aria-label="Remove queued message"
+                  className="mobile-tap-target flex items-center justify-center"
                   disabled={busy || uncertain}
                   onClick={() => setQueue((q) => q.filter((_, index) => index !== i))}
                 >
@@ -1840,7 +1842,7 @@ function AttachmentChip({
           aria-label={`Remove ${file.name}`}
           disabled={disabled}
           onClick={onRemove}
-          className={`absolute -top-1.5 -left-1.5 flex size-5 items-center justify-center rounded-full border bg-background text-foreground shadow-sm hover:bg-muted focus-visible:opacity-100 disabled:opacity-50 ${compact ? "" : "opacity-0 group-hover:opacity-100"}`}
+          className={`mobile-attachment-remove absolute -top-1.5 -left-1.5 flex size-5 items-center justify-center rounded-full border bg-background text-foreground shadow-sm hover:bg-muted focus-visible:opacity-100 disabled:opacity-50 ${compact ? "" : "opacity-0 group-hover:opacity-100"}`}
         >
           <X className="size-3" />
         </button>

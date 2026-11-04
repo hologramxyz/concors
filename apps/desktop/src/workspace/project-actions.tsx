@@ -64,7 +64,7 @@ export function ProjectActions({
           <DropdownMenuTrigger
             aria-label={`Actions for ${project.name}`}
             className={cn(
-              "rounded p-1 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-sidebar-foreground data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100",
+              "mobile-tap-target flex items-center justify-center rounded p-1 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-sidebar-foreground data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100",
               // Kept mounted while renaming so closing the menu can hand focus to the input.
               renaming && "invisible",
             )}

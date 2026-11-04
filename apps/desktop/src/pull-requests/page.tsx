@@ -198,7 +198,7 @@ export function PullRequestsPage({
                   onNavigate({ ...view, state: option, pullRequest: null });
                 }}
                 className={cn(
-                  "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-ui",
+                  "mobile-tap-target flex h-7 items-center gap-1.5 rounded-md px-2.5 text-ui",
                   view.state === option
                     ? "bg-background text-foreground shadow-xs"
                     : "text-muted-foreground hover:text-foreground",
@@ -248,7 +248,7 @@ export function PullRequestsPage({
               type="button"
               aria-label={`Show every repository in ${filtered.name}`}
               onClick={() => filter(filtered.id)}
-              className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-foreground/20 bg-muted px-2.5 text-ui"
+              className="mobile-tap-target flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-foreground/20 bg-muted px-2.5 text-ui"
             >
               {repositoryLabel(
                 repository,
@@ -564,7 +564,7 @@ function RowActions({
       <Button
         variant="outline"
         className="mt-2.5 shrink-0"
-        aria-label={`Close #${pullRequest.number}`}
+        aria-label={`Close pull request #${pullRequest.number}`}
         onClick={() => onAction("close")}
       >
         <GitPullRequestClosed />
@@ -655,7 +655,7 @@ function FilterChip({
       aria-pressed={pressed}
       onClick={onClick}
       className={cn(
-        "flex h-7 max-w-56 shrink-0 items-center gap-1.5 rounded-md border text-ui",
+        "mobile-tap-target flex h-7 max-w-56 shrink-0 items-center gap-1.5 rounded-md border text-ui",
         icon ? "pr-2.5 pl-1.5" : "px-2.5",
         pressed
           ? "border-foreground/20 bg-muted text-foreground"

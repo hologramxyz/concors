@@ -201,7 +201,7 @@ export function SidebarTabRow({
             <DropdownMenuTrigger
               aria-label={`Actions for ${title}`}
               className={cn(
-                "flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 hover:text-sidebar-foreground data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100",
+                "mobile-tap-target flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 hover:text-sidebar-foreground data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100",
                 // Kept mounted while renaming so closing the menu can hand focus to the input.
                 renaming !== null && "invisible",
               )}
@@ -264,7 +264,7 @@ export function SidebarTabRow({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : (
-        <span aria-hidden="true" className="size-6 shrink-0" />
+        <span aria-hidden="true" className="mobile-row-spacer size-6 shrink-0" />
       )}
     </li>
   );
@@ -290,7 +290,7 @@ export function UnavailableChats({ chats, now }: { chats: readonly AgentInfo[]; 
               {chat.paneName ?? chat.tabName ?? chat.name}
             </span>
             <span className="shrink-0 text-xs tabular-nums">{shortAge(chat.updatedAt, now)}</span>
-            <span aria-hidden="true" className="size-6 shrink-0" />
+            <span aria-hidden="true" className="mobile-row-spacer size-6 shrink-0" />
           </li>
         ))}
       </ul>

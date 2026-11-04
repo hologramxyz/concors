@@ -178,7 +178,7 @@ export function SettingsDrawer({
               >
                 {/* Where desktop has its banners: the phone's own notifications. */}
                 <div className="p-4">
-                  <label className="flex items-center justify-between gap-6">
+                  <label className="mobile-tap-target flex items-center justify-between gap-6">
                     <span className="text-sm font-medium">Push notifications</span>
                     <input
                       type="checkbox"

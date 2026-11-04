@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ExternalLink, Pencil, Trash2, TriangleAlert } from "lucide-react";
+import { ExternalLink, Pencil, Square, TriangleAlert } from "lucide-react";
 import { newRequestId } from "@concors/client-core";
 import {
   PREVIEW_NAME_MAX,
@@ -58,7 +58,7 @@ export function PreviewsSidebar({ compact = false }: { compact?: boolean }) {
       });
   };
   const actionClass =
-    "rounded p-1 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-sidebar-foreground disabled:hidden [@media(hover:none)]:opacity-100";
+    "mobile-tap-target flex items-center justify-center rounded p-1 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-sidebar-foreground disabled:hidden [@media(hover:none)]:opacity-100";
   const list = (
     <ul className="mt-1 space-y-0.5">
       {items.map((preview) => {
@@ -167,7 +167,7 @@ export function PreviewsSidebar({ compact = false }: { compact?: boolean }) {
                     }}
                     className={actionClass}
                   >
-                    <Trash2 className="size-3.5" aria-hidden="true" />
+                    <Square className="size-3.5" aria-hidden="true" />
                   </button>
                 </SidebarTooltip>
               </>

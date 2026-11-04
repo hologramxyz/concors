@@ -39,7 +39,7 @@ export function CopyButton({ text, label = "Copy message" }: { text: string; lab
       <button
         type="button"
         aria-label={copied ? "Copied" : error ? "Copy failed; try again" : label}
-        className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+        className="mobile-copy-button inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
         onClick={() => {
           void copyText(text).then(
             () => {
@@ -77,7 +77,10 @@ function CodeBlock({ children }: { children?: ReactNode }) {
     : undefined;
   return (
     <div className="my-4 overflow-hidden rounded-xl border bg-muted/40">
-      <div className="flex items-center justify-between border-b px-3 py-1 text-xs text-muted-foreground">
+      <div
+        data-code-header
+        className="flex items-center justify-between border-b px-3 py-1 text-xs text-muted-foreground"
+      >
         <span>{language ?? "Code"}</span>
         <CopyButton text={codeText(children).replace(/\n$/, "")} label="Copy code" />
       </div>

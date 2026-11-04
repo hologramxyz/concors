@@ -36,7 +36,7 @@ export function WorkspacePullRequestCount({
         setOpen(false);
         onOpen(project.id);
       }}
-      className="flex h-6 shrink-0 items-center gap-1 rounded px-1.5 text-xs text-muted-foreground tabular-nums hover:text-sidebar-foreground data-[state=open]:text-sidebar-foreground"
+      className="mobile-tap-target flex h-6 shrink-0 items-center justify-center gap-1 rounded px-1.5 text-xs text-muted-foreground tabular-nums hover:text-sidebar-foreground data-[state=open]:text-sidebar-foreground"
     >
       <GitPullRequest
         className="size-3.5 text-emerald-600 dark:text-emerald-500"

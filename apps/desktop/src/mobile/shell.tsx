@@ -896,19 +896,23 @@ function MobileWorkspaceContent({
                                   onCreate={createTab}
                                   onResume={() => setResumeOpen(true)}
                                 />
-                              ) : !host.direct && !host.machines.length ? (
-                                <Button onClick={() => openSettings("machines")}>
-                                  Manage machines
-                                </Button>
                               ) : (
-                                <Button variant="outline" onClick={() => setSidebarOpen(true)}>
-                                  Open workspace sidebar
-                                </Button>
-                              )}
-                              {ready && !project && (
-                                <Button onClick={() => setAddingProject("open")}>
-                                  Open folder…
-                                </Button>
+                                <div className="mobile-empty-actions">
+                                  {ready && (
+                                    <Button onClick={() => setAddingProject("open")}>
+                                      Open folder…
+                                    </Button>
+                                  )}
+                                  {!host.direct && !host.machines.length ? (
+                                    <Button onClick={() => openSettings("machines")}>
+                                      Manage machines
+                                    </Button>
+                                  ) : (
+                                    <Button variant="outline" onClick={() => setSidebarOpen(true)}>
+                                      Open workspace sidebar
+                                    </Button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           )}

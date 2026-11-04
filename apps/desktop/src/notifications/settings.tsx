@@ -60,7 +60,7 @@ export function NotificationSettings({
     >
       <SettingsCard className="divide-y">
         <div className="p-4">
-          <label className="flex items-center justify-between gap-6">
+          <label className="mobile-tap-target flex items-center justify-between gap-6">
             <span>
               <span className="text-sm font-medium">Sound</span>
             </span>

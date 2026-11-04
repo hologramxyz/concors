@@ -311,7 +311,7 @@ function AgentRow({
             <DropdownMenuTrigger
               aria-label={`Actions for ${agent.name}`}
               className={cn(
-                "mr-1 rounded p-1 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-sidebar-foreground data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100",
+                "mobile-tap-target mr-1 flex items-center justify-center rounded p-1 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-sidebar-foreground data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100",
                 // Kept mounted while renaming so closing the menu can hand focus to the input.
                 renaming !== null && "invisible",
               )}

@@ -51,8 +51,39 @@ body {
 [data-slot="button"] {
   min-height: 44px;
 }
-[data-slot="button"][data-size^="icon"] {
+/* A button whose label collapses to its icon on a phone is as narrow as an icon button. */
+[data-slot="button"] {
   min-width: 44px;
+}
+/* The shared size for controls desktop draws smaller. Only this stylesheet gives these classes
+   any style, so shared components can carry them without changing desktop. */
+.mobile-tap-target {
+  min-width: 44px;
+  min-height: 44px;
+}
+.mobile-row-spacer {
+  width: 44px;
+}
+/* Drawn at desktop's size and laid out as if it were, so a message's actions don't push its
+   neighbours away. The square around the icon takes the tap. */
+.mobile-copy-button {
+  --mobile-copy-overhang: calc((1.75rem - 44px) / 2);
+  position: relative;
+  width: 44px;
+  height: 44px;
+  margin: var(--mobile-copy-overhang);
+}
+/* Stops short of the next action in the row rather than covering part of it. */
+.mobile-copy-button:has(+ button) {
+  margin-inline-end: 0;
+}
+/* The block's rounded corners clip what overhangs, so its header makes the room instead. */
+[data-code-header] {
+  padding-block: 0;
+}
+[data-code-header] .mobile-copy-button {
+  margin-block: 0;
+  margin-inline-end: -0.75rem;
 }
 .mobile-files {
   position: absolute;
@@ -107,7 +138,8 @@ body {
   flex-shrink: 0;
 }
 .mobile-file-tabs button {
-  min-height: 40px;
+  min-width: 44px;
+  min-height: 44px;
 }
 .mobile-files-content,
 .mobile-files-tree,
@@ -341,7 +373,10 @@ body {
 }
 .mobile-project > button:last-child {
   opacity: 1;
-  min-width: 36px;
+}
+/* Every row's "…" ends at the same edge. */
+.mobile-sidebar-content .mobile-tap-target {
+  margin-right: 0;
 }
 .mobile-sidebar-footer {
   padding: 8px 12px max(8px, var(--mobile-safe-bottom)) max(12px, var(--mobile-safe-left));
@@ -673,8 +708,13 @@ body {
   overflow-wrap: anywhere;
 }
 .mobile-select-option:focus-visible:not([data-pointer-focus]),
-.mobile-select-option:hover {
+.mobile-select-option:active {
   background: var(--accent);
+}
+@media (hover: hover) {
+  .mobile-select-option:hover {
+    background: var(--accent);
+  }
 }
 .mobile-select-option[aria-selected="true"] {
   color: var(--primary);
@@ -796,6 +836,28 @@ body {
 .mobile-pane form:has([data-agent-composer]) button {
   min-height: 36px;
 }
+/* Stays a small circle on its attachment's corner, with a fingertip's square around it. */
+.mobile-pane form:has([data-agent-composer]) button.mobile-attachment-remove {
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+}
+.mobile-attachment-remove::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  translate: -50% -50%;
+}
+/* The buttons set the row's height now, so it needs no padding of its own. */
+.mobile-queue-row {
+  padding-block: 0;
+}
+.mobile-pane form:has([data-agent-composer]) button.mobile-tap-target {
+  min-height: 44px;
+}
 .mobile-pane .chat-markdown pre {
   max-width: 100%;
   overflow-x: auto;
@@ -827,6 +889,11 @@ body {
   max-width: 320px;
   font-size: 14px;
   color: var(--muted-foreground);
+}
+/* As wide as its longest label, so the two buttons match. */
+.mobile-empty-actions {
+  display: inline-grid;
+  gap: 12px;
 }
 .mobile-scrim {
   position: absolute;
@@ -1004,9 +1071,13 @@ body {
   padding: 12px 8px;
   border-radius: var(--radius-lg);
 }
-.mobile-session-list > button:hover,
 .mobile-session-list > button:active {
   background: var(--accent);
+}
+@media (hover: hover) {
+  .mobile-session-list > button:hover {
+    background: var(--accent);
+  }
 }
 .mobile-session-icon {
   display: flex;

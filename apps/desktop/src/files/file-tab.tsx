@@ -1,5 +1,5 @@
 import { lazy, Suspense, useContext, useEffect, useState, useSyncExternalStore } from "react";
-import { RefreshCw, Save, WrapText, Search, Ellipsis, Copy } from "lucide-react";
+import { RefreshCw, Save, WrapText, Search, Ellipsis, Copy, X } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -50,9 +50,9 @@ export function FileTabLabel({ file }: { file: OpenFile }) {
           disabled={state.busy}
           aria-label={`Close ${file.path} file`}
           onClick={() => files.close(file)}
-          className="px-1.5 text-muted-foreground hover:text-foreground disabled:opacity-40"
+          className="flex items-center justify-center px-1.5 text-muted-foreground hover:text-foreground disabled:opacity-40"
         >
-          ×
+          <X className="size-3.5" />
         </button>
       </SidebarTooltip>
     </div>
@@ -349,7 +349,8 @@ function TextFileTab({ file }: { file: OpenFile }) {
       </div>
       <div className="shrink-0 border-t px-3 py-1 font-mono text-xs text-muted-foreground">
         {dirty ? "Unsaved changes" : state.base ? "Saved on machine" : "File preview"}.{" "}
-        {vimEnabled ? "Vim: :w to save" : "⌘/Ctrl+S to save"}
+        {/* A phone saves with the Save button; it has no keyboard for these. */}
+        {!compact && (vimEnabled ? "Vim: :w to save" : "⌘/Ctrl+S to save")}
       </div>
     </section>
   );

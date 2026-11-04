@@ -174,7 +174,7 @@ export function ControlPicker({
                   type="button"
                   aria-label="Back to providers"
                   onClick={() => navigate(undefined)}
-                  className="flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2"
+                  className="mobile-tap-target flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
                   <ArrowLeft className="size-4" />
                 </button>
