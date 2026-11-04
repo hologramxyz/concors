@@ -567,6 +567,11 @@ html[data-pane-dragging] * {
 html[data-pane-dragging] * {
   cursor: grabbing !important;
 }
+/* The tab a dragged pane would join if dropped now. */
+[data-pane-drop-tab] {
+  border-color: var(--link) !important;
+  background-color: color-mix(in oklab, var(--link) 12%, transparent);
+}
 html[data-pane-resizing="column"] * {
   cursor: col-resize !important;
 }
