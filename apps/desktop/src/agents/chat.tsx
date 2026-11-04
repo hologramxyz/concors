@@ -253,6 +253,7 @@ export function ChatPane({
             </div>
           )}
           <div
+            data-new-chat-starting={start ? true : undefined}
             className={`rounded-2xl border bg-background p-2 ${start ? "agent-composer-form shadow-sm" : ""}`}
           >
             <textarea
@@ -260,7 +261,7 @@ export function ChatPane({
               aria-label="Preparing agent"
               placeholder={start ? START_PLACEHOLDER : "Reply…"}
               disabled
-              className={`agent-composer-input min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none ${start ? "max-h-[min(40cqh,26rem)] disabled:opacity-50" : ""}`}
+              className={`agent-composer-input min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none ${start ? "max-h-[min(40cqh,26rem)]" : ""}`}
             />
             {start && !asking && (
               <StartToolbar
@@ -340,7 +341,9 @@ function StartToolbar({ provider, directory }: { provider: string | null; direct
     context: null,
     threadId: null,
     turnId: null,
-    status: "idle",
+    status: "starting",
+    turnStartedAt: null,
+    nativeImport: false,
   };
   return (
     <div inert className="agent-composer-toolbar flex items-center gap-1 px-1">

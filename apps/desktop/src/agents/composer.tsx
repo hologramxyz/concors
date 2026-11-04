@@ -45,7 +45,7 @@ import { ControlTooltip } from "./control-tooltip";
 import { useClippedControls } from "./use-clipped-controls";
 import { useComposerWheel } from "./composer-wheel";
 import { FastModeToggle } from "./fast-mode-toggle";
-import { useAgents } from "./context";
+import { isNewChatStarting, useAgents } from "./context";
 import { switchDescription } from "./provider-switch";
 import { findAgentModel } from "@concors/protocol";
 import { useAgentModelSelection } from "./use-model-selection";
@@ -196,7 +196,10 @@ export function AgentComposer({
   const failedUpload = attachments.find(
     (file): file is UploadAttachment => isUpload(file) && !!file.error,
   );
+  // Decides how a message is delivered. What the composer shows follows `looksActive` instead.
   const active = ["starting", "working", "needs_input"].includes(agent.status);
+  const preparing = isNewChatStarting(agent);
+  const looksActive = active && !preparing;
   // A message sent while its attachments upload waits for them. Its text is locked meanwhile, so
   // what goes is what was sent; removing a slow file still sends the rest sooner. "Don't send yet"
   // (or Escape) unlocks it.
@@ -213,8 +216,8 @@ export function AgentComposer({
     (!!text.trim() || files > 0) &&
     !text.trim().startsWith("/") &&
     (!files || !!agent.controls.steerAttachments);
-  const showStop = active && (!compact || (!draft.trim() && !attachments.length));
-  const sendLabel = !active
+  const showStop = looksActive && (!compact || (!draft.trim() && !attachments.length));
+  const sendLabel = !looksActive
     ? "Send message"
     : followUps === "steer" && canSteer(draft, attachments.length)
       ? "Steer message"
@@ -684,12 +687,12 @@ export function AgentComposer({
       editAck,
       expanded,
       editable: connected && !busy && !uncertain && !deferred && !!agent.threadId,
-      placeholder: active
+      placeholder: looksActive
         ? followUps === "steer" && canSteer("steer", 0)
           ? "Steer the current turn…"
           : "Add a follow-up to the queue…"
         : "Message your agent",
-      active,
+      active: looksActive,
       canSend:
         connected &&
         !attaching &&
@@ -1204,6 +1207,7 @@ export function AgentComposer({
           ref={form}
           data-native-composer={native || undefined}
           data-composer-surface={owner}
+          data-new-chat-starting={preparing || undefined}
           data-expanded={compact ? expanded : undefined}
           onSubmit={(e) => {
             e.preventDefault();
@@ -1282,7 +1286,7 @@ export function AgentComposer({
               canSend={
                 connected && !busy && !uncertain && !attaching && !configuring && !!agent.threadId
               }
-              queued={active}
+              queued={looksActive}
               levels={!compact}
             />
           ) : native ? (
@@ -1296,9 +1300,9 @@ export function AgentComposer({
                 placeholder={
                   compact && !expanded
                     ? "Message your agent"
-                    : !active && placeholder
+                    : !looksActive && placeholder
                       ? placeholder
-                      : active
+                      : looksActive
                         ? followUps === "steer" && canSteer("steer", 0)
                           ? "Steer the current turn…"
                           : "Add a follow-up to the queue…"
@@ -1392,7 +1396,7 @@ export function AgentComposer({
                     if (!uncertain) void followUp(undefined, !compact && (e.metaKey || e.ctrlKey));
                   }
                 }}
-                className={`agent-composer-input ${compact ? "max-h-48" : "max-h-[min(40cqh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none read-only:opacity-50 disabled:opacity-50`}
+                className={`agent-composer-input ${compact ? "max-h-48" : "max-h-[min(40cqh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none ${preparing ? "" : "read-only:opacity-50 disabled:opacity-50"}`}
               />
               <div
                 ref={toolbar}

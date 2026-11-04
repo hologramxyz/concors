@@ -687,6 +687,7 @@ function Pane({
           <button
             type="button"
             aria-label="Close pane"
+            data-steady-while-creating
             disabled={!canEdit}
             onClick={() => onCommand({ kind: "pane.close", ...target })}
             className="rounded p-1 hover:bg-muted disabled:opacity-40"

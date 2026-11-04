@@ -127,6 +127,7 @@ export function WorkspaceSidebarItem({
   const button = (
     <button
       type="button"
+      data-steady-while-creating
       disabled={!canEdit}
       // A button's name replaces its contents for a screen reader, so the dot's text goes here too.
       aria-label={attentionLabel ? `${project.name}, ${attentionLabel}` : project.name}

@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { AgentStartedContext } from "./context";
+import { AgentStartedContext, isNewChatStarting, useAgents } from "./context";
 import { AgentDraftScopeContext, moveAgentDraft } from "./draft";
 import { AgentProviderIdSchema, type AgentInfo } from "@concors/protocol";
 import { modelSelection } from "@concors/client-core";
@@ -41,7 +41,16 @@ export function useAgentModelSelection(
   const [switching, setSwitching] = useState(false),
     [error, setError] = useState<string | null>(null);
   const known = snapshot.providers.find((p) => p.id === agent.provider);
-  const currentModels = agent.models?.length ? agent.models : (known?.models ?? []);
+  // Until a new chat's agent can list them, it shows what the provider's other chats report.
+  const sibling = useAgents().find(
+    (other) =>
+      isNewChatStarting(agent) && other.provider === agent.provider && other.models?.length,
+  );
+  const currentModels = agent.models?.length
+    ? agent.models
+    : known?.models.length
+      ? known.models
+      : (sibling?.models ?? []);
   const current = {
     ...known,
     id: agent.provider,

@@ -794,6 +794,14 @@ html[data-pane-resizing="row"] * {
   opacity: 0.4;
   cursor: default;
 }
+/* A new chat's controls wait for its agent, without looking any different from when it is ready. */
+[data-new-chat-starting] .agent-control:disabled {
+  opacity: 1;
+}
+/* These are disabled only for the moment a new tab takes to be confirmed: too short to dim. */
+:root[data-creating-tab] [data-steady-while-creating]:disabled {
+  opacity: 1;
+}
 .agent-control:focus-visible:not([data-pointer-focus]) {
   outline: 2px solid var(--ring);
   outline-offset: 2px;

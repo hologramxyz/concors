@@ -17,7 +17,7 @@ import { ProviderIcon } from "./provider-icon";
 import { useAgentModelSelection } from "./use-model-selection";
 import { ProviderUpdateFooter, ProviderUpdateNotice } from "./provider-update";
 import { useProviderUpdate } from "./provider-update-state";
-import { useAgents } from "./context";
+import { isNewChatStarting, useAgents } from "./context";
 import { hasConversation, providerState, switchConfirmation } from "./provider-switch";
 import { Button } from "@/components/ui/button";
 import {
@@ -106,7 +106,7 @@ export function AgentModelPicker({
         selectedLabel={selection.label}
         value={selection.value}
         icon={
-          agent.status === "starting" || switching ? (
+          (agent.status === "starting" && !isNewChatStarting(agent)) || switching ? (
             <LoaderCircle className="size-4 animate-spin" />
           ) : (
             <ProviderIcon provider={agent.provider} />
