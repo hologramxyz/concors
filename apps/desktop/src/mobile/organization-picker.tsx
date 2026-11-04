@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { Users, UserRound } from "lucide-react";
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { MobileSelect } from "./select";
 
@@ -44,8 +43,8 @@ export function MobileOrganizationPicker({
             options: auth.organizations.map((item) => ({
               value: item.id,
               label: item.name,
-              icon: item.isPersonal ? <UserRound /> : <Users />,
-              description: `${item.isPersonal ? "Personal" : "Team"}, ${item.role}`,
+              ...(item.isPersonal && { tag: "Personal" }),
+              trailing: item.role.charAt(0).toUpperCase() + item.role.slice(1),
             })),
           },
         ]}

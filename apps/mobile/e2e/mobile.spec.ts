@@ -1184,9 +1184,10 @@ test("machine sheet preserves the sidebar, selected status, and focus", async ({
   const sheet = ui.getByRole("dialog", { name: "Machine", exact: true });
   await expect(sheet).toHaveAttribute("data-mobile-drawer", "true");
   await expect(sheet).toHaveCSS("animation-name", "mobile-drawer-in");
-  const selected = sheet.getByRole("option", { name: /Development/ });
+  // The status is only spoken: a check mark on this row, a dot on the others.
+  const selected = sheet.getByRole("option", { name: "Development Connected", exact: true });
   await expect(selected).toHaveAttribute("aria-selected", "true");
-  await expect(selected).toContainText("Connected");
+  await expect(selected).not.toContainText("Connected");
   await selected.click();
   await expect(sheet).toHaveCount(0);
   await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");

@@ -173,6 +173,7 @@ export function MachinesView({
             ? "Manage this computer and your cloud development machines."
             : "Your development machines."
         }
+        inlineActions={!purchases}
         actions={
           (purchases || !empty) && (
             <>

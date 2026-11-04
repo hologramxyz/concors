@@ -46,19 +46,36 @@ export function SettingsSectionHeader({
   title,
   description,
   actions,
+  inlineActions = false,
 }: {
   readonly title: string;
   readonly description?: string | undefined;
   readonly actions?: ReactNode | undefined;
+  /** Keeps the actions beside the description on the phone too, instead of on a row below it. */
+  readonly inlineActions?: boolean;
 }) {
   const compact = useContext(CompactLayoutContext);
   const titleHidden = compact && COMPACT_HIDDEN_TITLES.has(title);
   return (
     <>
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+      <div
+        className={cn(
+          "grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start",
+          inlineActions && "grid-cols-[minmax(0,1fr)_auto] items-center",
+        )}
+      >
         <div className="min-w-0">
           <h2 className={titleHidden ? "sr-only" : "text-[15px] font-semibold"}>{title}</h2>
-          {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+          {description && (
+            <p
+              className={cn(
+                "text-sm text-muted-foreground",
+                !(titleHidden && inlineActions) && "mt-1",
+              )}
+            >
+              {description}
+            </p>
+          )}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>

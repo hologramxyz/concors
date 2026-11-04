@@ -1,5 +1,5 @@
 import { machineAvailability, machineStatusLabel, type MobileState } from "@concors/client-core";
-import { Activity, Monitor, Settings2 } from "lucide-react";
+import { Activity, Settings2 } from "lucide-react";
 import { MachineIcon } from "@/machines/machine-icon";
 import { MobileSelect } from "./select";
 
@@ -23,35 +23,48 @@ export function MobileMachinePicker({
       placeholder={host.direct ? "Connecting to desktop…" : "Choose a machine"}
       onValueChange={onSelect}
       actions={[
-        { label: "Manage machines", icon: <Settings2 />, onSelect: onManageMachines },
         { label: "Resources", icon: <Activity />, onSelect: onOpenResources },
+        { label: "Manage machines", icon: <Settings2 />, onSelect: onManageMachines },
       ]}
       groups={[
-        {
-          label: host.direct ? "Direct connection" : "Your machines",
-          options: host.direct
-            ? host.machineId
-              ? [
-                  {
-                    value: host.machineId,
-                    label: "Desktop daemon",
-                    icon: <Monitor />,
-                    description: host.phase === "ready" ? "Connected, real workspace" : host.phase,
-                  },
-                ]
-              : []
-            : host.machines.map((machine) => ({
-                value: machine.id,
-                label: machine.name,
-                icon: <MachineIcon icon={machine.icon} />,
-                description: machineStatusLabel(
-                  machineAvailability(machine),
-                  host.machineId === machine.id && host.phase === "ready",
-                ),
-                disabled:
-                  machineAvailability(machine) !== "connectable" || !host.capabilities.remoteAccess,
-              })),
-        },
+        host.direct
+          ? {
+              options: host.machineId
+                ? [
+                    {
+                      value: host.machineId,
+                      label: "This computer",
+                      icon: <MachineIcon local />,
+                      accessibleName: `This computer${host.phase === "ready" ? " Connected" : ""}`,
+                    },
+                  ]
+                : [],
+            }
+          : {
+              label: "Your machines",
+              options: host.machines.map((machine) => {
+                const availability = machineAvailability(machine);
+                const selected = host.machineId === machine.id;
+                return {
+                  value: machine.id,
+                  label: machine.name,
+                  icon: <MachineIcon icon={machine.icon} />,
+                  accessibleName: `${machine.name} ${machineStatusLabel(
+                    availability,
+                    selected && host.phase === "ready",
+                  )}`,
+                  ...(!selected && {
+                    trailing: (
+                      <span
+                        aria-hidden="true"
+                        className={`size-1.5 rounded-full ${availability === "connectable" ? "bg-emerald-500" : availability === "provisioning" ? "bg-amber-500" : "bg-muted-foreground/50"}`}
+                      />
+                    ),
+                  }),
+                  disabled: availability !== "connectable" || !host.capabilities.remoteAccess,
+                };
+              }),
+            },
       ]}
     />
   );

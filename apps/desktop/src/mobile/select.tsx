@@ -13,7 +13,13 @@ export interface MobileSelectOption {
   value: string;
   label: string;
   icon?: ReactNode;
+  /** A short muted word right after the label. */
+  tag?: string;
   description?: string;
+  /** A status dot or short muted label at the end of the row, before the check mark. */
+  trailing?: ReactNode;
+  /** The name screen readers hear, when the row shows less than that in words. */
+  accessibleName?: string;
   disabled?: boolean;
 }
 
@@ -34,7 +40,7 @@ export function MobileSelect({
   label: string;
   value: string;
   onValueChange(value: string): void;
-  groups: { label: string; options: MobileSelectOption[] }[];
+  groups: { label?: string; options: MobileSelectOption[] }[];
   placeholder?: string;
   className?: string;
   selectedLabel?: ReactNode;
@@ -126,17 +132,19 @@ export function MobileSelect({
     <div
       key={index}
       role="group"
-      aria-labelledby={`${id}-group-${index}`}
+      aria-labelledby={group.label ? `${id}-group-${index}` : undefined}
       className="mobile-select-group"
     >
-      <div id={`${id}-group-${index}`} className="mobile-select-label">
-        <span>{group.label}</span>
-        {hierarchy && (
-          <span className="mobile-pane-count">
-            {group.options.length} {group.options.length === 1 ? "pane" : "panes"}
-          </span>
-        )}
-      </div>
+      {group.label && (
+        <div id={`${id}-group-${index}`} className="mobile-select-label">
+          <span>{group.label}</span>
+          {hierarchy && (
+            <span className="mobile-pane-count">
+              {group.options.length} {group.options.length === 1 ? "pane" : "panes"}
+            </span>
+          )}
+        </div>
+      )}
       {group.options.map((option) => (
         <button
           key={option.value}
@@ -144,6 +152,7 @@ export function MobileSelect({
           role="option"
           disabled={option.disabled}
           aria-disabled={option.disabled || undefined}
+          aria-label={option.accessibleName}
           aria-selected={value === option.value}
           tabIndex={value === option.value ? 0 : -1}
           data-value={option.value}
@@ -157,11 +166,24 @@ export function MobileSelect({
           {option.icon && <span className="mobile-select-icon">{option.icon}</span>}
           <span className="min-w-0 flex-1">
             {option.label}
+            {option.tag && (
+              <span className="ml-2 text-xs font-normal text-muted-foreground">{option.tag}</span>
+            )}
             {option.description && (
               <span className="mobile-select-description">{option.description}</span>
             )}
           </span>
-          {value === option.value && <Check className="size-4 shrink-0" />}
+          {option.trailing && (
+            <span className="flex shrink-0 items-center text-xs text-muted-foreground">
+              {option.trailing}
+            </span>
+          )}
+          {value === option.value ? (
+            <Check className="size-4 shrink-0" />
+          ) : (
+            // Keeps what trails each row in one column, whichever row has the check mark.
+            option.trailing && <span className="size-4 shrink-0" />
+          )}
         </button>
       ))}
     </div>
@@ -203,7 +225,7 @@ export function MobileSelect({
             )}
           </div>
           {actions.length > 0 && (
-            <div className="mobile-account-actions">
+            <div className="mobile-account-actions border-t pt-3">
               {actions.map((action) => (
                 <button
                   key={action.label}
