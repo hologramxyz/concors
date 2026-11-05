@@ -32,22 +32,31 @@ test("mobile manages schedules through the native relay without horizontal overf
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
     await ui.getByRole("button", { name: "Schedules", exact: true }).click();
     await expect(ui.getByRole("heading", { name: "No schedules yet", exact: true })).toBeVisible();
+    // The form is a page in place of the list, not a sheet, and Back leaves it unsaved.
     await ui.getByRole("button", { name: "New schedule", exact: true }).click();
-    const dialog = ui.getByRole("dialog");
-    await dialog.getByLabel("Name", { exact: true }).fill("Mobile review");
-    await dialog.getByRole("combobox", { name: "Provider", exact: true }).click();
+    const form = ui.getByRole("form", { name: "New schedule", exact: true });
+    await expect(form.getByRole("heading", { name: "New schedule", exact: true })).toBeVisible();
+    await expect(ui.getByRole("dialog")).toHaveCount(0);
+    await expect(ui.getByRole("heading", { name: "No schedules yet" })).toHaveCount(0);
+    await expect(form.getByLabel("Name", { exact: true })).not.toBeFocused();
+    await form.getByRole("button", { name: "Schedules", exact: true }).click();
+    await expect(ui.getByRole("heading", { name: "No schedules yet", exact: true })).toBeVisible();
+    await ui.getByRole("button", { name: "New schedule", exact: true }).click();
+    await form.getByLabel("Name", { exact: true }).fill("Mobile review");
+    await form.getByRole("combobox", { name: "Provider", exact: true }).click();
     await ui.getByRole("menuitemradio", { name: "Codex", exact: true }).click();
-    await dialog.getByLabel("Model", { exact: true }).fill("fixture");
-    await dialog.getByLabel("Prompt", { exact: true }).fill("Review the project");
-    await expect(
-      dialog.getByRole("button", { name: "Create schedule", exact: true }),
-    ).toBeEnabled();
+    await form.getByLabel("Model", { exact: true }).fill("fixture");
+    await form.getByLabel("Prompt", { exact: true }).fill("Review the project");
+    await expect(form.getByRole("button", { name: "Create schedule", exact: true })).toBeEnabled();
     for (const width of [320, 390, 430]) {
       await page.setViewportSize({ width, height: 844 });
-      expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      expect(await form.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
     }
-    await dialog.getByRole("button", { name: "Create schedule", exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: test.info().outputPath("schedule-form-page-mobile.png") });
+    await form.getByRole("button", { name: "Create schedule", exact: true }).click();
     await expect.poll(() => desktop.schedules?.[0]?.name).toBe("Mobile review");
+    await expect(form).toHaveCount(0);
     await ui.getByRole("button", { name: "Run Mobile review now", exact: true }).click();
     await expect(ui.getByRole("article").getByRole("status")).toHaveText("Done");
     await ui.getByText("Recent runs", { exact: true }).click();

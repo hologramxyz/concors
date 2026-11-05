@@ -1286,6 +1286,17 @@ body {
   flex: 1;
   min-width: 180px;
 }
+/* A form shown as a page, such as a new schedule: the same touch sizes as one in a sheet. */
+.mobile-form-page input:not([type="checkbox"]):not([type="radio"]),
+.mobile-form-page [role="combobox"],
+.mobile-form-page button {
+  min-height: 44px;
+}
+.mobile-form-page input,
+.mobile-form-page textarea,
+.mobile-form-page [role="combobox"] {
+  font-size: 16px;
+}
 [role="dialog"] input,
 [role="dialog"] textarea,
 [role="dialog"] select {
