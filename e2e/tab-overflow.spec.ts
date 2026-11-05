@@ -224,6 +224,71 @@ test("dragging the active tab scrolls the strip at its edge and keeps the tab in
   }
 });
 
+/** Closes a tab, returning `scrollLeft` as of each frame until the strip has settled. */
+async function scrollWhileClosing(page: Page, index: number) {
+  const count = await tabs(page).count();
+  await strip(page).evaluate((element) => {
+    const seen: number[] = [];
+    (window as unknown as { closeScrolls: number[] }).closeScrolls = seen;
+    const sample = () => {
+      seen.push(element.scrollLeft);
+      if (seen.length < 60) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  // Straight to the button: moving the pointer there could scroll a clipped tab into view.
+  await closeTab(page, index).evaluate((button: HTMLElement) => button.click());
+  await expect(tabs(page)).toHaveCount(count - 1);
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as unknown as { closeScrolls: number[] }).closeScrolls.length),
+    )
+    .toBe(60);
+  return page.evaluate(() => (window as unknown as { closeScrolls: number[] }).closeScrolls);
+}
+
+test("closing a tab leaves the strip alone unless the next active tab is cut off", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const directory = await mkdtemp(join(tmpdir(), "concors-tab-close-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Tab close", directory);
+    await expect(tabs(page)).toHaveCount(1);
+
+    // No overflow: whichever tab is active, the last one closing never moves the others.
+    await openTerminals(page, 7);
+    expect(await maxScroll(page)).toBe(0);
+    expect(new Set(await scrollWhileClosing(page, 6))).toEqual(new Set([0]));
+    await tab(page, 4).click();
+    await expect(tab(page, 4)).toHaveAttribute("aria-pressed", "true");
+    expect(new Set(await scrollWhileClosing(page, 5))).toEqual(new Set([0]));
+
+    // The active tab is cut by the end, and so is the one that replaces it: one smooth scroll,
+    // only forwards, and only once the closing tab has gone.
+    await openTerminals(page, TAB_COUNT);
+    await tab(page, TAB_COUNT - 2).click();
+    await expect(tab(page, TAB_COUNT - 2)).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(() => scrollLeft(page)).toBe(await maxScroll(page));
+    const cut = await strip(page).evaluate((element) => {
+      const active = element.querySelector<HTMLElement>("[data-active-tab]");
+      if (!active) throw new Error("No active tab");
+      element.scrollLeft = active.offsetLeft + active.offsetWidth - element.clientWidth - 30;
+      return element.scrollLeft;
+    });
+    const scrolls = await scrollWhileClosing(page, TAB_COUNT - 2);
+    const steps = scrolls.slice(1).map((left, step) => left - (scrolls[step] ?? left));
+    expect(scrolls[0]).toBe(cut);
+    expect(scrolls.at(-1)).toBeGreaterThan(cut);
+    expect(Math.min(...steps)).toBeGreaterThanOrEqual(0);
+    await expectActiveInView(page);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 const NAMES = [
   "Build",
   "Review auth flow",

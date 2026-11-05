@@ -23,6 +23,8 @@ function activeRange(content: HTMLElement) {
 
 /** Nudges an active tab cut by the edge back in. One scrolled wholly away is left there. */
 function revealIfClipped(list: HTMLElement, content: HTMLElement) {
+  // Not a tab on its way out: the one that replaces it gets its own scroll, once it is gone.
+  if (content.querySelector("[data-active-tab].tab-closing")) return;
   const range = activeRange(content);
   if (range && overlapsStrip(list, range)) list.scrollLeft = revealedScrollLeft(list, range);
 }

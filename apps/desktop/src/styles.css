@@ -1156,8 +1156,11 @@ html[data-pane-resizing="row"] * {
     max-width: 0;
     opacity: 0;
     border-width: 0;
-    /* Takes the gap with it, so the tabs after it close in smoothly. */
-    margin-inline-end: -0.25rem;
+    /*
+     * Takes the gap with it, so the tabs after it close in smoothly. On the start side, because a
+     * last tab pulled in from its end would stick out past the strip and give it room to scroll.
+     */
+    margin-inline-start: -0.25rem;
   }
 }
 
