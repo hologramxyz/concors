@@ -28,9 +28,17 @@ import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
 import { useClosedTerminalNames } from "@/terminal/closed-names";
 import { canFork, useForkChat } from "@/agents/fork";
 import { useSchedules } from "@/schedules/use-schedules";
-import { Fragment, useContext, useLayoutEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  useContext,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type DragEvent as ReactDragEvent,
+} from "react";
 import {
   isDefaultTabName,
+  CHAT_MOVE_CAPABILITY,
   PANE_RENAME_CAPABILITY,
   PROJECT_CLOSE_CAPABILITY,
   type AgentInfo,
@@ -328,6 +336,70 @@ function WorkspaceTree(props: AppSidebarProps) {
   };
   const { schedules } = useSchedules();
   const scheduledChats = new Set(schedules?.filter((s) => s.enabled).map((s) => s.sessionId));
+  // Every schedule, enabled or not: each is tied to its chat's workspace, so a chat with one stays.
+  const hasSchedule = (id: string | undefined) => schedules?.some((s) => s.sessionId === id);
+  const canMoveChats =
+    props.canEdit &&
+    connection?.state.status === "ready" &&
+    !!connection.state.daemon.capabilities?.includes(CHAT_MOVE_CAPABILITY);
+  /** Sends a row's chat to another workspace: an open one with its tab, a closed one by itself. */
+  const moveRow = (project: WorkspaceProject, row: SidebarRow) => {
+    if (!canMoveChats) return undefined;
+    if (row.kind === "closed") {
+      const { agent } = row.chat;
+      if (hasSchedule(agent.id) || !chatActions) return undefined;
+      return (projectId: string) => {
+        setWorkspaceExpanded(projectId, true);
+        void chatActions
+          .move(agent, projectId)
+          .catch((error: unknown) => console.error("Could not move the chat", error));
+      };
+    }
+    if (row.kind !== "tab") return undefined;
+    const panes = project.tabs.find((tab) => tab.id === row.tabId)?.nodes;
+    if (
+      panes?.some(
+        (node) =>
+          node.kind === "pane" &&
+          (node.profile !== "chat" || hasSchedule(node.sessionId ?? undefined)),
+      )
+    )
+      return undefined;
+    return (projectId: string) => {
+      setWorkspaceExpanded(projectId, true);
+      props.onCommand({
+        kind: "tab.transfer",
+        projectId: project.id,
+        expectedVersion: project.version,
+        tabId: row.tabId,
+        targetProjectId: projectId,
+      });
+    };
+  };
+  // The row being dragged, and the workspace it would land in if dropped now.
+  const moveTargets = (projectId: string) =>
+    (props.workspace?.projects ?? [])
+      .filter((project) => project.id !== projectId)
+      .map(({ id, name }) => ({ id, name }));
+  const [moving, setMoving] = useState<{
+    projectId: string;
+    move: (projectId: string) => void;
+  } | null>(null);
+  const [dropWorkspace, setDropWorkspace] = useState<string | null>(null);
+  const endMove = () => {
+    setMoving(null);
+    setDropWorkspace(null);
+  };
+  const overWorkspace = (event: ReactDragEvent<HTMLUListElement>) => {
+    if (!moving) return;
+    const element = (event.target as Element).closest<HTMLElement>("[data-drop-workspace]");
+    const id = element?.dataset["dropWorkspace"];
+    const target = id && id !== moving.projectId ? id : null;
+    setDropWorkspace(target);
+    if (!target) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  };
   const fork = (chat: AgentInfo | undefined) =>
     props.canEdit && connection?.state.status === "ready" && canFork(chat)
       ? () =>
@@ -363,7 +435,24 @@ function WorkspaceTree(props: AppSidebarProps) {
         }
       />
       {props.workspace?.projects.length ? (
-        <ul ref={list} className="mt-1 space-y-0.5" onPointerLeave={followRows}>
+        <ul
+          ref={list}
+          className="mt-1 space-y-0.5"
+          onPointerLeave={followRows}
+          // Both: the browser sends an "over" only once the pointer rests on one element.
+          onDragEnter={overWorkspace}
+          onDragOver={overWorkspace}
+          onDragLeave={(event) => {
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+              setDropWorkspace(null);
+          }}
+          onDrop={(event) => {
+            if (!moving || !dropWorkspace) return;
+            event.preventDefault();
+            moving.move(dropWorkspace);
+            endMove();
+          }}
+        >
           {props.workspace.projects.map((project) => {
             const expanded = !props.collapsed && isExpanded(project.id);
             const ordered = stableOrder(rows.get(project.id) ?? [], shownOrder.get(project.id));
@@ -388,6 +477,7 @@ function WorkspaceTree(props: AppSidebarProps) {
                   current={current}
                   expanded={expanded}
                   canEdit={props.canEdit}
+                  dropTarget={dropWorkspace === project.id}
                   icon={
                     props.workspace
                       ? icons.get(projectIconKey(props.workspace.epoch, project))
@@ -405,42 +495,55 @@ function WorkspaceTree(props: AppSidebarProps) {
                   onCommand={props.onCommand}
                 />
                 {listed.length > 0 && (
-                  <li className="sidebar-collapse" data-collapsed={!expanded || undefined}>
+                  <li
+                    data-drop-workspace={project.id}
+                    className="sidebar-collapse"
+                    data-collapsed={!expanded || undefined}
+                  >
                     <div>
                       <ul aria-label={`${project.name} tabs`} className="space-y-0.5">
-                        {listed.map((row) => (
-                          <SidebarTabRow
-                            key={row.key}
-                            row={row}
-                            now={now}
-                            selected={row === selectedRow && current}
-                            scheduled={scheduledChats.has(rowChatId(row) ?? "")}
-                            onOpen={() => {
-                              // A background terminal comes back into a new tab.
-                              if (row.kind === "terminal") {
-                                background?.reopen(row.terminal);
-                                return;
+                        {listed.map((row) => {
+                          const move = moveRow(project, row);
+                          return (
+                            <SidebarTabRow
+                              key={row.key}
+                              row={row}
+                              moveTargets={moveTargets(project.id)}
+                              onMove={move}
+                              onMoveDragStart={
+                                move ? () => setMoving({ projectId: project.id, move }) : undefined
                               }
-                              // Opening a session focuses its pane, as the tab bar does;
-                              // a pane that has not started yet just has its tab selected.
-                              const session =
-                                row.kind === "tab"
-                                  ? (row.chat?.id ?? row.terminal?.id)
-                                  : row.chat.agent.id;
-                              if (session) props.onSelectAgent(session);
-                              else if (row.kind === "tab")
-                                props.onSelectTab(row.projectId, row.tabId);
-                            }}
-                            onRename={row.kind === "tab" ? rename(project, row) : undefined}
-                            onFork={
-                              row.kind === "terminal"
-                                ? undefined
-                                : fork(row.kind === "tab" ? row.chat : row.chat.agent)
-                            }
-                            onPin={pin(rowChat(row))}
-                            onDelete={remove(rowChat(row))}
-                          />
-                        ))}
+                              onMoveDragEnd={endMove}
+                              now={now}
+                              selected={row === selectedRow && current}
+                              scheduled={scheduledChats.has(rowChatId(row) ?? "")}
+                              onOpen={() => {
+                                // A background terminal comes back into a new tab.
+                                if (row.kind === "terminal") {
+                                  background?.reopen(row.terminal);
+                                  return;
+                                }
+                                // Opening a session focuses its pane, as the tab bar does;
+                                // a pane that has not started yet just has its tab selected.
+                                const session =
+                                  row.kind === "tab"
+                                    ? (row.chat?.id ?? row.terminal?.id)
+                                    : row.chat.agent.id;
+                                if (session) props.onSelectAgent(session);
+                                else if (row.kind === "tab")
+                                  props.onSelectTab(row.projectId, row.tabId);
+                              }}
+                              onRename={row.kind === "tab" ? rename(project, row) : undefined}
+                              onFork={
+                                row.kind === "terminal"
+                                  ? undefined
+                                  : fork(row.kind === "tab" ? row.chat : row.chat.agent)
+                              }
+                              onPin={pin(rowChat(row))}
+                              onDelete={remove(rowChat(row))}
+                            />
+                          );
+                        })}
                         {fold.folded.length > 0 && (
                           <li>
                             <button

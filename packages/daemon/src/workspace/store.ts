@@ -197,6 +197,17 @@ export class WorkspaceStore {
             ? snapshot.projects.find((project) => project.id === op.projectId)
             : undefined;
         if (opened) moved = this.#adoptChats(snapshot, opened);
+        if (op.kind === "tab.transfer") {
+          const tab = current.projects
+            .find((project) => project.id === op.projectId)
+            ?.tabs.find((item) => item.id === op.tabId);
+          moved = this.#moveChats(
+            (tab?.nodes ?? []).flatMap((node) =>
+              node.kind === "pane" && node.sessionId ? [node.sessionId] : [],
+            ),
+            op.targetProjectId,
+          );
+        }
         this.#db.exec("RELEASE operation");
         result = {
           type: "workspace.result",
@@ -340,6 +351,41 @@ export class WorkspaceStore {
           .run(JSON.stringify(state));
       }
     });
+  }
+
+  /**
+   * Lists chats under another workspace, with the conversations a provider switch set aside beside
+   * them, which come back into the same pane. Their folder, time and place in history stay as they
+   * are: a move is not activity, and a CLI ties a conversation to its folder.
+   */
+  #moveChats(ids: readonly string[], projectId: string): AgentInfo[] {
+    const agents = this.agents();
+    const groups = new Set(
+      agents.filter((agent) => ids.includes(agent.id)).map((a) => a.providerGroupId ?? a.id),
+    );
+    const moved: AgentInfo[] = [];
+    for (const agent of agents) {
+      if (!groups.has(agent.providerGroupId ?? agent.id) || agent.projectId === projectId) continue;
+      const next = { ...agent, projectId, revision: agent.revision + 1 };
+      this.saveAgent(next);
+      moved.push(next);
+    }
+    return moved;
+  }
+
+  /** Moves a chat no pane shows; an open one goes with its tab, through `tab.transfer`. */
+  moveClosedChat(id: string, projectId: string): void {
+    const state = this.snapshot();
+    if (!state.projects.some((project) => project.id === projectId))
+      throw new Error("That workspace is no longer available.");
+    const panes = state.projects.flatMap((project) => project.tabs.flatMap((tab) => tab.nodes));
+    const agent = this.agent(id);
+    const group = agent.providerGroupId ?? agent.id;
+    const members = this.agents().filter((item) => (item.providerGroupId ?? item.id) === group);
+    if (panes.some((n) => n.kind === "pane" && members.some((m) => m.id === n.sessionId)))
+      throw new Error("This chat is open. Move its tab instead.");
+    const moved = this.transaction(() => this.#moveChats([id], projectId));
+    if (moved.length) this.onAgentsMoved?.(moved);
   }
 
   /** Opening the folder of a workspace already open brings in its stranded chats too. */

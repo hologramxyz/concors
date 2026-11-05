@@ -530,3 +530,207 @@ it.each(["horizontal", "vertical"] as const)(
     validateLayout(tab);
   },
 );
+
+describe("pane.transfer", () => {
+  /** A workspace of two tabs: `split` holds two panes, `other` one. */
+  function twoTabs() {
+    const { state, projectId, tabId, paneId } = fixture();
+    const newPaneId = id();
+    const otherTabId = id();
+    const otherPaneId = id();
+    let next = applyWorkspaceOperation(state, {
+      kind: "pane.split",
+      projectId,
+      expectedVersion: 1,
+      tabId,
+      paneId,
+      splitId: id(),
+      newPaneId,
+      axis: "horizontal",
+      profile: "shell",
+    });
+    next = applyWorkspaceOperation(next, {
+      kind: "tab.create",
+      projectId,
+      expectedVersion: 2,
+      tabId: otherTabId,
+      paneId: otherPaneId,
+      name: "Review",
+      profile: "chat",
+    });
+    return { next, projectId, tabId, paneId, newPaneId, otherTabId, otherPaneId };
+  }
+  const tabOf = (snapshot: WorkspaceSnapshot, tabId: string) =>
+    snapshot.projects[0]!.tabs.find((tab) => tab.id === tabId);
+
+  it("moves a pane into another tab, keeping its session, and collapses the split it left", () => {
+    const { next, projectId, tabId, paneId, newPaneId, otherTabId, otherPaneId } = twoTabs();
+    const bound = JSON.parse(JSON.stringify(next)) as WorkspaceSnapshot;
+    const pane = tabOf(bound, tabId)!.nodes.find((node) => node.id === newPaneId);
+    if (pane?.kind === "pane") pane.sessionId = id();
+    const sessionId = pane?.kind === "pane" ? pane.sessionId : null;
+    const splitId = id();
+    const moved = applyWorkspaceOperation(bound, {
+      kind: "pane.transfer",
+      projectId,
+      expectedVersion: 3,
+      tabId,
+      paneId: newPaneId,
+      targetTabId: otherTabId,
+      splitId,
+    });
+    const source = tabOf(moved, tabId)!;
+    expect(source.root).toBe(paneId);
+    expect(source.nodes.map((node) => node.id)).toEqual([paneId]);
+    const destination = tabOf(moved, otherTabId)!;
+    expect(destination.root).toBe(splitId);
+    expect(destination.nodes.find((node) => node.id === splitId)).toMatchObject({
+      first: otherPaneId,
+      second: newPaneId,
+      ratio: 0.5,
+    });
+    expect(destination.nodes.find((node) => node.id === newPaneId)).toMatchObject({ sessionId });
+    expect(moved.selection).toEqual({ projectId, tabId: otherTabId });
+    validateLayout(source);
+    validateLayout(destination);
+  });
+
+  it("closes a tab whose only pane left", () => {
+    const { next, projectId, otherTabId, otherPaneId, tabId } = twoTabs();
+    const moved = applyWorkspaceOperation(next, {
+      kind: "pane.transfer",
+      projectId,
+      expectedVersion: 3,
+      tabId: otherTabId,
+      paneId: otherPaneId,
+      targetTabId: tabId,
+      splitId: id(),
+    });
+    expect(tabOf(moved, otherTabId)).toBeUndefined();
+    expect(moved.selection).toEqual({ projectId, tabId });
+    expect(tabOf(moved, tabId)!.nodes.some((node) => node.id === otherPaneId)).toBe(true);
+  });
+
+  it("refuses its own tab, a missing tab, a split, and a stale version", () => {
+    const { next, projectId, tabId, paneId, otherTabId } = twoTabs();
+    const base = { kind: "pane.transfer", projectId, expectedVersion: 3, tabId } as const;
+    expect(() =>
+      applyWorkspaceOperation(next, { ...base, paneId, targetTabId: tabId, splitId: id() }),
+    ).toThrow("different tab");
+    expect(() =>
+      applyWorkspaceOperation(next, { ...base, paneId, targetTabId: id(), splitId: id() }),
+    ).toThrow();
+    const split = tabOf(next, tabId)!.root;
+    expect(() =>
+      applyWorkspaceOperation(next, {
+        ...base,
+        paneId: split,
+        targetTabId: otherTabId,
+        splitId: id(),
+      }),
+    ).toThrow("different tab");
+    expect(() =>
+      applyWorkspaceOperation(next, {
+        ...base,
+        expectedVersion: 1,
+        paneId,
+        targetTabId: otherTabId,
+        splitId: id(),
+      }),
+    ).toThrow("another client");
+  });
+});
+
+describe("tab.transfer", () => {
+  function twoWorkspaces(profile: "chat" | "shell" = "chat") {
+    const { state, projectId } = fixture();
+    const targetId = id();
+    const tabId = id();
+    const paneId = id();
+    let next = applyWorkspaceOperation(state, {
+      kind: "project.add",
+      projectId: targetId,
+      name: "Other",
+      directory: "/projects/other",
+    });
+    next = applyWorkspaceOperation(next, {
+      kind: "tab.create",
+      projectId,
+      expectedVersion: 1,
+      tabId,
+      paneId,
+      name: "Chat",
+      profile,
+    });
+    return { next, projectId, targetId, tabId, paneId };
+  }
+  const paneOf = (snapshot: WorkspaceSnapshot, projectIndex: number, paneId: string) =>
+    snapshot.projects[projectIndex]!.tabs.flatMap((tab) => tab.nodes).find((n) => n.id === paneId);
+
+  it("moves a chat under way, which stays in its folder, and the view goes with it", () => {
+    const { next, projectId, targetId, tabId, paneId } = twoWorkspaces();
+    const bound = JSON.parse(JSON.stringify(next)) as WorkspaceSnapshot;
+    const pane = paneOf(bound, 0, paneId);
+    const sessionId = id();
+    if (pane?.kind === "pane") pane.sessionId = sessionId;
+    const moved = applyWorkspaceOperation(bound, {
+      kind: "tab.transfer",
+      projectId,
+      expectedVersion: 2,
+      tabId,
+      targetProjectId: targetId,
+    });
+    expect(moved.projects[0]!.tabs.some((tab) => tab.id === tabId)).toBe(false);
+    expect(moved.projects[1]!.tabs.map((tab) => tab.id)).toEqual([tabId]);
+    expect(paneOf(moved, 1, paneId)).toMatchObject({ sessionId, directory: "/projects/concors" });
+    expect(moved.projects[0]!.version).toBe(3);
+    expect(moved.projects[1]!.version).toBe(1);
+    expect(moved.selection).toEqual({ projectId: targetId, tabId });
+  });
+
+  it("starts a chat that has not begun in the workspace it moved to", () => {
+    const { next, projectId, targetId, tabId, paneId } = twoWorkspaces();
+    const moved = applyWorkspaceOperation(next, {
+      kind: "tab.transfer",
+      projectId,
+      expectedVersion: 2,
+      tabId,
+      targetProjectId: targetId,
+    });
+    expect(paneOf(moved, 1, paneId)).toMatchObject({ directory: "/projects/other" });
+  });
+
+  it("leaves the view alone when another tab moves", () => {
+    const { next, projectId, targetId, tabId } = twoWorkspaces();
+    const elsewhere = { projectId: targetId, tabId: null };
+    const moved = applyWorkspaceOperation(
+      { ...next, selection: elsewhere },
+      { kind: "tab.transfer", projectId, expectedVersion: 2, tabId, targetProjectId: targetId },
+    );
+    expect(moved.selection).toEqual(elsewhere);
+  });
+
+  it("refuses terminals, its own workspace, and one that is gone", () => {
+    const shell = twoWorkspaces("shell");
+    expect(() =>
+      applyWorkspaceOperation(shell.next, {
+        kind: "tab.transfer",
+        projectId: shell.projectId,
+        expectedVersion: 2,
+        tabId: shell.tabId,
+        targetProjectId: shell.targetId,
+      }),
+    ).toThrow("Only chats");
+    const chat = twoWorkspaces();
+    const base = {
+      kind: "tab.transfer",
+      projectId: chat.projectId,
+      expectedVersion: 2,
+      tabId: chat.tabId,
+    } as const;
+    expect(() =>
+      applyWorkspaceOperation(chat.next, { ...base, targetProjectId: chat.projectId }),
+    ).toThrow("another workspace");
+    expect(() => applyWorkspaceOperation(chat.next, { ...base, targetProjectId: id() })).toThrow();
+  });
+});

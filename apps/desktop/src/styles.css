@@ -558,6 +558,11 @@
 .pane-resize-handle[aria-disabled="true"] {
   cursor: default;
 }
+/* The workspace a dragged chat would move to if dropped now. */
+[data-drop-target] {
+  background-color: color-mix(in oklab, var(--link) 14%, transparent);
+  box-shadow: inset 0 0 0 1px var(--link);
+}
 /* While a split is dragged nothing else selects text or shows its own cursor. */
 html[data-pane-resizing] *,
 html[data-pane-dragging] * {
@@ -566,6 +571,11 @@ html[data-pane-dragging] * {
 }
 html[data-pane-dragging] * {
   cursor: grabbing !important;
+}
+/* The tab a dragged pane would join if dropped now. */
+[data-pane-drop-tab] {
+  border-color: var(--link) !important;
+  background-color: color-mix(in oklab, var(--link) 12%, transparent);
 }
 html[data-pane-resizing="column"] * {
   cursor: col-resize !important;
