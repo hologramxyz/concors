@@ -43,6 +43,7 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-raised-fill: var(--raised-fill);
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
@@ -96,10 +97,12 @@
   --popover-foreground: var(--foreground);
   --primary: var(--foreground);
   --primary-foreground: #ffffff;
-  --secondary: oklch(0.965 0 0);
+  --secondary: var(--raised-fill);
   --secondary-foreground: var(--foreground);
-  --muted: oklch(0.965 0 0);
+  --muted: var(--raised-fill);
   --muted-foreground: #65665f;
+  /* Selected and raised surfaces. Tinted from the theme's own text color, so any theme and surface works. */
+  --raised-fill: color-mix(in srgb, var(--foreground) 12%, transparent);
   --accent: oklch(0.955 0 0);
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.6 0.2 25);
@@ -115,7 +118,7 @@
   --sidebar-foreground: oklch(0.4 0 0);
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: oklch(0.935 0 0);
+  --sidebar-accent: var(--raised-fill);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: var(--border);
   --sidebar-ring: var(--ring);
@@ -141,10 +144,11 @@
   --popover-foreground: var(--foreground);
   --primary: var(--foreground);
   --primary-foreground: var(--background);
-  --secondary: #242424;
+  --secondary: var(--raised-fill);
   --secondary-foreground: var(--foreground);
-  --muted: #242424;
+  --muted: var(--raised-fill);
   --muted-foreground: #a0a0a0;
+  --raised-fill: color-mix(in srgb, var(--foreground) 10%, transparent);
   --accent: #292929;
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.68 0.19 25);
@@ -160,7 +164,7 @@
   --sidebar-foreground: #b0b0b0;
   --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: var(--primary-foreground);
-  --sidebar-accent: #222222;
+  --sidebar-accent: var(--raised-fill);
   --sidebar-accent-foreground: var(--foreground);
   --sidebar-border: oklch(1 0 0 / 7%);
   --sidebar-ring: var(--ring);
@@ -220,6 +224,12 @@
     background: color-mix(in srgb, var(--selection) 99%, transparent);
     color: var(--foreground);
   }
+}
+
+/* The raised fill on an opaque surface, for a control drawn over content that would show through. */
+@utility bg-raised-opaque {
+  background-color: var(--background);
+  background-image: linear-gradient(var(--raised-fill), var(--raised-fill));
 }
 
 @layer utilities {
@@ -353,6 +363,10 @@
 .chat-markdown > :is(h1, h2, h3) + * {
   margin-top: 0.5rem;
 }
+/* A panel's fill already shows behind what's inside it; a second would read as full strength. */
+[data-panel] [data-panel] {
+  background: transparent;
+}
 /* A full block, like code: a bar alone under a rule read as a box with its sides cut off. */
 .chat-quote {
   display: flex;
@@ -360,7 +374,7 @@
   gap: 0.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  background: color-mix(in oklab, var(--muted) 40%, transparent);
+  background: color-mix(in oklab, var(--muted) 50%, transparent);
   padding: 0.75rem 0.5rem 0.75rem 0.875rem;
 }
 .chat-quote > blockquote {
@@ -804,6 +818,14 @@ html[data-pane-resizing="row"] * {
   opacity: 0.4;
   cursor: default;
 }
+/* A new chat's controls wait for its agent, without looking any different from when it is ready. */
+[data-new-chat-starting] .agent-control:disabled {
+  opacity: 1;
+}
+/* These are disabled only for the moment a new tab takes to be confirmed: too short to dim. */
+:root[data-creating-tab] [data-steady-while-creating]:disabled {
+  opacity: 1;
+}
 .agent-control:focus-visible:not([data-pointer-focus]) {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
@@ -1052,7 +1074,8 @@ html[data-pane-resizing="row"] * {
 }
 .message-list-trigger:hover {
   color: var(--foreground);
-  background: var(--muted);
+  /* The timeline scrolls under it, so the fill sits on an opaque surface. */
+  background: linear-gradient(var(--raised-fill), var(--raised-fill)), var(--background);
 }
 .message-list-anchor {
   position: absolute;
@@ -1113,6 +1136,13 @@ html[data-pane-resizing="row"] * {
 .tab-strip-fade[data-visible="true"] {
   opacity: 1;
 }
+/* A status badge on the selected tab: opaque enough to cut into the logo, in the tab's exact color. */
+.tab-badge-surface {
+  background: linear-gradient(var(--raised-fill), var(--raised-fill)), var(--background);
+  box-shadow:
+    0 0 0 1px var(--raised-fill),
+    0 0 0 1px var(--background);
+}
 
 /* Tabs grow in when they open and shrink away before they close (`TAB_CLOSE_MS`). */
 @media (prefers-reduced-motion: no-preference) {
@@ -1147,8 +1177,11 @@ html[data-pane-resizing="row"] * {
     max-width: 0;
     opacity: 0;
     border-width: 0;
-    /* Takes the gap with it, so the tabs after it close in smoothly. */
-    margin-inline-end: -0.25rem;
+    /*
+     * Takes the gap with it, so the tabs after it close in smoothly. On the start side, because a
+     * last tab pulled in from its end would stick out past the strip and give it room to scroll.
+     */
+    margin-inline-start: -0.25rem;
   }
 }
 

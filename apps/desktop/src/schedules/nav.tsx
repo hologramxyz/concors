@@ -16,7 +16,7 @@ export function SchedulesNav({
       aria-label="Schedules"
       aria-current={selected ? "page" : undefined}
       className={cn(
-        "flex w-full items-center gap-2 rounded-md px-2 py-2 text-ui hover:bg-sidebar-accent/50",
+        "flex w-full items-center gap-2 rounded-md px-2 py-2 text-ui hover:bg-sidebar-accent/70",
         selected
           ? "bg-sidebar-accent text-sidebar-foreground hover:bg-sidebar-accent"
           : "text-muted-foreground",

@@ -31,7 +31,7 @@ export function ColorThemeSettings() {
             return (
               <label
                 key={theme.id}
-                className="group relative min-w-0 cursor-pointer rounded-lg border p-2 transition-colors hover:bg-muted has-checked:border-primary has-focus-visible:ring-2 has-focus-visible:ring-ring"
+                className="group relative min-w-0 cursor-pointer rounded-lg border p-2 transition-colors hover:bg-muted/70 has-checked:border-primary has-checked:bg-muted has-focus-visible:ring-2 has-focus-visible:ring-ring"
               >
                 <input
                   className="sr-only"
@@ -86,7 +86,7 @@ export function ColorThemeSettings() {
           })}
         </div>
       </fieldset>
-      <SettingsCard className="mt-5 space-y-3 bg-muted/20 p-4">
+      <SettingsCard className="mt-5 space-y-3 bg-muted/50 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-medium">Custom themes</h3>
           {catalog && (

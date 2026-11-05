@@ -17,7 +17,7 @@ export function ResourceProcessRow({
 }) {
   const Icon = item.previews.length ? ExternalLink : Activity;
   return (
-    <li className="flex min-w-0 items-start gap-1 rounded-md hover:bg-muted/40">
+    <li className="flex min-w-0 items-start gap-1 rounded-md hover:bg-muted/70">
       <details className="group/process min-w-0 flex-1">
         <summary
           aria-label={`Details for ${item.name} (PID ${item.pid})`}

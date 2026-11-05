@@ -306,7 +306,7 @@ function Directory({
                   disabled={!supported}
                   aria-expanded={directory ? open : undefined}
                   onClick={() => (directory ? onToggle(entry.path) : onOpen(entry))}
-                  className="flex w-full items-center gap-1.5 py-1.5 pr-3 text-left text-ui hover:bg-muted focus-visible:bg-muted focus-visible:outline-none disabled:opacity-40"
+                  className="flex w-full items-center gap-1.5 py-1.5 pr-3 text-left text-ui hover:bg-muted/70 focus-visible:bg-muted focus-visible:outline-none disabled:opacity-40"
                   style={{ paddingLeft: `${12 + Math.min(depth, 12) * 14}px` }}
                 >
                   {directory ? (

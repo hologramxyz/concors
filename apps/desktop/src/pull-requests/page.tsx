@@ -176,7 +176,7 @@ export function PullRequestsPage({
         <div
           role="tablist"
           aria-label="Pull request state"
-          className="mt-5 inline-flex self-start rounded-[calc(var(--radius-md)+(0.125rem+1px)*var(--concentric))] border bg-muted/40 p-0.5"
+          className="mt-5 inline-flex self-start rounded-[calc(var(--radius-md)+(0.125rem+1px)*var(--concentric))] border bg-muted/50 p-0.5"
         >
           {states.map(({ state: option, label, Icon, tone }) => {
             const count =
@@ -421,7 +421,7 @@ function Repository({
     >
       <header
         className={cn(
-          "flex items-center gap-2 bg-muted/30 px-4 py-2.5",
+          "flex items-center gap-2 bg-muted/50 px-4 py-2.5",
           (repository.error || pullRequests.length > 0) && "border-b",
         )}
       >
@@ -489,7 +489,7 @@ function PullRequestRow({
   const state = pullRequest.state ?? "open";
   const [Icon, tone] = rowState[state === "open" && pullRequest.draft ? "draft" : state];
   return (
-    <li className="flex items-start gap-2 pr-3 hover:bg-muted/50 has-[>button:focus-visible]:bg-muted/50">
+    <li className="flex items-start gap-2 pr-3 hover:bg-muted/70 has-[>button:focus-visible]:bg-muted/70">
       <button
         type="button"
         onClick={onOpen}
@@ -659,7 +659,7 @@ function FilterChip({
         icon ? "pr-2.5 pl-1.5" : "px-2.5",
         pressed
           ? "border-foreground/20 bg-muted text-foreground"
-          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+          : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
       )}
     >
       {icon}
@@ -680,7 +680,7 @@ function Status({ children }: { children: ReactNode }) {
 function Empty({ title, children }: { title: string; children: ReactNode }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20 text-center">
-      <div className="flex size-14 items-center justify-center rounded-xl border bg-muted/40">
+      <div className="flex size-14 items-center justify-center rounded-xl border bg-muted/50">
         <GitPullRequest className="size-6 text-muted-foreground" />
       </div>
       <div className="flex max-w-sm flex-col items-center">

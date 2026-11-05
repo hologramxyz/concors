@@ -20,7 +20,7 @@ test("someone with no account goes straight to work on this computer", async ({ 
     await asGuest(page);
     const sidebar = page.getByRole("navigation", { name: "Primary" });
     await expect(sidebar).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Continue to Concors" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Sign in to Concors" })).toHaveCount(0);
     await seedProject(page, "Guest work", directory);
     await expect(sidebar.getByText("Guest work")).toBeVisible();
 
@@ -38,11 +38,40 @@ test("a guest can reach sign-in, is warned what it does, and can come back", asy
   await sidebar.getByRole("button", { name: "Using this computer without an account" }).click();
   await expect(page.getByRole("menuitem", { name: "Take the tour" })).toBeVisible();
   await page.getByRole("menuitem", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Continue to Concors" })).toBeVisible();
-  await expect(page.getByText(/restarts any terminals and agents/)).toBeVisible();
-  await page.getByRole("button", { name: "Back to this computer" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in to Concors" })).toBeVisible();
+  await expect(page.getByText(/restarts running terminals and agents/)).toBeVisible();
+  await expect(page.getByText("New here? This creates your account.")).toBeVisible();
+  await page.getByRole("button", { name: "Not now" }).click();
   await expect(sidebar).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Continue to Concors" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Sign in to Concors" })).toHaveCount(0);
+});
+
+test("the sign-in page stays centred, and scrolls clear of the title bar when the window is short", async ({
+  page,
+}) => {
+  await asGuest(page);
+  const sidebar = page.getByRole("navigation", { name: "Primary" });
+  await sidebar.getByRole("button", { name: "Sign in", exact: true }).click();
+  const heading = page.getByRole("heading", { name: "Sign in to Concors" });
+  await expect(heading).toBeVisible();
+  const box = await heading.boundingBox();
+  if (!box) throw new Error("No heading");
+  expect(Math.abs(box.x + box.width / 2 - 680)).toBeLessThanOrEqual(1);
+
+  await page.setViewportSize({ width: 1000, height: 240 });
+  const surface = page.getByRole("main");
+  await surface.evaluate((node) => {
+    node.scrollTop = 0;
+  });
+  const top = await surface.locator("svg").first().boundingBox();
+  // The page's top padding matches the fixed title bar, where the window's controls are.
+  const padding = await surface.evaluate((node) => parseFloat(getComputedStyle(node).paddingTop));
+  expect(padding).toBeGreaterThan(0);
+  expect(top?.y).toBeGreaterThanOrEqual(padding);
+  expect(await surface.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
+  const notNow = page.getByRole("button", { name: "Not now" });
+  await notNow.scrollIntoViewIfNeeded();
+  await expect(notNow).toBeInViewport({ ratio: 1 });
 });
 
 test("what needs an account says so and offers sign-in, and the rest stays out of the way", async ({
@@ -66,7 +95,7 @@ test("what needs an account says so and offers sign-in, and the rest stays out o
   await expect(settings.getByRole("button", { name: "SSH keys" })).toHaveCount(0);
 
   await machines.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Continue to Concors" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to Concors" })).toBeVisible();
 });
 
 test("a guest clones by URL, since connecting GitHub belongs to an account", async ({ page }) => {
@@ -87,6 +116,7 @@ test("a saved session that cannot be checked is not treated as a guest", async (
   );
   await page.goto("/");
   await expect(page.getByText("Your saved session could not be checked.")).toBeVisible();
+  await expect(page.getByText("New here? This creates your account.")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Back to this computer" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Not now" })).toHaveCount(0);
 });

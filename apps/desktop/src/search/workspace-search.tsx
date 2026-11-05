@@ -232,7 +232,7 @@ function SearchContent({
             key={item.id}
             type="button"
             aria-pressed={category === item.id}
-            className="min-h-9 shrink-0 rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-primary aria-pressed:bg-muted aria-pressed:font-medium aria-pressed:text-foreground"
+            className="min-h-9 shrink-0 rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted/70 focus-visible:outline-2 focus-visible:outline-primary aria-pressed:bg-muted aria-pressed:font-medium aria-pressed:text-foreground"
             onClick={() => {
               setCategory(item.id);
               setLimit(30);

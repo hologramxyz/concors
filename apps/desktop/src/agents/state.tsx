@@ -61,7 +61,7 @@ export function AgentStatus({ agent }: { agent: AgentInfo }) {
       aria-label={`Agent status: ${AGENT_STATUS[status]}`}
     >
       <span
-        className={`size-1.5 rounded-full ${agent.status === "needs_input" ? "bg-amber-500" : agent.status === "failed" ? "bg-destructive" : agent.status === "working" || agent.status === "starting" ? "animate-pulse bg-primary" : status === "done" ? "bg-emerald-500" : "bg-muted-foreground"}`}
+        className={`size-1.5 rounded-full ${agent.status === "needs_input" ? "bg-amber-500" : agent.status === "failed" ? "bg-destructive" : status === "working" || status === "starting" ? "animate-pulse bg-primary" : status === "done" ? "bg-emerald-500" : "bg-muted-foreground"}`}
       />
       {AGENT_STATUS[status]}
       {agent.attention && !agent.attention.seen && (

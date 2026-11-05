@@ -151,7 +151,7 @@ function IconEditor({
               setDraft(value);
               setError(null);
             }}
-            className="flex size-10 items-center justify-center rounded-lg text-xl hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:bg-primary/15 aria-pressed:ring-1 aria-pressed:ring-primary"
+            className="flex size-10 items-center justify-center rounded-lg text-xl hover:bg-muted/70 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none aria-pressed:bg-muted aria-pressed:ring-1 aria-pressed:ring-primary"
           >
             <span aria-hidden="true">{value}</span>
           </button>

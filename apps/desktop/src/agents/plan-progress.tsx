@@ -12,7 +12,8 @@ export function PlanProgress({ item, compact = false }: { item: AgentItem; compa
     <details
       open={compact ? undefined : true}
       aria-label={compact ? "Agent tasks" : "Agent plan"}
-      className={`group/plan rounded-xl border bg-muted/20 ${compact ? "mb-2" : "my-4"}`}
+      data-panel
+      className={`group/plan rounded-xl border bg-muted/50 ${compact ? "mb-2" : "my-4"}`}
     >
       <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-sm">
         <ListTodo className="size-4" />

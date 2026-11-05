@@ -57,7 +57,7 @@ export function chatAgentStatus(agent: AgentInfo): AgentStatus {
     id: agent.id,
     provider: agent.engine ?? agent.provider,
     providerName: agent.providerLabel ?? agentProviderName(agent.provider),
-    running: agent.status === "starting" || agent.status === "working",
+    running: status === "starting" || status === "working",
     status: AGENT_STATUS[status],
     dot: chatDot(agent),
     background: agent.backgroundAgents ?? 0,

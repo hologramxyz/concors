@@ -45,7 +45,7 @@ import { ControlTooltip } from "./control-tooltip";
 import { useClippedControls } from "./use-clipped-controls";
 import { useComposerWheel } from "./composer-wheel";
 import { FastModeToggle } from "./fast-mode-toggle";
-import { useAgents } from "./context";
+import { isNewChatStarting, useAgents } from "./context";
 import { switchDescription } from "./provider-switch";
 import { findAgentModel } from "@concors/protocol";
 import { useAgentModelSelection } from "./use-model-selection";
@@ -196,7 +196,10 @@ export function AgentComposer({
   const failedUpload = attachments.find(
     (file): file is UploadAttachment => isUpload(file) && !!file.error,
   );
+  // Decides how a message is delivered. What the composer shows follows `looksActive` instead.
   const active = ["starting", "working", "needs_input"].includes(agent.status);
+  const preparing = isNewChatStarting(agent);
+  const looksActive = active && !preparing;
   // A message sent while its attachments upload waits for them. Its text is locked meanwhile, so
   // what goes is what was sent; removing a slow file still sends the rest sooner. "Don't send yet"
   // (or Escape) unlocks it.
@@ -213,8 +216,8 @@ export function AgentComposer({
     (!!text.trim() || files > 0) &&
     !text.trim().startsWith("/") &&
     (!files || !!agent.controls.steerAttachments);
-  const showStop = active && (!compact || (!draft.trim() && !attachments.length));
-  const sendLabel = !active
+  const showStop = looksActive && (!compact || (!draft.trim() && !attachments.length));
+  const sendLabel = !looksActive
     ? "Send message"
     : followUps === "steer" && canSteer(draft, attachments.length)
       ? "Steer message"
@@ -684,12 +687,12 @@ export function AgentComposer({
       editAck,
       expanded,
       editable: connected && !busy && !uncertain && !deferred && !!agent.threadId,
-      placeholder: active
+      placeholder: looksActive
         ? followUps === "steer" && canSteer("steer", 0)
           ? "Steer the current turn…"
           : "Add a follow-up to the queue…"
         : "Message your agent",
-      active,
+      active: looksActive,
       canSend:
         connected &&
         !attaching &&
@@ -1062,7 +1065,7 @@ export function AgentComposer({
             {agent.queue.map((entry) => (
               <div
                 key={entry.id}
-                className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs"
+                className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-xs"
               >
                 <span className="text-muted-foreground">Queued</span>
                 <span className="min-w-0 flex-1 truncate">
@@ -1112,7 +1115,7 @@ export function AgentComposer({
             {queue.map((entry, i) => (
               <div
                 key={i}
-                className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2 text-xs"
+                className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-xs"
               >
                 <span className="text-muted-foreground">Queued</span>
                 <span className="min-w-0 flex-1 truncate">
@@ -1204,6 +1207,7 @@ export function AgentComposer({
           ref={form}
           data-native-composer={native || undefined}
           data-composer-surface={owner}
+          data-new-chat-starting={preparing || undefined}
           data-expanded={compact ? expanded : undefined}
           onSubmit={(e) => {
             e.preventDefault();
@@ -1267,7 +1271,7 @@ export function AgentComposer({
                   role="status"
                   aria-label="Reading attachment"
                   data-composer-attachment-reading
-                  className="flex size-12 shrink-0 items-center justify-center rounded-lg border bg-muted/40 text-muted-foreground"
+                  className="flex size-12 shrink-0 items-center justify-center rounded-lg border bg-muted/50 text-muted-foreground"
                 >
                   <LoaderCircle className="size-4 animate-spin" aria-hidden="true" />
                 </div>
@@ -1282,7 +1286,7 @@ export function AgentComposer({
               canSend={
                 connected && !busy && !uncertain && !attaching && !configuring && !!agent.threadId
               }
-              queued={active}
+              queued={looksActive}
               levels={!compact}
             />
           ) : native ? (
@@ -1296,9 +1300,9 @@ export function AgentComposer({
                 placeholder={
                   compact && !expanded
                     ? "Message your agent"
-                    : !active && placeholder
+                    : !looksActive && placeholder
                       ? placeholder
-                      : active
+                      : looksActive
                         ? followUps === "steer" && canSteer("steer", 0)
                           ? "Steer the current turn…"
                           : "Add a follow-up to the queue…"
@@ -1392,7 +1396,7 @@ export function AgentComposer({
                     if (!uncertain) void followUp(undefined, !compact && (e.metaKey || e.ctrlKey));
                   }
                 }}
-                className={`agent-composer-input ${compact ? "max-h-48" : "max-h-[min(40cqh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none read-only:opacity-50 disabled:opacity-50`}
+                className={`agent-composer-input ${compact ? "max-h-48" : "max-h-[min(40cqh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none ${preparing ? "" : "read-only:opacity-50 disabled:opacity-50"}`}
               />
               <div
                 ref={toolbar}
@@ -1766,7 +1770,7 @@ function AttachmentChip({
   const label = upload?.error ? `${file.name}: ${upload.error}` : file.name;
   return (
     <div data-composer-attachment data-upload={state} className="group relative size-12 shrink-0">
-      <div className="relative size-full overflow-hidden rounded-lg border bg-muted/40">
+      <div className="relative size-full overflow-hidden rounded-lg border bg-muted/50">
         {image ? (
           <ImageViewer
             file={image}
@@ -1840,7 +1844,7 @@ function AttachmentChip({
           aria-label={`Remove ${file.name}`}
           disabled={disabled}
           onClick={onRemove}
-          className={`absolute -top-1.5 -left-1.5 flex size-5 items-center justify-center rounded-full border bg-background text-foreground shadow-sm hover:bg-muted focus-visible:opacity-100 disabled:opacity-50 ${compact ? "" : "opacity-0 group-hover:opacity-100"}`}
+          className={`absolute -top-1.5 -left-1.5 flex size-5 items-center justify-center rounded-full border bg-background text-foreground shadow-sm hover:bg-raised-opaque focus-visible:opacity-100 disabled:opacity-50 ${compact ? "" : "opacity-0 group-hover:opacity-100"}`}
         >
           <X className="size-3" />
         </button>

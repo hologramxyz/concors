@@ -185,8 +185,9 @@ export function SidebarTabRow({
       }}
       onDragEnd={onMoveDragEnd}
       className={cn(
-        "group/row flex items-center rounded-md hover:bg-sidebar-accent/50 has-[[data-state=open]]:bg-sidebar-accent/50",
-        selected && "bg-sidebar-accent hover:bg-sidebar-accent",
+        "group/row flex items-center rounded-md hover:bg-sidebar-accent/70 has-[[aria-expanded=true]]:bg-sidebar-accent/70",
+        selected &&
+          "bg-sidebar-accent hover:bg-sidebar-accent has-[[aria-expanded=true]]:bg-sidebar-accent",
       )}
     >
       {renaming !== null ? (
@@ -224,7 +225,7 @@ export function SidebarTabRow({
             <DropdownMenuTrigger
               aria-label={`Actions for ${title}`}
               className={cn(
-                "flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 hover:text-sidebar-foreground data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100",
+                "flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 hover:text-sidebar-foreground aria-expanded:opacity-100 [@media(hover:none)]:opacity-100",
                 // Kept mounted while renaming so closing the menu can hand focus to the input.
                 renaming !== null && "invisible",
               )}

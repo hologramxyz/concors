@@ -91,7 +91,7 @@ export function ResourceStatus({
       className={
         compact
           ? "relative mt-2 flex min-h-7 flex-wrap items-center gap-x-3 gap-y-1 px-1 text-[11px] text-muted-foreground"
-          : "relative flex min-h-7 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t bg-muted/20 px-3 py-1 text-[11px] text-muted-foreground"
+          : "relative flex min-h-7 shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-t bg-muted/50 px-3 py-1 text-[11px] text-muted-foreground"
       }
     >
       <span className={compact ? "sr-only" : "flex max-w-40 min-w-0 items-center gap-1.5"}>

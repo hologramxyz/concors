@@ -442,8 +442,8 @@ export function ProjectWorkspace({
                       }
                       className={cn(
                         "project-tab group flex shrink-0 items-center rounded-md border",
-                        !activeFile && selected?.id === tab.id
-                          ? "border-transparent bg-muted"
+                        !activeFile && selected?.id === tab.id && tabDrag?.tabId !== tab.id
+                          ? "border-transparent bg-raised-fill"
                           : "border-transparent",
                         closingTabs.has(tab.id) && "tab-closing",
                         tabDrag && !tabDrag.dropped && "tab-sliding",

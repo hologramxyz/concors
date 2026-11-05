@@ -115,6 +115,7 @@ export function NewWorkspaceMenu({
           <DropdownMenuTrigger
             ref={trigger}
             aria-label="Open workspace menu"
+            data-steady-while-creating
             disabled={disabled}
             className={`rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground disabled:opacity-40 ${rail ? "sidebar-rail-control" : "p-1"}`}
           >

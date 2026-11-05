@@ -226,7 +226,7 @@ function ReviewChatsDialog({
               <li
                 key={chat.id}
                 data-agent-id={chat.id}
-                className="flex items-center gap-2 rounded-md px-2 py-1 text-ui hover:bg-muted/50"
+                className="flex items-center gap-2 rounded-md px-2 py-1 text-ui hover:bg-muted/70"
               >
                 <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-2">
                   <input

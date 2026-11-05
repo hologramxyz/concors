@@ -62,7 +62,7 @@ export function TabButton({
           <AgentStatusIcon
             agent={status}
             label={`${status.providerName}: ${status.status}`}
-            surface={selected ? "bg-background ring-background" : "bg-sidebar ring-sidebar"}
+            surface={selected ? "tab-badge-surface" : "bg-sidebar ring-sidebar"}
           />
         ) : (
           <PaneMark profile={pane?.profile} />

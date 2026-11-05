@@ -52,6 +52,17 @@ test("GitHub clones show their folder's icon rather than a remote image, and pro
     expect(hovered).not.toBe("rgba(0, 0, 0, 0)");
     await row.getByRole("button", { name: "Sidebar images", exact: true }).hover();
     await expect(row).toHaveCSS("background-color", hovered);
+    // An open menu keeps the row's fill and its "…", with the pointer elsewhere. The menu hides
+    // the sidebar from the accessibility tree, so the row is found by its button's label.
+    const actions = page.locator('[aria-label="Actions for Sidebar images"]');
+    const openRow = actions.locator("xpath=ancestor::li[1]");
+    await actions.click();
+    await expect(page.getByRole("menu")).toBeVisible();
+    await page.mouse.move(700, 600);
+    await expect(openRow).toHaveCSS("background-color", hovered);
+    await expect(actions).toHaveCSS("opacity", "1");
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toHaveCount(0);
     const add = nav.getByRole("button", { name: "Open workspace menu", exact: true });
     const header = add.locator("../..");
     await add.hover();
