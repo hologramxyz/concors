@@ -81,6 +81,7 @@ describe("native sign-in", () => {
   it("reads the configured sign-in methods", async () => {
     const fetch = vi.fn(async () => json({ github: true, google: true, email: true }));
     await expect(client(fetch).api.getSignInProviders()).resolves.toEqual({
+      apple: false,
       github: true,
       google: true,
       email: true,
@@ -92,6 +93,7 @@ describe("native sign-in", () => {
   it("treats methods an older API does not report as unavailable", async () => {
     const fetch = vi.fn(async () => json({ github: true }));
     await expect(client(fetch).api.getSignInProviders()).resolves.toEqual({
+      apple: false,
       github: true,
       google: false,
       email: false,
@@ -124,6 +126,30 @@ describe("native sign-in", () => {
       api.completeNativeSignIn({ code: "k".repeat(43), verifier: "v".repeat(64) }),
     ).rejects.toBeInstanceOf(ApiError);
     expect(tokens.get()).toBeNull();
+  });
+  it("keeps the original account and revokes a different user’s reauthentication session", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(json({ token: "different-user-session" }))
+      .mockResolvedValueOnce(json({ ...ME, user: { ...USER, id: "someone-else" } }))
+      .mockResolvedValueOnce(json({ success: true }));
+    const { api, tokens } = client(fetch, "original-user-session");
+    await expect(
+      api.completeNativeSignIn({ code: "k".repeat(43), verifier: "v".repeat(64) }, USER.id),
+    ).rejects.toThrow("same account");
+    expect(tokens.get()).toBe("original-user-session");
+    expect(new Headers(fetch.mock.calls[2]![1]!.headers).get("authorization")).toBe(
+      "Bearer different-user-session",
+    );
+  });
+  it("accepts a fresh session only after verifying the expected account", async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(json({ token: "fresh-session" }))
+      .mockResolvedValueOnce(json(ME));
+    const { api, tokens } = client(fetch, "old-session");
+    await api.completeNativeSignIn({ code: "k".repeat(43), verifier: "v".repeat(64) }, USER.id);
+    expect(tokens.get()).toBe("fresh-session");
   });
 });
 

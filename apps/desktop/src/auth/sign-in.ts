@@ -90,15 +90,19 @@ export async function signInWithBrowser(
  * the API has no sign-in method configured hides the button: while the check is pending, or if it
  * fails, the page itself is the better place to find out.
  */
-export function useSignInUnavailable(api: ApiClient): string | null {
+export function useSignInOptions(api: ApiClient) {
   const [configured, setConfigured] = useState(true);
+  const [apple, setApple] = useState(false);
   useEffect(() => {
     if (!isTauri()) return;
     let current = true;
     api
       .getSignInProviders()
       .then((providers) => {
-        if (current) setConfigured(providers.github || providers.google || providers.email);
+        if (current) {
+          setConfigured(providers.apple || providers.github || providers.google || providers.email);
+          setApple(providers.apple);
+        }
       })
       .catch(() => undefined);
     return () => {
@@ -106,6 +110,13 @@ export function useSignInUnavailable(api: ApiClient): string | null {
     };
   }, [api]);
   if (!isTauri())
-    return "Signing in opens your browser, which only the Concors desktop app can do. Open the app to sign in.";
-  return configured ? null : "Sign-in is not set up on this Concors server yet.";
+    return {
+      apple: false,
+      unavailable:
+        "Signing in opens your browser, which only the Concors desktop app can do. Open the app to sign in.",
+    };
+  return {
+    apple,
+    unavailable: configured ? null : "Sign-in is not set up on this Concors server yet.",
+  };
 }

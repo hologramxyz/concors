@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 
 test("direct desktop cloning uses a URL and never requests cloud GitHub access", async ({
   page,

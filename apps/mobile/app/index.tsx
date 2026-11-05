@@ -1,4 +1,4 @@
-import { Redirect } from "expo-router";
+import { Redirect, useLocalSearchParams } from "expo-router";
 import { Image, Linking, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../src/auth/provider";
@@ -7,16 +7,30 @@ import { config } from "../src/config";
 import { Button, Copy, Notice, Screen, useTheme } from "../src/ui";
 import { useAppearance } from "../src/appearance-provider";
 import { StartupScreen } from "../src/startup";
+import { DeletionReceipt } from "../src/auth/deletion-receipt";
 
 export default function SignInScreen() {
   const auth = useAuth();
+  const { returnTo } = useLocalSearchParams();
   const theme = useTheme();
   const { ready } = useAppearance();
   if (!ready || auth.initializing) return <StartupScreen />;
-  if (auth.me || auth.direct) return <Redirect href="/(app)" />;
+  if (auth.me || auth.direct)
+    return (
+      <Redirect
+        href={
+          returnTo === "/account/delete"
+            ? "/account/delete"
+            : returnTo === "/support/report"
+              ? "/support/report"
+              : "/(app)"
+        }
+      />
+    );
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       <Screen title="Concors" subtitle="Your workspace, wherever you are.">
+        <DeletionReceipt />
         <View style={{ paddingVertical: 28, gap: 20 }}>
           <Image
             source={require("../assets/icon.png")}
@@ -28,6 +42,10 @@ export default function SignInScreen() {
           </Copy>
           <Copy muted>
             Check in on your agents, answer a request, and pick up where you left off.
+          </Copy>
+          <Copy muted>
+            Add machines in the desktop app, then connect here with the same account. The iPhone app
+            is free at launch.
           </Copy>
         </View>
         {config.demo && (
@@ -86,6 +104,7 @@ export default function SignInScreen() {
             {auth.signInAvailable ? (
               <SignInChoices
                 disabled={auth.loading}
+                providers={auth.signInProviders}
                 onChoose={(choice) => {
                   void auth.signIn(choice);
                 }}
@@ -122,7 +141,19 @@ export default function SignInScreen() {
             </Button>
           </View>
         )}
-        <View style={{ flexDirection: "row", gap: 12 }}>
+        <Copy muted size={13}>
+          By continuing, you agree to the Terms of use. Our privacy policy explains account and
+          workspace data handling.
+        </Copy>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+          <Button
+            secondary
+            onPress={() => {
+              void Linking.openURL("https://concors.dev/terms");
+            }}
+          >
+            Terms
+          </Button>
           <Button
             secondary
             onPress={() => {

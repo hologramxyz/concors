@@ -1,4 +1,4 @@
-appId: dev.concors.mobile.preview
+appId: xyz.hologram.concors.preview
 env:
   FRESH_SIMULATOR: "false"
 ---

@@ -42,11 +42,11 @@
   },
   "submit": {
     "candidate": {
-      "ios": { "ascAppId": "6812901549" },
+      "ios": { "appleTeamId": "9WN4P724M2", "ascAppId": "6817622624" },
       "android": { "track": "internal", "releaseStatus": "draft" }
     },
     "production": {
-      "ios": { "ascAppId": "6812901549" },
+      "ios": { "appleTeamId": "9WN4P724M2", "ascAppId": "6817622624" },
       "android": { "track": "internal", "releaseStatus": "draft" }
     }
   }
