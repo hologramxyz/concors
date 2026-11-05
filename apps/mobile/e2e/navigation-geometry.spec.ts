@@ -149,3 +149,27 @@ test("native header surfaces follow both panels throughout real touch drags", as
     await touch.detach();
   }
 });
+
+for (const native of [false, true]) {
+  test(`${native ? "native iPhone keeps its own header" : "web and Android get a header fade and a glass messages button"}`, async ({
+    page,
+  }) => {
+    const ui = await enter(page, native);
+    const header = ui.locator(".mobile-header");
+    const fade = () => header.evaluate((el) => getComputedStyle(el, "::before").content);
+    const trigger = ui.getByRole("button", { name: "Browse your messages", exact: true });
+    await expect(trigger).toBeVisible();
+    await expect(trigger).toHaveCSS("backdrop-filter", native ? "none" : /blur\(24px\)/);
+    expect(await fade()).toBe(native ? "none" : '""');
+    if (native) return;
+    // Pages keep their content below the header, so nothing scrolls under for a fade to soften.
+    await ui.locator("#mobile-sidebar-toggle").click();
+    await ui
+      .getByRole("dialog", { name: "Workspace sidebar" })
+      .getByRole("button", { name: "Schedules" })
+      .first()
+      .click();
+    await expect(ui.getByText("Morning review")).toBeVisible();
+    expect(await fade()).toBe("none");
+  });
+}

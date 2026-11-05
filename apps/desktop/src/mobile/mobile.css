@@ -1449,3 +1449,46 @@ body {
   padding-top: 56px;
   scroll-padding-top: 56px;
 }
+
+/* iPhone's header is native and brings its own glass, so these two stay on web and Android.
+   The glass controls already blur what is behind them, but a row still reads sharply in the gaps
+   between them. Pages keep their content below the header, and a notice pushes the chat below it,
+   so only an uninterrupted chat scrolls under. Stays below the messages button and the controls. */
+.mobile-main:has(> .mobile-pane[data-pane-profile="chat"]):not(
+    :has(.mobile-notice, .mobile-header [data-native-surface="true"])
+  )
+  > .mobile-header::before {
+  content: "";
+  position: absolute;
+  z-index: 5;
+  inset: 0 0 auto;
+  height: calc(var(--mobile-header-height) + 12px);
+  background: linear-gradient(
+    to bottom,
+    var(--background),
+    color-mix(in srgb, var(--background) 85%, transparent) calc(100% - 24px),
+    transparent
+  );
+}
+/* Rows run the full width, so a narrower chat column would cost every message for one button. */
+.mobile-main:not(:has(.mobile-header [data-native-surface="true"])) .message-list-trigger {
+  border-color: color-mix(in srgb, var(--border) 50%, transparent);
+  box-shadow:
+    inset 0 1px 0 #ffffff38,
+    0 3px 14px #0000000b,
+    0 1px 3px #00000008;
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .mobile-main:not(:has(.mobile-header [data-native-surface="true"])) .message-list-trigger {
+    background: color-mix(in srgb, var(--background) 38%, transparent);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    backdrop-filter: blur(24px) saturate(1.6);
+  }
+}
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .mobile-main:not(:has(.mobile-header [data-native-surface="true"])) .message-list-trigger {
+    background: var(--background);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
