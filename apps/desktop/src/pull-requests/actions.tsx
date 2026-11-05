@@ -79,7 +79,7 @@ export function MergeDialog({
                 key={option}
                 className={cn(
                   "flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 text-ui",
-                  chosen === option ? "border-foreground/30 bg-muted/60" : "hover:bg-muted/40",
+                  chosen === option ? "border-foreground/30 bg-muted" : "hover:bg-muted/70",
                 )}
               >
                 <input

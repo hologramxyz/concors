@@ -129,7 +129,7 @@ export function SchedulesPage({
         )
       ) : !schedules.length ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20 text-center">
-          <div className="flex size-14 items-center justify-center rounded-xl border bg-muted/40">
+          <div className="flex size-14 items-center justify-center rounded-xl border bg-muted/50">
             <Clock className="size-6 text-muted-foreground" />
           </div>
           <h3 className="text-lg font-medium">No schedules yet</h3>
@@ -265,7 +265,7 @@ export function SchedulesPage({
                   <p className="line-clamp-2 w-full break-words whitespace-pre-wrap text-foreground/80">
                     {schedule.prompt}
                   </p>
-                  <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md bg-muted/40 px-3 py-2.5 text-muted-foreground">
+                  <div className="flex w-full flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-md bg-muted/50 px-3 py-2.5 text-muted-foreground">
                     <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
                       <span className="inline-flex items-center gap-2">
                         <Clock className="size-3.5 shrink-0" aria-hidden="true" />
@@ -286,7 +286,7 @@ export function SchedulesPage({
                 </div>
                 {!!schedule.runs.length && (
                   <details className="group border-t">
-                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-muted-foreground transition-colors select-none hover:bg-muted/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset sm:px-5 [&::-webkit-details-marker]:hidden">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-muted-foreground transition-colors select-none hover:bg-muted/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset sm:px-5 [&::-webkit-details-marker]:hidden">
                       <span className="inline-flex gap-2">
                         <span>Recent runs</span>
                         <span>{schedule.runs.length}</span>
@@ -300,7 +300,7 @@ export function SchedulesPage({
                       {schedule.runs.map((run) => (
                         <li
                           key={run.id}
-                          className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/30 px-3 py-2.5"
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted/50 px-3 py-2.5"
                         >
                           <div className="min-w-0">
                             <span className="inline-flex items-center gap-2">

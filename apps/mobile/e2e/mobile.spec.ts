@@ -140,7 +140,7 @@ test("your message bubble stands out from the phone's light background", async (
     const fill = luminance(paint(background, getComputedStyle(element).backgroundColor));
     return Math.max(page, fill) / Math.min(page, fill);
   });
-  // The same bubble measures 1.037 on desktop; it measured 1.000 here before it had its own fill.
+  // The shared raised fill measures 1.27 here; the muted fill it replaced measured 1.000.
   expect(contrast).toBeGreaterThan(1.03);
 });
 test("mobile header, terminal and host share one background across palettes and modes", async ({

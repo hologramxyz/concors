@@ -83,14 +83,15 @@ test("the sign-in screen remains scrollable in short windows", async ({ page }) 
   await page.getByRole("button", { name: GUEST_MENU }).click();
   await page.getByRole("menuitem", { name: "Sign in", exact: true }).click();
   await page.setViewportSize({ width: 640, height: 320 });
-  await expect(page.getByRole("heading", { name: "Continue to Concors" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to Concors" })).toBeVisible();
   const main = page.getByRole("main");
   await main.evaluate((element) => {
     element.scrollTop = 0;
   });
   expect(
-    await page
-      .getByText("concors", { exact: true })
+    await main
+      .locator("svg")
+      .first()
       .evaluate((element) => element.getBoundingClientRect().top),
     "branding must be reachable at the top of the scroll area",
   ).toBeGreaterThanOrEqual(0);
@@ -109,7 +110,7 @@ test("a saved session opens its account, and without one the app runs as a guest
 }) => {
   const api = await mockApi(page);
   const sidebar = page.getByRole("navigation", { name: "Primary" });
-  const signInHeading = page.getByRole("heading", { name: "Continue to Concors" });
+  const signInHeading = page.getByRole("heading", { name: "Sign in to Concors" });
 
   const guestMenu = sidebar.getByRole("button", { name: GUEST_MENU });
 

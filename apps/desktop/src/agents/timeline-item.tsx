@@ -42,7 +42,7 @@ export const TimelineItem = memo(function TimelineItem({
       <article
         className={
           item.kind === "user"
-            ? "mobile-user-bubble ml-auto max-w-[90%] rounded-2xl bg-muted/65 px-4 py-3"
+            ? "mobile-user-bubble ml-auto max-w-[90%] rounded-2xl bg-raised-fill px-4 py-3"
             : "py-1"
         }
       >
@@ -132,7 +132,7 @@ export const TimelineItem = memo(function TimelineItem({
     <article
       data-tool-status={item.status}
       aria-busy={running}
-      className="overflow-hidden rounded-xl border border-transparent bg-muted/20"
+      className="overflow-hidden rounded-xl border border-transparent bg-muted/50"
       aria-label="Tool call"
     >
       <button

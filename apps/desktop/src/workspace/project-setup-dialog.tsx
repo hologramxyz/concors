@@ -253,7 +253,7 @@ export function ProjectSetupDialog({
                   </div>
                 )}
                 {source === "url" && (
-                  <div className="flex min-h-0 flex-1 flex-col justify-center gap-4 rounded-xl border bg-muted/20 p-6">
+                  <div className="flex min-h-0 flex-1 flex-col justify-center gap-4 rounded-xl border bg-muted/50 p-6">
                     <GitBranch className="size-7 text-muted-foreground" aria-hidden="true" />
                     <label className="block space-y-2 text-sm">
                       <span>Repository URL or local path</span>
@@ -281,7 +281,7 @@ export function ProjectSetupDialog({
                       Choose a new folder on this machine.
                     </p>
                   </div>
-                  <div className="flex items-center gap-3 rounded-xl border bg-muted/20 p-4">
+                  <div className="flex items-center gap-3 rounded-xl border bg-muted/50 p-4">
                     <GitBranch className="size-5 shrink-0 text-muted-foreground" />
                     <span className="truncate text-sm font-medium">
                       {repository.replace(/^https?:\/\/github\.com\//, "").replace(/\.git$/, "")}
@@ -319,7 +319,7 @@ export function ProjectSetupDialog({
               )}
             </div>
           )}
-          <div className={mode === "clone" ? "shrink-0 border-t bg-muted/20 px-6 py-4" : ""}>
+          <div className={mode === "clone" ? "shrink-0 border-t bg-muted/50 px-6 py-4" : ""}>
             {error && (
               <p role="alert" className="mb-3 text-sm text-destructive">
                 {error}

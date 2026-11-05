@@ -86,7 +86,7 @@ export function AppearanceSettings({
               {CORNER_STYLES.map((style) => (
                 <label
                   key={style}
-                  className="flex cursor-pointer flex-row items-center gap-3 rounded-lg border px-3 py-3 hover:bg-muted has-checked:border-primary has-checked:bg-primary/5 has-focus-visible:ring-2 has-focus-visible:ring-ring sm:flex-col sm:py-4 sm:text-center"
+                  className="flex cursor-pointer flex-row items-center gap-3 rounded-lg border px-3 py-3 hover:bg-muted/70 has-checked:border-primary has-checked:bg-muted has-focus-visible:ring-2 has-focus-visible:ring-ring sm:flex-col sm:py-4 sm:text-center"
                 >
                   <input
                     type="radio"

@@ -80,7 +80,7 @@ function ResourceContent() {
       )}
       {uninspected && (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20 text-center">
-          <div className="flex size-14 items-center justify-center rounded-xl border bg-muted/40">
+          <div className="flex size-14 items-center justify-center rounded-xl border bg-muted/50">
             <Cpu className="size-6 text-muted-foreground" />
           </div>
           <div className="flex max-w-xl flex-col items-center">
@@ -129,7 +129,7 @@ function ResourceContent() {
         </p>
       )}
       {message && (
-        <p role="status" className="rounded-md border bg-muted/30 p-3 text-sm">
+        <p role="status" className="rounded-md border bg-muted/50 p-3 text-sm">
           {message}
         </p>
       )}
@@ -172,7 +172,7 @@ function ResourceContent() {
       )}
       {!uninspected && (
         <details className="group rounded-lg border">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm text-muted-foreground transition-colors select-none hover:bg-muted/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm text-muted-foreground transition-colors select-none hover:bg-muted/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
             About resource usage
             <ChevronDown
               className="size-4 shrink-0 transition-transform duration-150 group-open:rotate-180"

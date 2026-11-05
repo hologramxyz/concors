@@ -164,6 +164,7 @@ export function NewTabMenu({
             <button
               type="button"
               aria-label={empty ? "Create a tab" : "New tab"}
+              data-steady-while-creating
               disabled={createDisabled}
               onClick={() => create("chat")}
               className={
@@ -181,6 +182,7 @@ export function NewTabMenu({
               <DropdownMenuTrigger
                 data-tour="new-tab"
                 aria-label="New tab options"
+                data-steady-while-creating
                 disabled={disabled}
                 className={
                   empty

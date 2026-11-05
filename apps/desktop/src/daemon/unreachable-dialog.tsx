@@ -57,7 +57,7 @@ export function UnreachableHelpButton({
             </DialogDescription>
           </DialogHeader>
           {help.status && (
-            <p role="status" className="rounded-md border bg-muted/40 p-3 text-sm">
+            <p role="status" className="rounded-md border bg-muted/50 p-3 text-sm">
               {help.status}
             </p>
           )}

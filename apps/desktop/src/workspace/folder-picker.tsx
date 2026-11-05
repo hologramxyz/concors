@@ -145,7 +145,7 @@ export function FolderPicker({
                   type="button"
                   disabled={disabled}
                   onClick={() => browse(entry.directory)}
-                  className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-ui hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"
+                  className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-ui hover:bg-muted/70 focus-visible:bg-muted focus-visible:outline-none"
                 >
                   <Folder className="size-4 shrink-0 text-muted-foreground" />
                   <span className="truncate">{entry.name}</span>

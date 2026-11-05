@@ -57,6 +57,7 @@ export function StartOptions({
               variant="outline"
               size="sm"
               className="text-muted-foreground"
+              data-steady-while-creating
               disabled={disabled}
               onClick={() => onOpen(option)}
             >

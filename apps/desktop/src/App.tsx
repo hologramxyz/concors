@@ -420,10 +420,13 @@ function AppContent() {
     if (operation.kind === "selection.set") return connection.execute(operation);
     const closing = background.closing(operation);
     setPending(true);
+    // Only the look: what `pending` disables stays disabled, see `data-steady-while-creating`.
+    if (operation.kind === "tab.create") document.documentElement.dataset["creatingTab"] = "";
     try {
       await connection.execute(operation);
     } finally {
       setPending(false);
+      delete document.documentElement.dataset["creatingTab"];
     }
     background.afterClose(closing);
   };
@@ -536,6 +539,7 @@ function AppContent() {
                           onSelectMachine={selectMachine}
                           onViewCloud={manageMachines}
                           auth={account}
+                          guest={guest}
                           canTour={connection.workspaceReady && !!workspace}
                           onSignOut={signOut}
                           onSignIn={signIn}

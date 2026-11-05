@@ -155,7 +155,7 @@ export function VideoFileTab({ file }: { file: OpenFile }) {
           {error}
         </p>
       )}
-      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-muted/40">
+      <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden bg-muted/50">
         {available && !supported ? (
           <Message>
             This machine’s Concors service is too old to preview videos. Update it from Machines,

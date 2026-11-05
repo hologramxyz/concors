@@ -212,7 +212,7 @@ function ImageView({
       ref={scroller}
       tabIndex={0}
       aria-label={`Preview of ${name}`}
-      className="flex h-full overflow-auto bg-muted/40 p-4 outline-none"
+      className="flex h-full overflow-auto bg-muted/50 p-4 outline-none"
     >
       <img
         src={src}

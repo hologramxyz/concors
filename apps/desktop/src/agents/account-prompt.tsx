@@ -313,7 +313,7 @@ function AccountPrompt({
     return (
       <section
         aria-label={`${label} installation`}
-        className="rounded-xl border bg-muted/30 p-3 text-sm"
+        className="rounded-xl border bg-muted/50 p-3 text-sm"
       >
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -324,17 +324,20 @@ function AccountPrompt({
                 : `Install ${cli.label} on this machine using its guide, then come back here.`}
             </p>
           </div>
-          <SidebarTooltip place="above" content="Dismiss">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground"
-              aria-label="Dismiss installation"
-              onClick={() => dismissAccountPromptForNow(dismissalKey)}
-            >
-              <X className="size-4" />
-            </Button>
-          </SidebarTooltip>
+          {/* One title line tall, so the larger button centres on that line. */}
+          <div className="flex h-lh items-center">
+            <SidebarTooltip place="above" content="Dismiss">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground"
+                aria-label="Dismiss installation"
+                onClick={() => dismissAccountPromptForNow(dismissalKey)}
+              >
+                <X className="size-4" />
+              </Button>
+            </SidebarTooltip>
+          </div>
         </div>
         {failure && (
           <p role="alert" className="mt-2 text-xs text-destructive">
@@ -388,7 +391,7 @@ function AccountPrompt({
   return (
     <section
       aria-label={`${label} account connection`}
-      className="account-prompt rounded-xl border bg-muted/30 p-3 text-sm"
+      className="account-prompt rounded-xl border bg-muted/50 p-3 text-sm"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -399,17 +402,20 @@ function AccountPrompt({
             Use your account on this machine.
           </p>
         </div>
-        <SidebarTooltip place="above" content="Dismiss">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground"
-            aria-label="Dismiss account connection"
-            onClick={hide}
-          >
-            <X className="size-4" />
-          </Button>
-        </SidebarTooltip>
+        {/* One title line tall, so the larger button centres on that line. */}
+        <div className="flex h-lh items-center">
+          <SidebarTooltip place="above" content="Dismiss">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground"
+              aria-label="Dismiss account connection"
+              onClick={hide}
+            >
+              <X className="size-4" />
+            </Button>
+          </SidebarTooltip>
+        </div>
       </div>
       {(error || account?.message) && (
         <p role="alert" className="mt-2 text-xs text-destructive">

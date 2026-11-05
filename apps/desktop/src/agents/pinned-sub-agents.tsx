@@ -27,7 +27,7 @@ export function PinnedSubAgents({
   return (
     <section
       aria-label="Running sub-agents"
-      className="chat-scroll max-h-40 divide-y overflow-y-auto rounded-xl border bg-muted/20"
+      className="chat-scroll max-h-40 divide-y overflow-y-auto rounded-xl border bg-muted/50"
     >
       {agents.map((agent) => {
         const selected = !!open && (open.childId ?? open.item.id) === agent.key;
@@ -72,7 +72,7 @@ function PinnedRow({
         aria-pressed={selected}
         data-pinned-sub-agent={agent.key}
         onClick={onPress}
-        className={`flex w-full min-w-0 items-start gap-2 px-3 py-1.5 text-left hover:bg-muted/50 ${selected ? "bg-muted/60" : ""}`}
+        className={`flex w-full min-w-0 items-start gap-2 px-3 py-1.5 text-left ${selected ? "bg-muted" : "hover:bg-muted/70"}`}
       >
         <span
           aria-hidden="true"

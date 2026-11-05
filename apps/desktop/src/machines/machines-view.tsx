@@ -673,7 +673,7 @@ function MachineCard({
         </div>
       ) : machine.status === "provisioning" ? (
         <div className="border-t p-5 sm:p-6">
-          <div role="status" className="flex items-start gap-3 rounded-lg bg-muted/30 p-4">
+          <div role="status" className="flex items-start gap-3 rounded-lg bg-muted/50 p-4">
             <LoaderCircle
               className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
               aria-hidden="true"
@@ -781,7 +781,7 @@ function DaemonUpdateNotice({
     return (
       <div
         role="status"
-        className="mx-5 mb-5 flex items-start gap-3 rounded-lg bg-muted/30 p-4 sm:mx-6 sm:mb-6"
+        className="mx-5 mb-5 flex items-start gap-3 rounded-lg bg-muted/50 p-4 sm:mx-6 sm:mb-6"
       >
         <LoaderCircle
           className="mt-0.5 size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
@@ -869,7 +869,7 @@ function DaemonUpdateNotice({
 function AdvancedDetails({ children }: { readonly children: ReactNode }) {
   return (
     <details className="group border-t">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-xs text-muted-foreground transition-colors select-none hover:bg-muted/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset sm:px-6 [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-3 text-xs text-muted-foreground transition-colors select-none hover:bg-muted/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset sm:px-6 [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <Settings2 className="size-3.5" aria-hidden="true" />
           Advanced
@@ -879,7 +879,7 @@ function AdvancedDetails({ children }: { readonly children: ReactNode }) {
           aria-hidden="true"
         />
       </summary>
-      <div className="border-t bg-muted/10 px-5 py-4 sm:px-6">{children}</div>
+      <div className="border-t bg-muted/50 px-5 py-4 sm:px-6">{children}</div>
     </details>
   );
 }
@@ -902,7 +902,7 @@ function SetupPanel({
       role="status"
       className={cn(
         "flex items-start gap-3 rounded-lg p-4",
-        problem ? "bg-amber-500/10" : "bg-muted/30",
+        problem ? "bg-amber-500/10" : "bg-muted/50",
       )}
     >
       {problem ? (

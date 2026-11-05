@@ -17,13 +17,15 @@ import {
   useRef,
   useState,
 } from "react";
-import { ArrowDown, Bot, MessageSquare } from "lucide-react";
-import type {
-  AgentOperation,
-  LayoutNode,
-  ProviderStatus,
-  WorkspaceProject,
-  WorkspaceTab,
+import { ArrowDown, ArrowUp, Bot, Brain, MessageSquare, Mic, Plus } from "lucide-react";
+import {
+  findAgentModel,
+  type AgentInfo,
+  type AgentOperation,
+  type LayoutNode,
+  type ProviderStatus,
+  type WorkspaceProject,
+  type WorkspaceTab,
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Activity } from "./activity";
@@ -40,7 +42,10 @@ import { forgetPendingResume, pendingResume } from "./pending-resume";
 import { rememberProviders } from "./session-cache";
 import { ControlPicker } from "./control-picker";
 import { ProviderIcon } from "./provider-icon";
-import { defaultProvider } from "./default-provider";
+import { defaultProvider, useStartingProvider } from "./default-provider";
+import { AgentModelPicker } from "./model-picker";
+import { ContextMeter } from "./context-meter";
+import { useAgentModelSelection } from "./use-model-selection";
 import { hasConversation } from "./provider-switch";
 import { timelineView } from "./thinking";
 import { PinnedSubAgents } from "./pinned-sub-agents";
@@ -81,6 +86,10 @@ export function ChatPane({
   const resumed = useRef(false);
   const [provider, setProvider] = useState<string | null>(resumeTarget?.provider ?? null);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  const startingProvider = useStartingProvider();
+  // The pane learns its session a moment before the agent arrives. A chat that began here keeps
+  // the start screen until then, so the real one opens already in place.
+  const [startedHere, setStartedHere] = useState(!node.sessionId);
   const agents = useAgents();
   const latestAgents = useRef(agents);
   useEffect(() => {
@@ -150,6 +159,7 @@ export function ChatPane({
           setProvider(null);
           throw new Error(result.outcome.message);
         }
+        setStartedHere(false);
       })
       .catch((cause: unknown) => {
         setError(cause instanceof Error ? cause.message : "Could not prepare agent");
@@ -168,6 +178,7 @@ export function ChatPane({
   ]);
   // Once its new chat is ready, it takes over the session: the CLI's history becomes the chat's.
   const bound = node.sessionId ? agents.find((agent) => agent.id === node.sessionId) : undefined;
+  if (startedHere && bound) setStartedHere(false);
   useEffect(() => {
     const target = resumeTarget;
     if (!target || resumed.current || !connection || !bound) return;
@@ -192,7 +203,7 @@ export function ChatPane({
         setResumeError(cause instanceof Error ? cause.message : "Could not resume the chat"),
       );
   }, [bound, connection, node.id, resumeTarget]);
-  if (node.sessionId) {
+  if (node.sessionId && !(start && startedHere && !bound)) {
     const chat = (
       <Chat key={node.sessionId} sessionId={node.sessionId} canEdit={canEdit} start={start} />
     );
@@ -215,7 +226,12 @@ export function ChatPane({
       aria-label="Agent conversation"
     >
       <div className="min-h-0 flex-1" role="log" aria-label="Chat timeline" />
-      {start && <StartHeading provider={provider} />}
+      {start && (
+        <StartHeading
+          provider={provider ?? startingProvider}
+          listing={choosesProvider && !providers && !error}
+        />
+      )}
       <div
         className={`shrink-0 px-[24px] pt-2 pb-3 ${compact ? "" : "agent-composer-dock sticky bottom-0 bg-background"}`}
       >
@@ -236,14 +252,23 @@ export function ChatPane({
               </Button>
             </div>
           )}
-          <div className="rounded-2xl border bg-background p-2">
+          <div
+            data-new-chat-starting={start ? true : undefined}
+            className={`rounded-2xl border bg-background p-2 ${start ? "agent-composer-form shadow-sm" : ""}`}
+          >
             <textarea
               data-agent-composer
               aria-label="Preparing agent"
               placeholder={start || compact ? START_PLACEHOLDER : "Reply…"}
               disabled
-              className="agent-composer-input min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none"
+              className={`agent-composer-input min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none ${start ? "max-h-[min(40cqh,26rem)]" : ""}`}
             />
+            {start && !asking && (
+              <StartToolbar
+                provider={provider ?? startingProvider}
+                directory={node.directory ?? project.directory}
+              />
+            )}
             {asking && (
               <div className="flex items-center gap-1 px-1">
                 <ControlPicker
@@ -279,13 +304,15 @@ export function ChatPane({
 const START_PLACEHOLDER = "Ask anything…";
 
 /** Above the start screen's prompt box: the mark of the provider its chip has selected. */
-function StartHeading({ provider }: { provider: string | null }) {
+function StartHeading({ provider, listing }: { provider: string | null; listing?: boolean }) {
   return (
     // 48px to the prompt box, less the 0.5rem its footer already pads above it.
     <div className="start-heading flex shrink-0 flex-col items-center gap-3 px-[24px] pt-2 pb-[calc(48px-0.5rem)] text-center text-muted-foreground">
       <span className="start-heading-icon flex">
         {provider ? (
           <ProviderIcon provider={provider} size={40} />
+        ) : listing ? (
+          <MessageSquare size={40} className="invisible" aria-hidden="true" />
         ) : (
           <MessageSquare className="size-10" aria-hidden="true" />
         )}
@@ -294,6 +321,95 @@ function StartHeading({ provider }: { provider: string | null }) {
     </div>
   );
 }
+
+/**
+ * The prompt box's row before its chat exists, drawn from the provider's latest chat so the real
+ * row replaces it unchanged. Nothing here works yet, so all of it is inert.
+ */
+function StartToolbar({ provider, directory }: { provider: string | null; directory: string }) {
+  const agents = useAgents();
+  const latest = agents
+    .filter((agent) => agent.provider === provider)
+    .reduce<AgentInfo | undefined>(
+      (found, agent) => (!found || agent.startedAt > found.startedAt ? agent : found),
+      undefined,
+    );
+  const like: AgentInfo | undefined = latest && {
+    ...withoutReports(latest),
+    directory,
+    model: null,
+    context: null,
+    threadId: null,
+    turnId: null,
+    status: "starting",
+    turnStartedAt: null,
+    nativeImport: false,
+  };
+  return (
+    <div inert className="agent-composer-toolbar flex items-center gap-1 px-1">
+      <div className="agent-composer-controls">
+        <button type="button" aria-label="Attach files" className="agent-control">
+          <Plus className="size-4" />
+        </button>
+        {like && <StartModelControls agent={like} />}
+      </div>
+      <div className="mobile-composer-primary ml-auto flex shrink-0 items-center gap-1">
+        <div className="agent-composer-utilities">
+          {like && <ContextMeter agent={like} />}
+          <button
+            type="button"
+            disabled
+            aria-label="Start dictation"
+            className="agent-control text-muted-foreground"
+          >
+            <Mic className="size-4" />
+          </button>
+        </div>
+        <button
+          type="button"
+          disabled
+          aria-label="Send"
+          className="rounded-lg bg-primary p-2 text-primary-foreground disabled:opacity-30"
+        >
+          <ArrowUp className="size-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** What only the provider's own chat reports: a new chat has none of it until it is ready. */
+function withoutReports({ models: _models, controls: _controls, ...agent }: AgentInfo) {
+  return agent;
+}
+
+function StartModelControls({ agent }: { agent: AgentInfo }) {
+  const { currentModels, selection } = useAgentModelSelection(agent, ignoreSelection, false);
+  const effortModel = findAgentModel(currentModels, selection.value);
+  const effort = agent.settings?.effort;
+  return (
+    <>
+      <AgentModelPicker agent={agent} disabled onSelect={ignoreSelection} />
+      {!!effortModel?.efforts.length && (
+        <ControlPicker
+          label="Thinking effort"
+          showValue
+          value={effort ?? ""}
+          selectedLabel={
+            effort
+              ? effort.charAt(0).toUpperCase() + effort.slice(1)
+              : `Default (${effortModel.defaultEffort ?? "automatic"})`
+          }
+          icon={<Brain className="size-4" />}
+          options={[]}
+          onSelect={ignoreSelection}
+        />
+      )}
+    </>
+  );
+}
+
+const ignoreSelection = () => undefined;
 
 /**
  * Below the prompt box on the start screen. It is taller than the timeline above, so the column
@@ -378,7 +494,6 @@ export function Chat({
     conversation.ready,
     conversation.items,
   );
-  const slowLoad = useSlowLoad(conversation.loading === "latest");
   const footers = useMemo(() => completedTurnFooters(conversation.items), [conversation.items]);
   const replies = useMemo(() => forkReplies(conversation.items), [conversation.items]);
   const latestReply = conversation.hasNewer
@@ -410,6 +525,8 @@ export function Chat({
   const active = agent && ["working", "needs_input"].includes(agent.status);
   // Nothing was said yet: the pane is still the start screen.
   const fresh = !!agent && !hasConversation(agent) && !conversation.items.length;
+  // A new chat has nothing to load.
+  const slowLoad = useSlowLoad(conversation.loading === "latest" && !fresh);
   const connected = canEdit && connection?.state.status === "ready";
   const canResume =
     agent &&
@@ -667,7 +784,7 @@ export function Chat({
             {!atBottom && (
               <Button
                 variant="outline"
-                className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 bg-background/80 shadow backdrop-blur-md"
+                className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 bg-background/80 shadow backdrop-blur-md hover:bg-raised-opaque dark:hover:bg-none"
                 onClick={latest}
               >
                 <ArrowDown className="size-3" />
