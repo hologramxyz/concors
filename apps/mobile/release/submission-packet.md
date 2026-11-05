@@ -4,7 +4,38 @@ Reviewed on **2026-11-04 UTC** against the current [Apple App Review Guidelines]
 
 The owner confirmed **Concors: Coding Workspace**, reported no prior rejection, and confirmed a **free launch**, with machines added from the desktop app. The app is [`6817622624`](https://appstoreconnect.apple.com/apps/6817622624), bundle `xyz.hologram.concors`, Apple team `9WN4P724M2`. The current build is in internal TestFlight. This review did not submit a public version or certify readiness.
 
-## App Store fields completed
+## Remediation prepared on 2026-11-05
+
+The audit below records the original production/TestFlight findings. The remediation branch starts
+from updated main `6a1844dc` and adds the following; production/device verification remains separate.
+
+Related changes: [account lifecycle API](https://github.com/hologramxyz/concors-server/pull/21)
+and [public pages/browser deletion](https://github.com/hologramxyz/concors-web/pull/12).
+The owner selected **gm@hologram.xyz** for public support and privacy contact. The exact legal
+company name is still unconfirmed.
+
+| Finding                        | Implemented change                                                                                                                                                | Remaining acceptance                                                               |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Missing public pages           | Real privacy/support/terms pages, **gm@hologram.xyz**, and a PKCE-protected web deletion page                                                                     | Verify deployed URLs, mailbox, owner retention/processor facts                     |
+| No account deletion            | Native same-user reauthentication, affected-resource plan, durable cleanup/receipt, revocation, owned disk erasure and billing cancellation                       | Signed iPhone and dedicated non-customer live acceptance; monitor delayed jobs     |
+| Social login without Apple     | API + iPhone + desktop Apple login, private relay address support, verified encrypted refresh tokens and Apple revocation                                         | Private Apple/Privy Services ID/client secret/relay configuration and device tests |
+| AI sharing permission absent   | Native boundary enforces configuration/model/connection permission, including scheduled work and tool responses; decline/withdrawal stops new applicable requests | Verify actual custom recipients and provider terms; physical-device acceptance     |
+| Content reporting absent       | In-app private report form, authorized API, rate limiting, operator triage and bounded resolved-report retention                                                  | Run the moderation/support process and confirm applicable safety rules             |
+| Unsupported associated domains | Remove unused production Universal/App Link declarations; retain supported authentication schemes                                                                 | New signed build and actual sign-in/link acceptance                                |
+| Stale release scope            | Record free launch with desktop machine setup and account creation through normal sign-in                                                                         | Countries, age ratings, privacy labels and public version/build alignment          |
+
+The existing `readiness.json` gates remain pending/blocked; implementation is not signed-device or
+store-console approval. No new TestFlight upload or App Review submission is claimed. A new signed
+candidate must replace `0.1.0 (7)` before the new behavior can be reviewed by Apple.
+
+Local remediation checks passed: formatting, lint, full TypeScript checks and **1,668 workspace
+tests** (two skipped), including the new protocol permission and same-user reauthentication cases.
+The API passed **517 tests** (13 skipped), including disposable-Postgres lifecycle/concurrency
+tests. Website build/format checks, four static-server/changelog tests and **20 browser checks**
+passed; seven mobile workspace browser smoke checks also passed. Rust checks could not run locally
+because Cargo is not installed. These checks do not establish signed iPhone acceptance.
+
+## App Store fields completed before remediation
 
 The verified iOS draft is exported in [`app-store-connect-draft.json`](app-store-connect-draft.json). `store-listing.json` remains the earlier generic cross-platform draft; use the verified export for current iOS copy.
 
@@ -114,7 +145,7 @@ The Apple record also has a macOS `1.0` draft without a build. The desktop DMG u
 
 ## Information needed from the owner
 
-1. Launch countries; support email, legal copyright holder and privacy contact. Launch is confirmed free, with machines added from desktop. Apple signing organization Rolling Inc. is not proof of the copyright owner.
+1. Launch countries and legal copyright holder. Public support/privacy contact is **gm@hologram.xyz**; verify the inbox is monitored. Launch is confirmed free, with machines added from desktop. Apple signing organization Rolling Inc. is not proof of the copyright owner.
 2. Approved processor, retention/deletion and AI handling/training facts; intended audience/minimum age and third-party content/service rights.
 3. Review contact name/email/phone and durable dedicated account/machine access. Enter credentials privately in App Store Connect, never in this repository.
 4. Native iPhone screenshots and final physical-device acceptance results.

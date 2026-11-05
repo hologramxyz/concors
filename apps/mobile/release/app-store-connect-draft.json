@@ -33,12 +33,17 @@
     "price": "free",
     "machineSetup": "Users add machines from the desktop app",
     "storePricingVerified": false,
-    "launchCountries": null
+    "launchCountries": null,
+    "supportAndPrivacyEmail": "gm@hologram.xyz"
   },
   "pendingDraftUpdates": {
     "status": "prepared-locally-not-uploaded",
     "descriptionAddition": "Concors is free at launch. Add your machine using the desktop app before connecting to it from your iPhone.",
-    "reviewNotesAddition": "The owner confirms Concors is free at launch. Users add machines from the desktop app; iPhone users connect to machines already on their account. Provide reviewers with an already connected, available machine so they can review the full iPhone experience without provisioning one."
+    "reviewNotesAddition": "The owner confirms Concors is free at launch. Users add machines from the desktop app; iPhone users connect to machines already on their account. Provide reviewers with an already connected, available machine so they can review the full iPhone experience without provisioning one.",
+    "supportUrl": "https://concors.dev/support",
+    "privacyPolicyUrl": "https://concors.dev/privacy",
+    "reviewFlowAddition": "Settings → Account provides AI-sharing permission controls, private content/problem reporting and permanent account deletion with same-user reauthentication and a private status receipt. Use a dedicated reviewer account and already connected machine.",
+    "condition": "Upload only after deployment, owner privacy verification, signed-device acceptance and submission-key replacement. These pending additions are not verified Apple fields."
   },
   "remainingOwnerFields": [
     "Legal copyright holder",
