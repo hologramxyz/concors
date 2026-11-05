@@ -368,17 +368,20 @@ function AccountPrompt({
             Use your account on this machine.
           </p>
         </div>
-        <SidebarTooltip place="above" content="Dismiss">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground"
-            aria-label="Dismiss account connection"
-            onClick={hide}
-          >
-            <X className="size-4" />
-          </Button>
-        </SidebarTooltip>
+        {/* One title line tall, so the larger button centres on that line. */}
+        <div className="flex h-lh items-center">
+          <SidebarTooltip place="above" content="Dismiss">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground"
+              aria-label="Dismiss account connection"
+              onClick={hide}
+            >
+              <X className="size-4" />
+            </Button>
+          </SidebarTooltip>
+        </div>
       </div>
       {(error || account?.message) && (
         <p role="alert" className="mt-2 text-xs text-destructive">

@@ -34,20 +34,23 @@ export function GuestSignInCard({
             Use cloud machines and Concors on your phone.
           </p>
         </div>
-        <SidebarTooltip place="above" content="Dismiss">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground"
-            aria-label="Dismiss"
-            onClick={() => {
-              setAccountPromptDismissed(DISMISSAL_KEY, true);
-              onDismissed();
-            }}
-          >
-            <X className="size-4" />
-          </Button>
-        </SidebarTooltip>
+        {/* One title line tall, so the larger button centres on that line. */}
+        <div className="flex h-lh items-center">
+          <SidebarTooltip place="above" content="Dismiss">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground"
+              aria-label="Dismiss"
+              onClick={() => {
+                setAccountPromptDismissed(DISMISSAL_KEY, true);
+                onDismissed();
+              }}
+            >
+              <X className="size-4" />
+            </Button>
+          </SidebarTooltip>
+        </div>
       </div>
       <div className="mt-3">
         <Button variant="outline" onClick={onSignIn}>
