@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 import { describeAuthError, type AuthState } from "./auth-state.ts";
-import { GitHubIcon, GoogleIcon } from "./provider-icons.tsx";
+import { AppleIcon, GitHubIcon, GoogleIcon } from "./provider-icons.tsx";
 import { SignInError } from "./sign-in.ts";
 
 interface AuthScreenProps {
@@ -17,12 +17,14 @@ interface AuthScreenProps {
   readonly onSignIn: (choice: NativeSignInChoice, signal: AbortSignal) => Promise<void>;
   /** Why sign-in cannot be offered here, shown in place of the buttons. */
   readonly signInUnavailable: string | null;
+  readonly appleAvailable?: boolean;
   readonly onRetry: () => void;
   /** Set for a guest, who chose to come here and can go back to what they were doing. */
   readonly onBack?: () => void;
 }
 
 const WAITING: Record<NativeSignInChoice["method"], string> = {
+  apple: "Continue with Apple in your browser.",
   github: "Continue with GitHub in your browser.",
   google: "Continue with Google in your browser.",
   email: "Enter the code we emailed you in your browser.",
@@ -41,6 +43,7 @@ export function AuthScreen({
   state,
   onSignIn,
   signInUnavailable,
+  appleAvailable = false,
   onRetry,
   onBack,
 }: AuthScreenProps) {
@@ -135,6 +138,12 @@ export function AuthScreen({
           </div>
         ) : (
           <div className="mt-6 grid gap-2.5">
+            {appleAvailable && (
+              <Button className="min-h-9 w-full" onClick={() => signIn({ method: "apple" })}>
+                <AppleIcon className="size-4" />
+                Continue with Apple
+              </Button>
+            )}
             <Button
               variant="outline"
               className="min-h-9 w-full"

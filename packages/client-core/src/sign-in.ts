@@ -21,6 +21,8 @@ export type SignInCallback =
 export const CANCELLED_SIGN_IN_CODES: ReadonlySet<string> = new Set(["cancelled", "access_denied"]);
 
 const MESSAGES: Readonly<Record<string, string>> = {
+  apple_authorization_required:
+    "Apple authorization was incomplete. Choose Continue with Apple again to finish signing in.",
   access_denied: "Sign-in was cancelled.",
   cancelled: "Sign-in was cancelled.",
   // Accounts are keyed by a verified email, so a sign-in without one cannot be matched or created.
