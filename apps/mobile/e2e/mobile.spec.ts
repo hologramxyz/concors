@@ -111,6 +111,38 @@ test("chat-first shell reuses desktop approvals, streaming and bottom composer",
   expect(metrics.overflow).toBe(false);
   expect(errors).toEqual([]);
 });
+test("your message bubble stands out from the phone's light background", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  const ui = await enter(page);
+  const bubble = ui
+    .locator("article")
+    .filter({ hasText: "Help me get the mobile client ready to test." });
+  const contrast = await bubble.evaluate((element) => {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) throw new Error("Canvas is unavailable");
+    const paint = (...layers: string[]) => {
+      for (const layer of layers) {
+        context.fillStyle = layer;
+        context.fillRect(0, 0, 1, 1);
+      }
+      return [...context.getImageData(0, 0, 1, 1).data].slice(0, 3);
+    };
+    const luminance = (rgb: number[]) => {
+      const [r, g, b] = rgb.map((channel) => {
+        const value = channel / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      }) as [number, number, number];
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b + 0.05;
+    };
+    const background = getComputedStyle(document.documentElement).getPropertyValue("--background");
+    const page = luminance(paint(background));
+    const fill = luminance(paint(background, getComputedStyle(element).backgroundColor));
+    return Math.max(page, fill) / Math.min(page, fill);
+  });
+  // The same bubble measures 1.037 on desktop; it measured 1.000 here before it had its own fill.
+  expect(contrast).toBeGreaterThan(1.03);
+});
 test("mobile header, terminal and host share one background across palettes and modes", async ({
   page,
 }) => {

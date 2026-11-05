@@ -826,6 +826,12 @@ body {
 .mobile-main:has(.mobile-notice) [aria-label="Chat timeline"] {
   padding-top: 16px;
 }
+/* The phone's paper background is lighter than desktop's, so the shared muted bubble disappears
+   into it. This token at this strength stands out as much as the desktop bubble does (contrast
+   1.04). Other palettes and dark mode already match desktop, so they keep the shared bubble. */
+:root[data-color-theme="concors"]:not(.dark) .mobile-user-bubble {
+  background: color-mix(in srgb, var(--sidebar-accent) 40%, transparent);
+}
 .mobile-pane [data-agent-composer] {
   font-size: 16px;
   max-height: 128px;
