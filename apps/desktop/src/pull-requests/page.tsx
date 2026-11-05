@@ -1,4 +1,4 @@
-import { useContext, useState, type ReactNode } from "react";
+import { useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ChevronDown,
   CircleCheck,
@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { ProjectImage } from "@/workspace/project-image";
+import { tabStripFades } from "@/workspace/tab-strip-scroll";
 import { projectIconKey } from "@/workspace/project-icons";
 import { useProjectIcons } from "@/workspace/use-project-icons";
 import { PullRequestView } from "./detail";
@@ -154,6 +155,10 @@ export function PullRequestsPage({
   const noRepositories =
     open.status === "listed" &&
     ![...open.workspaces.values()].some((listing) => listing.repositories.length);
+  const showStates =
+    connected && !!capabilities?.includes(PULL_REQUESTS_CAPABILITY) && !noRepositories;
+  const showChips = listed && (listings.length > 0 || !!filtered);
+  const showMine = showChips && !!state.viewer;
   return (
     <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-6 sm:px-8 sm:py-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -172,52 +177,60 @@ export function PullRequestsPage({
           </Button>
         )}
       </div>
-      {connected && capabilities?.includes(PULL_REQUESTS_CAPABILITY) && !noRepositories && (
-        <div
-          role="tablist"
-          aria-label="Pull request state"
-          className="mt-5 inline-flex self-start rounded-[calc(var(--radius-md)+(0.125rem+1px)*var(--concentric))] border bg-muted/50 p-0.5"
-        >
-          {states.map(({ state: option, label, Icon, tone }) => {
-            const count =
-              option === "open"
-                ? open.status === "listed"
-                  ? totalOpenCount(open.workspaces.values())
-                  : null
-                : option === view.state && listed
-                  ? total
-                  : null;
-            return (
-              <button
-                key={option}
-                type="button"
-                role="tab"
-                aria-selected={view.state === option}
-                onClick={() => {
-                  setNotice(null);
-                  onNavigate({ ...view, state: option, pullRequest: null });
-                }}
-                className={cn(
-                  "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-ui",
-                  view.state === option
-                    ? "bg-background text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <Icon className={cn("size-3.5", tone)} aria-hidden="true" />
-                {label}
-                {count !== null && <span className="text-xs tabular-nums opacity-70">{count}</span>}
-              </button>
-            );
-          })}
+      {showStates && (
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <div
+            role="tablist"
+            aria-label="Pull request state"
+            className="inline-flex rounded-[calc(var(--radius-md)+(0.125rem+1px)*var(--concentric))] border bg-muted/50 p-0.5"
+          >
+            {states.map(({ state: option, label, Icon, tone }) => {
+              const count =
+                option === "open"
+                  ? open.status === "listed"
+                    ? totalOpenCount(open.workspaces.values())
+                    : null
+                  : option === view.state && listed
+                    ? total
+                    : null;
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  role="tab"
+                  aria-selected={view.state === option}
+                  onClick={() => {
+                    setNotice(null);
+                    onNavigate({ ...view, state: option, pullRequest: null });
+                  }}
+                  className={cn(
+                    "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-ui",
+                    view.state === option
+                      ? "bg-background text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  <Icon className={cn("size-3.5", tone)} aria-hidden="true" />
+                  {label}
+                  {count !== null && (
+                    <span className="text-xs tabular-nums opacity-70">{count}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {/* On a phone the workspace chips scroll sideways, where this filter would sit past the
+              edge unseen; next to the state switch it is always in view. "Yours" keeps the two on
+              one line even with a count on Merged or Closed. */}
+          {showMine && (
+            <MineFilter mine={mine} onChange={setMine} className="ml-auto sm:hidden">
+              Yours
+            </MineFilter>
+          )}
         </div>
       )}
-      {listed && (listings.length > 0 || filtered) && (
-        <div
-          role="toolbar"
-          aria-label="Filter pull requests"
-          className="-mx-4 mt-3 flex items-center gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0"
-        >
+      {showChips && (
+        <FilterStrip>
           <FilterChip pressed={!filtered} onClick={() => filter(null)} count={total}>
             All workspaces
           </FilterChip>
@@ -248,7 +261,10 @@ export function PullRequestsPage({
               type="button"
               aria-label={`Show every repository in ${filtered.name}`}
               onClick={() => filter(filtered.id)}
-              className="flex h-7 shrink-0 items-center gap-1.5 rounded-md border border-foreground/20 bg-muted px-2.5 text-ui"
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 border border-foreground/20 bg-muted px-2.5 text-ui",
+                CHIP_SIZE,
+              )}
             >
               {repositoryLabel(
                 repository,
@@ -257,15 +273,15 @@ export function PullRequestsPage({
               <X className="size-3.5 text-muted-foreground" aria-hidden="true" />
             </button>
           )}
-          {state.viewer && (
-            <>
+          {showMine && (
+            <span className={showStates ? "hidden sm:contents" : "contents"}>
               <span className="mx-1 h-4 w-px shrink-0 bg-border" aria-hidden="true" />
-              <FilterChip pressed={mine} onClick={() => setMine(!mine)}>
+              <MineFilter mine={mine} onChange={setMine}>
                 Opened by you
-              </FilterChip>
-            </>
+              </MineFilter>
+            </span>
           )}
-        </div>
+        </FilterStrip>
       )}
       {notice && (
         <p role="status" className="mt-4 text-ui text-muted-foreground">
@@ -636,17 +652,95 @@ function Checks({ state }: { state: NonNullable<PullRequest["checks"]> }) {
   );
 }
 
+/**
+ * A chip's size: on a phone, the state switch's full height and rounding, so the two rows of
+ * controls read as one set and "Opened by you" sits flush beside the switch; on wider screens, the
+ * height of a tab inside the switch.
+ */
+const CHIP_SIZE =
+  "h-7 rounded-md max-sm:h-8.5 max-sm:rounded-[calc(var(--radius-md)+(0.125rem+1px)*var(--concentric))]";
+
+function MineFilter({
+  mine,
+  onChange,
+  className,
+  children,
+}: {
+  mine: boolean;
+  onChange: (mine: boolean) => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <FilterChip pressed={mine} onClick={() => onChange(!mine)} className={className}>
+      {children}
+    </FilterChip>
+  );
+}
+
+/**
+ * The workspace chips. A phone keeps them on one line that scrolls sideways, without a scrollbar,
+ * and fades an edge with more chips past it so the row reads as scrollable rather than cut off.
+ * Wider screens wrap them instead, so nothing overflows and no fade shows.
+ */
+function FilterStrip({ children }: { children: ReactNode }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const [fades, setFades] = useState({ start: false, end: false });
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const sync = () => {
+      const next = tabStripFades(list);
+      setFades((shown) => (shown.start === next.start && shown.end === next.end ? shown : next));
+    };
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(list);
+    if (list.firstElementChild) observer.observe(list.firstElementChild);
+    list.addEventListener("scroll", sync, { passive: true });
+    return () => {
+      observer.disconnect();
+      list.removeEventListener("scroll", sync);
+    };
+  }, []);
+  return (
+    <div className="relative -mx-4 mt-3 sm:mx-0">
+      <div ref={listRef} className="tab-strip overflow-x-auto px-4 sm:px-0">
+        <div
+          role="toolbar"
+          aria-label="Filter pull requests"
+          className="flex w-max items-center gap-1.5 sm:w-auto sm:flex-wrap"
+        >
+          {children}
+        </div>
+      </div>
+      <div
+        aria-hidden="true"
+        data-visible={fades.start}
+        className="tab-strip-fade left-0 bg-linear-to-r from-background to-transparent"
+      />
+      <div
+        aria-hidden="true"
+        data-visible={fades.end}
+        className="tab-strip-fade right-0 bg-linear-to-l from-background to-transparent"
+      />
+    </div>
+  );
+}
+
 function FilterChip({
   pressed,
   onClick,
   count,
   icon,
+  className,
   children,
 }: {
   pressed: boolean;
   onClick: () => void;
   count?: number;
   icon?: ReactNode;
+  className?: string | undefined;
   children: ReactNode;
 }) {
   return (
@@ -655,11 +749,13 @@ function FilterChip({
       aria-pressed={pressed}
       onClick={onClick}
       className={cn(
-        "flex h-7 max-w-56 shrink-0 items-center gap-1.5 rounded-md border text-ui",
+        "flex max-w-56 shrink-0 items-center gap-1.5 border text-ui",
+        CHIP_SIZE,
         icon ? "pr-2.5 pl-1.5" : "px-2.5",
         pressed
           ? "border-foreground/20 bg-muted text-foreground"
           : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+        className,
       )}
     >
       {icon}
