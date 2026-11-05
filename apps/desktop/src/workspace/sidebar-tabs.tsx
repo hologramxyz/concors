@@ -162,7 +162,7 @@ export function SidebarTabRow({
     <li
       data-sidebar-row={row.key}
       className={cn(
-        "group/row flex items-center rounded-md hover:bg-sidebar-accent/50 has-[[data-state=open]]:bg-sidebar-accent/50",
+        "group/row flex items-center rounded-md hover:bg-sidebar-accent/70 has-[[data-state=open]]:bg-sidebar-accent/50",
         selected && "bg-sidebar-accent hover:bg-sidebar-accent",
       )}
     >

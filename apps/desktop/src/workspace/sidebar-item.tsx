@@ -162,7 +162,7 @@ export function WorkspaceSidebarItem({
     <li
       className={cn(
         // Keyboard focus shows, but a clicked row does not stay filled once selection moves on.
-        "group relative flex items-center rounded-md hover:bg-sidebar-accent/50 has-[:focus-visible:not([data-pointer-focus])]:bg-sidebar-accent/50 has-[[data-state=open]]:bg-sidebar-accent/50",
+        "group relative flex items-center rounded-md hover:bg-sidebar-accent/70 has-[:focus-visible:not([data-pointer-focus])]:bg-sidebar-accent/50 has-[[data-state=open]]:bg-sidebar-accent/50",
         selected && "bg-sidebar-accent hover:bg-sidebar-accent",
         mobile && "mobile-project",
       )}

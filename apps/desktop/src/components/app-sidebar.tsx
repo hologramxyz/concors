@@ -448,7 +448,7 @@ function WorkspaceTree(props: AppSidebarProps) {
                               onClick={() =>
                                 setMore((previous) => new Set(previous).add(project.id))
                               }
-                              className="flex h-8 w-full items-center gap-2 rounded-md pr-2 pl-2 text-left text-ui text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+                              className="flex h-8 w-full items-center gap-2 rounded-md pr-2 pl-2 text-left text-ui text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
                             >
                               <span
                                 data-show-more-dot={foldedDot}
