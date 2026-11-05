@@ -148,7 +148,7 @@
   --secondary-foreground: var(--foreground);
   --muted: #242424;
   --muted-foreground: #a0a0a0;
-  --raised-fill: color-mix(in srgb, var(--foreground) 8%, transparent);
+  --raised-fill: color-mix(in srgb, var(--foreground) 10%, transparent);
   --accent: #292929;
   --accent-foreground: var(--foreground);
   --destructive: oklch(0.68 0.19 25);
