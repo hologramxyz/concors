@@ -82,14 +82,19 @@ test("native header surfaces follow both panels throughout real touch drags", as
       (await snapshot(page))?.surfaces.some((item) => item.content.kind === "composer"),
     )
     .toBe(true);
+  // On plain text, away from any button: a touch on a code block keeps that block's own sideways
+  // scroll, and a touch beside a 44pt copy button is taken as a tap on it.
+  const text = await ui.getByText("Use the selector above to switch panes.").boundingBox();
+  if (!text) throw new Error("Expected plain chat text to swipe from");
+  const y = text.y + text.height / 2;
   const touch = await page.context().newCDPSession(page);
   let touching = false;
   const move = (x: number) =>
-    touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: 300 }] });
+    touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y }] });
   const start = async (x: number) => {
     await touch.send("Input.dispatchTouchEvent", {
       type: "touchStart",
-      touchPoints: [{ x, y: 300 }],
+      touchPoints: [{ x, y }],
     });
     touching = true;
   };

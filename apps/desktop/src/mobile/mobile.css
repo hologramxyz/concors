@@ -469,7 +469,8 @@ body {
   inset: 0;
   pointer-events: none;
   border-radius: inherit;
-  border: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+  border: 1px solid;
+  border-color: color-mix(in srgb, var(--foreground) 6%, transparent);
   background: var(--background);
   box-shadow:
     inset 0.5px 0.5px 0 #ffffff28,
@@ -525,7 +526,9 @@ body {
   position: relative;
   z-index: 30;
   pointer-events: auto;
-  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  /* Apart from the width and style: WebView 113 draws a color-mix() in the shorthand as text color. */
+  border: 1px solid;
+  border-color: color-mix(in srgb, var(--border) 50%, transparent);
   border-radius: var(--mobile-round-radius);
   background: var(--background);
   box-shadow:
