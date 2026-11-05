@@ -90,7 +90,12 @@ export function AuthScreen({
         <BrandMark className="mx-auto mb-5 block size-15 text-primary" />
 
         <h1 className="text-xl font-semibold tracking-tight">Sign in to Concors</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">New here? This creates your account.</p>
+        {/* Someone whose saved session could not be checked already has an account. */}
+        {state.status !== "unavailable" && (
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            New here? This creates your account.
+          </p>
+        )}
 
         {state.status === "unavailable" && (
           <div
@@ -153,7 +158,8 @@ export function AuthScreen({
                 autoComplete="email"
                 placeholder="you@example.com"
                 aria-label="Email address"
-                className="h-9"
+                // Matches the outline buttons above it, so the field shows on the frosted surface.
+                className="h-9 border-border bg-background dark:border-input"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
               />
@@ -173,9 +179,9 @@ export function AuthScreen({
 
         {onBack && (
           <>
-            <p className="mt-4 rounded-lg border bg-muted/50 p-3 text-xs">
-              Signing in restarts any terminals and agents running on this computer. If this account
-              hasn&rsquo;t been used here before, your workspaces move to it.
+            <p className="mt-4 rounded-lg border bg-muted/50 p-3 text-left text-xs">
+              Your workspaces move to your account if it&rsquo;s new to this computer, which
+              restarts running terminals and agents.
             </p>
             <Button variant="ghost" className="mt-2 min-h-9 w-full" onClick={onBack}>
               Not now

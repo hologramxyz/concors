@@ -39,7 +39,8 @@ test("a guest can reach sign-in, is warned what it does, and can come back", asy
   await expect(page.getByRole("menuitem", { name: "Take the tour" })).toBeVisible();
   await page.getByRole("menuitem", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Sign in to Concors" })).toBeVisible();
-  await expect(page.getByText(/restarts any terminals and agents/)).toBeVisible();
+  await expect(page.getByText(/restarts running terminals and agents/)).toBeVisible();
+  await expect(page.getByText("New here? This creates your account.")).toBeVisible();
   await page.getByRole("button", { name: "Not now" }).click();
   await expect(sidebar).toBeVisible();
   await expect(page.getByRole("heading", { name: "Sign in to Concors" })).toHaveCount(0);
@@ -115,6 +116,7 @@ test("a saved session that cannot be checked is not treated as a guest", async (
   );
   await page.goto("/");
   await expect(page.getByText("Your saved session could not be checked.")).toBeVisible();
+  await expect(page.getByText("New here? This creates your account.")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Primary" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Not now" })).toHaveCount(0);
 });
