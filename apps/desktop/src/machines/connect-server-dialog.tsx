@@ -241,7 +241,7 @@ function ConnectProgress({ machine }: { readonly machine: Machine }) {
     <section
       aria-label="Setup progress"
       role="status"
-      className="rounded-lg border bg-muted/20 p-4"
+      className="rounded-lg border bg-muted/50 p-4"
     >
       <ol className="space-y-3">
         <ProgressRow
@@ -366,7 +366,7 @@ function Disclosure({
 }) {
   return (
     <details className="group rounded-lg border">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm text-muted-foreground transition-colors select-none hover:bg-muted/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-4 py-3 text-sm text-muted-foreground transition-colors select-none hover:bg-muted/70 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
         {summary}
         <ChevronDown
           className="size-4 shrink-0 transition-transform duration-150 group-open:rotate-180"
@@ -395,7 +395,7 @@ function CommandBox({
   return (
     <div
       className={cn(
-        "flex min-w-0 items-center gap-2 rounded-lg border bg-muted/40",
+        "flex min-w-0 items-center gap-2 rounded-lg border bg-muted/50",
         compact ? "w-fit py-1 pr-1 pl-3" : "py-2 pr-2 pl-3",
       )}
     >

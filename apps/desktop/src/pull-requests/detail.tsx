@@ -342,7 +342,7 @@ function MergeStatus({ detail }: { detail: PullRequestDetail }) {
             type="button"
             aria-expanded={expanded}
             onClick={() => setExpanded(!expanded)}
-            className="flex w-full items-center gap-2 border-t px-4 py-2 text-left text-muted-foreground hover:bg-muted/40"
+            className="flex w-full items-center gap-2 border-t px-4 py-2 text-left text-muted-foreground hover:bg-muted/70"
           >
             <span className="flex-1">
               {detail.checkCount} check{detail.checkCount === 1 ? "" : "s"}
@@ -388,7 +388,7 @@ function TimelineEntry({ entry }: { entry: PullRequestTimelineEntry }) {
   const review = entry.review ? reviewTone[entry.review] : null;
   return (
     <li className="rounded-lg border bg-background text-ui">
-      <p className="flex flex-wrap items-center gap-x-1.5 border-b bg-muted/30 px-4 py-2 text-muted-foreground">
+      <p className="flex flex-wrap items-center gap-x-1.5 border-b bg-muted/50 px-4 py-2 text-muted-foreground">
         <span className="font-medium text-foreground">{entry.author ?? "Someone"}</span>
         {review ? <span className={review[1]}>{review[0]}</span> : <span>commented</span>}
         <span>{shortAge(entry.createdAt)}</span>

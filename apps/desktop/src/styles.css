@@ -363,6 +363,10 @@
 .chat-markdown > :is(h1, h2, h3) + * {
   margin-top: 0.5rem;
 }
+/* A panel's fill already shows behind what's inside it; a second would read as full strength. */
+[data-panel] [data-panel] {
+  background: transparent;
+}
 /* A full block, like code: a bar alone under a rule read as a box with its sides cut off. */
 .chat-quote {
   display: flex;
@@ -370,7 +374,7 @@
   gap: 0.5rem;
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  background: color-mix(in oklab, var(--muted) 40%, transparent);
+  background: color-mix(in oklab, var(--muted) 50%, transparent);
   padding: 0.75rem 0.5rem 0.75rem 0.875rem;
 }
 .chat-quote > blockquote {

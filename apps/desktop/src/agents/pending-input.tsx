@@ -62,7 +62,7 @@ export function PendingInput({
               </pre>
             </details>
           </div>
-          <footer className="flex flex-wrap justify-end gap-2 border-t bg-muted/30 px-4 py-2.5">
+          <footer className="flex flex-wrap justify-end gap-2 border-t bg-muted/50 px-4 py-2.5">
             {(pending.actions
               ? pending.actions.map((action) => ({
                   key: action.id,
@@ -284,7 +284,7 @@ export function PendingInput({
               );
             })}
           </div>
-          <footer className="flex flex-wrap justify-end gap-2 border-t bg-muted/30 px-4 py-2.5">
+          <footer className="flex flex-wrap justify-end gap-2 border-t bg-muted/50 px-4 py-2.5">
             {pending.decisions
               .filter((d) => d !== "accept")
               .map((decision) => (

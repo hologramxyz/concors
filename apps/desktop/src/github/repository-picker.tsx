@@ -88,7 +88,7 @@ export function GitHubRepositoryPicker(props: PickerProps) {
       ) : !github.status && !github.error ? (
         <RepositorySkeleton />
       ) : (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 rounded-xl border bg-muted/20 p-6 text-center">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 rounded-xl border bg-muted/50 p-6 text-center">
           <GitHubIcon className="size-8 text-muted-foreground" aria-hidden="true" />
           <p className="text-sm text-muted-foreground">
             {github.status?.configured === false

@@ -66,7 +66,7 @@ export default function PdfView({
       aria-label={`Pages of ${name}`}
       // Focusable, so a click into the pages lets the keyboard scroll and zoom them.
       tabIndex={0}
-      className="flex h-full flex-col gap-4 overflow-auto bg-muted/40 p-4 outline-none"
+      className="flex h-full flex-col gap-4 overflow-auto bg-muted/50 p-4 outline-none"
     >
       {error ? (
         <p role="alert" className="text-sm text-destructive">

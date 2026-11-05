@@ -44,7 +44,8 @@ export function SubAgentCard({
       data-sub-agent={item.id}
       aria-busy={running}
       aria-label="Sub-agent activity"
-      className="overflow-hidden rounded-xl border border-transparent bg-muted/20"
+      data-panel
+      className="overflow-hidden rounded-xl border border-transparent bg-muted/50"
     >
       <div className="flex items-start">
         <button

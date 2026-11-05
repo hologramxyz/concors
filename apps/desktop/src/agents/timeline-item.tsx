@@ -130,7 +130,7 @@ export const TimelineItem = memo(function TimelineItem({
     <article
       data-tool-status={item.status}
       aria-busy={running}
-      className="overflow-hidden rounded-xl border border-transparent bg-muted/20"
+      className="overflow-hidden rounded-xl border border-transparent bg-muted/50"
       aria-label="Tool call"
     >
       <button

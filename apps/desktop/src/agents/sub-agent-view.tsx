@@ -152,7 +152,7 @@ export function SubAgentPanel({
         <div
           role="tablist"
           aria-label="Sub-agent view"
-          className="mx-3 mt-2 inline-flex shrink-0 self-start rounded-[calc(var(--radius-md)+(0.125rem+1px)*var(--concentric))] border bg-muted/40 p-0.5"
+          className="mx-3 mt-2 inline-flex shrink-0 self-start rounded-[calc(var(--radius-md)+(0.125rem+1px)*var(--concentric))] border bg-muted/50 p-0.5"
         >
           {(["progress", "conversation"] as const).map((option) => (
             <button

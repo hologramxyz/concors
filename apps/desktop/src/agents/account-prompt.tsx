@@ -282,7 +282,7 @@ function AccountPrompt({
     return (
       <section
         aria-label={`${label} installation`}
-        className="rounded-xl border bg-muted/30 p-3 text-sm"
+        className="rounded-xl border bg-muted/50 p-3 text-sm"
       >
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -357,7 +357,7 @@ function AccountPrompt({
   return (
     <section
       aria-label={`${label} account connection`}
-      className="account-prompt rounded-xl border bg-muted/30 p-3 text-sm"
+      className="account-prompt rounded-xl border bg-muted/50 p-3 text-sm"
     >
       <div className="flex items-start justify-between gap-3">
         <div>

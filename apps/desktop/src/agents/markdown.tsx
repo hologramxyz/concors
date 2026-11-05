@@ -76,7 +76,7 @@ function CodeBlock({ children }: { children?: ReactNode }) {
     ? child.props.className?.replace("language-", "")
     : undefined;
   return (
-    <div className="my-4 overflow-hidden rounded-xl border bg-muted/40">
+    <div data-panel className="my-4 overflow-hidden rounded-xl border bg-muted/50">
       <div className="flex items-center justify-between border-b px-3 py-1 text-xs text-muted-foreground">
         <span>{language ?? "Code"}</span>
         <CopyButton text={codeText(children).replace(/\n$/, "")} label="Copy code" />
@@ -109,7 +109,7 @@ function MarkdownQuote({ children, node }: ComponentProps<"blockquote"> & ExtraP
     end = node?.position?.end.offset;
   if (nested) return <blockquote>{children}</blockquote>;
   return (
-    <div className="chat-quote">
+    <div data-panel className="chat-quote">
       <InsideQuote value>
         <blockquote>{children}</blockquote>
       </InsideQuote>

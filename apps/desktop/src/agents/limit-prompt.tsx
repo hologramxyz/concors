@@ -154,7 +154,7 @@ function LimitPrompt({
   };
 
   return (
-    <section aria-label="Usage limit" className="rounded-xl border bg-muted/30 p-3 text-sm">
+    <section aria-label="Usage limit" className="rounded-xl border bg-muted/50 p-3 text-sm">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="font-medium">{limitHeadline(engine, resetsAt)}</p>

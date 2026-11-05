@@ -27,7 +27,7 @@ export function PinnedSubAgents({
   return (
     <section
       aria-label="Running sub-agents"
-      className="chat-scroll max-h-40 divide-y overflow-y-auto rounded-xl border bg-muted/20"
+      className="chat-scroll max-h-40 divide-y overflow-y-auto rounded-xl border bg-muted/50"
     >
       {agents.map((agent) => {
         const selected = !!open && (open.childId ?? open.item.id) === agent.key;

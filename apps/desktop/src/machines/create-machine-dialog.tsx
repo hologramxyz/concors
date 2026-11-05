@@ -400,7 +400,7 @@ export function CreateMachineDialog({
                   <h3 className="text-xs font-medium text-muted-foreground">Order summary</h3>
                   <div className="flex min-w-0 items-center justify-between gap-4">
                     <div className="flex min-w-0 items-center gap-3">
-                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/30">
+                      <span className="flex size-9 shrink-0 items-center justify-center rounded-lg border bg-muted/50">
                         <Server className="size-4 text-muted-foreground" aria-hidden="true" />
                       </span>
                       <div className="min-w-0 space-y-1">
@@ -438,7 +438,7 @@ export function CreateMachineDialog({
                   )}
                   {billed && (
                     <>
-                      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2.5">
+                      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-2.5">
                         <div className="flex min-w-0 items-center gap-2.5">
                           <CreditCard
                             className="size-4 shrink-0 text-muted-foreground"

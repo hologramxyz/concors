@@ -86,7 +86,7 @@ export function ColorThemeSettings() {
           })}
         </div>
       </fieldset>
-      <SettingsCard className="mt-5 space-y-3 bg-muted/20 p-4">
+      <SettingsCard className="mt-5 space-y-3 bg-muted/50 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-medium">Custom themes</h3>
           {catalog && (
