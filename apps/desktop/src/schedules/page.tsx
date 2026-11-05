@@ -9,7 +9,7 @@ import {
   Trash2,
   Zap,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import {
   SCHEDULES_CAPABILITY,
   agentProviderName,
@@ -29,6 +29,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useAgents } from "@/agents/context";
+import { CompactLayoutContext } from "@/components/compact-layout";
 import { useSchedules } from "./use-schedules";
 import { ScheduleForm } from "./schedule-form";
 import { cadenceLabel, dateLabel, runLabel } from "./schedule-labels";
@@ -54,7 +55,8 @@ export function SchedulesPage({
   onOpenAgent: (id: string) => void;
 }) {
   const { connection, schedules } = useSchedules(),
-    agents = useAgents();
+    agents = useAgents(),
+    compact = useContext(CompactLayoutContext);
   const [editing, setEditing] = useState<AgentSchedule | "new" | null>(null);
   const [deleting, setDeleting] = useState<AgentSchedule | null>(null);
   const [pending, setPending] = useState<string | null>(null),
@@ -95,6 +97,15 @@ export function SchedulesPage({
       setPending(null);
     }
   };
+  const form = editing && workspace && available && (
+    <ScheduleForm
+      workspace={workspace}
+      {...(editing === "new" ? {} : { schedule: editing })}
+      onClose={() => setEditing(null)}
+    />
+  );
+  // On a phone the form is a page of its own, shown instead of the list.
+  if (compact && form) return form;
   return (
     <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col px-4 py-6 sm:px-8 sm:py-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -342,13 +353,7 @@ export function SchedulesPage({
           })}
         </div>
       )}
-      {editing && workspace && available && (
-        <ScheduleForm
-          workspace={workspace}
-          {...(editing === "new" ? {} : { schedule: editing })}
-          onClose={() => setEditing(null)}
-        />
-      )}
+      {form}
       {deleting && (
         <Dialog
           open
