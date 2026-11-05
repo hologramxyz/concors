@@ -1111,6 +1111,7 @@ html[data-pane-resizing="row"] * {
 }
 
 /* The tab strip scrolls without a scrollbar, whose height would shift the bar when tabs overflow.
+   The pull request filter chips reuse it on a phone, where they scroll on one line.
    Its fades paint over every tab and take no clicks, so a tab under one still works. The surface
    behind the bar is opaque on every platform, the Mac's frosted window included, so fading to
    --background is a true match. */
