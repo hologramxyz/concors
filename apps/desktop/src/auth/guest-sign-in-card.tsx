@@ -29,7 +29,7 @@ export function GuestSignInCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-medium">Sign in to Concors</p>
+          <p className="font-medium text-foreground">Sign in to Concors</p>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Use cloud machines and Concors on your phone.
           </p>
