@@ -39,8 +39,8 @@ test("a guest is offered sign-in above the account row, and it opens the sign-in
   expect(cardBox.y + cardBox.height).toBeLessThanOrEqual((await box(account)).y);
 
   await card(page).getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Continue to Concors" })).toBeVisible();
-  await page.getByRole("button", { name: "Back to this computer" }).click();
+  await expect(page.getByRole("heading", { name: "Sign in to Concors" })).toBeVisible();
+  await page.getByRole("button", { name: "Not now" }).click();
   await expect(card(page)).toBeVisible();
 });
 

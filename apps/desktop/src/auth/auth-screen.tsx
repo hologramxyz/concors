@@ -33,9 +33,10 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Where someone signs in, when they choose to or when a saved session cannot be checked. They
- * choose how to continue: GitHub, Google or an emailed code. There is no separate sign-up; a returning person reaches their account and anyone new gets
- * one. The system browser opens straight on that method, on the API's own page. While a saved
- * session is being checked it shows a quiet splash instead.
+ * choose how to continue: GitHub, Google or an emailed code. There is no separate sign-up; a
+ * returning person reaches their account and anyone new gets one. The system browser opens straight
+ * on that method, on the API's own page. While a saved session is being checked it shows a quiet
+ * splash instead.
  */
 export function AuthScreen({
   state,
@@ -82,31 +83,19 @@ export function AuthScreen({
   };
 
   return (
-    <main className="flex h-dvh scroll-py-6 items-start justify-center overflow-y-auto bg-background p-6">
-      <div className="my-auto w-full max-w-sm">
-        <div className="mb-8 flex items-center gap-2.5">
-          <BrandMark className="size-8 text-primary" />
-          <span className="text-[23px] font-semibold tracking-[-.06em]">concors</span>
-        </div>
+    // Sits on the window itself, like the sidebar: frosted where macOS blurs what is behind it. The
+    // equal padding keeps it truly centred and clear of the title bar when it has to scroll.
+    <main className="app-frame flex h-dvh scroll-py-13 items-start justify-center overflow-y-auto bg-sidebar px-6 py-13">
+      <div className="my-auto w-full max-w-sm text-center">
+        <BrandMark className="mx-auto mb-5 block size-15 text-primary" />
 
-        <h1 className="text-xl font-semibold tracking-tight">Continue to Concors</h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
-          {
-            "Use the account you signed up with. If you're new, this creates one. You'll finish in your browser."
-          }
-        </p>
-
-        {onBack && (
-          <p className="mt-3 text-sm text-muted-foreground">
-            Signing in restarts any terminals and agents running on this computer. If this account
-            hasn&rsquo;t been used here before, your workspaces move to it.
-          </p>
-        )}
+        <h1 className="text-xl font-semibold tracking-tight">Sign in to Concors</h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">New here? This creates your account.</p>
 
         {state.status === "unavailable" && (
           <div
             role="alert"
-            className="mt-5 flex items-start justify-between gap-3 rounded-lg border bg-muted/50 p-3 text-xs"
+            className="mt-5 flex items-start justify-between gap-3 rounded-lg border bg-muted/50 p-3 text-left text-xs"
           >
             <span>
               <span className="font-medium">Your saved session could not be checked.</span>
@@ -126,7 +115,7 @@ export function AuthScreen({
         ) : waiting ? (
           <div
             role="status"
-            className="mt-6 flex items-center justify-between gap-3 rounded-lg border bg-muted/50 p-3 text-sm"
+            className="mt-6 flex items-center justify-between gap-3 rounded-lg border bg-muted/50 p-3 text-left text-sm"
           >
             <span>{WAITING[waiting]}</span>
             <Button variant="outline" onClick={() => attempt.current?.abort()}>
@@ -183,9 +172,15 @@ export function AuthScreen({
         )}
 
         {onBack && (
-          <Button variant="ghost" className="mt-4 min-h-9 w-full" onClick={onBack}>
-            Back to this computer
-          </Button>
+          <>
+            <p className="mt-4 rounded-lg border bg-muted/50 p-3 text-xs">
+              Signing in restarts any terminals and agents running on this computer. If this account
+              hasn&rsquo;t been used here before, your workspaces move to it.
+            </p>
+            <Button variant="ghost" className="mt-2 min-h-9 w-full" onClick={onBack}>
+              Not now
+            </Button>
+          </>
         )}
       </div>
     </main>

@@ -78,7 +78,7 @@ async function native(page: Page, port: number, decorated = false) {
 async function openSignIn(page: Page) {
   await page.getByRole("button", { name: "Using this computer without an account" }).click();
   await page.getByRole("menuitem", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Continue to Concors" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to Concors" })).toBeVisible();
 }
 
 test("browser and decorated native windows retain their own window controls", async ({ page }) => {
