@@ -1844,7 +1844,7 @@ function AttachmentChip({
           aria-label={`Remove ${file.name}`}
           disabled={disabled}
           onClick={onRemove}
-          className={`absolute -top-1.5 -left-1.5 flex size-5 items-center justify-center rounded-full border bg-background text-foreground shadow-sm hover:bg-muted focus-visible:opacity-100 disabled:opacity-50 ${compact ? "" : "opacity-0 group-hover:opacity-100"}`}
+          className={`absolute -top-1.5 -left-1.5 flex size-5 items-center justify-center rounded-full border bg-background text-foreground shadow-sm hover:bg-raised-opaque focus-visible:opacity-100 disabled:opacity-50 ${compact ? "" : "opacity-0 group-hover:opacity-100"}`}
         >
           <X className="size-3" />
         </button>

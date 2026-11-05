@@ -97,9 +97,9 @@
   --popover-foreground: var(--foreground);
   --primary: var(--foreground);
   --primary-foreground: #ffffff;
-  --secondary: oklch(0.965 0 0);
+  --secondary: var(--raised-fill);
   --secondary-foreground: var(--foreground);
-  --muted: oklch(0.965 0 0);
+  --muted: var(--raised-fill);
   --muted-foreground: #65665f;
   /* Selected and raised surfaces. Tinted from the theme's own text color, so any theme and surface works. */
   --raised-fill: color-mix(in srgb, var(--foreground) 12%, transparent);
@@ -144,9 +144,9 @@
   --popover-foreground: var(--foreground);
   --primary: var(--foreground);
   --primary-foreground: var(--background);
-  --secondary: #242424;
+  --secondary: var(--raised-fill);
   --secondary-foreground: var(--foreground);
-  --muted: #242424;
+  --muted: var(--raised-fill);
   --muted-foreground: #a0a0a0;
   --raised-fill: color-mix(in srgb, var(--foreground) 10%, transparent);
   --accent: #292929;
@@ -224,6 +224,12 @@
     background: color-mix(in srgb, var(--selection) 99%, transparent);
     color: var(--foreground);
   }
+}
+
+/* The raised fill on an opaque surface, for a control drawn over content that would show through. */
+@utility bg-raised-opaque {
+  background-color: var(--background);
+  background-image: linear-gradient(var(--raised-fill), var(--raised-fill));
 }
 
 @layer utilities {
@@ -1054,7 +1060,8 @@ html[data-pane-resizing="row"] * {
 }
 .message-list-trigger:hover {
   color: var(--foreground);
-  background: var(--muted);
+  /* The timeline scrolls under it, so the fill sits on an opaque surface. */
+  background: linear-gradient(var(--raised-fill), var(--raised-fill)), var(--background);
 }
 .message-list-anchor {
   position: absolute;
