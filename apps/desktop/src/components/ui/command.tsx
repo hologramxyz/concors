@@ -11,8 +11,6 @@ function Command({ className, ...props }: React.ComponentProps<typeof CommandPri
   return (
     <CommandPrimitive
       data-slot="command"
-      // The pointer would otherwise move the selection, leaving no hover distinct from it.
-      disablePointerSelection
       className={cn(
         "flex min-h-0 flex-1 flex-col overflow-hidden bg-popover text-popover-foreground",
         className,
@@ -143,7 +141,7 @@ function CommandItem({
     <CommandPrimitive.Item
       data-slot="command-item"
       className={cn(
-        "group/command-item relative flex min-h-11 cursor-pointer flex-wrap items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] outline-hidden select-none hover:bg-muted/70 data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-[selected=true]:bg-muted data-selected:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-selected:*:[svg]:text-foreground",
+        "group/command-item relative flex min-h-11 cursor-pointer flex-wrap items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] outline-hidden select-none data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 data-[selected=true]:bg-muted data-selected:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 data-selected:*:[svg]:text-foreground",
         className,
       )}
       {...props}

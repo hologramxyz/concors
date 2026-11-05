@@ -1824,7 +1824,7 @@ function AttachmentChip({
                 <button
                   type="button"
                   aria-label={`Retry uploading ${file.name}`}
-                  className="flex size-full items-center justify-center hover:bg-muted/70"
+                  className="flex size-full items-center justify-center hover:bg-muted/60"
                   onClick={onRetry}
                 >
                   <RotateCw className="size-4" />
