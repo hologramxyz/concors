@@ -60,6 +60,7 @@ it("uses a separate local Personal Team identity without push or associated doma
   expect(config.ios?.bundleIdentifier).toBe("dev.tester.concors");
   expect(config.ios?.appleTeamId).toBe("ABC1234567");
   expect(config.ios?.associatedDomains).toBeUndefined();
+  expect(config.android?.intentFilters).toBeUndefined();
   expect(config.extra?.personalTeam).toBe(true);
   expect(config.plugins).toContain("./plugins/with-personal-team.cjs");
   expect(
@@ -135,7 +136,8 @@ it("uses the production identity for candidates without a development launcher s
   expect(config.plugins).toContainEqual(["expo-dev-client", { addGeneratedScheme: false }]);
   expect(config.plugins).toContainEqual(["expo-secure-store", { faceIDPermission: false }]);
   expect(config.android?.blockedPermissions).toContain("android.permission.SYSTEM_ALERT_WINDOW");
-  expect(config.ios?.associatedDomains).toEqual(["applinks:concors.dev"]);
+  expect(config.ios?.associatedDomains).toBeUndefined();
+  expect(config.android?.intentFilters).toBeUndefined();
   expect(config.plugins).toContainEqual([
     "expo-splash-screen",
     expect.objectContaining({

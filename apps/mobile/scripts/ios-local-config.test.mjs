@@ -42,5 +42,5 @@ it("omits paid-only local entitlements without changing production capabilities"
   expect(production._internal.modResults.ios.entitlements["aps-environment"]).toBeDefined();
   expect(
     production._internal.modResults.ios.entitlements["com.apple.developer.associated-domains"],
-  ).toEqual(["applinks:concors.dev"]);
+  ).toBeUndefined();
 }, 65_000);

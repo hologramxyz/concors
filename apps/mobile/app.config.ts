@@ -63,7 +63,7 @@ const config: ExpoConfig = {
       ITSAppUsesNonExemptEncryption: false,
       NSAppTransportSecurity: { NSAllowsArbitraryLoads: false },
     },
-    ...(production ? { associatedDomains: ["applinks:concors.dev"] } : {}),
+    // Add Universal Links only once the website serves and tests the association file.
   },
   android: {
     softwareKeyboardLayoutMode: "resize",
@@ -85,18 +85,6 @@ const config: ExpoConfig = {
     ],
     ...(process.env.GOOGLE_SERVICES_JSON
       ? { googleServicesFile: process.env.GOOGLE_SERVICES_JSON }
-      : {}),
-    ...(production
-      ? {
-          intentFilters: [
-            {
-              action: "VIEW",
-              autoVerify: true,
-              category: ["BROWSABLE", "DEFAULT"],
-              data: [{ scheme: "https", host: "concors.dev", pathPrefix: "/session" }],
-            },
-          ],
-        }
       : {}),
   },
   web: { bundler: "metro", output: "single", favicon: "./assets/icon.png" },
