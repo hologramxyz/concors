@@ -22,7 +22,6 @@ export const NativeIconSchema = z.enum([
   "brain",
   "shield",
   "options",
-  "context",
   "mic",
 ]);
 export type NativeIcon = z.infer<typeof NativeIconSchema>;

@@ -23,9 +23,13 @@ import {
   Spacer,
   Text,
   VStack,
+  ZStack,
 } from "@expo/ui/swift-ui";
 import {
   accessibilityLabel,
+  accessibilityValue,
+  Animation,
+  animation,
   background,
   buttonStyle,
   clipShape,
@@ -44,7 +48,9 @@ import {
   presentationBackground,
   presentationDragIndicator,
   progressViewStyle,
+  rotationEffect,
   shapes,
+  strokeBorder,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -63,6 +69,8 @@ import type {
   NativeUsage,
 } from "@concors/client-core";
 import {
+  contextRingStroke,
+  contextRingValue,
   currentNativeSnapshot,
   nativeSurfaceLayout,
   reconcileNativeDraft,
@@ -86,7 +94,6 @@ const symbols = {
   brain: "brain",
   shield: "shield",
   options: "slider.horizontal.3",
-  context: "circle.dotted",
   mic: "mic",
 } as const;
 const providerImages = {
@@ -750,6 +757,7 @@ function Composer({
               usage={content.usage}
               corners={corners}
               dark={dark}
+              reduceMotion={reduceMotion}
               emit={emit}
               onPresent={onPresent}
             />
@@ -825,19 +833,19 @@ function ContextControl({
   usage,
   corners,
   dark,
+  reduceMotion,
   emit,
   onPresent,
 }: {
   usage: NativeUsage;
   corners: CornerStyle;
   dark: boolean;
+  reduceMotion: boolean;
   emit: Emit;
   onPresent(open: boolean): void;
 }) {
   const [open, setOpen] = useState(false);
   const { percent } = usage.context;
-  const label =
-    percent === null ? "Context window" : `Context window, ${Math.round(percent)}% used`;
   return (
     <Host
       style={styles.control}
@@ -858,10 +866,16 @@ function ContextControl({
               setOpen(true);
               emit({ kind: "press", control: "context" });
             }}
-            modifiers={controlModifiers({ label, color: toneColor(usage.context.tone, dark) })}
+            modifiers={[
+              ...controlModifiers({
+                label: "Context window",
+                color: toneColor(usage.context.tone, dark),
+              }),
+              accessibilityValue(contextRingValue(percent)),
+            ]}
           >
             <ControlFace corners={corners} dark={dark}>
-              <Image systemName={symbols.context} size={18} />
+              <ContextRing percent={percent} reduceMotion={reduceMotion} />
             </ControlFace>
           </Button>
         }
@@ -873,6 +887,35 @@ function ContextControl({
         />
       </BottomSheet>
     </Host>
+  );
+}
+
+/**
+ * Desktop's ring at the toolbar's icon size: a faint track, and over it an arc of what is used from
+ * 12 o'clock clockwise. The stroke takes the button's foreground, so it follows the context tone.
+ */
+function ContextRing({ percent, reduceMotion }: { percent: number | null; reduceMotion: boolean }) {
+  const layer = [frame({ width: 18, height: 18 })];
+  return (
+    <ZStack modifiers={layer}>
+      <Spacer
+        modifiers={[
+          ...layer,
+          strokeBorder({ shape: "circle", style: { lineWidth: 2.25 } }),
+          opacity(0.2),
+        ]}
+      />
+      {percent === null ? null : (
+        <Spacer
+          modifiers={[
+            ...layer,
+            strokeBorder({ shape: "circle", style: contextRingStroke(percent, 18, 2.25) }),
+            rotationEffect(-90),
+            ...(reduceMotion ? [] : [animation(Animation.easeInOut({ duration: 0.25 }), percent)]),
+          ]}
+        />
+      )}
+    </ZStack>
   );
 }
 

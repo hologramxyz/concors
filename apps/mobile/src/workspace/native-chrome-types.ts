@@ -55,3 +55,18 @@ export function reconcileNativeDraft(
 ) {
   return acknowledged >= sequence ? draft : local;
 }
+
+/**
+ * The context ring's arc, drawn as desktop's SVG draws it: one dash the length of the circle, offset
+ * so that only the used share shows. An offset rather than a shorter dash, because SwiftUI animates
+ * a stroke's phase but not its dash lengths.
+ */
+export function contextRingStroke(percent: number, diameter: number, lineWidth: number) {
+  const circumference = Math.PI * (diameter - lineWidth);
+  const used = Math.min(100, Math.max(0, percent)) / 100;
+  return { lineWidth, dash: [circumference, circumference], dashPhase: circumference * (1 - used) };
+}
+/** What the context button says it holds, in desktop's words. */
+export function contextRingValue(percent: number | null) {
+  return percent === null ? "Usage pending" : `${Math.round(percent)}% context used`;
+}
