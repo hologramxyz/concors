@@ -1913,7 +1913,7 @@ function AddSubscriptionDialog({
                     key={provider}
                     className={cn(
                       "relative flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-3 transition-colors focus-within:ring-1 focus-within:ring-ring",
-                      selected ? "border-foreground/40 bg-muted/60" : "hover:bg-muted/35",
+                      selected ? "border-foreground/40 bg-muted" : "hover:bg-muted/70",
                     )}
                   >
                     <input

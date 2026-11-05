@@ -224,7 +224,7 @@ export function PendingInput({
                               choices[index]?.click();
                             }}
                             key={option.label}
-                            className={`group/option flex w-full min-w-0 cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25 disabled:pointer-events-none disabled:opacity-50 ${selected ? "border-foreground/50 bg-muted" : "bg-background hover:bg-muted/60"}`}
+                            className={`group/option flex w-full min-w-0 cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/25 disabled:pointer-events-none disabled:opacity-50 ${selected ? "border-foreground/50 bg-muted" : "bg-background hover:bg-muted/70"}`}
                             disabled={disabled}
                             onClick={() => {
                               setAnswers((current) => ({

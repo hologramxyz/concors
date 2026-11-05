@@ -72,7 +72,7 @@ function PinnedRow({
         aria-pressed={selected}
         data-pinned-sub-agent={agent.key}
         onClick={onPress}
-        className={`flex w-full min-w-0 items-start gap-2 px-3 py-1.5 text-left hover:bg-muted/50 ${selected ? "bg-muted/60" : ""}`}
+        className={`flex w-full min-w-0 items-start gap-2 px-3 py-1.5 text-left ${selected ? "bg-muted" : "hover:bg-muted/70"}`}
       >
         <span
           aria-hidden="true"

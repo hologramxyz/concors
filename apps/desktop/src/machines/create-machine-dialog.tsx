@@ -276,7 +276,7 @@ export function CreateMachineDialog({
                       return (
                         <label
                           key={candidate.id}
-                          className="relative flex min-w-0 cursor-pointer flex-col gap-3 rounded-lg border p-4 transition-colors hover:bg-muted/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/50"
+                          className="relative flex min-w-0 cursor-pointer flex-col gap-3 rounded-lg border p-4 transition-colors hover:bg-muted/70 has-[:checked]:border-primary has-[:checked]:bg-muted has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/50"
                         >
                           <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
                             <span className="flex min-w-0 items-center gap-2.5">

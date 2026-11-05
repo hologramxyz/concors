@@ -296,7 +296,7 @@ function Repositories({
                   aria-pressed={selected === repo.url}
                   disabled={disabled}
                   onClick={() => onSelect(repo.url)}
-                  className={`group flex min-h-16 w-full items-center gap-3 rounded-lg px-3 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:opacity-50 ${selected === repo.url ? "bg-primary/10" : "hover:bg-muted/60"}`}
+                  className={`group flex min-h-16 w-full items-center gap-3 rounded-lg px-3 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:opacity-50 ${selected === repo.url ? "bg-muted" : "hover:bg-muted/70"}`}
                 >
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-lg border bg-background/50 text-muted-foreground">
                     <BookMarked aria-hidden="true" className="size-4" />

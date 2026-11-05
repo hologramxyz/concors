@@ -659,7 +659,7 @@ function FilterChip({
         icon ? "pr-2.5 pl-1.5" : "px-2.5",
         pressed
           ? "border-foreground/20 bg-muted text-foreground"
-          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+          : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
       )}
     >
       {icon}

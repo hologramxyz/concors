@@ -31,7 +31,7 @@ export function ColorThemeSettings() {
             return (
               <label
                 key={theme.id}
-                className="group relative min-w-0 cursor-pointer rounded-lg border p-2 transition-colors hover:bg-muted has-checked:border-primary has-focus-visible:ring-2 has-focus-visible:ring-ring"
+                className="group relative min-w-0 cursor-pointer rounded-lg border p-2 transition-colors hover:bg-muted/70 has-checked:border-primary has-checked:bg-muted has-focus-visible:ring-2 has-focus-visible:ring-ring"
               >
                 <input
                   className="sr-only"
