@@ -50,7 +50,10 @@ import {
 } from "./schemas.ts";
 import { memoryTokenStore, type TokenStore } from "./token-store.ts";
 import {
-  AccountDeletionSchema,
+  AccountDeletionPlanSchema,
+  AccountDeletionReceiptSchema,
+  AccountDeletionStatusSchema,
+  SupportReportReceiptSchema,
   MachineConnectionTicketSchema,
   MachineAccessTokenSchema,
   MobileCapabilitiesSchema,
@@ -123,7 +126,7 @@ export type SignInMethod = "github" | "google" | "email";
  * returning person to their account and creates one for anyone new.
  */
 export type NativeSignInChoice =
-  | { readonly method: "github" | "google" }
+  | { readonly method: "apple" | "github" | "google" }
   | {
       readonly method: "email";
       /** Where the code goes; without it the page asks. */
@@ -214,11 +217,13 @@ export class ApiClient {
     target: NativeSignInTarget,
     challenge: string,
     choice?: NativeSignInChoice,
+    options?: { reauthenticate: boolean },
   ): string {
     const url = new URL(`${this.baseUrl}/api/v1/native-auth/start`);
     if ("port" in target) url.searchParams.set("port", String(target.port));
     else url.searchParams.set("app", target.app);
     url.searchParams.set("challenge", challenge);
+    if (options?.reauthenticate) url.searchParams.set("purpose", "reauthenticate");
     if (choice) {
       url.searchParams.set("method", choice.method);
       if (choice.method === "email" && choice.email) url.searchParams.set("email", choice.email);
@@ -230,11 +235,31 @@ export class ApiClient {
    * Redeems the one-time code the sign-in page returned and keeps the session token. The code is
    * single-use: a failed attempt means starting over.
    */
-  async completeNativeSignIn(input: { readonly code: string; readonly verifier: string }) {
+  async completeNativeSignIn(
+    input: { readonly code: string; readonly verifier: string },
+    expectedUserId?: string,
+  ) {
     const { data } = await this.#request("POST", "/api/v1/native-auth/exchange", {
       body: input,
       schema: NativeSignInResponseSchema,
     });
+    if (expectedUserId) {
+      const temporary = new ApiClient({
+        baseUrl: this.baseUrl,
+        tokenStore: memoryTokenStore(data.token),
+        fetch: this.#fetch,
+      });
+      try {
+        const me = await temporary.getMe();
+        if (me.user.id !== expectedUserId)
+          throw new Error(
+            "Sign in with the same account to confirm deletion. Your original account is still selected.",
+          );
+      } catch (error) {
+        await temporary.signOut().catch(() => undefined);
+        throw error;
+      }
+    }
     this.tokens.set(data.token);
   }
 
@@ -611,12 +636,36 @@ export class ApiClient {
       schema: null,
     });
   }
-  async deleteAccount(password: string): Promise<"deleted" | "scheduled"> {
+  async getAccountDeletionPlan() {
+    return (
+      await this.#request("GET", "/api/v1/account/deletion", { schema: AccountDeletionPlanSchema })
+    ).data;
+  }
+  async deleteAccount(input: { confirmation: "DELETE"; planToken: string }) {
     const { data } = await this.#request("POST", "/api/v1/account/deletion", {
-      body: { password },
-      schema: AccountDeletionSchema,
+      body: input,
+      schema: AccountDeletionReceiptSchema,
     });
-    return data.status;
+    return data;
+  }
+  async getAccountDeletionStatus(receipt: string) {
+    return (
+      await this.#request("POST", "/api/v1/account/deletion/status", {
+        body: { receipt },
+        schema: AccountDeletionStatusSchema,
+      })
+    ).data;
+  }
+  async reportContent(input: {
+    category: "ai-content" | "bug" | "privacy" | "security" | "other";
+    message: string;
+    machineId?: string;
+  }) {
+    const response = await this.#request("POST", "/api/v1/support/reports", {
+      body: input,
+      schema: SupportReportReceiptSchema,
+    });
+    return response.data;
   }
   async githubStatus() {
     return (await this.#request("GET", "/api/v1/github/", { schema: GitHubStatusSchema })).data;

@@ -48,6 +48,7 @@ export function isSettingUp(
 export type StatusTone = "neutral" | "pending" | "success" | "danger";
 
 export const STATUS_TONE: Record<MachineStatus, StatusTone> = {
+  deleting: "pending",
   provisioning: "pending",
   running: "success",
   stopped: "neutral",
