@@ -31,7 +31,8 @@ import { AgentsProvider } from "@/agents/state";
 import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
 import { NotificationProvider } from "@/notifications/provider";
 import { setNotificationPreferences } from "@/notifications/preferences";
-import { AgentSidebar } from "@/agents/list";
+import { MobileAgentSidebar } from "./agent-sidebar";
+import { ChatMenuProvider } from "./chat-menu";
 import { ChatPane } from "@/agents/chat";
 import { AgentDraftScopeContext } from "@/agents/draft";
 import { TerminalPane } from "@/terminal/terminal-pane";
@@ -536,488 +537,503 @@ function MobileWorkspaceContent({
         <AgentDraftScopeContext value={draftScope}>
           <NotificationProvider connection={connection} onOpen={openAgent} inAppOnly cards={false}>
             <AgentsProvider connection={connection} onStarted={openAgent}>
-              <div
-                className="mobile-shell"
-                data-sidebar-open={sidebarOpen}
-                data-files-open={files.sidebar.open}
-                onPointerDownCapture={(event) => {
-                  gesture.handlers.onPointerDown(event);
-                  filesGesture.handlers.onPointerDown(event);
-                }}
-                onPointerMoveCapture={(event) => {
-                  gesture.handlers.onPointerMove(event);
-                  filesGesture.handlers.onPointerMove(event);
-                }}
-                onPointerUpCapture={(event) => {
-                  gesture.handlers.onPointerUp(event);
-                  filesGesture.handlers.onPointerUp(event);
-                }}
-                onPointerCancelCapture={(event) => {
-                  gesture.handlers.onPointerCancel(event);
-                  filesGesture.handlers.onPointerCancel(event);
-                }}
-                onClickCapture={(event) => {
-                  gesture.handlers.onClickCapture(event);
-                  filesGesture.handlers.onClickCapture(event);
-                }}
+              <ChatMenuProvider
+                canEdit={canEdit}
+                execute={execute}
+                isSelected={(id) => pane?.sessionId === id}
+                onReopenSelected={openAgent}
               >
-                <aside
-                  ref={sidebar}
-                  id="mobile-sidebar"
-                  role={sidebarOpen ? "dialog" : undefined}
-                  aria-label="Workspace sidebar"
-                  aria-modal={sidebarOpen || undefined}
-                  aria-hidden={!sidebarOpen}
-                  inert={!sidebarOpen}
-                  className="mobile-sidebar"
-                  style={{ width }}
-                >
-                  <div className="mobile-sidebar-head">
-                    <div className="mobile-sidebar-machine">
-                      <MobileMachinePicker
-                        host={host}
-                        onManageMachines={() => openSettings("machines")}
-                        onOpenResources={() => {
-                          setSidebarOpen(false);
-                          setResourcesOpen(true);
-                        }}
-                        onSelect={(machineId) => {
-                          setLocal({ machineId, target: {} });
-                          runHost({ kind: "select-machine", machineId });
-                        }}
-                      />
-                    </div>
-                    <NativeHeaderButton
-                      icon="search"
-                      className="mobile-icon mobile-glass"
-                      aria-label="Search workspace"
-                      onClick={() => setSearchOpen(true)}
-                    >
-                      <Search />
-                    </NativeHeaderButton>
-                  </div>
-                  {sidebarOpen && (
-                    <div className="px-3 pb-3">
-                      <ResourceStatus
-                        compact
-                        onOpenResources={() => {
-                          setSidebarOpen(false);
-                          setResourcesOpen(true);
-                        }}
-                        connection={connection}
-                        state={connection?.state ?? { status: "disconnected" }}
-                        machine={
-                          host.machines.find((machine) => machine.id === host.machineId)?.name ??
-                          "Desktop daemon"
-                        }
-                      />
-                    </div>
-                  )}
-                  <nav aria-label="Primary" className="mobile-sidebar-content">
-                    <div className="space-y-0.5">
-                      <SchedulesNav
-                        selected={page?.kind === "schedules"}
-                        onClick={() => {
-                          setPage({ kind: "schedules" });
-                          setSidebarOpen(false);
-                        }}
-                      />
-                      <PullRequestsNav
-                        workspace={workspace}
-                        selected={page?.kind === "pull-requests"}
-                        onClick={() => openPullRequests()}
-                      />
-                    </div>
-                    <SidebarSection
-                      title="Workspaces"
-                      action={
-                        <NewWorkspaceMenu
-                          disabled={!canEdit || newWorkspace.busy}
-                          onNew={newWorkspace.start}
-                          onOpen={setAddingProject}
-                          closed={recentlyClosed(workspace)}
-                          onReopen={(projectId) => command({ kind: "project.reopen", projectId })}
-                        />
-                      }
-                    >
-                      <ul>
-                        {workspace?.projects.map((item) => (
-                          <WorkspaceSidebarItem
-                            key={item.id}
-                            project={item}
-                            compact={false}
-                            selected={project?.id === item.id}
-                            canEdit={canEdit}
-                            icon={icons.get(projectIconKey(workspace.epoch, item))}
-                            pullRequests={pullRequests.workspaces.get(
-                              pullRequestKey(workspace.epoch, item),
-                            )}
-                            onSelect={selectProject}
-                            onOpenPullRequests={openPullRequests}
-                            execute={execute}
-                            onCommand={command}
-                          />
-                        ))}
-                      </ul>
-                      {!workspace?.projects.length && (
-                        <SidebarEmpty>No workspaces yet.</SidebarEmpty>
-                      )}
-                    </SidebarSection>
-                    <SidebarSection title="Agents">
-                      <AgentSidebar
-                        onSelect={openAgent}
-                        workspace={workspace}
-                        canEdit={canEdit}
-                        onCommand={command}
-                      />
-                    </SidebarSection>
-                    <PreviewsSidebar />
-                  </nav>
-                  <div className="mobile-sidebar-footer">
-                    <MobileAccountMenu
-                      profile={host.profile ?? null}
-                      {...(host.direct
-                        ? { onOpenProfile: () => runHost({ kind: "open-profile" }) }
-                        : {})}
-                      auth={
-                        host.me
-                          ? {
-                              status: "signed-in",
-                              ...host.me,
-                              organizations: host.organizations,
-                            }
-                          : null
-                      }
-                      organizationPicker={
-                        host.me && !host.direct ? (
-                          <MobileOrganizationPicker
-                            auth={{
-                              status: "signed-in",
-                              ...host.me,
-                              organizations: host.organizations,
-                            }}
-                            onSelect={(organizationId) =>
-                              hostAction({ kind: "switch-organization", organizationId })
-                            }
-                          />
-                        ) : undefined
-                      }
-                      onOpenSettings={() => openSettings()}
-                      onSignOut={() => runHost({ kind: "sign-out" })}
-                    />
-                  </div>
-                </aside>
                 <div
-                  className="mobile-workspace"
-                  data-testid="mobile-workspace"
-                  data-dragging={gesture.dragging}
-                  style={
-                    {
-                      "--mobile-workspace-reveal": Math.min(1, gesture.offset / 32),
-                      transform: `translateX(${gesture.offset}px)`,
-                      transition: gesture.dragging ? "none" : undefined,
-                    } as CSSProperties
-                  }
+                  className="mobile-shell"
+                  data-sidebar-open={sidebarOpen}
+                  data-files-open={files.sidebar.open}
+                  onPointerDownCapture={(event) => {
+                    gesture.handlers.onPointerDown(event);
+                    filesGesture.handlers.onPointerDown(event);
+                  }}
+                  onPointerMoveCapture={(event) => {
+                    gesture.handlers.onPointerMove(event);
+                    filesGesture.handlers.onPointerMove(event);
+                  }}
+                  onPointerUpCapture={(event) => {
+                    gesture.handlers.onPointerUp(event);
+                    filesGesture.handlers.onPointerUp(event);
+                  }}
+                  onPointerCancelCapture={(event) => {
+                    gesture.handlers.onPointerCancel(event);
+                    filesGesture.handlers.onPointerCancel(event);
+                  }}
+                  onClickCapture={(event) => {
+                    gesture.handlers.onClickCapture(event);
+                    filesGesture.handlers.onClickCapture(event);
+                  }}
                 >
-                  <div
-                    className="mobile-main"
-                    inert={sidebarOpen || files.sidebar.open}
-                    aria-hidden={sidebarOpen || files.sidebar.open || undefined}
+                  <aside
+                    ref={sidebar}
+                    id="mobile-sidebar"
+                    role={sidebarOpen ? "dialog" : undefined}
+                    aria-label="Workspace sidebar"
+                    aria-modal={sidebarOpen || undefined}
+                    aria-hidden={!sidebarOpen}
+                    inert={!sidebarOpen}
+                    className="mobile-sidebar"
+                    style={{ width }}
                   >
-                    <header className="mobile-header">
-                      <NativeHeaderButton
-                        icon="menu"
-                        id="mobile-sidebar-toggle"
-                        className="mobile-icon mobile-glass"
-                        aria-label="Open sidebar"
-                        aria-controls="mobile-sidebar"
-                        aria-expanded={sidebarOpen}
-                        onClick={() => setSidebarOpen(true)}
-                      >
-                        <Menu />
-                      </NativeHeaderButton>
-                      {page ? (
-                        <h1 className="min-w-0 flex-1 truncate text-base font-medium">
-                          {page.kind === "schedules" ? "Schedules" : "Pull requests"}
-                        </h1>
-                      ) : project ? (
-                        <NewTabMenu
-                          keyboard={commandsAvailable}
-                          disabled={!canEdit}
-                          tabLimitReached={project.tabs.length >= 32}
-                          onCreate={createTab}
-                          onResume={() => setResumeOpen(true)}
-                          renderTrigger={(open) => (
-                            <WorkspacePicker
-                              project={project}
-                              tab={tab}
-                              pane={pane}
-                              canEdit={canEdit}
-                              keyboard={commandsAvailable}
-                              execute={execute}
-                              command={command}
-                              onSelect={select}
-                              onNewTab={open}
-                            />
-                          )}
-                        />
-                      ) : (
-                        <h1 className="min-w-0 flex-1 truncate text-base font-medium">Workspace</h1>
-                      )}
-                      <NativeHeaderButton
-                        icon="files"
-                        id="mobile-files-toggle"
-                        className="mobile-icon mobile-glass"
-                        hidden={!!page}
-                        aria-label="Project files"
-                        aria-controls="mobile-project-files"
-                        aria-expanded={files.sidebar.open}
-                        onPointerEnter={preloadCodeEditor}
-                        onFocus={preloadCodeEditor}
-                        onClick={() => {
-                          preloadCodeEditor();
-                          files.select(scope, null);
-                          files.sidebar.setOpen(true);
-                        }}
-                      >
-                        <FolderOpen />
-                      </NativeHeaderButton>
-                    </header>
-                    {(error || host.message) && (
-                      <div role="alert" className="mobile-notice">
-                        <span>{error ?? host.message}</span>
-                        <button
-                          onClick={() => {
-                            setError(null);
-                            runHost({ kind: "retry" });
-                            runHost({ kind: "refresh" });
+                    <div className="mobile-sidebar-head">
+                      <div className="mobile-sidebar-machine">
+                        <MobileMachinePicker
+                          host={host}
+                          onManageMachines={() => openSettings("machines")}
+                          onOpenResources={() => {
+                            setSidebarOpen(false);
+                            setResourcesOpen(true);
                           }}
-                        >
-                          Retry
-                        </button>
-                        <button onClick={() => setError(null)} aria-label="Dismiss error">
-                          ×
-                        </button>
+                          onSelect={(machineId) => {
+                            setLocal({ machineId, target: {} });
+                            runHost({ kind: "select-machine", machineId });
+                          }}
+                        />
+                      </div>
+                      <NativeHeaderButton
+                        icon="search"
+                        className="mobile-icon mobile-glass"
+                        aria-label="Search workspace"
+                        onClick={() => setSearchOpen(true)}
+                      >
+                        <Search />
+                      </NativeHeaderButton>
+                    </div>
+                    {sidebarOpen && (
+                      <div className="px-3 pb-3">
+                        <ResourceStatus
+                          compact
+                          onOpenResources={() => {
+                            setSidebarOpen(false);
+                            setResourcesOpen(true);
+                          }}
+                          connection={connection}
+                          state={connection?.state ?? { status: "disconnected" }}
+                          machine={
+                            host.machines.find((machine) => machine.id === host.machineId)?.name ??
+                            "Desktop daemon"
+                          }
+                        />
                       </div>
                     )}
-                    {workspace && !ready && reconnectNotice && (
-                      <p role="status" className="mobile-notice">
-                        Reconnecting… Saved workspace is read-only.
-                      </p>
-                    )}
-                    <TabVisibility value={!files.sidebar.open}>
-                      <PaneVisibilityContext value={unobscured}>
-                        <main
-                          className="mobile-pane"
-                          data-pane-id={pane?.id}
-                          // A page shows instead of the pane, so it must not get a chat's layout.
-                          data-pane-profile={page ? undefined : pane?.profile}
-                        >
-                          {page?.kind === "schedules" ? (
-                            <div className="h-full overflow-y-auto">
-                              <SchedulesPage
-                                key={host.machineId}
-                                workspace={workspace}
-                                connected={!!ready}
-                                connectionFailed={connectionFailed}
-                                onOpenAgent={openAgent}
-                              />
-                            </div>
-                          ) : page?.kind === "pull-requests" ? (
-                            <div className="h-full overflow-y-auto">
-                              <PullRequestsPage
-                                key={host.machineId}
-                                workspace={workspace}
-                                connected={!!ready}
-                                connectionFailed={connectionFailed}
-                                canOpenFolder={canEdit}
-                                onOpenFolder={setAddingProject}
-                                view={page.view}
-                                onNavigate={(view) => setPage({ kind: "pull-requests", view })}
-                              />
-                            </div>
-                          ) : project && tab && pane ? (
-                            <ProjectFileLinks
-                              // A chat stays where it started; the workspace may follow a terminal.
-                              project={
-                                pane.profile === "chat" && pane.directory
-                                  ? { ...project, directory: pane.directory }
-                                  : project
+                    <nav aria-label="Primary" className="mobile-sidebar-content">
+                      <div className="space-y-0.5">
+                        <SchedulesNav
+                          selected={page?.kind === "schedules"}
+                          onClick={() => {
+                            setPage({ kind: "schedules" });
+                            setSidebarOpen(false);
+                          }}
+                        />
+                        <PullRequestsNav
+                          workspace={workspace}
+                          selected={page?.kind === "pull-requests"}
+                          onClick={() => openPullRequests()}
+                        />
+                      </div>
+                      <SidebarSection
+                        title="Workspaces"
+                        action={
+                          <NewWorkspaceMenu
+                            disabled={!canEdit || newWorkspace.busy}
+                            onNew={newWorkspace.start}
+                            onOpen={setAddingProject}
+                            closed={recentlyClosed(workspace)}
+                            onReopen={(projectId) => command({ kind: "project.reopen", projectId })}
+                          />
+                        }
+                      >
+                        <ul>
+                          {workspace?.projects.map((item) => (
+                            <WorkspaceSidebarItem
+                              key={item.id}
+                              project={item}
+                              compact={false}
+                              selected={project?.id === item.id}
+                              canEdit={canEdit}
+                              icon={icons.get(projectIconKey(workspace.epoch, item))}
+                              pullRequests={pullRequests.workspaces.get(
+                                pullRequestKey(workspace.epoch, item),
+                              )}
+                              onSelect={selectProject}
+                              onOpenPullRequests={openPullRequests}
+                              execute={execute}
+                              onCommand={command}
+                            />
+                          ))}
+                        </ul>
+                        {!workspace?.projects.length && (
+                          <SidebarEmpty>No workspaces yet.</SidebarEmpty>
+                        )}
+                      </SidebarSection>
+                      <SidebarSection title="Agents">
+                        <MobileAgentSidebar
+                          onSelect={openAgent}
+                          workspace={workspace}
+                          paneId={pane?.id}
+                          canEdit={canEdit}
+                          execute={execute}
+                          command={command}
+                          select={select}
+                        />
+                      </SidebarSection>
+                      <PreviewsSidebar />
+                    </nav>
+                    <div className="mobile-sidebar-footer">
+                      <MobileAccountMenu
+                        profile={host.profile ?? null}
+                        {...(host.direct
+                          ? { onOpenProfile: () => runHost({ kind: "open-profile" }) }
+                          : {})}
+                        auth={
+                          host.me
+                            ? {
+                                status: "signed-in",
+                                ...host.me,
+                                organizations: host.organizations,
                               }
-                            >
-                              {pane.profile === "chat" ? (
-                                <ChatPane
-                                  key={`${host.machineId}:${pane.id}`}
-                                  project={project}
-                                  tab={tab}
-                                  node={pane}
-                                  canEdit={canEdit}
+                            : null
+                        }
+                        organizationPicker={
+                          host.me && !host.direct ? (
+                            <MobileOrganizationPicker
+                              auth={{
+                                status: "signed-in",
+                                ...host.me,
+                                organizations: host.organizations,
+                              }}
+                              onSelect={(organizationId) =>
+                                hostAction({ kind: "switch-organization", organizationId })
+                              }
+                            />
+                          ) : undefined
+                        }
+                        onOpenSettings={() => openSettings()}
+                        onSignOut={() => runHost({ kind: "sign-out" })}
+                      />
+                    </div>
+                  </aside>
+                  <div
+                    className="mobile-workspace"
+                    data-testid="mobile-workspace"
+                    data-dragging={gesture.dragging}
+                    style={
+                      {
+                        "--mobile-workspace-reveal": Math.min(1, gesture.offset / 32),
+                        transform: `translateX(${gesture.offset}px)`,
+                        transition: gesture.dragging ? "none" : undefined,
+                      } as CSSProperties
+                    }
+                  >
+                    <div
+                      className="mobile-main"
+                      inert={sidebarOpen || files.sidebar.open}
+                      aria-hidden={sidebarOpen || files.sidebar.open || undefined}
+                    >
+                      <header className="mobile-header">
+                        <NativeHeaderButton
+                          icon="menu"
+                          id="mobile-sidebar-toggle"
+                          className="mobile-icon mobile-glass"
+                          aria-label="Open sidebar"
+                          aria-controls="mobile-sidebar"
+                          aria-expanded={sidebarOpen}
+                          onClick={() => setSidebarOpen(true)}
+                        >
+                          <Menu />
+                        </NativeHeaderButton>
+                        {page ? (
+                          <h1 className="min-w-0 flex-1 truncate text-base font-medium">
+                            {page.kind === "schedules" ? "Schedules" : "Pull requests"}
+                          </h1>
+                        ) : project ? (
+                          <NewTabMenu
+                            keyboard={commandsAvailable}
+                            disabled={!canEdit}
+                            tabLimitReached={project.tabs.length >= 32}
+                            onCreate={createTab}
+                            onResume={() => setResumeOpen(true)}
+                            renderTrigger={(open) => (
+                              <WorkspacePicker
+                                project={project}
+                                tab={tab}
+                                pane={pane}
+                                canEdit={canEdit}
+                                keyboard={commandsAvailable}
+                                execute={execute}
+                                command={command}
+                                onSelect={select}
+                                onNewTab={open}
+                              />
+                            )}
+                          />
+                        ) : (
+                          <h1 className="min-w-0 flex-1 truncate text-base font-medium">
+                            Workspace
+                          </h1>
+                        )}
+                        <NativeHeaderButton
+                          icon="files"
+                          id="mobile-files-toggle"
+                          className="mobile-icon mobile-glass"
+                          hidden={!!page}
+                          aria-label="Project files"
+                          aria-controls="mobile-project-files"
+                          aria-expanded={files.sidebar.open}
+                          onPointerEnter={preloadCodeEditor}
+                          onFocus={preloadCodeEditor}
+                          onClick={() => {
+                            preloadCodeEditor();
+                            files.select(scope, null);
+                            files.sidebar.setOpen(true);
+                          }}
+                        >
+                          <FolderOpen />
+                        </NativeHeaderButton>
+                      </header>
+                      {(error || host.message) && (
+                        <div role="alert" className="mobile-notice">
+                          <span>{error ?? host.message}</span>
+                          <button
+                            onClick={() => {
+                              setError(null);
+                              runHost({ kind: "retry" });
+                              runHost({ kind: "refresh" });
+                            }}
+                          >
+                            Retry
+                          </button>
+                          <button onClick={() => setError(null)} aria-label="Dismiss error">
+                            ×
+                          </button>
+                        </div>
+                      )}
+                      {workspace && !ready && reconnectNotice && (
+                        <p role="status" className="mobile-notice">
+                          Reconnecting… Saved workspace is read-only.
+                        </p>
+                      )}
+                      <TabVisibility value={!files.sidebar.open}>
+                        <PaneVisibilityContext value={unobscured}>
+                          <main
+                            className="mobile-pane"
+                            data-pane-id={pane?.id}
+                            // A page shows instead of the pane, so it must not get a chat's layout.
+                            data-pane-profile={page ? undefined : pane?.profile}
+                          >
+                            {page?.kind === "schedules" ? (
+                              <div className="h-full overflow-y-auto">
+                                <SchedulesPage
+                                  key={host.machineId}
+                                  workspace={workspace}
+                                  connected={!!ready}
+                                  connectionFailed={connectionFailed}
+                                  onOpenAgent={openAgent}
                                 />
-                              ) : (
-                                <TerminalPane
-                                  key={`${host.machineId}:${pane.id}:${pane.profile}:${pane.terminalProfile?.id}:${pane.terminalProfile?.version}`}
-                                  project={project}
-                                  tab={tab}
-                                  node={pane}
-                                  canEdit={canEdit}
+                              </div>
+                            ) : page?.kind === "pull-requests" ? (
+                              <div className="h-full overflow-y-auto">
+                                <PullRequestsPage
+                                  key={host.machineId}
+                                  workspace={workspace}
+                                  connected={!!ready}
+                                  connectionFailed={connectionFailed}
+                                  canOpenFolder={canEdit}
+                                  onOpenFolder={setAddingProject}
+                                  view={page.view}
+                                  onNavigate={(view) => setPage({ kind: "pull-requests", view })}
                                 />
-                              )}
-                            </ProjectFileLinks>
-                          ) : host.capabilities.remoteAccess && host.machineId && !workspace ? (
-                            // Loading, not empty: no folder, no call to action, until the projects arrive.
-                            <div className="mobile-empty" role="status">
-                              <LoaderCircle className="size-6 animate-spin text-muted-foreground" />
-                              <p>
-                                Connecting to{" "}
-                                {host.machines.find((machine) => machine.id === host.machineId)
-                                  ?.name ?? "your machine"}
-                                …
-                              </p>
-                            </div>
-                          ) : (
-                            <div className="mobile-empty">
-                              <FolderOpen className="size-8 text-muted-foreground" />
-                              <h1>
-                                {local.target.sessionId && workspace
-                                  ? "Session unavailable"
-                                  : project
-                                    ? "Start a conversation"
-                                    : !host.direct && !host.machines.length
-                                      ? "Connect a machine to get started"
-                                      : "Open a workspace"}
-                              </h1>
-                              {!host.capabilities.remoteAccess && (
-                                <p>Remote access is not available on this Concors server yet.</p>
-                              )}
-                              {project ? (
-                                <NewTabMenu
-                                  empty
-                                  disabled={!canEdit}
-                                  onCreate={createTab}
-                                  onResume={() => setResumeOpen(true)}
-                                />
-                              ) : (
-                                <div className="mobile-empty-actions">
-                                  {ready && (
-                                    <Button onClick={() => setAddingProject("open")}>
-                                      Open folder…
-                                    </Button>
-                                  )}
-                                  {!host.direct && !host.machines.length ? (
-                                    <Button onClick={() => openSettings("machines")}>
-                                      Manage machines
-                                    </Button>
-                                  ) : (
-                                    <Button variant="outline" onClick={() => setSidebarOpen(true)}>
-                                      Open workspace sidebar
-                                    </Button>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </main>
-                      </PaneVisibilityContext>
-                    </TabVisibility>
+                              </div>
+                            ) : project && tab && pane ? (
+                              <ProjectFileLinks
+                                // A chat stays where it started; the workspace may follow a terminal.
+                                project={
+                                  pane.profile === "chat" && pane.directory
+                                    ? { ...project, directory: pane.directory }
+                                    : project
+                                }
+                              >
+                                {pane.profile === "chat" ? (
+                                  <ChatPane
+                                    key={`${host.machineId}:${pane.id}`}
+                                    project={project}
+                                    tab={tab}
+                                    node={pane}
+                                    canEdit={canEdit}
+                                  />
+                                ) : (
+                                  <TerminalPane
+                                    key={`${host.machineId}:${pane.id}:${pane.profile}:${pane.terminalProfile?.id}:${pane.terminalProfile?.version}`}
+                                    project={project}
+                                    tab={tab}
+                                    node={pane}
+                                    canEdit={canEdit}
+                                  />
+                                )}
+                              </ProjectFileLinks>
+                            ) : host.capabilities.remoteAccess && host.machineId && !workspace ? (
+                              // Loading, not empty: no folder, no call to action, until the projects arrive.
+                              <div className="mobile-empty" role="status">
+                                <LoaderCircle className="size-6 animate-spin text-muted-foreground" />
+                                <p>
+                                  Connecting to{" "}
+                                  {host.machines.find((machine) => machine.id === host.machineId)
+                                    ?.name ?? "your machine"}
+                                  …
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="mobile-empty">
+                                <FolderOpen className="size-8 text-muted-foreground" />
+                                <h1>
+                                  {local.target.sessionId && workspace
+                                    ? "Session unavailable"
+                                    : project
+                                      ? "Start a conversation"
+                                      : !host.direct && !host.machines.length
+                                        ? "Connect a machine to get started"
+                                        : "Open a workspace"}
+                                </h1>
+                                {!host.capabilities.remoteAccess && (
+                                  <p>Remote access is not available on this Concors server yet.</p>
+                                )}
+                                {project ? (
+                                  <NewTabMenu
+                                    empty
+                                    disabled={!canEdit}
+                                    onCreate={createTab}
+                                    onResume={() => setResumeOpen(true)}
+                                  />
+                                ) : (
+                                  <div className="mobile-empty-actions">
+                                    {ready && (
+                                      <Button onClick={() => setAddingProject("open")}>
+                                        Open folder…
+                                      </Button>
+                                    )}
+                                    {!host.direct && !host.machines.length ? (
+                                      <Button onClick={() => openSettings("machines")}>
+                                        Manage machines
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        variant="outline"
+                                        onClick={() => setSidebarOpen(true)}
+                                      >
+                                        Open workspace sidebar
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </main>
+                        </PaneVisibilityContext>
+                      </TabVisibility>
+                    </div>
+                    {sidebarOpen && (
+                      <button
+                        className="mobile-scrim"
+                        aria-label="Return to workspace"
+                        onClick={() => setSidebarOpen(false)}
+                        tabIndex={-1}
+                      />
+                    )}
                   </div>
-                  {sidebarOpen && (
-                    <button
-                      className="mobile-scrim"
-                      aria-label="Return to workspace"
-                      onClick={() => setSidebarOpen(false)}
-                      tabIndex={-1}
-                    />
-                  )}
+                  <MobileFiles
+                    project={project}
+                    workspace={workspace}
+                    available={filesAvailable}
+                    connected={ready}
+                    demo={host.demo}
+                    offset={filesGesture.offset}
+                    dragging={filesGesture.dragging}
+                  />
                 </div>
-                <MobileFiles
-                  project={project}
-                  workspace={workspace}
-                  available={filesAvailable}
-                  connected={ready}
-                  demo={host.demo}
-                  offset={filesGesture.offset}
-                  dragging={filesGesture.dragging}
-                />
-              </div>
-              <Dialog open={resourcesOpen} onOpenChange={setResourcesOpen}>
-                <DialogContent size="wide" className="mobile-settings-drawer">
-                  <DialogHeader>
-                    <DialogTitle>Resources</DialogTitle>
-                    <DialogDescription>
-                      Process CPU and RAM usage on the selected machine.
-                    </DialogDescription>
-                  </DialogHeader>
-                  {resourcesOpen && <ResourcesView />}
-                </DialogContent>
-              </Dialog>
-              <SettingsDrawer
-                key={host.machineId}
-                open={settingsOpen}
-                onOpenChange={setSettingsOpen}
-                host={host}
-                connectionState={connection?.state ?? { status: "disconnected" }}
-                page={settingsPage}
-                onPageChange={setSettingsPage}
-              />
-              {addingProject && (
-                <ProjectSetupDialog
+                <Dialog open={resourcesOpen} onOpenChange={setResourcesOpen}>
+                  <DialogContent size="wide" className="mobile-settings-drawer">
+                    <DialogHeader>
+                      <DialogTitle>Resources</DialogTitle>
+                      <DialogDescription>
+                        Process CPU and RAM usage on the selected machine.
+                      </DialogDescription>
+                    </DialogHeader>
+                    {resourcesOpen && <ResourcesView />}
+                  </DialogContent>
+                </Dialog>
+                <SettingsDrawer
                   key={host.machineId}
-                  machineId={host.direct ? "local" : (host.machineId ?? "local")}
-                  githubEnabled={!host.direct}
-                  mode={addingProject}
-                  onClose={() => setAddingProject(null)}
-                  onAdded={() => {
-                    setAddingProject(null);
-                    setSidebarOpen(false);
-                    if (connection?.workspace?.selection)
-                      select({
-                        projectId: connection.workspace.selection.projectId,
-                        tabId: connection.workspace.selection.tabId ?? undefined,
-                      });
-                  }}
+                  open={settingsOpen}
+                  onOpenChange={setSettingsOpen}
+                  host={host}
+                  connectionState={connection?.state ?? { status: "disconnected" }}
+                  page={settingsPage}
+                  onPageChange={setSettingsPage}
                 />
-              )}
-              {newWorkspace.error && (
-                <p role="alert" className="p-3 text-sm text-destructive">
-                  {newWorkspace.error}
-                </p>
-              )}
-              <ResumeChatDialog
-                open={resumeOpen && canEdit}
-                onOpenChange={setResumeOpen}
-                workspace={workspace}
-                projectId={project?.id}
-                execute={execute}
-                onTabCreated={select}
-              />
-              <WorkspaceSearch
-                key={`${host.machineId}:${workspace?.epoch}`}
-                activeProjectId={project?.id}
-                projects={workspace?.projects ?? []}
-                canSelectProject={!!workspace}
-                onSelectProject={selectProject}
-                onSelectPane={select}
-                open={searchOpen}
-                onOpenChange={setSearchOpen}
-                onNavigate={(view) => {
-                  if (view === "settings") openSettings();
-                  else if (view === "schedules") {
-                    setPage({ kind: "schedules" });
-                    setSidebarOpen(false);
-                  } else if (view === "pull-requests") openPullRequests();
-                  else if (view === "resources") {
-                    setSidebarOpen(false);
-                    setResourcesOpen(true);
-                  } else setSidebarOpen(true);
-                }}
-                onManageMachines={() => openSettings("machines")}
-                onReconnect={() => runHost({ kind: "retry" })}
-                canReconnect={!ready}
-                onSetTheme={(theme) =>
-                  runHost({ kind: "preferences", preferences: { ...host.preferences, theme } })
-                }
-                onSignOut={() => runHost({ kind: "sign-out" })}
-              />
+                {addingProject && (
+                  <ProjectSetupDialog
+                    key={host.machineId}
+                    machineId={host.direct ? "local" : (host.machineId ?? "local")}
+                    githubEnabled={!host.direct}
+                    mode={addingProject}
+                    onClose={() => setAddingProject(null)}
+                    onAdded={() => {
+                      setAddingProject(null);
+                      setSidebarOpen(false);
+                      if (connection?.workspace?.selection)
+                        select({
+                          projectId: connection.workspace.selection.projectId,
+                          tabId: connection.workspace.selection.tabId ?? undefined,
+                        });
+                    }}
+                  />
+                )}
+                {newWorkspace.error && (
+                  <p role="alert" className="p-3 text-sm text-destructive">
+                    {newWorkspace.error}
+                  </p>
+                )}
+                <ResumeChatDialog
+                  open={resumeOpen && canEdit}
+                  onOpenChange={setResumeOpen}
+                  workspace={workspace}
+                  projectId={project?.id}
+                  execute={execute}
+                  onTabCreated={select}
+                />
+                <WorkspaceSearch
+                  key={`${host.machineId}:${workspace?.epoch}`}
+                  activeProjectId={project?.id}
+                  projects={workspace?.projects ?? []}
+                  canSelectProject={!!workspace}
+                  onSelectProject={selectProject}
+                  onSelectPane={select}
+                  open={searchOpen}
+                  onOpenChange={setSearchOpen}
+                  onNavigate={(view) => {
+                    if (view === "settings") openSettings();
+                    else if (view === "schedules") {
+                      setPage({ kind: "schedules" });
+                      setSidebarOpen(false);
+                    } else if (view === "pull-requests") openPullRequests();
+                    else if (view === "resources") {
+                      setSidebarOpen(false);
+                      setResourcesOpen(true);
+                    } else setSidebarOpen(true);
+                  }}
+                  onManageMachines={() => openSettings("machines")}
+                  onReconnect={() => runHost({ kind: "retry" })}
+                  canReconnect={!ready}
+                  onSetTheme={(theme) =>
+                    runHost({ kind: "preferences", preferences: { ...host.preferences, theme } })
+                  }
+                  onSignOut={() => runHost({ kind: "sign-out" })}
+                />
+              </ChatMenuProvider>
             </AgentsProvider>
           </NotificationProvider>
         </AgentDraftScopeContext>

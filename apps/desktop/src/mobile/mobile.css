@@ -257,6 +257,11 @@ body {
   color: var(--muted-foreground);
   font-size: 12px;
 }
+.mobile-pane-choice > .mobile-pane-pinned {
+  width: 15px;
+  height: 15px;
+  color: var(--muted-foreground);
+}
 .mobile-pane-choice > .mobile-pane-selected {
   width: 15px;
   height: 15px;
@@ -938,6 +943,12 @@ body {
 .mobile-notice button {
   min-height: 32px;
   color: var(--primary);
+}
+/* Desktop's undo toast, moved from under desktop's title bar to under the phone's header. */
+.mobile-undo-toast > [role="status"] {
+  top: calc(var(--mobile-header-height) + 4px);
+  padding-block: 0;
+  padding-inline: 16px 0;
 }
 .mobile-terminal-controls {
   display: flex;

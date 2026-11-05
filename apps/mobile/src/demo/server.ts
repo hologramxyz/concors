@@ -1,4 +1,5 @@
 import {
+  AGENT_PIN_DELETE_CAPABILITY,
   AGENT_USAGE_CAPABILITY,
   DICTATION_CAPABILITY,
   PULL_REQUEST_ACTIONS_CAPABILITY,
@@ -7,6 +8,7 @@ import {
   SCHEDULES_CAPABILITY,
   parseClientMessage,
   applyWorkspaceOperation,
+  nextWorkspaceTabName,
   WorkspaceOperationError,
   AgentInfoSchema,
   type DaemonMessage,
@@ -105,6 +107,37 @@ export function createDemoServer() {
     if (!project || !tab || !pane || pane.kind !== "pane") throw new Error("Pane not found");
     return { project, tab, pane };
   };
+  /** Opens the chat in a new tab of its workspace, unless a tab shows it already. */
+  const showInTab = (agent: AgentInfo) => {
+    const project = workspace.projects.find((item) => item.id === agent.projectId);
+    if (!project) throw new Error("The agent's workspace is unavailable");
+    if (
+      project.tabs.some((tab) =>
+        tab.nodes.some((node) => node.kind === "pane" && node.sessionId === agent.id),
+      )
+    )
+      return;
+    const tabId = newRequestId(),
+      paneId = newRequestId();
+    workspace = applyWorkspaceOperation(workspace, {
+      kind: "tab.create",
+      projectId: project.id,
+      expectedVersion: project.version,
+      tabId,
+      paneId,
+      name: agent.tabName ?? nextWorkspaceTabName(project.tabs),
+      profile: "chat",
+    });
+    const pane = workspace.projects
+      .find((item) => item.id === project.id)
+      ?.tabs.find((tab) => tab.id === tabId)
+      ?.nodes.find((node) => node.id === paneId);
+    if (pane?.kind === "pane") {
+      pane.sessionId = agent.id;
+      if (agent.paneName) pane.name = agent.paneName;
+    }
+    snapshot();
+  };
   const requestAgent = (operation: AgentOperation): Conversation => {
     if (operation.kind === "start") {
       const { project, tab, pane } = findPane(
@@ -147,6 +180,55 @@ export function createDemoServer() {
     }
     const conversation = conversations.get(operation.sessionId);
     if (!conversation) throw new Error("Agent not found");
+    if (operation.kind === "pin") {
+      // As the daemon does: pinning is not activity, so the chat keeps its place.
+      conversation.agent = {
+        ...conversation.agent,
+        pinned: operation.pinned || undefined,
+        revision: conversation.agent.revision + 1,
+      };
+      broadcast({ type: "agent.state", agent: conversation.agent });
+    }
+    if (operation.kind === "delete") {
+      clearInterval(conversation.timer);
+      conversations.delete(conversation.agent.id);
+      broadcast({
+        type: "agent.list",
+        agents: [...conversations.values()].map((entry) => entry.agent),
+      });
+      return { agent: conversation.agent, items: [] };
+    }
+    if (operation.kind === "open-session") showInTab(conversation.agent);
+    if (operation.kind === "fork-session") {
+      if (operation.expectedRevision !== conversation.agent.revision)
+        throw new Error("Agent changed. Try again.");
+      const id = newRequestId(),
+        now = new Date().toISOString();
+      const fork: Conversation = {
+        agent: {
+          ...conversation.agent,
+          id,
+          name: `${conversation.agent.name.slice(0, 70)} (fork)`,
+          tabName: undefined,
+          paneName: undefined,
+          pinned: undefined,
+          threadId: "demo-thread-" + id,
+          turnId: null,
+          status: "idle",
+          pending: [],
+          attention: null,
+          revision: 1,
+          startedAt: now,
+          updatedAt: now,
+          turnStartedAt: null,
+        },
+        items: conversation.items.map((item) => ({ ...item, id: newRequestId(), sessionId: id })),
+      };
+      conversations.set(id, fork);
+      showInTab(fork.agent);
+      state(fork);
+      return fork;
+    }
     if (operation.kind === "respond") {
       if (!conversation.agent.pending.some((pending) => pending.id === operation.pendingId))
         throw new Error("Request is no longer pending");
@@ -359,6 +441,7 @@ export function createDemoServer() {
                   "project-rename",
                   "workspace-pane-rearrangement",
                   "folder-workspaces",
+                  AGENT_PIN_DELETE_CAPABILITY,
                   AGENT_USAGE_CAPABILITY,
                   DICTATION_CAPABILITY,
                   PULL_REQUESTS_CAPABILITY,

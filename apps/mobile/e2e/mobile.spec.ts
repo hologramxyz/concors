@@ -973,6 +973,68 @@ test("flat tab actions configure and close inactive leaves without changing the 
   await paneCount(ui, 2);
 });
 
+test("tab menus pin, fork and delete chats with desktop's actions, and undo a delete", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const ui = await enter(page);
+  const picker = ui.getByRole("combobox", { name: "Tabs", includeHidden: true });
+  const sheet = ui.getByRole("dialog", { name: "Tabs", exact: true });
+  const menuItems = () => ui.locator('[role="menu"]').getByRole("menuitem").allTextContents();
+  // The demo's first chat waits on an approval, and a busy chat cannot fork, so use a new one.
+  await newTab(ui);
+  await ui.getByRole("button", { name: "New chat", exact: true }).click();
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+  const chat = await picker.getAttribute("data-value");
+  if (!chat) throw new Error("New chat was not selected");
+  const row = sheet.locator(`.mobile-pane-row:has([data-value="${chat}"])`);
+
+  // A terminal has no chat to pin, fork or delete.
+  await openPicker(ui);
+  await sheet
+    .locator(`.mobile-pane-row:has([data-value="${activeTerminal}"])`)
+    .getByRole("button", { name: /^Actions for tab / })
+    .click();
+  expect(await menuItems()).toEqual(["Close tab…"]);
+  await ui.locator('[role="menu"]').press("Escape");
+
+  await row.getByRole("button", { name: /^Actions for tab / }).click();
+  expect(await menuItems()).toEqual(["Pin", "Rename tab", "Fork chat", "Close tab…", "Delete…"]);
+  await ui.getByRole("menuitem", { name: "Pin", exact: true }).click();
+  await expect(row.getByLabel("Pinned")).toBeVisible();
+  await row.getByRole("button", { name: /^Actions for tab / }).click();
+  await expect(ui.getByRole("menuitem", { name: "Unpin", exact: true })).toBeVisible();
+
+  // The fork opens in a tab of its own and is shown.
+  await ui.getByRole("menuitem", { name: "Fork chat", exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(picker).not.toHaveAttribute("data-value", chat);
+  const fork = await picker.getAttribute("data-value");
+  await paneCount(ui, 4);
+
+  await workspaceActions(ui);
+  await ui.getByRole("menuitem", { name: "Delete…", exact: true }).click();
+  const confirm = ui.getByRole("dialog", { name: /^Delete “/ });
+  await expect(confirm).toContainText("You’ll have a few seconds to undo.");
+  await confirm.getByRole("button", { name: "Delete", exact: true }).click();
+  const toast = ui.getByRole("status").filter({ hasText: "Chat deleted" });
+  await expect(toast).toBeVisible();
+  await expect(picker).not.toHaveAttribute("data-value", fork ?? "");
+  await paneCount(ui, 3);
+  // Undo brings the tab back and, as it was shown, shows it again.
+  await toast.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(toast).toHaveCount(0);
+  await paneCount(ui, 4);
+  await expect(picker).not.toHaveAttribute("data-value", chat);
+
+  // The sidebar's Agents rows open the same menu.
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await ui
+    .getByRole("dialog", { name: "Workspace sidebar" })
+    .getByRole("button", { name: /^Actions for .*\(fork\)$/ })
+    .click();
+  expect(await menuItems()).toEqual(["Pin", "Rename tab", "Fork chat", "Close tab…", "Delete…"]);
+});
 test("glass controls retain their shape and composer height animates with reduced-motion support", async ({
   page,
 }) => {

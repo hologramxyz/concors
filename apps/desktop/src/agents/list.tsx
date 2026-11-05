@@ -1,29 +1,17 @@
-import { Bot, Clock, Ellipsis, GitFork, Pencil } from "lucide-react";
+import { Bot, Clock } from "lucide-react";
 import { useSchedules } from "@/schedules/use-schedules";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { SidebarEmpty } from "@/components/sidebar-section";
-import { useContext, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { cn } from "cn";
-import { TerminalConnectionContext } from "@/terminal/connection-context";
-import { agentPane, paneNames, visibleAgentSessions } from "./visible-sessions";
+import { paneNames, visibleAgentSessions } from "./visible-sessions";
 import { AgentStatusIcon } from "./activity";
 import { closedChats } from "./closed-chats";
 import { chatAgentStatus, terminalAgentStatus, type AgentStatus } from "./agent-status";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { TAB_PROFILES } from "@/workspace/tab-profiles";
-import {
-  PANE_RENAME_CAPABILITY,
-  type WorkspaceOperation,
-  type WorkspaceSnapshot,
-} from "@concors/protocol";
+import type { WorkspaceSnapshot } from "@concors/protocol";
 import { useAgents } from "./context";
-import { canFork, useForkChat } from "./fork";
 
 /**
  * Closing a pane keeps its chat, so the newest few stay in reach below the open agents. The rest
@@ -35,27 +23,22 @@ export function AgentSidebar({
   onSelect,
   workspace,
   compact = false,
-  canEdit = false,
-  onCommand,
+  hidden,
+  actions,
 }: {
   onSelect: (id: string) => void;
   workspace: WorkspaceSnapshot | null;
   compact?: boolean;
-  canEdit?: boolean;
-  /** Without it the list is read-only and rows have no actions menu. */
-  onCommand?: ((operation: WorkspaceOperation) => void) | undefined;
+  /** Chats waiting out an undo of their deletion, which are gone from the list already. */
+  hidden?: ReadonlySet<string> | undefined;
+  /** The open agent's "…" menu; without it the list is read-only. */
+  actions?: ((id: string, name: string) => ReactNode) | undefined;
 }) {
   const { schedules } = useSchedules();
-  const connection = useContext(TerminalConnectionContext);
-  const chats = useAgents();
+  const chats = useAgents().filter((agent) => !hidden?.has(agent.id));
   const terminals = useTerminalSessions();
   const visible = visibleAgentSessions(workspace, chats, terminals);
   const names = paneNames(workspace);
-  const forkChat = useForkChat();
-  const canRename =
-    canEdit &&
-    connection?.state.status === "ready" &&
-    !!connection.state.daemon.capabilities?.includes(PANE_RENAME_CAPABILITY);
   const scheduled = new Set(
     schedules
       ?.filter(
@@ -97,52 +80,20 @@ export function AgentSidebar({
     return compact ? null : <SidebarEmpty>No agents yet.</SidebarEmpty>;
   const list = (
     <ul className="mt-1 space-y-0.5 empty:hidden">
-      {agents.map((agent) => {
-        // Agents cannot be renamed themselves; the sidebar names the pane showing the agent, so the
-        // pane title and every other list follow (see `paneNames`).
-        const target = canRename && onCommand ? agentPane(workspace, agent.id) : null;
-        return (
-          <AgentRow
-            key={agent.id}
-            agent={agent}
-            compact={compact}
-            projectName={
-              workspace?.projects.find((project) => project.id === agent.projectId)?.name ??
-              "Project no longer available"
-            }
-            scheduled={!!schedules?.some((s) => s.enabled && s.sessionId === agent.id)}
-            onSelect={onSelect}
-            actions={!!onCommand}
-            onFork={(() => {
-              const chat = chats.find((a) => a.id === agent.id);
-              return canEdit && connection?.state.status === "ready" && canFork(chat)
-                ? () =>
-                    void forkChat(chat).catch((error: unknown) =>
-                      console.error("Could not fork the chat", error),
-                    )
-                : undefined;
-            })()}
-            onRename={
-              target && onCommand
-                ? (value) => {
-                    // Clearing the field, or typing the default back, returns to the automatic name.
-                    const name = value.trim().slice(0, 120);
-                    const next = name && name !== agent.defaultName ? name : null;
-                    if (next === (target.pane.name ?? null)) return;
-                    onCommand({
-                      kind: "pane.rename",
-                      projectId: target.project.id,
-                      expectedVersion: target.project.version,
-                      tabId: target.tab.id,
-                      paneId: target.pane.id,
-                      name: next,
-                    });
-                  }
-                : undefined
-            }
-          />
-        );
-      })}
+      {agents.map((agent) => (
+        <AgentRow
+          key={agent.id}
+          agent={agent}
+          compact={compact}
+          projectName={
+            workspace?.projects.find((project) => project.id === agent.projectId)?.name ??
+            "Project no longer available"
+          }
+          scheduled={!!schedules?.some((s) => s.enabled && s.sessionId === agent.id)}
+          onSelect={onSelect}
+          actions={compact ? null : actions?.(agent.id, agent.name)}
+        />
+      ))}
     </ul>
   );
   if (compact) return <section aria-label="Agents">{list}</section>;
@@ -166,9 +117,7 @@ export function AgentSidebar({
             projectName={chat.projectName}
             scheduled={false}
             onSelect={onSelect}
-            actions={false}
-            onRename={undefined}
-            onFork={undefined}
+            actions={null}
           />
         ))}
       </ul>
@@ -184,8 +133,6 @@ function AgentRow({
   scheduled,
   onSelect,
   actions,
-  onRename,
-  onFork,
 }: {
   agent: AgentStatus & { name: string };
   compact: boolean;
@@ -194,30 +141,13 @@ function AgentRow({
   projectName: string;
   scheduled: boolean;
   onSelect: (id: string) => void;
-  actions: boolean;
-  /** Absent when this agent cannot be renamed right now; the menu item is then disabled. */
-  onRename: ((name: string) => void) | undefined;
-  /** Absent for terminals, and for a chat that cannot be forked right now. */
-  onFork: (() => void) | undefined;
+  /** Its "…" menu, if it has one. */
+  actions: ReactNode;
 }) {
   const { status, dot, background } = agent;
   const backgroundLabel = background
     ? `${background} sub-agent${background === 1 ? "" : "s"} running`
     : "";
-  // Mirrors the pane rename: the ref stops blur after Enter/Escape from committing a second time.
-  const [renaming, setRenaming] = useState<string | null>(null);
-  const renameRef = useRef<string | null>(null);
-  const renameInput = useRef<HTMLInputElement>(null);
-  const setRename = (value: string | null) => {
-    renameRef.current = value;
-    setRenaming(value);
-  };
-  const commitRename = () => {
-    const value = renameRef.current;
-    if (value === null) return;
-    setRename(null);
-    onRename?.(value);
-  };
   return (
     <li
       className={cn(
@@ -225,122 +155,59 @@ function AgentRow({
           "group flex items-center rounded-md hover:bg-sidebar-accent has-[[data-state=open]]:bg-sidebar-accent",
       )}
     >
-      {renaming !== null ? (
-        <div className="flex h-8 min-w-0 flex-1 items-center gap-2 px-2">
-          <AgentStatusIcon agent={agent} />
-          <input
-            ref={renameInput}
-            aria-label="Agent name"
-            autoFocus
-            value={renaming}
-            maxLength={120}
-            onFocus={(event) => event.currentTarget.select()}
-            onChange={(event) => setRename(event.target.value)}
-            onBlur={commitRename}
-            onKeyDown={(event) => {
-              // Keep Enter, Escape and app shortcuts away from the handlers outside the sidebar.
-              event.stopPropagation();
-              if (event.key === "Enter") {
-                event.preventDefault();
-                commitRename();
-              } else if (event.key === "Escape") {
-                event.preventDefault();
-                setRename(null);
-              }
-            }}
-            className="min-w-0 flex-1 rounded bg-background px-1.5 py-0.5 text-ui text-foreground ring-1 ring-ring outline-none"
-          />
-        </div>
-      ) : (
-        <SidebarTooltip
-          content={
-            <div className="min-w-0">
-              <p className="font-medium break-words">
-                {agent.name}, {agent.providerName}
-              </p>
-              <p className="font-medium break-words">{projectName}</p>
-              <p className="opacity-75">
-                {status}
-                {backgroundLabel ? `, ${backgroundLabel}` : ""}
-                {scheduled ? ", Scheduled" : ""}
-                {dot === "done" ? ", Unread update" : ""}
-              </p>
-            </div>
+      <SidebarTooltip
+        content={
+          <div className="min-w-0">
+            <p className="font-medium break-words">
+              {agent.name}, {agent.providerName}
+            </p>
+            <p className="font-medium break-words">{projectName}</p>
+            <p className="opacity-75">
+              {status}
+              {backgroundLabel ? `, ${backgroundLabel}` : ""}
+              {scheduled ? ", Scheduled" : ""}
+              {dot === "done" ? ", Unread update" : ""}
+            </p>
+          </div>
+        }
+      >
+        <button
+          type="button"
+          className={`flex items-center rounded-md text-ui ${compact ? "sidebar-rail-control w-full hover:bg-sidebar-accent" : "h-8 min-w-0 flex-1 gap-2 px-2 text-left"}`}
+          aria-label={
+            compact
+              ? `Agent status: ${status}${backgroundLabel ? `, ${backgroundLabel}` : ""}, ${agent.name}, ${projectName}`
+              : undefined
           }
+          data-agent-id={agent.id}
+          data-agent-closed={closed || undefined}
+          onClick={() => onSelect(agent.id)}
         >
-          <button
-            type="button"
-            className={`flex items-center rounded-md text-ui ${compact ? "sidebar-rail-control w-full hover:bg-sidebar-accent" : "h-8 min-w-0 flex-1 gap-2 px-2 text-left"}`}
-            aria-label={
-              compact
-                ? `Agent status: ${status}${backgroundLabel ? `, ${backgroundLabel}` : ""}, ${agent.name}, ${projectName}`
-                : undefined
-            }
-            data-agent-id={agent.id}
-            data-agent-closed={closed || undefined}
-            onClick={() => onSelect(agent.id)}
-          >
-            <AgentStatusIcon agent={agent} />
-            {!compact && (
-              <span className={cn("min-w-0 flex-1 truncate", closed && "text-muted-foreground")}>
-                {agent.name}
-              </span>
-            )}
-            {!compact && background > 0 && (
-              <span
-                data-background-agents={background}
-                aria-label={backgroundLabel}
-                className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground tabular-nums"
-              >
-                <Bot aria-hidden="true" className="size-3.5 motion-safe:animate-pulse" />
-                {background > 1 && background}
-              </span>
-            )}
-            {!compact && scheduled && (
-              <Clock
-                className="size-3.5 shrink-0 text-muted-foreground"
-                aria-label="Scheduled agent"
-              />
-            )}
-          </button>
-        </SidebarTooltip>
-      )}
-      {!compact && actions && (
-        <DropdownMenu>
-          <SidebarTooltip content="Chat options">
-            <DropdownMenuTrigger
-              aria-label={`Actions for ${agent.name}`}
-              className={cn(
-                "mobile-tap-target mr-1 flex items-center justify-center rounded p-1 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-sidebar-foreground data-[state=open]:opacity-100 [@media(hover:none)]:opacity-100",
-                // Kept mounted while renaming so closing the menu can hand focus to the input.
-                renaming !== null && "invisible",
-              )}
+          <AgentStatusIcon agent={agent} />
+          {!compact && (
+            <span className={cn("min-w-0 flex-1 truncate", closed && "text-muted-foreground")}>
+              {agent.name}
+            </span>
+          )}
+          {!compact && background > 0 && (
+            <span
+              data-background-agents={background}
+              aria-label={backgroundLabel}
+              className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground tabular-nums"
             >
-              <Ellipsis className="size-4" />
-            </DropdownMenuTrigger>
-          </SidebarTooltip>
-          <DropdownMenuContent
-            align="start"
-            className="w-56"
-            onCloseAutoFocus={(event) => {
-              // The menu's focus trap outlives the input's autoFocus, so hand focus over here
-              // instead of returning it to the trigger.
-              if (renameRef.current === null) return;
-              event.preventDefault();
-              renameInput.current?.focus();
-            }}
-          >
-            <DropdownMenuItem disabled={!onRename} onSelect={() => setRename(agent.name)}>
-              <Pencil /> Rename agent
-            </DropdownMenuItem>
-            {onFork && (
-              <DropdownMenuItem onSelect={onFork}>
-                <GitFork /> Fork chat
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+              <Bot aria-hidden="true" className="size-3.5 motion-safe:animate-pulse" />
+              {background > 1 && background}
+            </span>
+          )}
+          {!compact && scheduled && (
+            <Clock
+              className="size-3.5 shrink-0 text-muted-foreground"
+              aria-label="Scheduled agent"
+            />
+          )}
+        </button>
+      </SidebarTooltip>
+      {!compact && actions}
     </li>
   );
 }

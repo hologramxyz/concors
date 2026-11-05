@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from "react";
-import { Check, ChevronDown, Plus } from "lucide-react";
+import { Check, ChevronDown, Pin, Plus } from "lucide-react";
 import type { MobileTarget } from "@concors/client-core";
 import type { WorkspaceOperation, WorkspaceProject, WorkspaceTab } from "@concors/protocol";
 import {
@@ -175,6 +175,8 @@ export function WorkspacePicker({
               const active = tab?.id === item.id && pane?.id === node.id;
               // The agent's logo and status dot, as desktop's tab strip shows them.
               const status = paneAgentStatus(node, chats, terminals);
+              // Marked as desktop's sidebar marks it; the sheet keeps the tab strip's order.
+              const pinned = !!chats.find((chat) => chat.id === node.sessionId)?.pinned;
               return (
                 <div key={`${item.id}:${node.id}`} className="mobile-pane-row">
                   <button
@@ -203,6 +205,7 @@ export function WorkspacePicker({
                       <span className="block truncate">{label}</span>
                       <small className="truncate">{profileLabel}</small>
                     </span>
+                    {pinned && <Pin className="mobile-pane-pinned" aria-label="Pinned" />}
                     {active && <Check className="mobile-pane-selected" />}
                   </button>
                   <WorkspaceActions

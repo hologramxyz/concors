@@ -26,7 +26,6 @@ import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
 import { useClosedTerminalNames } from "@/terminal/closed-names";
-import { canFork, useForkChat } from "@/agents/fork";
 import { useSchedules } from "@/schedules/use-schedules";
 import {
   Fragment,
@@ -49,7 +48,7 @@ import { SidebarEmpty, SidebarSection } from "./sidebar-section";
 import { SearchButton } from "@/components/search-button";
 import { ChatLimitBanner, DeleteChatDialog, type ChatToDelete } from "@/agents/chat-limit";
 import { chatName, useChatActions } from "@/agents/chat-actions";
-import { useDeferredDelete } from "@/agents/deferred-delete";
+import { useChatRowActions } from "@/agents/chat-row-actions";
 import { SidebarToggle } from "@/components/sidebar-toggle";
 import { cn } from "cn";
 import { useWindowChrome } from "@/window/context";
@@ -223,16 +222,15 @@ function WorkspaceTree(props: AppSidebarProps) {
   const parents = clashingWorkspaceParents(props.workspace?.projects ?? []);
   const connection = useContext(TerminalConnectionContext);
   const background = useContext(BackgroundTerminalsContext);
-  const forkChat = useForkChat();
-  const chatActions = useChatActions(props.execute);
   // The chat stays set while its dialog closes, so it can ease out under the same name.
   const [deleting, setDeleting] = useState<{ chat: ChatToDelete; open: boolean } | null>(null);
   const now = useMinuteClock();
   const chats = useAgents();
   const terminals = useTerminalSessions();
   const closedNames = useClosedTerminalNames();
-  const deferred = useDeferredDelete({
-    actions: chatActions,
+  const rowActions = useChatRowActions({
+    canEdit: props.canEdit,
+    execute: props.execute,
     isSelected: (id) => {
       const selection = props.workspace?.selection;
       return !!props.workspace?.projects
@@ -242,15 +240,16 @@ function WorkspaceTree(props: AppSidebarProps) {
     },
     onReopenSelected: props.onSelectAgent,
   });
+  const chatActions = rowActions.actions;
   const all = sidebarRows(props.workspace, chats, terminals, closedNames);
   // A chat waiting out its undo is gone from the list already.
   const rows = new Map(
     [...all.rows].map(([id, list]) => [
       id,
-      list.filter((row) => !deferred.hidden.has(rowChatId(row) ?? "")),
+      list.filter((row) => !rowActions.hidden.has(rowChatId(row) ?? "")),
     ]),
   );
-  const unavailable = all.unavailable.filter((chat) => !deferred.hidden.has(chat.id));
+  const unavailable = all.unavailable.filter((chat) => !rowActions.hidden.has(chat.id));
   const currentProjectId = props.workspace?.selection?.projectId ?? null;
   const selectedTabId =
     props.view === "projects" ? (props.workspace?.selection?.tabId ?? null) : null;
@@ -400,34 +399,21 @@ function WorkspaceTree(props: AppSidebarProps) {
     event.preventDefault();
     event.dataTransfer.dropEffect = "move";
   };
-  const fork = (chat: AgentInfo | undefined) =>
-    props.canEdit && connection?.state.status === "ready" && canFork(chat)
-      ? () =>
-          void forkChat(chat).catch((error: unknown) =>
-            console.error("Could not fork the chat", error),
-          )
-      : undefined;
-  const pin = (chat: AgentInfo | undefined) =>
-    props.canEdit && chatActions && chat
-      ? () =>
-          void chatActions
-            .pin(chat, !chat.pinned)
-            .catch((error: unknown) => console.error("Could not pin the chat", error))
-      : undefined;
+  const { fork, pin } = rowActions;
   // Bound to the chat's ID and its name as shown now, never to where its row sits.
   const remove = (chat: AgentInfo | undefined) =>
-    props.canEdit && chatActions && chat
+    rowActions.canDelete && chat
       ? () => setDeleting({ chat: { id: chat.id, name: chatName(chat) }, open: true })
       : undefined;
   return (
     <>
-      {deferred.toast}
+      {rowActions.toast}
       <DeleteChatDialog
         key={deleting?.chat.id}
         chat={deleting?.chat ?? null}
         open={!!deleting?.open}
         canDelete={!!chatActions}
-        onConfirm={(chat) => void deferred.remove(chat)}
+        onConfirm={(chat) => void rowActions.remove(chat)}
         onClose={(id) =>
           setDeleting((current) =>
             current?.chat.id === id ? { chat: current.chat, open: false } : current,

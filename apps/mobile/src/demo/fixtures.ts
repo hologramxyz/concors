@@ -138,6 +138,8 @@ export const demoAgent = AgentInfoSchema.parse({
     },
   ],
   attention: { id: ids.approval, kind: "needs_input", createdAt: date, seen: false },
+  // Codex can fork; it also reports context usage, which leaving controls out implied.
+  controls: { fork: true, contextUsage: true },
 });
 export const demoItems = [
   AgentItemSchema.parse({
