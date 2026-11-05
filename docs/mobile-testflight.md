@@ -182,7 +182,7 @@ Record iPhone/iOS version and Diagnostics version/build with each report. Use Te
 without private code, credentials or personal data in screenshots.
 
 - First install: Concors icon/name, light/dark startup, real sign-in, cancelled sign-in, offline/retry,
-  force-close/session restoration. No demo or extra consent/onboarding page.
+  force-close/session restoration. No demo in candidates. Confirm the native AI-sharing permission names recipients before applicable requests; decline, withdrawal and changed configurations must be tested.
 - Desktop sync: same organization/machine/workspaces; harmless chat and terminal from both clients;
   tabs/panes and files stay in sync. No VPS purchase on phone.
 - Native UI: glass and older-iOS fallback; square/subtle/rounded themes; sidebar/Files swipes;

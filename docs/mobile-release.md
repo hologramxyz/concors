@@ -7,10 +7,11 @@ It uses `candidate` to collect signed-device evidence without claiming public-re
 
 Start with the [submission packet](../apps/mobile/release/submission-packet.md): draft
 store copy, data inventory, public URL audit, and ownership for each blocker. The first
-release's existing-account companion scope is approved and enforced in the client. The AI
-data-sharing onboarding page and withdrawal controls have been removed by product direction,
-without a replacement prompt. Provider/privacy review and content-reporting readiness remain
-unverified release gates; removing the page does not establish store compliance.
+release is free, with machines added on desktop. Normal sign-in can create an account. AI-sharing
+permission is enforced by the native host before applicable agent/provider/schedule requests,
+with named configurations, a per-connection grant and withdrawal in account settings. The new
+account-deletion and reporting APIs must deploy before the app. Owner privacy facts, provider
+setup, signed-device acceptance and store materials remain unverified release gates.
 
 Client/demo/shared lifecycle/protocol integration/build profiles are implemented.
 No signed IPA/AAB, store release or production validation is implied by bundle export.
@@ -41,7 +42,7 @@ the [managed daemon rollout](mobile-backend.md); capability discovery is optiona
    signed preview builds, and execute the device matrix below. Safari demo success
    is not evidence of native WebView, signing, background or notification correctness.
 6. **Release services and submission:** finish push/revocation, account deletion,
-   public policy/support/deletion pages and domain association files; resolve the
+   public policy/support/deletion pages; keep unused domain-link declarations removed; resolve the
    storefront billing/provisioning policy; collect evidence before enabling production.
 
 The client now has an API method for the actual machine JWT endpoint and retains agent
@@ -49,10 +50,10 @@ metadata. It does not silently connect the chat UI to the terminal-only protocol
 Managed-cloud testing still needs the selected account/machine; native builds need team-owned
 project and signing configuration. The production checklist remains intentionally blocked/pending.
 
-The mobile client reuses the desktop workspace while excluding signup, machine
-provisioning, subscriptions and billing/checkout UI. The native API dispatcher rejects
+The mobile client reuses the desktop workspace and allows account creation through sign-in,
+while excluding machine provisioning and billing/checkout UI. The native API dispatcher rejects
 commerce calls as well. Commands run remotely and the application UI is bundled, not
-downloaded at runtime. The existing-account companion scope still needs storefront
+downloaded at runtime. The free existing-machine scope still needs storefront
 policy review, and the readiness checklist stays blocked until evidence is collected.
 This scope is **not a guarantee of approval**: review the actual service against
 [Apple guidelines](https://developer.apple.com/app-store/review/guidelines/) and Play
