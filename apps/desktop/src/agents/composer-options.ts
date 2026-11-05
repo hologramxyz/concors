@@ -22,3 +22,22 @@ export function hasComposerOptions(
 export function effortName(effort: string): string {
   return effort.charAt(0).toUpperCase() + effort.slice(1);
 }
+
+/** Codex's permission modes, as both the desktop menu and the iPhone's sheet word them. */
+export const codexPermissionModes = [
+  {
+    id: "default",
+    label: "Default permissions",
+    description: "Workspace access; asks when approval is needed.",
+  },
+  {
+    id: "auto-review",
+    label: "Auto-review",
+    description: "Same sandbox; eligible requests go to the reviewer agent.",
+  },
+  {
+    id: "full-access",
+    label: "Full access",
+    description: "File and network access without approval prompts.",
+  },
+] as const;

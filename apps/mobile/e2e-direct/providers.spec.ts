@@ -41,7 +41,7 @@ for (const native of [false, true]) {
           (item.content.kind === "composer" || item.content.label === label),
       );
     const nativeEvent = async (event: NativeSurfaceEvent, label?: string) => {
-      if (event.kind === "press" && event.control === "model") {
+      if (event.kind === "press" && event.control.startsWith("model")) {
         await expect
           .poll(async () => {
             const content = (await surface("composer"))?.content;
@@ -141,19 +141,18 @@ for (const native of [false, true]) {
         const modelId = provider === "codex" ? "fixture" : `fixture-${provider}`;
         const modelLabel = provider === "codex" ? "Fixture model" : `Fixture ${provider} model`;
         if (native) {
-          await nativeEvent({ kind: "press", control: "model", value: "__providers__" });
           await expect
             .poll(async () => {
               const content = (await surface("composer"))?.content;
               return (
                 content?.kind === "composer" &&
                 content.controls
-                  .find((item) => item.id === "model")
+                  .find((item) => item.id === "model:providers")
                   ?.options?.some((option) => option.id === provider)
               );
             })
             .toBe(true);
-          await nativeEvent({ kind: "press", control: "model", value: provider });
+          await nativeEvent({ kind: "press", control: "model:providers", value: provider });
           await expect
             .poll(async () => {
               const content = (await surface("composer"))?.content;
@@ -247,6 +246,7 @@ for (const native of [false, true]) {
           ).toEqual([
             ["model", provider],
             ["options", "options"],
+            ["model:providers", provider],
             ["effort", "brain"],
           ]);
         }

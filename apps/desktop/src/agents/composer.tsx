@@ -50,7 +50,7 @@ import { ControlTooltip } from "./control-tooltip";
 import { useClippedControls } from "./use-clipped-controls";
 import { useComposerWheel } from "./composer-wheel";
 import { FastModeToggle } from "./fast-mode-toggle";
-import { effortName, hasComposerOptions } from "./composer-options";
+import { codexPermissionModes, effortName, hasComposerOptions } from "./composer-options";
 import { findAgentModel } from "@concors/protocol";
 import { useAgentModelSelection } from "./use-model-selection";
 import { useDictation } from "./dictation";
@@ -789,11 +789,19 @@ export function AgentComposer({
           nativeMenu.readAccount(agent.provider);
         } else if (!controlsDisabled) {
           const value = event.value ?? "";
-          if (event.control === "model") {
-            if (value === "__providers__") {
-              setNativeProviderPage(undefined);
-              void nativeModels.load();
-            } else if (value === "__update__" && nativeProvider) {
+          if (event.control === "model:providers") {
+            // Back on the sheet's first page, this shows the provider's models; only choosing one
+            // of them switches.
+            const provider = nativeModels.providers.find(
+              (entry) => entry.id === value && !entry.error,
+            );
+            if (provider) {
+              setNativeProviderPage(provider.id);
+              void nativeModels.load(provider.id);
+              nativeMenu.readAccount(provider.id);
+            }
+          } else if (event.control === "model" || event.control === "model:older") {
+            if (value === "__update__" && nativeProvider) {
               if (nativeUpdate.version?.updateCommand) void nativeUpdate.update();
               else if (nativeGuide) void openExternal(nativeGuide).catch(() => undefined);
             } else if (value === "__connect__" && nativeProvider) {
@@ -802,16 +810,10 @@ export function AgentComposer({
                 label: nativeProviderLabel,
                 engine: nativeMenu.engineOf(nativeProvider.id),
               });
-            } else if (!nativeProvider) {
-              const provider = nativeModels.providers.find(
-                (entry) => entry.id === value && !entry.error,
-              );
-              if (provider) {
-                setNativeProviderPage(provider.id);
-                void nativeModels.load(provider.id);
-                nativeMenu.readAccount(provider.id);
-              }
-            } else if (!value || nativeProvider.models.some((model) => model.id === value)) {
+            } else if (
+              nativeProvider &&
+              (!value || nativeProvider.models.some((model) => model.id === value))
+            ) {
               nativeMenu.choose(value, nativeProvider.id);
             }
           } else if (
@@ -827,7 +829,11 @@ export function AgentComposer({
             void configure({ ...settings, mode: value as AgentSettings["mode"] });
           else if (event.control === "mode" && agent.controls?.modes.some((m) => m.id === value))
             void configure({ ...settings, nativeMode: value });
-          else if (event.control === "options" || event.control.startsWith("feature:")) {
+          else if (
+            event.control === "options" ||
+            event.control === "speed" ||
+            event.control.startsWith("feature:")
+          ) {
             if (value.startsWith("feature:")) {
               const [id, next] = JSON.parse(value.slice(8)) as [string, boolean | string];
               if (agent.controls?.features.some((f) => f.id === id))
@@ -987,26 +993,17 @@ export function AgentComposer({
             )
           }
           disabled={!advanced || !connected || busy || configuring}
-          options={[
-            {
-              id: "default",
-              label: "Default permissions",
-              description: "Workspace access; asks when approval is needed.",
-              icon: <Shield className="size-4" />,
-            },
-            {
-              id: "auto-review",
-              label: "Auto-review",
-              description: "Same sandbox; eligible requests go to the reviewer agent.",
-              icon: <ShieldCheck className="size-4" />,
-            },
-            {
-              id: "full-access",
-              label: "Full access",
-              description: "File and network access without approval prompts.",
-              icon: <ShieldOff className="size-4 text-amber-500" />,
-            },
-          ]}
+          options={codexPermissionModes.map((mode) => ({
+            ...mode,
+            icon:
+              mode.id === "auto-review" ? (
+                <ShieldCheck className="size-4" />
+              ) : mode.id === "full-access" ? (
+                <ShieldOff className="size-4 text-amber-500" />
+              ) : (
+                <Shield className="size-4" />
+              ),
+          }))}
           onSelect={(mode) => void configure({ ...settings, mode: mode as AgentSettings["mode"] })}
         />
       )}

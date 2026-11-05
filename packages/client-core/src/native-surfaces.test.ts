@@ -10,7 +10,7 @@ it("round-trips a full provider model catalog and long qualified IDs through nat
     icon: "model",
     disabled: false,
     options: [
-      { id: "__providers__", label: "← Providers", selected: false, navigate: true },
+      { id: "model:providers", label: "Provider", selected: false, navigate: true },
       { id: "", label: "Machine default", selected: true },
       ...Array.from({ length: MAX_AGENT_MODELS }, (_, index) => ({
         id: index === 0 ? modelId : `provider/model-${index}`,

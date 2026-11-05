@@ -2,7 +2,7 @@ import { useLayoutEffect, useState, type ReactNode } from "react";
 import type { MobileState, NativeSurface } from "@concors/client-core";
 import { NativeSurfaceContext, type NativeSurfaceRegistration } from "@/components/native-surface";
 import { hostAction, sendHost, subscribeHost } from "./bridge";
-import { clipNativeSurface } from "./native-geometry";
+import { clipNativeSurface, pinComposerToViewport } from "./native-geometry";
 
 /** Geometry travels out; a bounded UI event travels back. Credentials never enter this layer. */
 function createRegistry() {
@@ -52,14 +52,18 @@ export function NativeSurfaces({ host, children }: { host: MobileState; children
           // Header controls travel with their panels, even while inactive. Keep the
           // composer unmounted when obscured so it cannot retain keyboard focus.
           if (!interactive && item.content.kind === "composer") continue;
-          const rect = element.getBoundingClientRect();
+          const measured = element.getBoundingClientRect();
+          const rect =
+            item.content.kind === "composer"
+              ? pinComposerToViewport(measured, innerHeight)
+              : measured;
           if (
             !rect.width ||
             !rect.height ||
-            rect.bottom <= 0 ||
-            rect.top >= innerHeight ||
-            rect.right <= 0 ||
-            rect.left >= innerWidth
+            rect.y + rect.height <= 0 ||
+            rect.y >= innerHeight ||
+            rect.x + rect.width <= 0 ||
+            rect.x >= innerWidth
           )
             continue;
           const layer = element.closest(".mobile-files")

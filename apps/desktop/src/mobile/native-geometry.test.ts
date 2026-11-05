@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { clipNativeSurface } from "./native-geometry";
+import { clipNativeSurface, pinComposerToViewport } from "./native-geometry";
 
 const viewport = { width: 390, height: 844 };
 const main = { x: 0, y: 0, ...viewport };
@@ -53,4 +53,15 @@ it("clips to the keyboard-reduced viewport without stretching the control", () =
       offscreenFiles,
     ),
   ).toEqual({ x: 12, y: 430, width: 366, height: 50 });
+});
+
+it("keeps the composer on screen when the viewport shrinks a frame ahead of layout", () => {
+  const composer = { x: 0, y: 700, width: 390, height: 123 };
+  const pinned = pinComposerToViewport(composer, 637);
+  expect(pinned).toEqual({ ...composer, y: 514 });
+  expect(
+    clipNativeSurface(pinned, "workspace", { width: 390, height: 637 }, main, offscreenFiles),
+  ).not.toBeNull();
+  // Where it already fits, it stays exactly where layout put it.
+  expect(pinComposerToViewport(composer, 844)).toEqual(composer);
 });

@@ -214,7 +214,7 @@ the in-memory demo cannot prove real provider switching or saved profile launch.
 1. Open Settings → Providers. Search the catalog, install a supported CLI on the
    connected machine, and sign into it using a regular terminal. Installed and
    authenticated are separate states. Create a new Agent pane and choose a provider.
-   In an agent chat, tap the composer and its model icon. Go back to providers, choose
+   In an agent chat, tap the composer and its model icon. Open Provider, choose
    an installed Claude Code, OpenCode or Pi provider, then a model. The new chat should
    open automatically; use Tabs to return to the original conversation.
    Current daemons with `agent-accounts` also offer dismissible Codex, Claude and
@@ -310,8 +310,8 @@ The iOS-specific imports do not enter Android or Safari bundles. Android/web ret
 controls and web styling. Older iOS or Reduce Transparency uses native bordered controls and an
 opaque composer. Both native glass availability checks run before mounting glass; accessibility
 changes are observed while running. Reduce Motion disables composer expansion animation.
-The model button opens a native sheet, and the options button an action sheet that leads to effort,
-permissions and the other settings. The microphone button replaces the
+The model and options buttons open native sheets of grouped rows, whose rows push pages for older
+models, providers, effort, permissions and the other settings. The microphone button replaces the
 field with a recording row, in the webview: its stream runs on the workspace's secure origin
 (`IOS_WORKSPACE_ORIGIN`), which exists because WebKit offers no microphone to a page without one.
 Recording only ever starts from that button. Attachments use the native document picker,

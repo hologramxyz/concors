@@ -37,15 +37,12 @@ env:
 - takeScreenshot: apps/mobile/test-results/native/composer-expanded
 - tapOn:
     id: native-composer-model
-- assertVisible: "← Providers"
-- tapOn: "← Providers"
+- assertVisible: "Provider"
+- tapOn: "Provider"
 - assertVisible: "Providers"
 - tapOn: "Codex"
-- assertVisible: "← Providers"
-- tapOn: "← Providers"
-- assertVisible: "Providers"
-- tapOn: "Codex"
-# The sheet's title is the provider's name too; the model row is the second match.
+# Back on the first page, whose title is the provider's name too; the model row is the second match.
+- assertVisible: "Provider"
 - tapOn:
     text: "Codex"
     index: 1
@@ -55,13 +52,17 @@ env:
 - assertVisible: "Plan mode"
 - tapOn: "Thinking effort"
 - assertVisible: "Default \\(medium\\)"
-- tapOn: "Cancel"
+- tapOn: "Low"
+- assertVisible: "Plan mode"
+- tapOn: "Close"
 - assertVisible: "Native Liquid Glass draft"
 - tapOn:
     id: native-composer-options
 - tapOn: "Permission mode"
 - assertVisible: "Default permissions"
-- tapOn: "Cancel"
+- tapOn: "Default permissions"
+- assertVisible: "Plan mode"
+- tapOn: "Close"
 - assertVisible: "Native Liquid Glass draft"
 - tapOn:
     id: native-header-files

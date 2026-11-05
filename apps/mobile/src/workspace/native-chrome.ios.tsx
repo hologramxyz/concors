@@ -380,46 +380,6 @@ function ControlFace({
   );
 }
 
-/**
- * An action sheet has no second line and no dividers, so those stay in the model picker's sheet.
- * A row that navigates opens the control it names as this sheet's dismissal finishes.
- */
-function showControlSheet(
-  control: NativeControl,
-  context: {
-    dark: boolean;
-    controls(): readonly NativeControl[];
-    choose(control: string, value: string): void;
-    done(): void;
-  },
-) {
-  const options = control.options ?? [];
-  const color = context.dark ? "#ededed" : "#20211f";
-  ActionSheetIOS.showActionSheetWithOptions(
-    {
-      ...(control.title ? { title: control.title } : {}),
-      options: [
-        ...options.map((option) => `${option.selected ? "✓ " : ""}${option.label}`),
-        "Cancel",
-      ],
-      cancelButtonIndex: options.length,
-      tintColor: color,
-      cancelButtonTintColor: color,
-      userInterfaceStyle: context.dark ? "dark" : "light",
-    },
-    (index) => {
-      const option = options[index];
-      const next = option?.navigate && context.controls().find((item) => item.id === option.id);
-      if (next) {
-        showControlSheet(next, context);
-        return;
-      }
-      if (option) context.choose(control.id, option.id);
-      context.done();
-    },
-  );
-}
-
 function Control({
   id,
   icon,
@@ -431,6 +391,7 @@ function Control({
   blocked,
   onPress,
   options,
+  pages,
   onSelect,
   onPresent,
 }: {
@@ -442,10 +403,12 @@ function Control({
   dark: boolean;
   primary?: boolean;
   blocked?: boolean;
-  /** For a control with options, what opens them; the model picker also opens its own sheet. */
+  /** For a control with options, also runs as its sheet opens. */
   onPress?(): void;
   options?: NativeControl["options"];
-  onSelect?(id: string): void;
+  /** The controls its sheet's rows can open as pages. */
+  pages?: readonly NativeControl[];
+  onSelect?(control: string, value: string): void;
   onPresent?(open: boolean): void;
 }) {
   const modifiers = controlModifiers({ label, blocked });
@@ -474,10 +437,10 @@ function Control({
       seedColor={dark ? "#ededed" : "#20211f"}
       ignoreSafeArea="all"
     >
-      {options && id === "model" ? (
+      {id && options ? (
         <NativeControlPicker
-          label={title ?? label}
-          options={options}
+          control={{ id, title: title ?? label, options }}
+          pages={pages ?? []}
           dark={dark}
           blocked={blocked}
           anchor={button}
@@ -772,21 +735,13 @@ function Composer({
                 dark={dark}
                 onPresent={onPresent}
                 blocked={control.disabled}
+                pages={content.controls}
                 onPress={
                   control.id === "model"
                     ? () => emit({ kind: "press", control: "model-open" })
-                    : () => {
-                        onPresent(true);
-                        showControlSheet(control, {
-                          dark,
-                          controls: () => latest.current.content.controls,
-                          choose: (from, value) =>
-                            latest.current.emit({ kind: "press", control: from, value }),
-                          done: () => onPresent(false),
-                        });
-                      }
+                    : undefined
                 }
-                onSelect={(value) => emit({ kind: "press", control: control.id, value })}
+                onSelect={(from, value) => emit({ kind: "press", control: from, value })}
               />
             ))}
           <View style={styles.spacer} />

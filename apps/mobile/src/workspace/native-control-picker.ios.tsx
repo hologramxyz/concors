@@ -1,37 +1,67 @@
-import { Fragment, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   BottomSheet,
   Button,
-  Divider,
   HStack,
   Image,
-  ScrollView,
+  List,
+  NavigationDestination,
+  NavigationLink,
+  NavigationStack,
+  Section,
   Spacer,
   Text,
+  Toggle,
+  Toolbar,
+  ToolbarItem,
   VStack,
 } from "@expo/ui/swift-ui";
 import {
   accessibilityLabel,
   accessibilityValue,
-  buttonStyle,
-  contentShape,
+  background,
   disabled,
-  environment,
   font,
   foregroundStyle,
-  frame,
-  padding,
+  labelStyle,
+  layoutPriority,
+  lineLimit,
+  listRowBackground,
+  listStyle,
+  navigationBarTitleDisplayMode,
+  navigationTitle,
+  preferredColorScheme,
   presentationBackground,
   presentationDetents,
   presentationDragIndicator,
-  shapes,
+  scrollContentBackground,
+  tint,
+  truncationMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { NativeControl } from "@concors/client-core";
 
-/** A model picker stays presented while the WebView sends the next provider/model page. */
+type Option = NonNullable<NativeControl["options"]>[number];
+type Page = Pick<NativeControl, "id" | "title" | "options"> & { disabled?: boolean };
+
+/** Rows in the groups a list draws them in; each `section` row starts the next. */
+function sections(options: readonly Option[]) {
+  const groups: Option[][] = [];
+  for (const option of options) {
+    const group = groups.at(-1);
+    if (option.section || !group) groups.push([option]);
+    else group.push(option);
+  }
+  return groups;
+}
+
+/**
+ * One of a toolbar button's sheets, in the system's own navigation stack so that its rows push pages
+ * with a back chevron and an edge swipe. The sheet stays presented while the WebView answers: a
+ * provider's models arrive on the first page after the provider is chosen.
+ */
 export function NativeControlPicker({
-  label,
-  options,
+  control,
+  pages,
   dark,
   blocked,
   anchor,
@@ -39,16 +69,35 @@ export function NativeControlPicker({
   onSelect,
   onPresent,
 }: {
-  label: string;
-  options: NonNullable<NativeControl["options"]>;
+  control: Page;
+  /** The controls this sheet's rows may open. */
+  pages: readonly Page[];
   dark: boolean;
   blocked?: boolean;
   anchor(open: () => void): ReactNode;
   onOpen?(): void;
-  onSelect?(id: string): void;
+  onSelect?(control: string, value: string): void;
   onPresent?(open: boolean): void;
 }) {
   const [open, setOpen] = useState(false);
+  const [path, setPath] = useState<string[]>([]);
+  const destinations = pages.filter((page) =>
+    control.options?.some((option) => option.navigate && option.id === page.id),
+  );
+  const page = (shown: Page, closes: boolean) => (
+    <SheetPage
+      control={shown}
+      pages={destinations}
+      dark={dark}
+      blocked={!!blocked || !!shown.disabled}
+      onChoose={(option) => {
+        onSelect?.(shown.id, option.id);
+        if (option.toggle || option.navigate) return;
+        if (closes || option.closes) setOpen(false);
+        else setPath((value) => value.slice(0, -1));
+      }}
+    />
+  );
   return (
     <BottomSheet
       isPresented={open}
@@ -59,78 +108,149 @@ export function NativeControlPicker({
         if (blocked) return;
         onPresent?.(true);
         onOpen?.();
+        setPath([]);
         setOpen(true);
       })}
     >
-      <VStack
-        spacing={12}
+      <NavigationStack
+        // A page can go away beneath the stack, as Speed does for a model without tiers.
+        path={path.filter((id) => destinations.some((page) => page.id === id))}
+        onPathChange={setPath}
         modifiers={[
-          padding({ horizontal: 20, top: 24, bottom: 12 }),
-          environment("colorScheme", dark ? "dark" : "light"),
-          foregroundStyle(dark ? "#ededed" : "#20211f"),
+          // Also reaches the navigation bar, which the content's colorScheme does not.
+          preferredColorScheme(dark ? "dark" : "light"),
           // The sheet background follows the phone unless explicitly matched to the app.
           presentationBackground(dark ? "#1f1f1f" : "#ffffff"),
           presentationDetents(["medium", "large"]),
           presentationDragIndicator("visible"),
         ]}
       >
-        <HStack spacing={12}>
-          <Text modifiers={[font({ size: 17, weight: "semibold" })]}>{label}</Text>
-          <Spacer />
-          <Button label="Cancel" onPress={() => setOpen(false)} />
-        </HStack>
-        <Divider />
-        <ScrollView>
-          <VStack alignment="leading" spacing={4}>
-            {options.map((option) => (
-              <Fragment key={option.id}>
-                {option.divider ? <Divider /> : null}
-                <Button
-                  onPress={() => {
-                    if (blocked || option.disabled) return;
-                    onSelect?.(option.id);
-                    if (!option.navigate) setOpen(false);
+        <Toolbar>
+          {page(control, true)}
+          <Toolbar.Content>
+            <ToolbarItem placement="topBarLeading">
+              <Button
+                role="close"
+                label="Close"
+                systemImage="xmark"
+                onPress={() => setOpen(false)}
+                modifiers={[labelStyle("iconOnly")]}
+              />
+            </ToolbarItem>
+          </Toolbar.Content>
+        </Toolbar>
+        {destinations.map((destination) => (
+          <NavigationDestination key={destination.id} value={destination.id}>
+            {page(destination, false)}
+          </NavigationDestination>
+        ))}
+      </NavigationStack>
+    </BottomSheet>
+  );
+}
+
+function SheetPage({
+  control,
+  pages,
+  dark,
+  blocked,
+  onChoose,
+}: {
+  control: Page;
+  pages: readonly Page[];
+  dark: boolean;
+  blocked: boolean;
+  onChoose(option: Option): void;
+}) {
+  const text = dark ? "#ededed" : "#20211f";
+  const muted = dark ? "#a3a3a3" : "#646464";
+  const row = [listRowBackground(dark ? "#292929" : "#e8e8e3")];
+  return (
+    <List
+      modifiers={[
+        listStyle("insetGrouped"),
+        navigationTitle(control.title ?? ""),
+        navigationBarTitleDisplayMode("inline"),
+        foregroundStyle(text),
+        // A list paints its own background over the sheet's, and a pushed page paints the stack's.
+        scrollContentBackground("hidden"),
+        background(dark ? "#1f1f1f" : "#ffffff"),
+      ]}
+    >
+      {sections(control.options ?? []).map((group) => (
+        <Section key={group[0]?.id}>
+          {group.map((option) => {
+            const off = blocked || !!option.disabled;
+            if (option.toggle)
+              return (
+                <Toggle
+                  key={option.id}
+                  label={option.label}
+                  isOn={option.selected}
+                  onIsOnChange={() => {
+                    if (!off) onChoose(option);
                   }}
+                  // The host's seed color would leave a white thumb on a near-white track in dark.
+                  modifiers={[...row, tint(dark ? muted : text), disabled(off)]}
+                />
+              );
+            if (pages.some((page) => page.id === option.id))
+              return (
+                <NavigationLink
+                  key={option.id}
+                  value={option.id}
                   modifiers={[
-                    buttonStyle("plain"),
-                    disabled(!!blocked || !!option.disabled),
-                    accessibilityLabel(
-                      [option.label, option.description].filter(Boolean).join(", "),
-                    ),
-                    accessibilityValue(option.selected ? "Selected" : ""),
+                    ...row,
+                    disabled(off),
+                    accessibilityLabel(option.label),
+                    accessibilityValue(option.value ?? ""),
                   ]}
                 >
-                  {/* Plain buttons hit-test their label, so the label fills the whole row. */}
-                  <HStack
-                    spacing={12}
-                    modifiers={[
-                      frame({ maxWidth: Infinity, minHeight: 44, alignment: "leading" }),
-                      padding({ vertical: 4 }),
-                      contentShape(shapes.rectangle()),
-                    ]}
-                  >
-                    <VStack alignment="leading" spacing={2}>
-                      <Text>{option.label}</Text>
-                      {option.description ? (
-                        <Text
-                          modifiers={[
-                            font({ size: 13 }),
-                            foregroundStyle(dark ? "#a3a3a3" : "#646464"),
-                          ]}
-                        >
-                          {option.description}
-                        </Text>
-                      ) : null}
-                    </VStack>
+                  <HStack spacing={12}>
+                    {/* The label keeps its width, so a long value is what truncates. */}
+                    <Text modifiers={[lineLimit(1), layoutPriority(1)]}>{option.label}</Text>
                     <Spacer />
-                    {option.selected ? <Image systemName="checkmark" size={15} /> : null}
+                    {option.value ? (
+                      <Text
+                        modifiers={[foregroundStyle(muted), lineLimit(1), truncationMode("tail")]}
+                      >
+                        {option.value}
+                      </Text>
+                    ) : null}
                   </HStack>
-                </Button>
-              </Fragment>
-            ))}
-          </VStack>
-        </ScrollView>
-      </VStack>
-    </BottomSheet>
+                </NavigationLink>
+              );
+            return (
+              <Button
+                key={option.id}
+                onPress={() => {
+                  if (!off) onChoose(option);
+                }}
+                modifiers={[
+                  ...row,
+                  disabled(off),
+                  accessibilityLabel([option.label, option.description].filter(Boolean).join(", ")),
+                  accessibilityValue(option.selected ? "Selected" : ""),
+                ]}
+              >
+                {/* In a list the default button style takes the whole row, and would tint this. */}
+                <HStack spacing={12} modifiers={[foregroundStyle(text)]}>
+                  <VStack alignment="leading" spacing={2}>
+                    <Text>{option.label}</Text>
+                    {option.description ? (
+                      <Text modifiers={[font({ size: 13 }), foregroundStyle(muted)]}>
+                        {option.description}
+                      </Text>
+                    ) : null}
+                  </VStack>
+                  <Spacer />
+                  {option.selected ? <Image systemName="checkmark" size={15} /> : null}
+                </HStack>
+              </Button>
+            );
+          })}
+        </Section>
+      ))}
+    </List>
   );
 }
