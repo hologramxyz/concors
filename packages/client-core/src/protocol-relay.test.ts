@@ -8,7 +8,7 @@ const hello = {
   protocolVersion: "v1",
   client: { kind: "mobile", name: "ui", version: "0.1.0" },
 };
-function setup() {
+function setup(beforeSend?: Parameters<typeof createProtocolRelay>[2]) {
   const off = vi.fn();
   const dictation: { current?: Parameters<RelayConnection["onDictation"]>[0] } = {};
   const connection: RelayConnection = {
@@ -101,11 +101,49 @@ function setup() {
     sendDictationAudio: vi.fn(),
   };
   const messages: DaemonMessage[] = [];
-  const relay = createProtocolRelay(connection, (message) => messages.push(message));
+  const relay = createProtocolRelay(connection, (message) => messages.push(message), beforeSend);
   return { connection, messages, relay, off, dictation };
 }
 const dictationId = "22222222-2222-4222-8222-222222222222";
 const pcm = "AAAA";
+it("does not dispatch a denied AI request and returns its matching result", async () => {
+  const { relay, connection, messages } = setup(async () => ({
+    type: "agent.result",
+    requestId: id,
+    outcome: { status: "error", message: "Permission declined" },
+  }));
+  await relay.receive(hello);
+  await relay.receive({
+    type: "agent.request",
+    requestId: id,
+    operation: { kind: "send", sessionId: id, text: "private prompt" },
+  });
+  expect(connection.requestAgent).not.toHaveBeenCalled();
+  expect(messages.at(-1)).toMatchObject({
+    type: "agent.result",
+    requestId: id,
+    outcome: { status: "error" },
+  });
+});
+it("drops an approved request if its relay was disposed while the permission UI was open", async () => {
+  let finish!: (value: null) => void;
+  const { relay, connection } = setup(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await relay.receive(hello);
+  const waiting = relay.receive({
+    type: "agent.request",
+    requestId: id,
+    operation: { kind: "send", sessionId: id, text: "private prompt" },
+  });
+  relay.dispose();
+  finish(null);
+  await waiting;
+  expect(connection.requestAgent).not.toHaveBeenCalled();
+});
 const dictate = (kind: "start" | "finish" | "cancel") => ({
   type: "dictation.request",
   requestId: crypto.randomUUID(),
