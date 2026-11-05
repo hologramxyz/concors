@@ -293,17 +293,20 @@ function AccountPrompt({
                 : `Install ${cli.label} on this machine using its guide, then come back here.`}
             </p>
           </div>
-          <SidebarTooltip place="above" content="Dismiss">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-muted-foreground"
-              aria-label="Dismiss installation"
-              onClick={hide}
-            >
-              <X className="size-4" />
-            </Button>
-          </SidebarTooltip>
+          {/* One title line tall, so the larger button centres on that line. */}
+          <div className="flex h-lh items-center">
+            <SidebarTooltip place="above" content="Dismiss">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-muted-foreground"
+                aria-label="Dismiss installation"
+                onClick={hide}
+              >
+                <X className="size-4" />
+              </Button>
+            </SidebarTooltip>
+          </div>
         </div>
         {failure && (
           <p role="alert" className="mt-2 text-xs text-destructive">

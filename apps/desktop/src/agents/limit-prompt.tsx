@@ -163,15 +163,18 @@ function LimitPrompt({
             its current turn ends.
           </p>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-muted-foreground"
-          aria-label="Dismiss usage limit"
-          onClick={() => setHidden(true)}
-        >
-          <X className="size-4" />
-        </Button>
+        {/* One title line tall, so the larger button centres on that line. */}
+        <div className="flex h-lh items-center">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground"
+            aria-label="Dismiss usage limit"
+            onClick={() => setHidden(true)}
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
       </div>
       {error && (
         <p role="alert" className="mt-2 text-xs text-destructive">
