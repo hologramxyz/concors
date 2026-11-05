@@ -49,6 +49,7 @@ import type { WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
 import type { View } from "@/navigation";
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { AccountMenu } from "@/components/account-menu";
+import { GuestSignInCard } from "@/auth/guest-sign-in-card";
 import { UpdateBadge } from "@/update/update-badge";
 import { MachineSwitcher } from "@/workspace/machine-switcher";
 import type { Host } from "@/workspace/machines";
@@ -77,6 +78,8 @@ interface AppSidebarProps {
   onSelectMachine: (host: Host) => void;
   onViewCloud: (machineId?: string) => void;
   auth: SignedInAuth | null;
+  /** Using this computer without an account; a session that could not be checked is not one. */
+  guest: boolean;
   /** The workspace is loaded, so Take the tour has something to point at. */
   canTour: boolean;
   onSignIn: () => void;
@@ -116,6 +119,7 @@ export function AppSidebar(props: AppSidebarProps) {
   );
   const search = <SearchButton onOpenSearch={props.onOpenSearch} tour />;
   const toggle = <SidebarToggle collapsed={false} onToggle={props.onCollapse} className="p-1.5" />;
+  const footer = useRef<HTMLDivElement>(null);
 
   return (
     // Collapsed, the sidebar keeps its layout and is clipped to nothing, so it slides away whole;
@@ -189,7 +193,13 @@ export function AppSidebar(props: AppSidebarProps) {
           </>
         </div>
         <SidebarChatLimit workspace={props.workspace} execute={props.execute} />
-        <div className="space-y-1 p-2">
+        {props.guest && (
+          <GuestSignInCard
+            onSignIn={props.onSignIn}
+            onDismissed={() => footer.current?.querySelector("button")?.focus()}
+          />
+        )}
+        <div ref={footer} className="space-y-1 p-2">
           <UpdateBadge collapsed={false} />
           <AccountMenu
             collapsed={false}

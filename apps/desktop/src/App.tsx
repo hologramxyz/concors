@@ -538,6 +538,7 @@ function AppContent() {
                           onSelectMachine={selectMachine}
                           onViewCloud={manageMachines}
                           auth={account}
+                          guest={guest}
                           canTour={connection.workspaceReady && !!workspace}
                           onSignOut={signOut}
                           onSignIn={signIn}
