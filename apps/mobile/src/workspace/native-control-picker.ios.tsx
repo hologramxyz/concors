@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import {
   BottomSheet,
   Button,
   Divider,
   HStack,
+  Image,
   ScrollView,
   Spacer,
   Text,
@@ -11,7 +12,9 @@ import {
 } from "@expo/ui/swift-ui";
 import {
   accessibilityLabel,
+  accessibilityValue,
   buttonStyle,
+  contentShape,
   disabled,
   environment,
   font,
@@ -21,6 +24,7 @@ import {
   presentationBackground,
   presentationDetents,
   presentationDragIndicator,
+  shapes,
 } from "@expo/ui/swift-ui/modifiers";
 import type { NativeControl } from "@concors/client-core";
 
@@ -31,6 +35,7 @@ export function NativeControlPicker({
   dark,
   blocked,
   anchor,
+  onOpen,
   onSelect,
   onPresent,
 }: {
@@ -39,6 +44,7 @@ export function NativeControlPicker({
   dark: boolean;
   blocked?: boolean;
   anchor(open: () => void): ReactNode;
+  onOpen?(): void;
   onSelect?(id: string): void;
   onPresent?(open: boolean): void;
 }) {
@@ -52,6 +58,7 @@ export function NativeControlPicker({
       anchor={anchor(() => {
         if (blocked) return;
         onPresent?.(true);
+        onOpen?.();
         setOpen(true);
       })}
     >
@@ -76,22 +83,50 @@ export function NativeControlPicker({
         <ScrollView>
           <VStack alignment="leading" spacing={4}>
             {options.map((option) => (
-              <Button
-                key={option.id}
-                label={`${option.selected ? "✓ " : ""}${option.label}`}
-                onPress={() => {
-                  if (blocked) return;
-                  onSelect?.(option.id);
-                  if (!option.navigate) setOpen(false);
-                }}
-                modifiers={[
-                  buttonStyle("plain"),
-                  disabled(!!blocked),
-                  accessibilityLabel(option.label),
-                  frame({ maxWidth: Infinity, minHeight: 44, alignment: "leading" }),
-                  padding({ vertical: 8 }),
-                ]}
-              />
+              <Fragment key={option.id}>
+                {option.divider ? <Divider /> : null}
+                <Button
+                  onPress={() => {
+                    if (blocked || option.disabled) return;
+                    onSelect?.(option.id);
+                    if (!option.navigate) setOpen(false);
+                  }}
+                  modifiers={[
+                    buttonStyle("plain"),
+                    disabled(!!blocked || !!option.disabled),
+                    accessibilityLabel(
+                      [option.label, option.description].filter(Boolean).join(", "),
+                    ),
+                    accessibilityValue(option.selected ? "Selected" : ""),
+                  ]}
+                >
+                  {/* Plain buttons hit-test their label, so the label fills the whole row. */}
+                  <HStack
+                    spacing={12}
+                    modifiers={[
+                      frame({ maxWidth: Infinity, minHeight: 44, alignment: "leading" }),
+                      padding({ vertical: 4 }),
+                      contentShape(shapes.rectangle()),
+                    ]}
+                  >
+                    <VStack alignment="leading" spacing={2}>
+                      <Text>{option.label}</Text>
+                      {option.description ? (
+                        <Text
+                          modifiers={[
+                            font({ size: 13 }),
+                            foregroundStyle(dark ? "#a3a3a3" : "#646464"),
+                          ]}
+                        >
+                          {option.description}
+                        </Text>
+                      ) : null}
+                    </VStack>
+                    <Spacer />
+                    {option.selected ? <Image systemName="checkmark" size={15} /> : null}
+                  </HStack>
+                </Button>
+              </Fragment>
             ))}
           </VStack>
         </ScrollView>

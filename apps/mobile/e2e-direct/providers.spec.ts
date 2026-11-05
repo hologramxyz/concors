@@ -117,10 +117,10 @@ for (const native of [false, true]) {
               return (
                 content?.kind === "composer" &&
                 content.editable &&
-                content.controls.find((control) => control.id === "model")?.label
+                content.controls.find((control) => control.id === "model")?.title
               );
             })
-            .toBe(`${label}: Agent and model`);
+            .toBe(label);
           await nativeEvent({ kind: "focus", focused: true });
           await nativeEvent({ kind: "text", text, sequence: ++sequence });
           await expect
@@ -166,6 +166,17 @@ for (const native of [false, true]) {
             })
             .toBe(true);
           await nativeEvent({ kind: "press", control: "model", value: modelId });
+          // Once this pane has a conversation with content, a switch is confirmed first. The
+          // wording depends on whether the pane already has a conversation with that provider.
+          if (sequence)
+            await ui
+              .getByRole("dialog", {
+                name: new RegExp(`^(Switch to ${label}\\?|Start a new ${label} conversation\\?)$`),
+              })
+              .getByRole("button", {
+                name: new RegExp(`^(Switch to ${label}|Start new conversation)$`),
+              })
+              .click();
           // The chip shows the new provider at once, but the pane changes chat only when the
           // switch is done; typing before then goes to the chat being left.
           const paneProvider = () => {
@@ -203,11 +214,11 @@ for (const native of [false, true]) {
         const model = async () => {
           const content = (await surface("composer"))?.content;
           return content?.kind === "composer"
-            ? content.controls.find((control) => control.id === "model")?.label
+            ? content.controls.find((control) => control.id === "model")?.title
             : undefined;
         };
-        await expect.poll(model).toMatch(/: Agent and model$/);
-        if ((await model()) !== "Codex: Agent and model") await choose("codex", "Codex");
+        await expect.poll(model).toBeTruthy();
+        if ((await model()) !== "Codex") await choose("codex", "Codex");
       }
       await send("Codex", "Keep my original conversation");
       for (const [provider, label] of [
@@ -235,6 +246,7 @@ for (const native of [false, true]) {
               content.controls.map((control) => [control.id, control.icon]),
           ).toEqual([
             ["model", provider],
+            ["options", "options"],
             ["effort", "brain"],
           ]);
         }

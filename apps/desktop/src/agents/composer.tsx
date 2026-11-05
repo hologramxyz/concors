@@ -1,4 +1,3 @@
-import { modelOptions } from "@concors/client-core";
 import { AgentDraftScopeContext, useAgentDraft, type InputDraft as Draft } from "./draft";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
@@ -22,6 +21,7 @@ import {
 } from "lucide-react";
 import {
   agentProviderName,
+  providerPresets,
   AgentAttachmentSchema,
   MAX_AGENT_IMAGE_BYTES,
   MAX_MESSAGE_ATTACHMENTS,
@@ -41,13 +41,16 @@ import { ContextMeter } from "./context-meter";
 import { usageView } from "./context-window";
 import { usePlanUsage } from "./use-plan-usage";
 import { AgentModelPicker } from "./model-picker";
+import { useModelMenuActions } from "./model-menu-actions";
+import { modelMenuFooter, nativeComposerControls } from "./native-composer-controls";
+import { accountName } from "./account-name";
+import { useProviderUpdate } from "./provider-update-state";
+import { openExternal } from "@/tauri/open-external";
 import { ControlTooltip } from "./control-tooltip";
 import { useClippedControls } from "./use-clipped-controls";
 import { useComposerWheel } from "./composer-wheel";
 import { FastModeToggle } from "./fast-mode-toggle";
-import { hasComposerOptions } from "./composer-options";
-import { useAgents } from "./context";
-import { switchDescription } from "./provider-switch";
+import { effortName, hasComposerOptions } from "./composer-options";
 import { findAgentModel } from "@concors/protocol";
 import { useAgentModelSelection } from "./use-model-selection";
 import { useDictation } from "./dictation";
@@ -91,12 +94,6 @@ import {
 const UPDATE_FOR_MORE = "This machine needs a Concors update to attach more or larger files.";
 const UPLOAD_LIMIT = `${MAX_UPLOAD_BYTES / 1024 / 1024} MB`;
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
-const nativeProviderIcons: Record<string, "model" | "claude" | "opencode" | "pi"> = {
-  codex: "model",
-  claude: "claude",
-  opencode: "opencode",
-  pi: "pi",
-} as const;
 export function AgentComposer({
   agent,
   connected,
@@ -125,7 +122,7 @@ export function AgentComposer({
   const native = compact && !!nativeHost;
   const { owner, expanded: webExpanded, expand } = useComposerExpansion(compact && !native);
   const [nativeExpanded, setNativeExpanded] = useState(false);
-  const [nativeHeight, setNativeHeight] = useState(56);
+  const [nativeHeight, setNativeHeight] = useState(66);
   const [editAck, setEditAck] = useState(0);
   const nativeEditSequence = useRef(0);
   const nativeField = useRef<HTMLDivElement>(null);
@@ -643,7 +640,6 @@ export function AgentComposer({
       window.removeEventListener("concors-foreground", check);
     };
   }, [compact, native, expanded]);
-  const agents = useAgents();
   const nativeModels = useAgentModelSelection(
     agent,
     (model) =>
@@ -662,6 +658,19 @@ export function AgentComposer({
   const nativeProvider = nativeModels.providers.find(
     (provider) => provider.id === nativeProviderPage,
   );
+  const nativeProviderLabel = nativeProvider
+    ? (nativeProvider.label ?? agentProviderName(nativeProvider.id))
+    : "";
+  const nativeMenu = useModelMenuActions(agent, nativeModels.providers, nativeModels.choose);
+  const nativeUpdate = useProviderUpdate(
+    nativeProvider?.id ?? agent.provider,
+    nativeProviderLabel,
+    nativeProvider?.version,
+  );
+  const nativeGuide = nativeProvider
+    ? providerPresets.find((preset) => preset.id === nativeMenu.engineOf(nativeProvider.id))
+        ?.installLink
+    : undefined;
   const effortModel = findAgentModel(nativeModels.currentModels, nativeModels.selection.value);
   const controlsDisabled = !advanced || !connected || busy || configuring;
   // Same conditions as the attach button; while they fail, the window refuses the drop.
@@ -705,161 +714,26 @@ export function AgentComposer({
       hasAttachments: !!attachments.length,
       attachEnabled: !!advanced && connected && !busy && !attaching && !uncertain,
       uploads,
-      controls: [
-        {
-          id: "model",
-          label: nativeProvider
-            ? `${nativeProvider.label ?? agentProviderName(nativeProvider.id)}: Agent and model`
-            : "Choose an agent provider",
-          icon:
-            nativeProviderIcons[
-              nativeProvider?.id === agent.provider
-                ? (agent.engine ?? agent.provider)
-                : (nativeProvider?.id ?? agent.provider)
-            ] ?? ("options" as const),
-          disabled: controlsDisabled || agent.status === "starting" || nativeModels.switching,
-          options: nativeProvider
-            ? [
-                {
-                  id: "__providers__",
-                  label: "← Back to providers",
-                  selected: false,
-                  navigate: true,
-                },
-                // Choosing it opens a chat that offers to install the CLI.
-                ...(nativeProvider.installed === false
-                  ? [
-                      {
-                        id: "",
-                        label: `Install ${nativeProvider.label ?? agentProviderName(nativeProvider.id)}`,
-                        selected: false,
-                      },
-                    ]
-                  : []),
-                ...(!nativeProvider.error || nativeProvider.models.length
-                  ? [
-                      ...(nativeProvider.id === agent.provider
-                        ? nativeModels.selection.options
-                        : modelOptions(nativeProvider.models)
-                      ).map((model) => ({
-                        id: model.id,
-                        label: model.label,
-                        selected:
-                          nativeProvider.id === agent.provider &&
-                          nativeModels.selection.value === model.id,
-                      })),
-                    ]
-                  : []),
-              ]
-            : nativeModels.providers
-                .filter((provider) => !provider.error || provider.models.length)
-                .map((provider) => ({
-                  id: provider.id,
-                  label:
-                    (provider.label ?? agentProviderName(provider.id)) +
-                    (provider.installed === false
-                      ? ": Not installed"
-                      : `: ${switchDescription(agents, agent, provider.id)}`),
-                  selected: provider.id === agent.provider,
-                  navigate: true,
-                })),
-        },
-        {
-          id: "effort",
-          label: `Thinking effort: ${settings.effort ?? "Default"}`,
-          icon: "brain" as const,
-          disabled: controlsDisabled,
-          options: [
-            {
-              id: "",
-              label: `Default (${effortModel?.defaultEffort ?? "automatic"})`,
-              selected: !settings.effort,
-            },
-            ...(effortModel?.efforts ?? []).map((effort) => ({
-              id: effort,
-              label: effort,
-              selected: settings.effort === effort,
-            })),
-          ],
-        },
-        {
-          id: "mode",
-          label: `Mode: ${(agent.engine ?? agent.provider) === "codex" ? settings.mode : (settings.nativeMode ?? agent.controls?.currentMode ?? "default")}`,
-          icon: "shield" as const,
-          disabled: controlsDisabled,
-          options:
-            (agent.engine ?? agent.provider) !== "codex"
-              ? (agent.controls?.modes ?? []).map((mode) => ({
-                  id: mode.id,
-                  label: mode.label,
-                  selected: (settings.nativeMode ?? agent.controls?.currentMode) === mode.id,
-                }))
-              : [
-                  {
-                    id: "default",
-                    label: "Default permissions: asks for approval",
-                    selected: settings.mode === "default",
-                  },
-                  {
-                    id: "auto-review",
-                    label: "Auto-review: same sandbox",
-                    selected: settings.mode === "auto-review",
-                  },
-                  {
-                    id: "full-access",
-                    label: "Full access: no approval prompts",
-                    selected: settings.mode === "full-access",
-                  },
-                ],
-        },
-        {
-          id: "options",
-          label: "Conversation options",
-          icon: "options" as const,
-          disabled: controlsDisabled,
-          options: [
-            ...(agent.supportsPlan
-              ? [
-                  {
-                    id: "plan",
-                    label: "Plan mode: read-only exploration",
-                    selected: !!settings.planMode,
-                  },
-                ]
-              : []),
-            ...((agent.engine ?? agent.provider) === "codex"
-              ? [{ id: "speed:", label: "Default speed", selected: !settings.serviceTier }]
-              : []),
-            ...(agent.controls?.features ?? []).flatMap((f) =>
-              f.options
-                ? f.options.map((o) => ({
-                    id: `feature:${JSON.stringify([f.id, o.id])}`,
-                    label: `${f.label}: ${o.label}`,
-                    selected: (settings.features?.[f.id] ?? f.value) === o.id,
-                  }))
-                : [
-                    {
-                      id: `feature:${JSON.stringify([f.id, !(settings.features?.[f.id] ?? f.value)])}`,
-                      label: `${f.label}: ${(settings.features?.[f.id] ?? f.value) ? "on" : "off"}`,
-                      selected: !!(settings.features?.[f.id] ?? f.value),
-                    },
-                  ],
-            ),
-            ...(effortModel?.serviceTiers ?? []).map((tier) => ({
-              id: `speed:${tier.id}`,
-              label: tier.label,
-              selected: settings.serviceTier === tier.id,
-            })),
-          ],
-        },
-      ].filter(
-        (control) =>
-          (agent.engine ?? agent.provider) === "codex" ||
-          control.id === "model" ||
-          (control.id === "effort" && !!effortModel?.efforts.length) ||
-          (control.id === "mode" && !!agent.controls?.modes.length) ||
-          (control.id === "options" && !!agent.controls?.features.length),
-      ),
+      controls: nativeComposerControls({
+        agent,
+        settings,
+        effortModel,
+        disabled: controlsDisabled,
+        modelDisabled: controlsDisabled || agent.status === "starting" || nativeModels.switching,
+        providers: nativeModels.providers,
+        page: nativeProvider,
+        selection: nativeModels.selection,
+        footer: nativeProvider
+          ? modelMenuFooter({
+              provider: nativeProvider,
+              version: nativeUpdate.version,
+              error: nativeUpdate.error,
+              guide: nativeGuide,
+              account: nativeMenu.accounts[nativeProvider.id],
+              accountName: accountName(nativeMenu.engineOf(nativeProvider.id), nativeProviderLabel),
+            })
+          : [],
+      }),
       dictationHelp,
       usage: usageView(agent, planUsage),
     },
@@ -908,12 +782,26 @@ export function AgentComposer({
         } else if (event.control === "context" || event.control === "context-refresh") {
           // Like the desktop popover: plan usage is read while the sheet is open, not before.
           planUsage.refresh(agent.id, event.control === "context-refresh");
+        } else if (event.control === "model-open") {
+          // Like the desktop menu: it opens on the current provider, and asks then if it's signed in.
+          setNativeProviderPage(agent.provider);
+          void nativeModels.load();
+          nativeMenu.readAccount(agent.provider);
         } else if (!controlsDisabled) {
           const value = event.value ?? "";
           if (event.control === "model") {
             if (value === "__providers__") {
               setNativeProviderPage(undefined);
               void nativeModels.load();
+            } else if (value === "__update__" && nativeProvider) {
+              if (nativeUpdate.version?.updateCommand) void nativeUpdate.update();
+              else if (nativeGuide) void openExternal(nativeGuide).catch(() => undefined);
+            } else if (value === "__connect__" && nativeProvider) {
+              nativeMenu.connect({
+                id: nativeProvider.id,
+                label: nativeProviderLabel,
+                engine: nativeMenu.engineOf(nativeProvider.id),
+              });
             } else if (!nativeProvider) {
               const provider = nativeModels.providers.find(
                 (entry) => entry.id === value && !entry.error,
@@ -921,9 +809,10 @@ export function AgentComposer({
               if (provider) {
                 setNativeProviderPage(provider.id);
                 void nativeModels.load(provider.id);
+                nativeMenu.readAccount(provider.id);
               }
             } else if (!value || nativeProvider.models.some((model) => model.id === value)) {
-              void nativeModels.choose(value, nativeProvider.id);
+              nativeMenu.choose(value, nativeProvider.id);
             }
           } else if (
             event.control === "effort" &&
@@ -938,7 +827,7 @@ export function AgentComposer({
             void configure({ ...settings, mode: value as AgentSettings["mode"] });
           else if (event.control === "mode" && agent.controls?.modes.some((m) => m.id === value))
             void configure({ ...settings, nativeMode: value });
-          else if (event.control === "options") {
+          else if (event.control === "options" || event.control.startsWith("feature:")) {
             if (value.startsWith("feature:")) {
               const [id, next] = JSON.parse(value.slice(8)) as [string, boolean | string];
               if (agent.controls?.features.some((f) => f.id === id))
@@ -1014,7 +903,7 @@ export function AgentComposer({
             },
             ...(effortModel?.efforts ?? []).map((effort) => ({
               id: effort,
-              label: effort.charAt(0).toUpperCase() + effort.slice(1),
+              label: effortName(effort),
               icon: <Brain className="size-4" />,
             })),
           ]}
@@ -1417,7 +1306,10 @@ export function AgentComposer({
               levels={!compact}
             />
           ) : native ? (
-            <div ref={nativeField} aria-hidden="true" style={{ height: nativeHeight }} />
+            <>
+              <div ref={nativeField} aria-hidden="true" style={{ height: nativeHeight }} />
+              {nativeMenu.dialogs}
+            </>
           ) : (
             <>
               <textarea

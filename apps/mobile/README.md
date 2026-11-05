@@ -310,7 +310,8 @@ The iOS-specific imports do not enter Android or Safari bundles. Android/web ret
 controls and web styling. Older iOS or Reduce Transparency uses native bordered controls and an
 opaque composer. Both native glass availability checks run before mounting glass; accessibility
 changes are observed while running. Reduce Motion disables composer expansion animation.
-The model/effort/permission buttons open native action sheets. The microphone button replaces the
+The model button opens a native sheet, and the options button an action sheet that leads to effort,
+permissions and the other settings. The microphone button replaces the
 field with a recording row, in the webview: its stream runs on the workspace's secure origin
 (`IOS_WORKSPACE_ORIGIN`), which exists because WebKit offers no microphone to a page without one.
 Recording only ever starts from that button. Attachments use the native document picker,

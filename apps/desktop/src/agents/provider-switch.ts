@@ -38,18 +38,6 @@ export function providerState(provider: {
   return provider.version?.updateAvailable ? "Update available" : undefined;
 }
 
-/** How a phone's model menu describes choosing a provider for this pane. */
-export function switchDescription(
-  agents: readonly AgentInfo[],
-  agent: AgentInfo,
-  provider: string,
-): string {
-  if (provider === agent.provider) return "Current conversation";
-  return setAsideConversation(agents, agent, provider)
-    ? "Back to its conversation in this pane"
-    : "Starts a new conversation in this pane";
-}
-
 /** The confirmation shown before a switch would set a conversation with content aside. */
 export function switchConfirmation(
   agents: readonly AgentInfo[],

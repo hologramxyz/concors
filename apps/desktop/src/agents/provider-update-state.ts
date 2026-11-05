@@ -19,12 +19,18 @@ export function useProviderUpdate(
   version: ProviderVersion | undefined,
 ) {
   const connection = useContext(TerminalConnectionContext);
-  const [live, setLive] = useState<ProviderVersion | null>(null),
-    [error, setError] = useState<string | null>(null);
-  const timer = useRef<number | undefined>(undefined);
-  useEffect(() => () => window.clearTimeout(timer.current), []);
+  // By provider: the phone's model menu keeps this one hook across its pages.
+  const [live, setLive] = useState<Record<string, ProviderVersion | null>>({}),
+    [errors, setErrors] = useState<Record<string, string | null>>({});
+  const timers = useRef(new Set<number>());
+  useEffect(() => {
+    const running = timers.current;
+    return () => running.forEach((timer) => window.clearTimeout(timer));
+  }, []);
   const update = async () => {
     if (!connection) return;
+    const setError = (message: string | null) =>
+      setErrors((known) => ({ ...known, [provider]: message }));
     setError(null);
     try {
       const request = async (operation: { kind: "update"; id: string } | { kind: "list" }) => {
@@ -33,11 +39,14 @@ export function useProviderUpdate(
         return result.outcome.providers.find((p) => p.id === provider)?.version;
       };
       const poll = (next: ProviderVersion | undefined) => {
-        setLive(next ?? null);
-        if (next?.updating)
-          timer.current = window.setTimeout(() => {
+        setLive((known) => ({ ...known, [provider]: next ?? null }));
+        if (next?.updating) {
+          const timer = window.setTimeout(() => {
+            timers.current.delete(timer);
             request({ kind: "list" }).then(poll, (e: Error) => setError(e.message));
           }, 2000);
+          timers.current.add(timer);
+        }
         // A new CLI can report new models; drop cached catalogs so they are rediscovered.
         else invalidateModelCatalogs(connection);
       };
@@ -46,5 +55,6 @@ export function useProviderUpdate(
       setError(e instanceof Error ? e.message : `Could not update ${label}`);
     }
   };
-  return { version: live ?? version, error: error ?? (live ?? version)?.updateError, update };
+  const current = live[provider] ?? version;
+  return { version: current, error: errors[provider] ?? current?.updateError, update };
 }

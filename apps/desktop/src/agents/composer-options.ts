@@ -17,3 +17,8 @@ export function hasComposerOptions(
     !!agent.supportsPlan
   );
 }
+
+/** An effort as a reasoning level is named in the menus; the catalog gives it as a raw ID. */
+export function effortName(effort: string): string {
+  return effort.charAt(0).toUpperCase() + effort.slice(1);
+}

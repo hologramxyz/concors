@@ -73,17 +73,55 @@ test("native model pages distinguish provider navigation from a committed model 
     )
     .toBe(true);
   await event(page, "composer", "", { kind: "press", control: "model", value: "__providers__" });
-  await expect.poll(async () => (await model())?.label).toBe("Choose an agent provider");
+  await expect.poll(async () => (await model())?.title).toBe("Providers");
   await expect
     .poll(async () => (await model())?.options?.find((option) => option.id === "codex")?.navigate)
     .toBe(true);
   await event(page, "composer", "", { kind: "press", control: "model", value: "codex" });
-  await expect.poll(async () => (await model())?.label).toBe("Codex: Agent and model");
+  await expect.poll(async () => (await model())?.title).toBe("Codex");
   await expect
     .poll(async () =>
       (await model())?.options?.some((option) => option.id === "demo-codex" && !option.navigate),
     )
     .toBe(true);
+});
+test("native menus word their titles and rows as desktop does", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await openNativeDemo(page);
+  const control = async (id: string) =>
+    (await composer(page))?.controls.find((item) => item.id === id);
+  const rows = async (id: string) =>
+    (await control(id))?.options?.map((option) =>
+      option.selected ? `✓ ${option.label}` : option.label,
+    );
+  await expect.poll(() => rows("effort")).toEqual(["Default (medium)", "Low", "✓ Medium", "High"]);
+  expect((await control("effort"))?.title).toBe("Thinking effort");
+  expect((await control("mode"))?.title).toBe("Permission mode");
+  expect(await rows("mode")).toEqual(["✓ Default permissions", "Auto-review", "Full access"]);
+  // The toolbar button keeps its desktop name; only its menu is titled by the page.
+  expect((await control("model"))?.label).toBe("Agent and model");
+  await expect
+    .poll(() => rows("options"))
+    .toEqual(["Thinking effort", "Permission mode", "Plan mode", "Fast"]);
+
+  await event(page, "composer", "", { kind: "press", control: "options", value: "plan" });
+  await expect
+    .poll(() => rows("options"))
+    .toEqual(["Thinking effort", "Permission mode", "✓ Plan mode", "Fast"]);
+  await event(page, "composer", "", { kind: "press", control: "options", value: "plan" });
+  await expect
+    .poll(() => rows("options"))
+    .toEqual(["Thinking effort", "Permission mode", "Plan mode", "Fast"]);
+  await event(page, "composer", "", { kind: "press", control: "options", value: "speed:fast" });
+  await expect
+    .poll(() => rows("options"))
+    .toEqual(["Thinking effort", "Permission mode", "Plan mode", "✓ Fast"]);
+  await event(page, "composer", "", { kind: "press", control: "options", value: "speed:" });
+  await expect
+    .poll(() => rows("options"))
+    .toEqual(["Thinking effort", "Permission mode", "Plan mode", "Fast"]);
+  expect(errors).toEqual([]);
 });
 /** A microphone that hears silence, standing in for the one WebKit offers on iOS. */
 async function fakeMicrophone(page: Page) {

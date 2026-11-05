@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import {
   AccessibilityInfo,
   ActionSheetIOS,
@@ -27,11 +27,9 @@ import {
 import {
   accessibilityLabel,
   background,
-  buttonBorderShape,
   buttonStyle,
   clipShape,
   contentShape,
-  controlSize,
   disabled,
   environment,
   font,
@@ -41,6 +39,7 @@ import {
   labelStyle,
   lineLimit,
   monospacedDigit,
+  opacity,
   padding,
   presentationBackground,
   presentationDragIndicator,
@@ -331,35 +330,94 @@ function HeaderButton({
 }
 
 function controlModifiers({
-  corners,
   label,
+  blocked,
+  color,
+}: {
+  label: string;
+  blocked?: boolean;
+  color?: string | null;
+}) {
+  return [
+    buttonStyle("plain"),
+    ...(color ? [foregroundStyle(color)] : []),
+    disabled(!!blocked),
+    accessibilityLabel(label),
+  ];
+}
+
+/** Plain buttons hit-test their label, so the label is what fills the 44pt control. */
+function ControlFace({
+  corners,
   dark,
   primary,
   blocked,
-  color,
-  width,
+  children,
 }: {
   corners: CornerStyle;
-  label: string;
   dark: boolean;
   primary?: boolean;
   blocked?: boolean;
-  color?: string | null;
-  width: number;
+  children: ReactElement;
 }) {
-  return [
-    buttonStyle(primary ? "borderedProminent" : "plain"),
-    ...(primary
-      ? [foregroundStyle(dark ? "#141414" : "#ffffff")]
-      : color
-        ? [foregroundStyle(color)]
-        : []),
-    buttonBorderShape(...nativeButtonShape(corners)),
-    controlSize("regular"),
-    disabled(!!blocked),
-    accessibilityLabel(label),
-    frame({ width, height: 44 }),
-  ];
+  return (
+    <HStack
+      modifiers={[
+        frame({ width: 44, height: 44 }),
+        ...(primary
+          ? [
+              foregroundStyle(dark ? "#141414" : "#ffffff"),
+              background(dark ? "#ededed" : "#20211f"),
+              clipShape(...nativeButtonShape(corners)),
+              opacity(blocked ? 0.3 : 1),
+            ]
+          : []),
+        contentShape(shapes.rectangle()),
+      ]}
+    >
+      {children}
+    </HStack>
+  );
+}
+
+/**
+ * An action sheet has no second line and no dividers, so those stay in the model picker's sheet.
+ * A row that navigates opens the control it names as this sheet's dismissal finishes.
+ */
+function showControlSheet(
+  control: NativeControl,
+  context: {
+    dark: boolean;
+    controls(): readonly NativeControl[];
+    choose(control: string, value: string): void;
+    done(): void;
+  },
+) {
+  const options = control.options ?? [];
+  const color = context.dark ? "#ededed" : "#20211f";
+  ActionSheetIOS.showActionSheetWithOptions(
+    {
+      ...(control.title ? { title: control.title } : {}),
+      options: [
+        ...options.map((option) => `${option.selected ? "✓ " : ""}${option.label}`),
+        "Cancel",
+      ],
+      cancelButtonIndex: options.length,
+      tintColor: color,
+      cancelButtonTintColor: color,
+      userInterfaceStyle: context.dark ? "dark" : "light",
+    },
+    (index) => {
+      const option = options[index];
+      const next = option?.navigate && context.controls().find((item) => item.id === option.id);
+      if (next) {
+        showControlSheet(next, context);
+        return;
+      }
+      if (option) context.choose(control.id, option.id);
+      context.done();
+    },
+  );
 }
 
 function Control({
@@ -367,6 +425,7 @@ function Control({
   icon,
   corners,
   label,
+  title,
   dark,
   primary,
   blocked,
@@ -374,86 +433,60 @@ function Control({
   options,
   onSelect,
   onPresent,
-  width = 40,
 }: {
   id?: string;
   icon: NativeIcon;
   corners: CornerStyle;
   label: string;
+  title?: string | undefined;
   dark: boolean;
   primary?: boolean;
   blocked?: boolean;
+  /** For a control with options, what opens them; the model picker also opens its own sheet. */
   onPress?(): void;
   options?: NativeControl["options"];
   onSelect?(id: string): void;
   onPresent?(open: boolean): void;
-  width?: number;
 }) {
-  const modifiers = controlModifiers({ corners, label, dark, primary, blocked, width });
-  const optionButton = (press: () => void) => (
+  const modifiers = controlModifiers({ label, blocked });
+  const button = (press: (() => void) | undefined) => (
     <Button testID={`native-composer-${icon}`} onPress={press} modifiers={modifiers}>
-      {icon === "model" || icon === "claude" || icon === "opencode" ? (
-        <RNHostView matchContents>
-          <RNImage
-            source={providerImages[icon]}
-            style={{ width: 18, height: 18, tintColor: dark ? "#eee" : "#222" }}
-          />
-        </RNHostView>
-      ) : icon === "pi" ? (
-        <Text modifiers={[font({ size: 20 })]}>π</Text>
-      ) : (
-        <Image systemName={symbols[icon]} size={18} />
-      )}
+      <ControlFace corners={corners} dark={dark} primary={primary} blocked={blocked}>
+        {icon === "model" || icon === "claude" || icon === "opencode" ? (
+          <RNHostView matchContents>
+            <RNImage
+              source={providerImages[icon]}
+              style={{ width: 18, height: 18, tintColor: dark ? "#eee" : "#222" }}
+            />
+          </RNHostView>
+        ) : icon === "pi" ? (
+          <Text modifiers={[font({ size: 20 })]}>π</Text>
+        ) : (
+          <Image systemName={symbols[icon]} size={18} />
+        )}
+      </ControlFace>
     </Button>
   );
   return (
     <Host
-      style={[styles.control, { width }]}
+      style={styles.control}
       colorScheme={dark ? "dark" : "light"}
       seedColor={dark ? "#ededed" : "#20211f"}
       ignoreSafeArea="all"
     >
-      {options ? (
-        id === "model" ? (
-          <NativeControlPicker
-            label={label}
-            options={options}
-            dark={dark}
-            blocked={blocked}
-            anchor={optionButton}
-            onSelect={onSelect}
-            onPresent={onPresent}
-          />
-        ) : (
-          optionButton(() => {
-            onPresent?.(true);
-            ActionSheetIOS.showActionSheetWithOptions(
-              {
-                title: label,
-                options: [
-                  ...options.map((option) => `${option.selected ? "✓ " : ""}${option.label}`),
-                  "Cancel",
-                ],
-                cancelButtonIndex: options.length,
-                tintColor: dark ? "#ededed" : "#20211f",
-                cancelButtonTintColor: dark ? "#ededed" : "#20211f",
-                userInterfaceStyle: dark ? "dark" : "light",
-              },
-              (index) => {
-                if (options[index]) onSelect?.(options[index].id);
-                onPresent?.(false);
-              },
-            );
-          })
-        )
-      ) : (
-        <Button
-          testID={`native-composer-${icon}`}
-          label={label}
-          systemImage={symbols[icon]}
-          onPress={onPress}
-          modifiers={[...modifiers, labelStyle("iconOnly")]}
+      {options && id === "model" ? (
+        <NativeControlPicker
+          label={title ?? label}
+          options={options}
+          dark={dark}
+          blocked={blocked}
+          anchor={button}
+          onOpen={onPress}
+          onSelect={onSelect}
+          onPresent={onPresent}
         />
+      ) : (
+        button(onPress)
       )}
     </Host>
   );
@@ -480,7 +513,6 @@ function Composer({
   const [focused, setFocused] = useState(false);
   const [textHeight, setTextHeight] = useState(40);
   const [picking, setPicking] = useState(false);
-  const [width, setWidth] = useState(360);
   const presenting = useRef(false);
   const alive = useRef(true);
   const latest = useRef({ content, emit });
@@ -499,7 +531,13 @@ function Composer({
     );
   }, [content.draft, content.editAck]);
   const expanded = focused;
-  const height = expanded ? Math.min(208, Math.max(112, textHeight + 64)) : 56;
+  // Send keeps an even 8pt to the right and bottom edges, as on the phone web build. Liquid Glass
+  // draws its edge 3pt inside its frame, so 8pt there takes 11pt of padding.
+  const inset = glass ? 11 : 8;
+  const toolbarHeight = 44 + inset * 2;
+  const height = expanded
+    ? Math.min(208 + inset, Math.max(112 + inset, textHeight + 64 + inset))
+    : toolbarHeight;
   const [motion] = useState(() => new Animated.Value(height));
   useEffect(() => {
     latest.current.emit({ kind: "height", height });
@@ -661,7 +699,6 @@ function Composer({
     }
   };
   const stop = content.active && !draft.trim() && !content.hasAttachments;
-  const controlWidth = Math.min(40, (width - 12) / 8);
   const glassShape = { borderRadius: cornerRadius(corners) * 3.6 };
   const sendButton = (
     <Control
@@ -669,7 +706,6 @@ function Composer({
       corners={corners}
       label={stop ? "Interrupt agent" : content.active ? "Queue message" : "Send message"}
       dark={dark}
-      width={controlWidth}
       primary
       blocked={
         stop ? !content.canStop : !content.canSend || (!draft.trim() && !content.hasAttachments)
@@ -683,21 +719,17 @@ function Composer({
       corners={corners}
       label="Attach files"
       dark={dark}
-      width={controlWidth}
       blocked={!content.attachEnabled || picking}
       onPress={() => void attach()}
     />
   );
   const surface = (
-    <View
-      style={[styles.composer, !expanded && styles.collapsed]}
-      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-    >
+    <View style={[styles.composer, { padding: inset }, !expanded && styles.collapsed]}>
       {!expanded && attachButton}
       <TextInput
         testID="native-agent-input"
         ref={input}
-        accessibilityLabel="Message your agent"
+        accessibilityLabel={content.placeholder}
         placeholder={content.placeholder}
         placeholderTextColor={dark ? "#a3a3a3" : "#666"}
         selectionColor={dark ? "#ededed" : "#20211f"}
@@ -710,7 +742,7 @@ function Composer({
         style={[
           styles.input,
           { color: dark ? "#f5f5f5" : "#20211f" },
-          expanded ? { height: height - 60 } : styles.collapsedInput,
+          expanded ? { height: height - toolbarHeight } : styles.collapsedInput,
         ]}
         onContentSizeChange={(event) => setTextHeight(event.nativeEvent.contentSize.height)}
         onChangeText={(text) => {
@@ -730,25 +762,39 @@ function Composer({
       {expanded ? (
         <View style={styles.toolbar}>
           {attachButton}
-          {content.controls.map((control) => (
-            <Control
-              key={control.id}
-              {...control}
-              corners={corners}
-              dark={dark}
-              width={controlWidth}
-              onPresent={onPresent}
-              blocked={control.disabled}
-              onSelect={(value) => emit({ kind: "press", control: control.id, value })}
-            />
-          ))}
+          {content.controls
+            .filter((control) => control.id === "model" || control.id === "options")
+            .map((control) => (
+              <Control
+                key={control.id}
+                {...control}
+                corners={corners}
+                dark={dark}
+                onPresent={onPresent}
+                blocked={control.disabled}
+                onPress={
+                  control.id === "model"
+                    ? () => emit({ kind: "press", control: "model-open" })
+                    : () => {
+                        onPresent(true);
+                        showControlSheet(control, {
+                          dark,
+                          controls: () => latest.current.content.controls,
+                          choose: (from, value) =>
+                            latest.current.emit({ kind: "press", control: from, value }),
+                          done: () => onPresent(false),
+                        });
+                      }
+                }
+                onSelect={(value) => emit({ kind: "press", control: control.id, value })}
+              />
+            ))}
           <View style={styles.spacer} />
           {content.usage ? (
             <ContextControl
               usage={content.usage}
               corners={corners}
               dark={dark}
-              width={controlWidth}
               emit={emit}
               onPresent={onPresent}
             />
@@ -758,7 +804,6 @@ function Composer({
             corners={corners}
             label="Start dictation"
             dark={dark}
-            width={controlWidth}
             blocked={!content.editable}
             onPress={() => {
               if (!content.dictationHelp) {
@@ -825,14 +870,12 @@ function ContextControl({
   usage,
   corners,
   dark,
-  width,
   emit,
   onPresent,
 }: {
   usage: NativeUsage;
   corners: CornerStyle;
   dark: boolean;
-  width: number;
   emit: Emit;
   onPresent(open: boolean): void;
 }) {
@@ -842,7 +885,7 @@ function ContextControl({
     percent === null ? "Context window" : `Context window, ${Math.round(percent)}% used`;
   return (
     <Host
-      style={[styles.control, { width }]}
+      style={styles.control}
       colorScheme={dark ? "dark" : "light"}
       seedColor={dark ? "#ededed" : "#20211f"}
       ignoreSafeArea="all"
@@ -855,24 +898,17 @@ function ContextControl({
         anchor={
           <Button
             testID="native-composer-context"
-            label={label}
-            systemImage={symbols.context}
             onPress={() => {
               onPresent(true);
               setOpen(true);
               emit({ kind: "press", control: "context" });
             }}
-            modifiers={[
-              ...controlModifiers({
-                corners,
-                label,
-                dark,
-                color: toneColor(usage.context.tone, dark),
-                width,
-              }),
-              labelStyle("iconOnly"),
-            ]}
-          />
+            modifiers={controlModifiers({ label, color: toneColor(usage.context.tone, dark) })}
+          >
+            <ControlFace corners={corners} dark={dark}>
+              <Image systemName={symbols.context} size={18} />
+            </ControlFace>
+          </Button>
         }
       >
         <UsageSheet
@@ -995,12 +1031,12 @@ function UsageBar({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  control: { width: 40, height: 44, flexShrink: 1 },
+  control: { width: 44, height: 44, flexShrink: 0 },
   composerFrame: { position: "absolute", bottom: 0, left: 0, right: 0 },
-  composer: { flex: 1, padding: 6 },
+  composer: { flex: 1 },
   collapsed: { flexDirection: "row", alignItems: "center" },
   input: { fontSize: 15, lineHeight: 21, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 6 },
-  collapsedInput: { flex: 1, height: 42, paddingHorizontal: 4, paddingTop: 9 },
+  collapsedInput: { flex: 1, height: 44, paddingHorizontal: 4, paddingTop: 10 },
   toolbar: { flexDirection: "row", alignItems: "center", height: 44 },
   spacer: { flex: 1 },
 });
