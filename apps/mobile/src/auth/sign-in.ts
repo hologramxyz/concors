@@ -41,13 +41,16 @@ export class SignInError extends Error {
 export async function signInWithAuthSession(
   api: ApiClient,
   platform: SignInPlatform,
-  choice: NativeSignInChoice,
+  choice?: NativeSignInChoice,
+  expectedUserId?: string,
 ): Promise<SignInOutcome> {
   const verifier = verifierFromBytes(platform.randomBytes(32));
   const challenge = base64url(await platform.sha256(verifier));
   const redirectUrl = `${platform.scheme}://native-auth/callback`;
   const session = await platform.openAuthSession(
-    api.nativeSignInUrl({ app: platform.scheme }, challenge, choice),
+    api.nativeSignInUrl({ app: platform.scheme }, challenge, choice, {
+      reauthenticate: !!expectedUserId,
+    }),
     redirectUrl,
   );
   if (session.type !== "success" || session.url === undefined) return "cancelled";
@@ -59,6 +62,6 @@ export async function signInWithAuthSession(
     if (CANCELLED_SIGN_IN_CODES.has(result.error)) return "cancelled";
     throw new SignInError(result.error, describeSignInError(result.error));
   }
-  await api.completeNativeSignIn({ code: result.code, verifier });
+  await api.completeNativeSignIn({ code: result.code, verifier }, expectedUserId);
   return "signed-in";
 }

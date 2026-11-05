@@ -14,7 +14,6 @@ import { SettingsView } from "@/views/settings-view";
 import { SETTINGS_NAV_GROUPS, type SettingsPage } from "@/settings/navigation";
 import { Section } from "@/views/settings-primitives";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { hostAction } from "./bridge";
 import { NotificationSettings } from "@/notifications/settings";
 import { MachinesSettings } from "./machines-settings";
@@ -40,9 +39,6 @@ export function SettingsDrawer({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-  const [password, setPassword] = useState("");
-  const [confirmation, setConfirmation] = useState("");
   const run = async (work: () => Promise<unknown>) => {
     if (busy) return;
     setBusy(true);
@@ -61,9 +57,6 @@ export function SettingsDrawer({
       onOpenChange={(next) => {
         if (!busy) {
           onOpenChange(next);
-          setPassword("");
-          setConfirmation("");
-          setDeleting(false);
         }
       }}
     >
@@ -88,9 +81,14 @@ export function SettingsDrawer({
                 .filter(
                   (item) =>
                     !host.direct ||
-                    ["appearance", "shortcuts", "about", "subscriptions", "machines"].includes(
-                      item.page,
-                    ),
+                    [
+                      "appearance",
+                      "shortcuts",
+                      "about",
+                      "subscriptions",
+                      "machines",
+                      "account",
+                    ].includes(item.page),
                 )
                 .map(({ page, label, icon: Icon }) => ({
                   value: page,
@@ -234,10 +232,16 @@ export function SettingsDrawer({
               }
             />
           ) : null}
-          {page === "account" && !host.direct && (
+          {page === "account" && (
             <div className="px-4 pb-4">
               <Section title="Help and privacy" description="Concors support and data practices.">
-                <div className="flex gap-3 py-3">
+                <div className="flex flex-wrap gap-3 py-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => void run(() => hostAction({ kind: "report-content" }))}
+                  >
+                    Report content or a problem
+                  </Button>
                   <Button
                     variant="outline"
                     onClick={() =>
@@ -257,62 +261,58 @@ export function SettingsDrawer({
                 </div>
               </Section>
               <Section
-                title="Delete account"
-                description="Account deletion affects all devices. The server must explain retention, shared organizations and active subscriptions before deletion."
+                title="AI data sharing"
+                description="Agent requests can share prompts, code, attachments and tool context with the configured AI services. Permission applies to the named configuration on this connection."
               >
-                {!host.capabilities.accountDeletion ? (
-                  <p className="py-3 text-sm text-muted-foreground">
-                    Account deletion is not available on this server yet.
-                  </p>
-                ) : !deleting ? (
-                  <Button variant="outline" onClick={() => setDeleting(true)}>
-                    Delete my account
+                <p className="py-3 text-sm text-muted-foreground">
+                  {host.aiSharing === "blocked"
+                    ? "New agent requests from this iPhone are blocked."
+                    : host.aiSharing === "allowed"
+                      ? "You have allowed sharing with one or more configurations on this connection."
+                      : "You will be asked before an agent action shares data."}{" "}
+                  Work already running on your machine continues until you stop it there.
+                </p>
+                <div className="flex flex-wrap gap-3 pb-3">
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(() => hostAction({ kind: "ai-sharing", action: "withdraw" }))
+                    }
+                  >
+                    Withdraw permission
                   </Button>
-                ) : (
-                  <div className="space-y-3 py-3">
-                    <p className="text-sm text-destructive">
-                      This cannot be undone once deletion is complete.
-                    </p>
-                    <label className="block space-y-1">
-                      Confirm your password
-                      <Input
-                        type="password"
-                        value={password}
-                        onChange={(event) => setPassword(event.target.value)}
-                        autoComplete="current-password"
-                      />
-                    </label>
-                    <label className="block space-y-1">
-                      Type DELETE to confirm
-                      <Input
-                        value={confirmation}
-                        onChange={(event) => setConfirmation(event.target.value)}
-                      />
-                    </label>
-                    <Button
-                      variant="destructive"
-                      disabled={busy || confirmation !== "DELETE" || !password}
-                      onClick={() =>
-                        void run(() =>
-                          hostAction({ kind: "delete-account", password, confirmation: "DELETE" }),
-                        )
-                      }
-                    >
-                      Confirm account deletion
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      disabled={busy}
-                      onClick={() => {
-                        setDeleting(false);
-                        setPassword("");
-                      }}
-                    >
-                      Cancel deletion
-                    </Button>
-                  </div>
-                )}
+                  <Button
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(() => hostAction({ kind: "ai-sharing", action: "review" }))
+                    }
+                  >
+                    Ask on the next request
+                  </Button>
+                </div>
               </Section>
+              {!host.direct && (
+                <Section
+                  title="Delete account"
+                  description="Review affected organizations, machines and billing, then verify your identity before confirming permanent deletion."
+                >
+                  {!host.capabilities.accountDeletion ? (
+                    <p className="py-3 text-sm text-muted-foreground">
+                      Account deletion is not available on this server yet.
+                    </p>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => void run(() => hostAction({ kind: "delete-account" }))}
+                    >
+                      Delete my account
+                    </Button>
+                  )}
+                </Section>
+              )}
             </div>
           )}
         </div>

@@ -134,6 +134,9 @@ export function useChatActions(execute: (operation: WorkspaceOperation) => Promi
     });
   };
   return {
+    /** Lists a closed chat under another workspace; an open one moves with its tab. */
+    move: (chat: AgentInfo, projectId: string) =>
+      request({ kind: "move", sessionId: chat.id, projectId }),
     pin: (chat: AgentInfo, pinned: boolean) => request({ kind: "pin", sessionId: chat.id, pinned }),
     closePanes,
     placeTab,

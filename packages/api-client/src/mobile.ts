@@ -6,6 +6,7 @@ export const MobileCapabilitiesSchema = z.object({
   remoteAccess: z.boolean(),
   pushNotifications: z.boolean(),
   accountDeletion: z.boolean(),
+  accountDeletionFlow: z.literal("reauth-plan-v1").optional(),
 });
 export type MobileCapabilities = z.infer<typeof MobileCapabilitiesSchema>;
 export const NO_MOBILE_CAPABILITIES: MobileCapabilities = {
@@ -50,3 +51,38 @@ export const PushDeviceSchema = z.object({
 });
 export type PushDevice = z.infer<typeof PushDeviceSchema>;
 export const AccountDeletionSchema = z.object({ status: z.enum(["deleted", "scheduled"]) });
+export const AccountDeletionPlanSchema = z.object({
+  planToken: z.string().regex(/^[a-f0-9]{64}$/),
+  organizations: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      action: z.enum(["delete", "leave"]),
+      transferTo: z.object({ userId: z.string(), name: z.string() }).nullable(),
+      machines: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          provider: z.enum(["ovh", "external"]),
+          alreadyEnded: z.boolean().default(false),
+        }),
+      ),
+    }),
+  ),
+});
+export type AccountDeletionPlan = z.infer<typeof AccountDeletionPlanSchema>;
+export const AccountDeletionReceiptSchema = z.object({
+  id: z.string(),
+  receipt: z.string().regex(/^[a-f0-9]{64}$/),
+  status: z.literal("scheduled"),
+});
+export const AccountDeletionStatusSchema = z.object({
+  status: z.enum(["processing", "completed"]),
+  requestedAt: z.string().datetime(),
+  completedAt: z.string().datetime().nullable(),
+  delayed: z.boolean(),
+});
+export const SupportReportReceiptSchema = z.object({
+  id: z.string().uuid(),
+  status: z.literal("received"),
+});

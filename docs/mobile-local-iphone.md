@@ -72,7 +72,8 @@ pnpm --filter @concors/mobile ios:local
 
 Use that same identifier on subsequent runs. Changing it installs a separate app and its saved
 session/preferences will be separate. The default is `dev.concors.mobile.local`; the shipping
-`dev.concors.mobile` and existing `.preview` IDs are deliberately reserved.
+`xyz.hologram.concors` and its `.preview` ID are reserved, along with the earlier beta's
+`dev.concors.mobile` and `.preview` IDs.
 
 ## Daily use and limitations
 

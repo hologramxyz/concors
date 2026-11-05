@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { mobileDesktopSocket } from "../../../e2e/support/mobile-direct-ports.cjs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -183,12 +183,7 @@ for (const native of [false, true]) {
           await ui.getByRole("button", { name: "Back to providers", exact: true }).click();
           // Codex is where every round trip returns; the others are new each time.
           const returning = provider === "codex";
-          await ui
-            .getByRole("option", {
-              name: `${label} ${returning ? "Back to its conversation" : "Starts a new conversation"} in this pane`,
-              exact: true,
-            })
-            .click();
+          await ui.getByRole("option", { name: label, exact: true }).click();
           await ui.getByRole("option", { name: modelLabel, exact: true }).click();
           // Each switch leaves a conversation with content, so it is confirmed first.
           await ui

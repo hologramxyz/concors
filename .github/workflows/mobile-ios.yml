@@ -92,7 +92,7 @@ jobs:
           codesign -d --entitlements :- "$MOBILE_APP" > "$RUNNER_TEMP/mobile-entitlements.plist"
           /usr/libexec/PlistBuddy -c 'Print :application-identifier' "$RUNNER_TEMP/mobile-entitlements.plist"
           xcrun simctl install '${{ steps.simulator.outputs.id }}' "$MOBILE_APP"
-          xcrun simctl launch '${{ steps.simulator.outputs.id }}' dev.concors.mobile.preview
+          xcrun simctl launch '${{ steps.simulator.outputs.id }}' xyz.hologram.concors.preview
       - name: Install pinned native UI test runner
         timeout-minutes: 2
         run: |

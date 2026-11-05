@@ -6,7 +6,7 @@ it("direct access allows workspace controls but never cloud account actions", ()
     { kind: "api", call: { method: "listMachines", args: [] } },
     { kind: "switch-organization", organizationId: "org" },
     { kind: "push", enabled: true },
-    { kind: "delete-account", password: "x", confirmation: "DELETE" },
+    { kind: "delete-account" },
   ] satisfies MobileAction[])
     expect(() => assertWorkspaceActionAllowed(true, false, action)).toThrow(
       "Cloud account actions",

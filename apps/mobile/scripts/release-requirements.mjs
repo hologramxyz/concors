@@ -57,8 +57,8 @@ export function candidateFailures(readiness, environment, appVersion) {
   const failures = [];
   if (!readiness || readiness.schemaVersion !== 1 || !Array.isArray(readiness.gates))
     failures.push("Invalid release evidence document (schemaVersion 1 and gates are required)");
-  if (readiness?.releaseModel !== "existing-account-companion")
-    failures.push("Use the implemented existing-account-companion release scope");
+  if (readiness?.releaseModel !== "free-existing-machines")
+    failures.push("Use the implemented free-existing-machines release scope");
   if (!/^\d+\.\d+\.\d+$/.test(readiness?.appVersion ?? ""))
     failures.push("Record the app version under review");
   if (appVersion && readiness?.appVersion !== appVersion)

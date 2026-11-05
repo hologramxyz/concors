@@ -1,5 +1,10 @@
 import type { DaemonConnection } from "@concors/daemon-client";
-import { parseClientMessage, PROTOCOL_VERSION, type DaemonMessage } from "@concors/protocol";
+import {
+  parseClientMessage,
+  PROTOCOL_VERSION,
+  type ClientMessage,
+  type DaemonMessage,
+} from "@concors/protocol";
 import { newRequestId } from "./connection.ts";
 
 /**
@@ -39,6 +44,7 @@ export type RelayConnection = Pick<
 export function createProtocolRelay(
   connection: RelayConnection,
   deliver: (message: DaemonMessage) => void,
+  beforeSend?: (message: ClientMessage) => Promise<DaemonMessage | null>,
 ) {
   let disposed = false;
   let started = false;
@@ -99,6 +105,16 @@ export function createProtocolRelay(
         return;
       }
       if (!started) throw new Error("Embedded protocol handshake is required");
+      if (beforeSend) {
+        const rejection = await beforeSend(message);
+        // An auth sheet can outlive a machine switch or renderer reload. Its result must never
+        // dispatch onto the previous socket, even if the person approved it.
+        if (disposed || connection.state.status !== "ready") return;
+        if (rejection) {
+          emit(rejection);
+          return;
+        }
+      }
       switch (message.type) {
         case "host.subscribe":
           if (message.enabled) {

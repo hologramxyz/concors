@@ -218,6 +218,34 @@ export function applyWorkspaceOperation(
           case "tab.close":
             closeTab(state, project.id, tab.id);
             break;
+          case "tab.transfer": {
+            const destination = requireValue(
+              state.projects.find((p) => p.id === op.targetProjectId),
+              "Workspace",
+            );
+            if (destination.id === project.id)
+              throw new WorkspaceOperationError("INVALID_OPERATION", "Choose another workspace");
+            // A terminal's session is tied to its workspace, which stops it when it closes.
+            if (tab.nodes.some((node) => node.kind === "pane" && node.profile !== "chat"))
+              throw new WorkspaceOperationError(
+                "INVALID_OPERATION",
+                "Only chats can move to another workspace",
+              );
+            // A CLI ties a conversation to its folder, so a chat under way stays in its own. One
+            // not yet started has no conversation to lose, and starts where it now is.
+            for (const node of tab.nodes)
+              if (node.kind === "pane")
+                node.directory = node.sessionId
+                  ? (node.directory ?? project.directory)
+                  : destination.directory;
+            const selected = state.selection?.tabId === tab.id;
+            closeTab(state, project.id, tab.id);
+            destination.tabs.push(tab);
+            destination.version++;
+            // Moving the tab in view takes the view along; moving another leaves it where it is.
+            if (selected) state.selection = { projectId: destination.id, tabId: tab.id };
+            break;
+          }
           case "pane.resize": {
             const split = requireValue(
               tab.nodes.find((n) => n.id === op.splitId),
@@ -281,6 +309,55 @@ export function applyWorkspaceOperation(
                 second: before ? destination : source.id,
               });
             }
+            break;
+          }
+          case "pane.transfer": {
+            const pane = requireValue(
+              tab.nodes.find((n) => n.id === op.paneId),
+              "Source pane",
+            );
+            const destination = requireValue(
+              project.tabs.find((t) => t.id === op.targetTabId),
+              "Target tab",
+            );
+            if (pane.kind !== "pane" || destination.id === tab.id)
+              throw new WorkspaceOperationError(
+                "INVALID_OPERATION",
+                "Choose a pane and a different tab",
+              );
+            claim(op.splitId);
+            // The node itself moves, so its session stays bound and nothing restarts. A tab left
+            // with no panes has nothing more to show.
+            if (tab.root === pane.id) closeTab(state, project.id, tab.id);
+            else {
+              const parent = requireValue(
+                tab.nodes.find(
+                  (n) => n.kind === "split" && (n.first === pane.id || n.second === pane.id),
+                ),
+                "Source parent",
+              );
+              if (parent.kind !== "split")
+                throw new WorkspaceOperationError("INVALID_OPERATION", "Invalid source parent");
+              const sibling = parent.first === pane.id ? parent.second : parent.first;
+              if (tab.root === parent.id) tab.root = sibling;
+              for (const node of tab.nodes)
+                if (node.kind === "split") {
+                  if (node.first === parent.id) node.first = sibling;
+                  if (node.second === parent.id) node.second = sibling;
+                }
+              tab.nodes = tab.nodes.filter((n) => n.id !== parent.id && n.id !== pane.id);
+            }
+            destination.nodes.push(pane, {
+              id: op.splitId,
+              kind: "split",
+              axis: "horizontal",
+              ratio: 0.5,
+              first: destination.root,
+              second: pane.id,
+            });
+            destination.root = op.splitId;
+            // Whoever moved it is looking at it, so it stays in view, where it landed.
+            state.selection = { projectId: project.id, tabId: destination.id };
             break;
           }
           case "pane.rename": {

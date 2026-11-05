@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
-import { tab } from "./support/tabs.ts";
+import { tab, tabs } from "./support/tabs.ts";
 
 test("dragging moves panes across the workspace without replacing sessions", async ({
   page,
@@ -131,7 +131,116 @@ test("dragging moves panes across the workspace without replacing sessions", asy
   }
 });
 
-test("a lone pane cannot be dragged, and a split one still renames by double-click", async ({
+/** Drags a pane by its header onto a tab in the bar, leaving the button held. */
+async function dragPaneToTab(page: Page, pane: Locator, destination: Locator) {
+  const header = await pane.locator("header").boundingBox();
+  const target = await destination.boundingBox();
+  if (!header || !target) throw new Error("Pane header or tab missing");
+  await page.mouse.move(header.x + 60, header.y + header.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 6 });
+}
+
+test("dragging a pane onto another tab moves it there and keeps its session", async ({ page }) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-pane-transfer-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Pane transfer", directory);
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    await expect(tab(page, 1)).toHaveAttribute("aria-pressed", "true");
+    const panes = page.locator("[data-pane-id]").filter({ visible: true });
+    await page.getByRole("button", { name: "Pane actions" }).click();
+    await page.getByRole("menuitem", { name: "Split horizontally" }).click();
+    await expect(panes).toHaveCount(2);
+    const paneId = await panes.last().getAttribute("data-pane-id");
+    if (!paneId) throw new Error("Pane ID missing");
+    const moved = page.locator(`[data-pane-id="${paneId}"]`);
+    await moved.locator("textarea").focus();
+    await page.keyboard.type("echo TRANSFER_KEPT_SESSION");
+    await page.keyboard.press("Enter");
+    await expect(moved.getByLabel("Terminal output").filter({ visible: true })).toContainText(
+      "TRANSFER_KEPT_SESSION",
+    );
+
+    // The tab it would join says so, and Escape calls the whole thing off.
+    const first = tabs(page).first();
+    await dragPaneToTab(page, moved, first);
+    await expect(first).toHaveAttribute("data-pane-drop-tab", "");
+    await expect(page.getByTestId("pane-drop-preview")).toHaveCount(0);
+    await page.screenshot({ path: test.info().outputPath("pane-over-tab.png") });
+    await page.keyboard.press("Escape");
+    await expect(first).not.toHaveAttribute("data-pane-drop-tab");
+    await page.mouse.up();
+    await expect(panes).toHaveCount(2);
+
+    await dragPaneToTab(page, moved, first);
+    await page.mouse.up();
+    await expect(first).not.toHaveAttribute("data-pane-drop-tab");
+    // It stays in view, in the tab it joined, beside that tab's own pane, with its output intact.
+    await expect(tab(page, 0)).toHaveAttribute("aria-pressed", "true");
+    await expect(panes).toHaveCount(2);
+    await expect(page.locator(`[data-pane-id="${paneId}"]`)).toBeVisible();
+    await expect(moved.getByLabel("Terminal output").filter({ visible: true })).toContainText(
+      "TRANSFER_KEPT_SESSION",
+    );
+    await moved.locator("textarea").focus();
+    await page.keyboard.type("echo STILL_THE_SAME_SHELL");
+    await page.keyboard.press("Enter");
+    await expect(moved.getByLabel("Terminal output").filter({ visible: true })).toContainText(
+      "STILL_THE_SAME_SHELL",
+    );
+
+    // The tab it left kept the other pane.
+    await tab(page, 1).click();
+    await expect(panes).toHaveCount(1);
+
+    // That one was alone, so joining the first tab leaves nothing to keep its tab open.
+    await dragPaneToTab(page, panes.first(), tabs(page).first());
+    await expect(page.locator("html")).toHaveAttribute("data-pane-dragging");
+    await expect(tabs(page).first()).toHaveAttribute("data-pane-drop-tab", "");
+    await page.mouse.up();
+    await expect(tabs(page)).toHaveCount(1);
+    await expect(panes).toHaveCount(3);
+
+    // Survives a reload: it was the daemon's layout that changed.
+    await page.reload();
+    await expect(panes).toHaveCount(3);
+    await expect(tabs(page)).toHaveCount(1);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("Move to tab does the same from the pane's menu", async ({ page }) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-pane-transfer-menu-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Pane transfer menu", directory);
+    const panes = page.locator("[data-pane-id]").filter({ visible: true });
+    const paneActions = page.getByRole("button", { name: "Pane actions" });
+    // With one tab there is nowhere to move it.
+    await expect(tabs(page)).toHaveCount(1);
+    await paneActions.click();
+    await expect(page.getByRole("menuitem", { name: "Move to tab" })).toHaveCount(0);
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    await expect(tab(page, 1)).toHaveAttribute("aria-pressed", "true");
+    await paneActions.click();
+    await page.getByRole("menuitem", { name: "Move to tab" }).click();
+    await page.getByRole("menuitem", { name: "Terminal", exact: true }).click();
+    await expect(tabs(page)).toHaveCount(1);
+    await expect(panes).toHaveCount(2);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a lone pane finds no place in its own tab, and a split one still renames by double-click", async ({
   page,
 }) => {
   const directory = await mkdtemp(join(tmpdir(), "concors-pane-lone-"));
@@ -145,15 +254,18 @@ test("a lone pane cannot be dragged, and a split one still renames by double-cli
     const panes = page.locator("[data-pane-id]").filter({ visible: true });
     await expect(panes).toHaveCount(1);
     const header = panes.first().locator("header");
-    await expect(header).toHaveCSS("cursor", "auto");
+    // It can join another tab, so it can be picked up, but there is nowhere to put it in this one.
+    await expect(header).toHaveCSS("cursor", "grab");
     const box = await header.boundingBox();
     if (!box) throw new Error("Header missing");
     await page.mouse.move(box.x + 60, box.y + box.height / 2);
     await page.mouse.down();
     await page.mouse.move(box.x + 60, box.y + 300, { steps: 4 });
-    await expect(page.locator("html")).not.toHaveAttribute("data-pane-dragging");
+    await expect(page.locator("html")).toHaveAttribute("data-pane-dragging");
     await expect(page.getByTestId("pane-drop-preview")).toHaveCount(0);
     await page.mouse.up();
+    await expect(panes).toHaveCount(1);
+    await expect(page.locator("html")).not.toHaveAttribute("data-pane-dragging");
 
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitem", { name: "Split horizontally" }).click();

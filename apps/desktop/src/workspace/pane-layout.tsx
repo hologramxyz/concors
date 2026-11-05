@@ -19,6 +19,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ChatPane } from "@/agents/chat";
 import { TerminalPane } from "@/terminal/terminal-pane";
@@ -34,10 +37,11 @@ import { AgentPaneIcon, AgentStatusIcon } from "@/agents/activity";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { isLiveTerminalAgent, terminalAgentStatus } from "@/agents/agent-status";
 import { useAgents } from "@/agents/context";
-import { Columns2, Rows2, Ellipsis, Pencil, Plug, Terminal, X } from "lucide-react";
+import { ArrowRightLeft, Columns2, Rows2, Ellipsis, Pencil, Plug, Terminal, X } from "lucide-react";
 import { McpStatusDialog } from "@/agents/mcp-status-dialog";
 import {
   PANE_RENAME_CAPABILITY,
+  PANE_TRANSFER_CAPABILITY,
   type LayoutNode,
   type WorkspaceOperation,
   type WorkspaceProject,
@@ -52,7 +56,7 @@ import {
   type PaneDropTarget,
 } from "./pane-drop";
 import { typingOutsidePanes } from "./typing-outside-panes";
-import { defaultPaneTitle, PROFILE_LABELS } from "./tab-title";
+import { defaultPaneTitle, PROFILE_LABELS, tabTitle } from "./tab-title";
 
 interface Props {
   focusRequest?: PaneFocusRequest | null;
@@ -94,11 +98,10 @@ export function PaneLayout(props: Props) {
     return () => navigationFocus.current?.disconnect();
   }, [visible]);
   // A drag must not outlive its pane or tab, or the whole app keeps the grabbing cursor.
-  const paneCount = props.tab.nodes.filter((node) => node.kind === "pane").length;
   const draggedPaneExists = props.tab.nodes.some((node) => node.id === draggedPaneId);
   useEffect(() => {
-    if (!visible || paneCount < 2 || !draggedPaneExists) stopDrag.current?.();
-  }, [visible, paneCount, draggedPaneExists]);
+    if (!visible || !draggedPaneExists) stopDrag.current?.();
+  }, [visible, draggedPaneExists]);
   useEffect(() => () => stopDrag.current?.(), []);
   const [activePaneId, setActivePaneId] = useState<string | null>(null);
   const activePane =
@@ -364,6 +367,17 @@ export function PaneLayout(props: Props) {
     let started = false;
     let target: PaneDropTarget | null = null;
     let plan: PaneDropPlan | null = null;
+    // Another tab in the bar, where the pane would join that tab instead of moving within this one.
+    let overTab: HTMLElement | null = null;
+    const hoverTab = (element: HTMLElement | null) => {
+      if (element === overTab) return;
+      overTab?.removeAttribute("data-pane-drop-tab");
+      element?.setAttribute("data-pane-drop-tab", "");
+      overTab = element;
+    };
+    const canTransfer =
+      connection?.state.status === "ready" &&
+      !!connection.state.daemon.capabilities?.includes(PANE_TRANSFER_CAPABILITY);
     // Generated once, so the plan that is previewed and the commands that are sent are the same.
     const splitId = crypto.randomUUID();
     const move = (moved: PointerEvent) => {
@@ -374,6 +388,23 @@ export function PaneLayout(props: Props) {
         header.setPointerCapture(pointerId);
         document.documentElement.dataset["paneDragging"] = "";
         setDraggedPaneId(paneId);
+      }
+      const hoveredTab = canTransfer
+        ? document
+            .elementFromPoint(moved.clientX, moved.clientY)
+            ?.closest<HTMLElement>("[data-tab-id]")
+        : null;
+      const otherTab =
+        hoveredTab?.dataset["tabId"] !== tab.id &&
+        project.tabs.some((item) => item.id === hoveredTab?.dataset["tabId"])
+          ? (hoveredTab ?? null)
+          : null;
+      hoverTab(otherTab);
+      if (otherTab) {
+        target = null;
+        plan = null;
+        setDrop(null);
+        return;
       }
       const workspace = container.current;
       if (!workspace) return;
@@ -398,7 +429,20 @@ export function PaneLayout(props: Props) {
     const release = (released: PointerEvent) => {
       if (released.pointerId !== pointerId) return;
       const dropped = plan;
+      const targetTabId = overTab?.dataset["tabId"];
       stop();
+      if (targetTabId) {
+        onCommand({
+          kind: "pane.transfer",
+          projectId: project.id,
+          expectedVersion: project.version,
+          tabId: tab.id,
+          paneId,
+          targetTabId,
+          splitId,
+        });
+        return;
+      }
       if (!dropped) return;
       onCommand(dropped.move);
       if (!dropped.resize) return;
@@ -419,6 +463,7 @@ export function PaneLayout(props: Props) {
       window.removeEventListener("keydown", key, true);
       window.removeEventListener("blur", stop);
       if (header.hasPointerCapture(pointerId)) header.releasePointerCapture(pointerId);
+      hoverTab(null);
       delete document.documentElement.dataset["paneDragging"];
       stopDrag.current = null;
       setDraggedPaneId(null);
@@ -484,7 +529,14 @@ function Pane({
     !!connection.state.daemon.capabilities?.includes(PANE_RENAME_CAPABILITY);
   // Mirrors the tab rename: the ref stops blur after Enter/Escape from committing a second time.
   const [renaming, setRenaming] = useState<string | null>(null);
-  const movable = canDrag && tab.nodes.length > 1 && renaming === null;
+  const otherTabs = project.tabs.filter((item) => item.id !== tab.id);
+  const canTransfer =
+    canEdit &&
+    connection?.state.status === "ready" &&
+    !!connection.state.daemon.capabilities?.includes(PANE_TRANSFER_CAPABILITY) &&
+    otherTabs.length > 0;
+  // A lone pane has nowhere to go within its tab, but it can still join another.
+  const movable = canDrag && (tab.nodes.length > 1 || canTransfer) && renaming === null;
   const renameRef = useRef<string | null>(null);
   const renameInput = useRef<HTMLInputElement>(null);
   const setRename = (value: string | null) => {
@@ -497,8 +549,10 @@ function Pane({
   const tabVisible = useTabVisible();
   const [menuOpen, setMenuOpen] = useState(false);
   if (menuOpen && !tabVisible) setMenuOpen(false);
-  const agent = useAgents().find((agent) => agent.id === node.sessionId);
-  const terminal = useTerminalSessions().find((session) => session.id === node.sessionId);
+  const agents = useAgents();
+  const terminals = useTerminalSessions();
+  const agent = agents.find((agent) => agent.id === node.sessionId);
+  const terminal = terminals.find((session) => session.id === node.sessionId);
   const terminalAgent =
     node.profile !== "chat" && terminal && isLiveTerminalAgent(terminal) ? terminal : null;
   const [mcpOpen, setMcpOpen] = useState(false);
@@ -617,6 +671,31 @@ function Pane({
               <DropdownMenuItem onSelect={() => setMcpOpen(true)}>
                 <Plug /> <span className="whitespace-nowrap">MCP servers…</span>
               </DropdownMenuItem>
+            )}
+            {canTransfer && (
+              // Dragging has no keyboard or touch equivalent; this is the same move.
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <ArrowRightLeft /> <span className="whitespace-nowrap">Move to tab</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="max-h-80 max-w-72 overflow-y-auto">
+                  {otherTabs.map((item) => (
+                    <DropdownMenuItem
+                      key={item.id}
+                      onSelect={() =>
+                        onCommand({
+                          kind: "pane.transfer",
+                          ...target,
+                          targetTabId: item.id,
+                          splitId: crypto.randomUUID(),
+                        })
+                      }
+                    >
+                      <span className="truncate">{tabTitle(item, agents, terminals)}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem

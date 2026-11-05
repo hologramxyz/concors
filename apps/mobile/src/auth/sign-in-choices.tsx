@@ -1,7 +1,8 @@
-import type { NativeSignInChoice } from "@concors/api-client";
+import type { NativeSignInChoice, SignInProviders } from "@concors/api-client";
 import { useState } from "react";
 import { View } from "react-native";
 import { Button, Copy, Field } from "../ui";
+import { AppleSignInButton } from "./apple-sign-in-button";
 
 /** Loose on purpose: the API validates properly, this only catches a half-typed address. */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -12,9 +13,11 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  */
 export function SignInChoices({
   disabled,
+  providers,
   onChoose,
 }: {
   disabled: boolean;
+  providers?: SignInProviders;
   onChoose(choice: NativeSignInChoice): void;
 }) {
   const [email, setEmail] = useState("");
@@ -28,45 +31,56 @@ export function SignInChoices({
           "Use the account you signed up with. If you're new, this creates one. You'll finish in your browser."
         }
       </Copy>
-      <Button
-        secondary
-        testID="sign-in-github"
-        disabled={disabled}
-        onPress={() => onChoose({ method: "github" })}
-      >
-        Continue with GitHub
-      </Button>
-      <Button
-        secondary
-        testID="sign-in-google"
-        disabled={disabled}
-        onPress={() => onChoose({ method: "google" })}
-      >
-        Continue with Google
-      </Button>
-      <Field
-        label="Email"
-        value={email}
-        onChangeText={setEmail}
-        placeholder="you@example.com"
-        keyboardType="email-address"
-        autoCapitalize="none"
-        autoCorrect={false}
-        autoComplete="email"
-        textContentType="emailAddress"
-        returnKeyType="go"
-        editable={!disabled}
-        onSubmitEditing={() => {
-          if (validEmail && !disabled) onChoose({ method: "email", email: address });
-        }}
-      />
-      <Button
-        testID="sign-in-email"
-        disabled={disabled || !validEmail}
-        onPress={() => onChoose({ method: "email", email: address })}
-      >
-        Continue with email
-      </Button>
+      {providers?.apple && (
+        <AppleSignInButton disabled={disabled} onPress={() => onChoose({ method: "apple" })} />
+      )}
+      {providers?.github !== false && (
+        <Button
+          secondary
+          testID="sign-in-github"
+          disabled={disabled}
+          onPress={() => onChoose({ method: "github" })}
+        >
+          Continue with GitHub
+        </Button>
+      )}
+      {providers?.google !== false && (
+        <Button
+          secondary
+          testID="sign-in-google"
+          disabled={disabled}
+          onPress={() => onChoose({ method: "google" })}
+        >
+          Continue with Google
+        </Button>
+      )}
+      {providers?.email !== false && (
+        <>
+          <Field
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            textContentType="emailAddress"
+            returnKeyType="go"
+            editable={!disabled}
+            onSubmitEditing={() => {
+              if (validEmail && !disabled) onChoose({ method: "email", email: address });
+            }}
+          />
+          <Button
+            testID="sign-in-email"
+            disabled={disabled || !validEmail}
+            onPress={() => onChoose({ method: "email", email: address })}
+          >
+            Continue with email
+          </Button>
+        </>
+      )}
     </View>
   );
 }

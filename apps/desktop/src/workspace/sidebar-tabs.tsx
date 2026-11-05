@@ -1,4 +1,5 @@
 import {
+  ArrowRightLeft,
   Clock,
   Ellipsis,
   GitFork,
@@ -17,6 +18,9 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { BrailleSpinner } from "@/agents/activity";
@@ -80,6 +84,10 @@ export function SidebarTabRow({
   onFork,
   onPin,
   onDelete,
+  moveTargets = [],
+  onMove,
+  onMoveDragStart,
+  onMoveDragEnd,
 }: {
   row: SidebarRow;
   now: number;
@@ -95,6 +103,12 @@ export function SidebarTabRow({
   onPin?: (() => void) | undefined;
   /** Asks to delete the row's chat; absent for terminals. */
   onDelete?: (() => void) | undefined;
+  /** The workspaces it could move to. */
+  moveTargets?: readonly { id: string; name: string }[];
+  /** Moves the row to a workspace; absent when it cannot move. */
+  onMove?: ((projectId: string) => void) | undefined;
+  onMoveDragStart?: (() => void) | undefined;
+  onMoveDragEnd?: (() => void) | undefined;
 }) {
   const closed = row.kind !== "tab";
   const title = row.kind === "closed" ? row.chat.title : row.title;
@@ -122,7 +136,8 @@ export function SidebarTabRow({
       : undefined);
   const statusLabel = rowStatusLabel(row);
   const pinned = rowPinned(row);
-  const actions = !!onRename || !!onFork || !!onPin || !!onDelete || !!terminal;
+  const canMove = !!onMove && moveTargets.length > 0;
+  const actions = !!onRename || !!onFork || !!onPin || !!onDelete || !!terminal || canMove;
   const button = (
     <button
       type="button"
@@ -161,6 +176,14 @@ export function SidebarTabRow({
   return (
     <li
       data-sidebar-row={row.key}
+      draggable={canMove && renaming === null}
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = "move";
+        // Firefox starts no drag without data, and the row's name is what it is if dropped elsewhere.
+        event.dataTransfer.setData("text/plain", title);
+        onMoveDragStart?.();
+      }}
+      onDragEnd={onMoveDragEnd}
       className={cn(
         "group/row flex items-center rounded-md hover:bg-sidebar-accent/70 has-[[aria-expanded=true]]:bg-sidebar-accent/70",
         selected &&
@@ -243,6 +266,21 @@ export function SidebarTabRow({
               <DropdownMenuItem onSelect={onFork}>
                 <GitFork /> Fork chat
               </DropdownMenuItem>
+            )}
+            {canMove && (
+              // Dragging has no keyboard or touch equivalent; this is the same move.
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <ArrowRightLeft /> Move to workspace
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="max-h-80 max-w-72 overflow-y-auto">
+                  {moveTargets.map((target) => (
+                    <DropdownMenuItem key={target.id} onSelect={() => onMove?.(target.id)}>
+                      <span className="truncate">{target.name}</span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
             )}
             {onDelete && (
               <>

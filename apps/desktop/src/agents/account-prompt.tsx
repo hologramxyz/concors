@@ -18,6 +18,7 @@ import { accountName } from "./account-name";
 import { accountChanges } from "./account-requests";
 import {
   accountPromptKey,
+  dismissAccountPromptForNow,
   setAccountPromptDismissed,
   useAccountPromptDismissed,
 } from "./dismissed-account-prompts";
@@ -202,6 +203,8 @@ function AccountPrompt({
       if (!mounted.current) return;
       setCli(next);
       if (before && !before.installed && next?.installed) {
+        // What was dismissed was the install, which is done; signing in is a different question.
+        setAccountPromptDismissed(dismissalKey, false);
         setInstallError(null);
         invalidateModelCatalogs(connection);
         void request({ type: "read" });
@@ -216,7 +219,7 @@ function AccountPrompt({
             .catch(() => undefined);
       }
     },
-    [connection, agent.id, agent.engine, agent.provider, request],
+    [connection, agent.id, agent.engine, agent.provider, dismissalKey, request],
   );
   const listing = useRef(false);
   const checkInstall = useCallback(() => {
@@ -259,6 +262,34 @@ function AccountPrompt({
       accountChanges.removeEventListener("change", check);
     };
   }, [hidden, canEdit, request, checkInstall]);
+  // Dismissed, it asks nothing but keeps watching. A sign-in made outside the app, such as in a
+  // terminal, ends the dismissal as the app's own sign-in dialog does, so a login that later expires
+  // brings the prompt back. A CLI installed meanwhile still resumes the chat that needed it.
+  useEffect(() => {
+    if (!hidden || !canEdit) return;
+    const check = () => {
+      if (latestCli.current?.installed === false) checkInstall();
+      void connection
+        .requestAgent(
+          { kind: "account", sessionId: agent.id, action: { type: "read" } },
+          crypto.randomUUID(),
+        )
+        .then(
+          ({ outcome }) => {
+            if (outcome.status !== "error" && outcome.account?.status === "connected")
+              setAccountPromptDismissed(dismissalKey, false);
+          },
+          () => undefined,
+        );
+    };
+    check();
+    window.addEventListener("focus", check);
+    accountChanges.addEventListener("change", check);
+    return () => {
+      window.removeEventListener("focus", check);
+      accountChanges.removeEventListener("change", check);
+    };
+  }, [hidden, canEdit, connection, agent.id, dismissalKey, checkInstall]);
   useEffect(() => {
     if (hidden || account?.status !== "pending") return;
     const timer = setInterval(() => void request({ type: "read" }), 2000);
@@ -301,7 +332,7 @@ function AccountPrompt({
                 size="icon"
                 className="text-muted-foreground"
                 aria-label="Dismiss installation"
-                onClick={hide}
+                onClick={() => dismissAccountPromptForNow(dismissalKey)}
               >
                 <X className="size-4" />
               </Button>
