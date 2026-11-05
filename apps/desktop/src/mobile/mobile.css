@@ -786,6 +786,28 @@ body {
   max-height: min(72dvh, 640px) !important;
   gap: 16px;
 }
+/* A row's "…" menu: the sheet's own list, not the floating menu the global role rules style. */
+.mobile-row-sheet [role="menu"] {
+  max-width: none;
+  padding: 0;
+  border-radius: 0;
+}
+.mobile-row-sheet .mobile-select-sheet-list .mobile-select-option {
+  min-height: 44px;
+  padding-block: 8px;
+}
+/* A full chat menu is taller than a picker's list; it gets the drawer's height so every item shows. */
+[data-mobile-drawer].mobile-row-sheet {
+  max-height: min(calc(100dvh - var(--mobile-safe-top) - 8px), 960px) !important;
+}
+.mobile-row-sheet .mobile-select-option[data-variant="destructive"],
+.mobile-row-sheet .mobile-select-option[data-variant="destructive"] .mobile-select-icon {
+  color: var(--destructive);
+}
+.mobile-row-sheet-separator {
+  margin: 6px 0;
+  border-top: 1px solid var(--border);
+}
 [data-mobile-drawer].mobile-workspace-sheet {
   min-height: min(38dvh, 280px);
 }

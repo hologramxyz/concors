@@ -15,8 +15,15 @@ import { paneAgentStatus } from "@/agents/agent-status";
 import { useAgents } from "@/agents/context";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { projectPanes, type PaneNode } from "./selection";
-import { WorkspaceActions } from "./workspace-actions";
+import { WorkspaceActions, type TabStep } from "./workspace-actions";
 import { useNativeSurface } from "@/components/native-surface";
+
+interface Handoff {
+  tabId: string;
+  paneId: string;
+  step: TabStep;
+  count: number;
+}
 
 /** Navigation and management share a drawer, with separate buttons (never nested option actions). */
 export function WorkspacePicker({
@@ -41,10 +48,16 @@ export function WorkspacePicker({
   onNewTab(): void;
 }) {
   const [open, setOpen] = useState(false);
+  // A row's dialog opens once this sheet has gone, so it shows alone; the count remounts it.
+  const [handoff, setHandoff] = useState<Handoff | null>(null);
+  const pendingHandoff = useRef<Handoff | null>(null);
   const id = useId();
   const trigger = useRef<HTMLButtonElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const entries = projectPanes(project);
+  const handoffEntry =
+    handoff &&
+    entries.find((entry) => entry.tab.id === handoff.tabId && entry.pane.id === handoff.paneId);
   const chats = useAgents();
   const terminals = useTerminalSessions();
   const selected = entries.find((entry) => entry.tab.id === tab?.id && entry.pane.id === pane?.id);
@@ -75,6 +88,7 @@ export function WorkspacePicker({
         <WorkspaceActions
           key={`${tab.id}:${pane.id}`}
           label="Active tab actions"
+          title={selected?.label ?? tab.name}
           project={project}
           tab={tab}
           pane={pane}
@@ -84,6 +98,23 @@ export function WorkspacePicker({
           onSelect={onSelect}
           selected
           keyboard={keyboard && !open}
+          showTrigger={false}
+        />
+      )}
+      {handoff && handoffEntry && (
+        <WorkspaceActions
+          key={handoff.count}
+          label={`Actions for tab ${handoffEntry.label}`}
+          title={handoffEntry.label}
+          project={project}
+          tab={handoffEntry.tab}
+          pane={handoffEntry.pane}
+          selected={tab?.id === handoff.tabId && pane?.id === handoff.paneId}
+          canEdit={canEdit}
+          execute={execute}
+          command={command}
+          onSelect={onSelect}
+          step={handoff.step}
           showTrigger={false}
         />
       )}
@@ -132,6 +163,12 @@ export function WorkspacePicker({
           }}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
+            const next = pendingHandoff.current;
+            pendingHandoff.current = null;
+            if (next) {
+              setHandoff(next);
+              return;
+            }
             requestAnimationFrame(() => {
               if (!document.querySelector('[data-slot="dialog-content"][data-state="open"]'))
                 trigger.current?.focus({ preventScroll: true });
@@ -210,6 +247,7 @@ export function WorkspacePicker({
                   </button>
                   <WorkspaceActions
                     label={`Actions for tab ${label}`}
+                    title={label}
                     project={project}
                     tab={item}
                     pane={node}
@@ -219,6 +257,15 @@ export function WorkspacePicker({
                     command={command}
                     onSelect={onSelect}
                     onComplete={() => setOpen(false)}
+                    onStep={(step) => {
+                      pendingHandoff.current = {
+                        tabId: item.id,
+                        paneId: node.id,
+                        step,
+                        count: (handoff?.count ?? 0) + 1,
+                      };
+                      setOpen(false);
+                    }}
                   />
                 </div>
               );

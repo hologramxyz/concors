@@ -477,8 +477,12 @@ test("Files responds in the demo and terminal swipes keep both panels reachable"
   const y = popup.y + popup.height / 2;
   await touchSwipe(page, { x: popup.x + popup.width / 2, y }, { x: 30, y });
   await expect(shell).toHaveAttribute("data-sidebar-open", "true");
+  // Row menus open as sheets on a tap, as the phone's other sheets do, so a swipe opens none.
+  await expect(ui.getByRole("menu")).toHaveCount(0);
+  await ui.getByRole("button", { name: "Actions for Concors", exact: true }).click();
   await expect(ui.getByRole("menu")).toBeVisible();
   await ui.getByRole("menu").press("Escape");
+  await expect(ui.getByRole("menu")).toHaveCount(0);
   await expect(shell).toHaveAttribute("data-sidebar-open", "true");
 });
 test("flat tab changes use the authoritative workspace operations", async ({ page }) => {
@@ -1016,6 +1020,8 @@ test("tab menus pin, fork and delete chats with desktop's actions, and undo a de
   await ui.getByRole("menuitem", { name: "Delete…", exact: true }).click();
   const confirm = ui.getByRole("dialog", { name: /^Delete “/ });
   await expect(confirm).toContainText("You’ll have a few seconds to undo.");
+  // The menu sheet and the Tabs sheet close before the confirm opens, so it shows alone.
+  await expect(ui.getByRole("dialog")).toHaveCount(1);
   await confirm.getByRole("button", { name: "Delete", exact: true }).click();
   const toast = ui.getByRole("status").filter({ hasText: "Chat deleted" });
   await expect(toast).toBeVisible();

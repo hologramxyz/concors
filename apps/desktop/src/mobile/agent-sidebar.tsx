@@ -40,6 +40,7 @@ export function MobileAgentSidebar({
             <WorkspaceActions
               sidebar
               label={`Actions for ${name}`}
+              title={name}
               project={target.project}
               tab={target.tab}
               pane={target.pane}

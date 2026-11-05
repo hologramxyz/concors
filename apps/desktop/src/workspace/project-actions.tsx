@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
+import { CompactLayoutContext } from "@/components/compact-layout";
+import { RowMenuItem, RowMenuSheet } from "@/components/row-menu-sheet";
 
 export function ProjectActions({
   project,
@@ -57,37 +59,62 @@ export function ProjectActions({
       terminal.projectId === project.id &&
       (terminal.status === "running" || terminal.status === "starting"),
   ).length;
+  const phone = useContext(CompactLayoutContext);
+  const triggerClass = cn(
+    "mobile-tap-target flex items-center justify-center rounded p-1 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-sidebar-foreground aria-expanded:opacity-100 [@media(hover:none)]:opacity-100",
+    // Kept mounted while renaming so closing the menu can hand focus to the input.
+    renaming && "invisible",
+  );
+  const confirm = () => {
+    setError(null);
+    setConfirming(true);
+  };
   return (
     <>
-      <DropdownMenu>
-        <SidebarTooltip content="Workspace options">
-          <DropdownMenuTrigger
-            aria-label={`Actions for ${project.name}`}
-            className={cn(
-              "mobile-tap-target flex items-center justify-center rounded p-1 text-muted-foreground opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:text-sidebar-foreground aria-expanded:opacity-100 [@media(hover:none)]:opacity-100",
-              // Kept mounted while renaming so closing the menu can hand focus to the input.
-              renaming && "invisible",
-            )}
-          >
-            <Ellipsis className="size-4" />
-          </DropdownMenuTrigger>
-        </SidebarTooltip>
-        <DropdownMenuContent align="start" className="w-56" onCloseAutoFocus={onCloseAutoFocus}>
-          <DropdownMenuItem disabled={!onRename} onSelect={() => onRename?.()}>
-            <Pencil /> Rename workspace
-          </DropdownMenuItem>
-          <DropdownMenuItem
+      {phone ? (
+        // A phone opens row menus as sheets; each item runs once the sheet has gone.
+        <RowMenuSheet
+          label={`Actions for ${project.name}`}
+          title={project.name}
+          className={triggerClass}
+          icon={<Ellipsis className="size-4" />}
+        >
+          <RowMenuItem icon={<Pencil />} disabled={!onRename} onSelect={() => onRename?.()}>
+            Rename workspace
+          </RowMenuItem>
+          <RowMenuItem
+            icon={keeps ? <FolderX /> : <Trash2 />}
             disabled={!canEdit}
-            variant={keeps ? "default" : "destructive"}
-            onSelect={() => {
-              setError(null);
-              setConfirming(true);
-            }}
+            destructive={!keeps}
+            onSelect={confirm}
           >
-            {keeps ? <FolderX /> : <Trash2 />} Close workspace…
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+            Close workspace…
+          </RowMenuItem>
+        </RowMenuSheet>
+      ) : (
+        <DropdownMenu>
+          <SidebarTooltip content="Workspace options">
+            <DropdownMenuTrigger
+              aria-label={`Actions for ${project.name}`}
+              className={triggerClass}
+            >
+              <Ellipsis className="size-4" />
+            </DropdownMenuTrigger>
+          </SidebarTooltip>
+          <DropdownMenuContent align="start" className="w-56" onCloseAutoFocus={onCloseAutoFocus}>
+            <DropdownMenuItem disabled={!onRename} onSelect={() => onRename?.()}>
+              <Pencil /> Rename workspace
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={!canEdit}
+              variant={keeps ? "default" : "destructive"}
+              onSelect={confirm}
+            >
+              {keeps ? <FolderX /> : <Trash2 />} Close workspace…
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       <Dialog
         open={confirming}
         onOpenChange={(open) => {
