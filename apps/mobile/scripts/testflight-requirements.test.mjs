@@ -21,7 +21,7 @@ const input = {
   readiness: {
     schemaVersion: 1,
     appVersion: "0.1.0",
-    releaseModel: "existing-account-companion",
+    releaseModel: "free-existing-machines",
     gates: [],
   },
 };
