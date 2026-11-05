@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { searchWorkspace } from "../../../e2e/support/search-workspace.ts";
 import { mobileDesktopSocket } from "../../../e2e/support/mobile-direct-ports.cjs";
 

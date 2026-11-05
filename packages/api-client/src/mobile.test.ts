@@ -82,9 +82,17 @@ describe("optional mobile control-plane contract", () => {
     expect(MachineConnectionTicketSchema.safeParse({ ...ticket, url }).success).toBe(false);
   });
   it("does not claim deletion succeeded on an unexpected response", async () => {
-    await expect(client({}).api.deleteAccount("password")).rejects.toMatchObject({
+    await expect(
+      client({}).api.deleteAccount({ confirmation: "DELETE", planToken: "a".repeat(64) }),
+    ).rejects.toMatchObject({
       code: "INVALID_RESPONSE",
     });
-    expect(await client({ status: "scheduled" }).api.deleteAccount("password")).toBe("scheduled");
+    const receipt = { id: "deletion-1", receipt: "b".repeat(64), status: "scheduled" };
+    expect(
+      await client(receipt).api.deleteAccount({
+        confirmation: "DELETE",
+        planToken: "a".repeat(64),
+      }),
+    ).toEqual(receipt);
   });
 });

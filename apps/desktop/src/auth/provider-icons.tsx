@@ -1,3 +1,11 @@
+/** Monochrome Apple mark used only for Sign in with Apple. */
+export function AppleIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.5 7.59 8.9 7.31c1.31.07 2.22.74 2.98.79 1.13-.23 2.21-.92 3.42-.84 1.45.12 2.54.69 3.26 1.73-3 1.8-2.28 5.76.48 6.87-.55 1.45-1.26 2.88-2 4.42M12.03 7.25c-.15-2.15 1.6-3.92 3.6-4.1.27 2.48-2.25 4.35-3.6 4.1Z" />
+    </svg>
+  );
+}
 /** GitHub's mark (Octicons `mark-github`). */
 export function GitHubIcon({ className = "" }: { className?: string }) {
   return (

@@ -69,8 +69,12 @@ See [direct setup](../apps/mobile/README.md#first-connect-to-the-same-daemon-as-
 Files use the same schema-validated `file.request`/`file.result` protocol. The daemon
 must advertise `project-files`, and `project-file-create` for creation. Chat, tool
 events, approvals, tabs/panes, file guards and terminal ownership remain shared with
-desktop. The client has no separate AI-sharing onboarding gate; managed authentication
-and private direct-endpoint authorization remain required.
+desktop. The native host checks AI-sharing permission before applicable agent/provider/schedule requests.
+Files and local message indexes remain readable; interrupt/decline/cancel actions stay available.
+Opening a conversation can resume its provider, so history/attachment/child-history requests are also guarded. Grants are
+scoped to the current account/machine connection, provider registry revision and selected model.
+Settings → Account can withdraw permission. Authentication and private direct-endpoint authorization
+remain required. Provider data/retention facts still need owner verification.
 
 ## Verification and release gates
 
@@ -84,20 +88,27 @@ desktop/phone concurrency, token expiry/revocation, files, chat approvals and
 background/reconnect on signed native builds. No deployment, fleet update, signing,
 store submission or physical-device verification is implied by these source tests.
 
-## Remaining backend services
+## Account and optional services
 
-Authenticate and authorize every request. Capability discovery governs these optional services only; machine access is authorized
-by the token endpoint and managed gateway.
+The account API now implements durable deletion and private content reports. Deploy the server
+migrations before clients. `accountDeletionFlow: "reauth-plan-v1"` advertises the new flow;
+legacy `accountDeletion` remains false to keep password-only clients from offering it.
 
-| Route                                           | Request                           | Success                                                      |
-| ----------------------------------------------- | --------------------------------- | ------------------------------------------------------------ |
-| `GET /api/v1/mobile/capabilities`               | —                                 | `{version:1,remoteAccess,pushNotifications,accountDeletion}` |
-| `POST /api/v1/mobile/devices`                   | `{installationId,token,platform}` | Successful 2xx                                               |
-| `DELETE /api/v1/mobile/devices/:installationId` | —                                 | Successful 2xx                                               |
-| `POST /api/v1/account/deletion`                 | `{password}`                      | `{status:"deleted"                                           | "scheduled"}` |
+| Route                                  | Request                                                               | Result                                                     |
+| -------------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `GET /api/v1/mobile/capabilities`      | authenticated                                                         | Version 1, managed access, no push, deletion flow marker   |
+| `GET /api/v1/account/deletion`         | authenticated                                                         | Plan, affected organizations/machines, ownership transfers |
+| `POST /api/v1/account/deletion`        | `{confirmation:"DELETE",planToken}` and fresh same-user sign-in       | Durable job and private status receipt                     |
+| `POST /api/v1/account/deletion/status` | `{receipt}`                                                           | Processing/completed status, no account data               |
+| `POST /api/v1/support/reports`         | category, user-written message, optional authorized machine reference | Private report reference                                   |
 
-Only discovery is implemented in the companion server PR. The following push and
-deletion contracts still require backend implementation and policy review.
+The API revokes all account sessions, disables owned-machine credentials and retries provider cleanup.
+Owned cloud disks are rebuilt and subscriptions stopped; the user's own external computers are not
+wiped. Shared teams and colleagues' machines remain. Cleanup revokes Apple OAuth and removes Privy
+identities before final DB deletion. Reports are rate limited, removed with the account or purged
+30 days after resolution. The server README documents operator triage and delayed-job monitoring.
+
+Push remains unavailable and must not be claimed in the first release.
 
 ### Push
 
@@ -127,18 +138,18 @@ Client accepts structured IDs, ignores cross-account responses, navigates intern
 and re-fetches authorized state. No arbitrary notification URL opens. Daemon attention
 remains authoritative. Cross-organization links currently require switching organization.
 
-### Deletion / public pages
+### Public pages and authentication
 
-Re-authenticate with the password. Define transactional handling of personal/shared
-organizations, machine/subscription ownership, jobs and retained billing records before
-advertising deletion. Return success only when complete or durably scheduled; revoke
-sessions, sockets and push tokens. Publish timing/retention explanations. Client confirms
-password plus `DELETE`, then signs out; client code cannot implement cloud deletion.
+The website changes provide `/privacy`, `/support`, `/terms` and a self-service `/account/delete`
+page with a fixed HTTPS callback and PKCE. The owner selected **gm@hologram.xyz**. Recheck the live
+pages and deletion after deployment; local tests alone do not establish production acceptance.
+Authentication uses registered app schemes. Unused iOS Universal Links and Android App Links have
+been removed instead of declaring unsupported association files.
 
-Publish `https://concors.dev/privacy`, `/support`, `/account/delete` (or update configured
-URLs). External deletion must actually accept requests. Publish Apple
-`apple-app-site-association` and Android `assetlinks.json` for `/session` using real team
-IDs/release fingerprints. This PR deploys none of these pages/association files.
+Sign in with Apple is implemented in API, iPhone and desktop clients, but remains undiscoverable
+until the Apple/Privy setup, matching Services ID/client secret, encrypted revocation storage and
+private-email relay are configured. See the server's `docs/sign-in.md`. This is separate from the
+exposed Expo submission key, which still must be revoked and replaced privately.
 
 ## References reviewed
 

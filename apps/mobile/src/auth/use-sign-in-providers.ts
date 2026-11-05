@@ -21,7 +21,11 @@ export function useSignInProviders(enabled: boolean) {
   });
   const providers = query.data;
   return {
-    available: enabled && !!providers && (providers.github || providers.google || providers.email),
+    providers,
+    available:
+      enabled &&
+      !!providers &&
+      (providers.apple || providers.github || providers.google || providers.email),
     checking: enabled && query.data === undefined && query.isFetching,
     error:
       enabled && query.data === undefined && query.isError

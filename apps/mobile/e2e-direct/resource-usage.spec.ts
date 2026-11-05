@@ -1,4 +1,5 @@
-import { test, expect, type Page, type WebSocketRoute } from "@playwright/test";
+import type { Page, WebSocketRoute } from "@playwright/test";
+import { test, expect } from "./fixtures";
 import { mobileDirectSocket } from "../../../e2e/support/mobile-direct-ports.cjs";
 
 async function connect(page: Page) {

@@ -45,6 +45,7 @@ export const NativeSignInResponseSchema = z.object({ token: z.string().min(1) })
  * method reads as unavailable, so an older API that only reports `github` still parses.
  */
 export const SignInProvidersSchema = z.object({
+  apple: z.boolean().default(false),
   github: z.boolean().default(false),
   google: z.boolean().default(false),
   email: z.boolean().default(false),
@@ -115,6 +116,7 @@ export const MoneySchema = z.object({
 export type Money = z.infer<typeof MoneySchema>;
 
 export const MACHINE_STATUSES = [
+  "deleting",
   "provisioning",
   "running",
   "stopped",

@@ -11,7 +11,7 @@ const environment = {
 const complete = () => ({
   schemaVersion: 1,
   appVersion: "0.1.0",
-  releaseModel: "existing-account-companion",
+  releaseModel: "free-existing-machines",
   gates: requiredGates.map((id) => ({
     id,
     status: "verified",
@@ -86,7 +86,7 @@ describe("evidence-backed release checks", () => {
       );
       expect(
         check({ ...complete(), releaseModel: "signup-and-purchasing" }, environment, "0.1.0"),
-      ).toContain("Use the implemented existing-account-companion release scope");
+      ).toContain("Use the implemented free-existing-machines release scope");
     }
   });
 });

@@ -16,7 +16,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import Constants from "expo-constants";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -45,6 +45,7 @@ import type { WorkspaceRendererHandle } from "./renderer-types";
 import { dispatchMobileApi } from "./api";
 import { assertWorkspaceActionAllowed } from "./access";
 import { deviceStorage } from "../platform/storage";
+import { createAISharingPermission } from "./ai-sharing";
 import {
   LAST_TARGETS_KEY,
   lastTargetKey,
@@ -117,6 +118,11 @@ function SignedInWorkspace() {
   const [push, setPush] = useState(false);
   const [failed, setFailed] = useState(false);
   const [rendererKey, setRendererKey] = useState(0);
+  const [aiSharingGrant, setAISharingGrant] = useState<{
+    connectionId: string | null;
+    status: "ask" | "allowed" | "blocked";
+  }>({ connectionId: null, status: "ask" });
+  const aiPermission = useRef<ReturnType<typeof createAISharingPermission> | null>(null);
   const renderer = useRef<WorkspaceRendererHandle>(null);
   const ready = useRef(false);
   const alive = useRef(true);
@@ -144,16 +150,43 @@ function SignedInWorkspace() {
     [transport, rendererKey],
   );
   const relay = useRef<ReturnType<typeof createProtocolRelay> | null>(null);
+  const aiSharing = aiSharingGrant.connectionId === connectionId ? aiSharingGrant.status : "ask";
   useEffect(() => {
+    const permission =
+      transport && !config.demo
+        ? createAISharingPermission(
+            transport,
+            (disclosure) =>
+              Platform.OS === "web"
+                ? Promise.resolve(window.confirm(`Allow AI data sharing?\n\n${disclosure}`))
+                : new Promise<boolean>((resolve) =>
+                    Alert.alert(
+                      "Allow AI data sharing?",
+                      disclosure,
+                      [
+                        { text: "Don't allow", style: "cancel", onPress: () => resolve(false) },
+                        { text: "Allow sharing", onPress: () => resolve(true) },
+                      ],
+                      { cancelable: true, onDismiss: () => resolve(false) },
+                    ),
+                  ),
+            (status) => setAISharingGrant({ connectionId, status }),
+          )
+        : null;
+    aiPermission.current = permission;
     const current =
       transport && connectionId
-        ? createProtocolRelay(transport, (message) =>
-            renderer.current?.send({ type: "protocol", connectionId, message }),
+        ? createProtocolRelay(
+            transport,
+            (message) => renderer.current?.send({ type: "protocol", connectionId, message }),
+            permission?.beforeSend,
           )
         : null;
     relay.current = current;
     return () => {
       current?.dispose();
+      permission?.dispose();
+      aiPermission.current = null;
       relay.current = null;
     };
   }, [transport, connectionId]);
@@ -212,6 +245,7 @@ function SignedInWorkspace() {
           capabilities: {
             ...(capabilities.data ?? NO_MOBILE_CAPABILITIES),
             remoteAccess: !!auth.me || auth.direct,
+            accountDeletion: capabilities.data?.accountDeletionFlow === "reauth-plan-v1",
             pushNotifications:
               !config.personalTeam && (capabilities.data?.pushNotifications ?? false),
           },
@@ -222,6 +256,7 @@ function SignedInWorkspace() {
           systemDark,
           preferences,
           pushEnabled: push,
+          aiSharing,
           target: target.success ? target.data : {},
           ...(machineId && lastTargets
             ? {
@@ -332,10 +367,16 @@ function SignedInWorkspace() {
         if (alive.current) setPush(action.enabled);
         return;
       case "delete-account":
-        if (!capabilities.data?.accountDeletion)
+        if (capabilities.data?.accountDeletionFlow !== "reauth-plan-v1")
           throw new Error("Account deletion is not available on this server");
-        await api.deleteAccount(action.password);
-        await auth.signOut();
+        router.push("/account/delete");
+        return;
+      case "ai-sharing":
+        if (action.action === "withdraw") aiPermission.current?.withdraw();
+        else aiPermission.current?.review();
+        return;
+      case "report-content":
+        router.push({ pathname: "/support/report", params: machineId ? { machineId } : {} });
         return;
       case "clipboard":
         await Clipboard.setStringAsync(action.text);

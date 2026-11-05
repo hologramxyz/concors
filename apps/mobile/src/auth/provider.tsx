@@ -1,5 +1,10 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { ApiError, type Me, type NativeSignInChoice } from "@concors/api-client";
+import {
+  ApiError,
+  type Me,
+  type NativeSignInChoice,
+  type SignInProviders,
+} from "@concors/api-client";
 import { useQueryClient } from "@tanstack/react-query";
 import { AppState } from "react-native";
 import { api } from "./runtime";
@@ -29,6 +34,7 @@ interface AuthContextValue extends AuthState {
   signInSupported: boolean;
   /** `true` once this build and the API both support sign-in. */
   signInAvailable: boolean;
+  signInProviders: SignInProviders | undefined;
   signInChecking: boolean;
   signInCheckError: string | null;
   retrySignInCheck(): Promise<void>;
@@ -241,6 +247,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
         signInSupported: !!platform,
         signInAvailable: providers.available,
+        signInProviders: providers.providers,
         signInChecking: providers.checking,
         signInCheckError: providers.error,
         retrySignInCheck: providers.retry,

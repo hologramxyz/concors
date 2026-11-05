@@ -35,7 +35,7 @@ import { activeOrganization, describeAuthError } from "@/auth/auth-state";
 import { GUEST_PROFILE_USER } from "@concors/protocol";
 import { UnreachableHelpButton } from "@/daemon/unreachable-dialog";
 import { useAuth } from "@/auth/use-auth";
-import { useSignInUnavailable } from "@/auth/sign-in";
+import { useSignInOptions } from "@/auth/sign-in";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarToggle } from "@/components/sidebar-toggle";
 import { SearchButton } from "@/components/search-button";
@@ -152,7 +152,7 @@ function AppContent() {
   const colorTheme = useColorThemePreference();
   const corners = useCornerStyle();
   const auth = useAuth(api);
-  const signInUnavailable = useSignInUnavailable(api);
+  const { unavailable: signInUnavailable, apple: appleSignInAvailable } = useSignInOptions(api);
   const organizationId =
     auth.state.status === "signed-in" ? activeOrganization(auth.state)?.id : undefined;
   // Nobody signed in is a guest using this computer. A saved session that could not be checked is
@@ -405,6 +405,7 @@ function AppContent() {
             state={auth.state}
             onSignIn={auth.signIn}
             signInUnavailable={signInUnavailable}
+            appleAvailable={appleSignInAvailable}
             onRetry={() => void auth.refresh()}
             {...(guest ? { onBack: () => setSigningIn(false) } : {})}
           />
