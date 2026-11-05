@@ -7,7 +7,7 @@ The owner confirmed **Concors: Coding Workspace**, reported no prior rejection, 
 ## Remediation prepared on 2026-11-05
 
 The audit below records the original production/TestFlight findings. The remediation branch starts
-from updated main `6a1844dc` and adds the following; production/device verification remains separate.
+from updated main `ca94d003` and adds the following; production/device verification remains separate.
 
 Related changes: [account lifecycle API](https://github.com/hologramxyz/concors-server/pull/21)
 and [public pages/browser deletion](https://github.com/hologramxyz/concors-web/pull/12).
@@ -32,7 +32,7 @@ Local remediation checks passed: formatting, lint, full TypeScript checks and **
 tests** (two skipped), including the new protocol permission and same-user reauthentication cases.
 The API passed **517 tests** (13 skipped), including disposable-Postgres lifecycle/concurrency
 tests. Website build/format checks, four static-server/changelog tests and **20 browser checks**
-passed; seven mobile workspace browser smoke checks also passed. Rust checks could not run locally
+passed; seven mobile workspace browser smoke checks and an iOS Hermes bundle export also passed. Rust checks could not run locally
 because Cargo is not installed. These checks do not establish signed iPhone acceptance.
 
 ## App Store fields completed before remediation
