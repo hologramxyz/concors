@@ -250,7 +250,7 @@ test("model, effort, permissions, plan and speed use the desktop controls", asyn
     ["Permission mode", "Auto-review", "auto-review"],
     ["Speed", "Fast", "fast"],
   ] as const) {
-    if (control === "Speed")
+    if (control === "Thinking effort")
       await ui.getByRole("button", { name: "More composer options" }).click();
     const button = ui.getByRole("button", { name: control, exact: true });
     await button.click();
@@ -268,6 +268,94 @@ test("model, effort, permissions, plan and speed use the desktop controls", asyn
   await ui.getByRole("textbox", { name: "Message Codex" }).fill("ask me a question");
   await ui.getByRole("button", { name: "Send message", exact: true }).click();
   await expect(ui.getByText("Which platform should I verify?")).toBeVisible();
+});
+test("composer options hold effort and permissions, with desktop wording and quiet menus", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const input = ui.locator("[data-agent-composer]");
+  await expect(input).toHaveAttribute("placeholder", "Add a follow-up to the queue…");
+  await newTab(ui);
+  await ui.getByRole("button", { name: "New chat", exact: true }).click();
+  await expect(input).toHaveAttribute("placeholder", "Ask anything…");
+  await input.click();
+  await expect(input).toHaveAttribute("placeholder", "Ask anything…");
+
+  const form = ui.locator(".mobile-composer");
+  const gaps = await form.evaluate((element) => {
+    const outer = element.getBoundingClientRect();
+    const button = element
+      .querySelector(".mobile-composer-primary button")
+      ?.getBoundingClientRect();
+    return button && [outer.right - button.right, outer.bottom - button.bottom];
+  });
+  expect(gaps?.[0]).toBeGreaterThanOrEqual(8);
+  expect(gaps?.[0]).toBeCloseTo(gaps?.[1] ?? 0, 0);
+  for (const name of ["Thinking effort", "Permission mode"]) {
+    await expect(form.getByRole("button", { name, exact: true })).toHaveCount(0);
+  }
+
+  await ui.getByRole("button", { name: "More composer options" }).click();
+  const sheet = ui.locator(".mobile-composer-options");
+  await expect(sheet.getByText("Conversation options")).toHaveCount(0);
+  for (const [name, selected] of [
+    ["Thinking effort", "Medium"],
+    ["Permission mode", "Default permissions"],
+  ] as const) {
+    await sheet.getByRole("button", { name, exact: true }).click();
+    const menu = ui.getByRole("listbox", { name, exact: true });
+    await expect(menu).toBeVisible();
+    // Few enough to read at a glance, with nothing highlighted but the current value's check.
+    await expect(ui.getByRole("combobox", { name: /^Search/ })).toHaveCount(0);
+    await expect(menu.locator(".bg-accent")).toHaveCount(0);
+    await expect(menu.locator(".lucide-check")).toHaveCount(1);
+    await expect(menu.getByRole("option", { selected: true })).toContainText(selected);
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
+  }
+  await page.keyboard.press("Escape");
+  await ui.getByRole("button", { name: "Agent and model", exact: true }).click();
+  await expect(ui.getByRole("combobox", { name: "Search models" })).toBeVisible();
+});
+test("an attachment keeps its remove button inside its corner, with a fingertip's tap area", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  await ui.locator("[data-agent-composer]").click();
+  await ui.locator('input[aria-label="Upload files"]').setInputFiles({
+    name: "notes-for-the-release.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from("# Notes\n"),
+  });
+  const chip = ui.locator("[data-composer-attachment]");
+  await expect(chip.getByText("notes-for-the-release.md")).toBeVisible();
+  const metrics = await chip.evaluate((element) => {
+    const outer = element.getBoundingClientRect();
+    const remove = element.querySelector(".mobile-attachment-remove");
+    const rect = remove?.getBoundingClientRect();
+    const name = element.querySelector(".truncate");
+    if (!rect || !name) return null;
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    return {
+      inside:
+        rect.left >= outer.left &&
+        rect.top >= outer.top &&
+        rect.right <= outer.right &&
+        rect.bottom <= outer.bottom,
+      tap: [
+        [-21, -21],
+        [21, -21],
+        [-21, 21],
+        [21, 21],
+      ].every(([x = 0, y = 0]) => {
+        const hit = document.elementFromPoint(centerX + x, centerY + y);
+        return hit?.closest(".mobile-attachment-remove") === remove;
+      }),
+      nameRoom: name.clientWidth > 100,
+    };
+  });
+  expect(metrics).toEqual({ inside: true, tap: true, nameRoom: true });
 });
 test("Android composer keeps the model picker open when returning to providers", async ({
   page,
@@ -292,10 +380,7 @@ test("Android composer keeps the model picker open when returning to providers",
     await expect(providers).toBeVisible();
     // Back re-renders the menu under the tap; the composer stays open around its picker, or the
     // picker loses its anchor and jumps away from the next tap.
-    await expect(ui.getByRole("textbox", { name: "Message Codex" })).not.toHaveAttribute(
-      "placeholder",
-      "Message your agent",
-    );
+    await expect(ui.locator(".mobile-composer")).toHaveAttribute("data-expanded", "true");
     await expect(ui.getByRole("combobox", { name: "Search providers" })).toBeVisible();
     await providers.getByRole("option", { name: /^Codex\b/ }).click();
     await expect(ui.getByRole("listbox", { name: "Models", exact: true })).toBeVisible();
@@ -594,6 +679,8 @@ test("compact toolbar keeps icon controls and send on one row at phone widths", 
           top: rect.top + rect.height / 2,
           left: rect.left,
           right: rect.right,
+          width: rect.width,
+          height: rect.height,
           start: bounds.left,
           end: bounds.right,
         };
@@ -604,9 +691,9 @@ test("compact toolbar keeps icon controls and send on one row at phone widths", 
       expect(rect.left).toBeGreaterThanOrEqual(rect.start);
       expect(rect.right).toBeLessThanOrEqual(rect.end);
     }
-    for (const label of ["Agent and model", "Thinking effort", "Permission mode"]) {
-      await expect(ui.getByRole("button", { name: label, exact: true })).toHaveText("");
-    }
+    for (const rect of metrics) expect(rect.width).toBe(44);
+    expect(metrics.map((rect) => rect.height)).toEqual(metrics.map(() => 44));
+    await expect(ui.getByRole("button", { name: "Agent and model", exact: true })).toHaveText("");
     const header = ui.locator(".mobile-header");
     await expect(header).not.toContainText("Concors");
     const chevronInside = await ui.getByRole("combobox", { name: "Tabs" }).evaluate((picker) => {
@@ -718,13 +805,12 @@ test("composer expands on focus, preserves portaled controls, and collapses afte
   await expect(primary).toHaveAttribute("aria-label", "Interrupt agent");
   const collapsedBounds = await form.boundingBox();
   if (!collapsedBounds) throw new Error("Collapsed composer is not visible");
-  expect(collapsedBounds.height).toBeLessThanOrEqual(60);
+  expect(collapsedBounds.height).toBeLessThanOrEqual(62);
   await input.click();
   await expect(form).toHaveAttribute("data-expanded", "true");
   for (const name of [
     "Agent and model",
-    "Thinking effort",
-    "Permission mode",
+    "More composer options",
     "Context window",
     "Start dictation",
   ]) {

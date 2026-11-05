@@ -240,7 +240,7 @@ export function ChatPane({
             <textarea
               data-agent-composer
               aria-label="Preparing agent"
-              placeholder={start ? START_PLACEHOLDER : "Reply…"}
+              placeholder={start || compact ? START_PLACEHOLDER : "Reply…"}
               disabled
               className="agent-composer-input min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none"
             />
@@ -550,7 +550,8 @@ export function Chat({
       reachable={connection?.state.status === "ready"}
       onSend={latest}
       onInterrupt={interrupt}
-      placeholder={start && fresh ? START_PLACEHOLDER : undefined}
+      // The phone has no start screen, only the composer to say what a new chat is for.
+      placeholder={(start || compact) && fresh ? START_PLACEHOLDER : undefined}
     />
   );
   return (

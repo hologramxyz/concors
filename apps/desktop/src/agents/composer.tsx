@@ -45,6 +45,7 @@ import { ControlTooltip } from "./control-tooltip";
 import { useClippedControls } from "./use-clipped-controls";
 import { useComposerWheel } from "./composer-wheel";
 import { FastModeToggle } from "./fast-mode-toggle";
+import { hasComposerOptions } from "./composer-options";
 import { useAgents } from "./context";
 import { switchDescription } from "./provider-switch";
 import { findAgentModel } from "@concors/protocol";
@@ -676,6 +677,11 @@ export function AgentComposer({
   // dragenter and dragleave fire for every child the pointer crosses, so count them.
   const dragDepth = useRef(0);
   const [dropping, setDropping] = useState(false);
+  const prompt = active
+    ? followUps === "steer" && canSteer("steer", 0)
+      ? "Steer the current turn…"
+      : "Add a follow-up to the queue…"
+    : (placeholder ?? "Reply…");
   useNativeSurface(
     nativeField,
     {
@@ -684,11 +690,7 @@ export function AgentComposer({
       editAck,
       expanded,
       editable: connected && !busy && !uncertain && !deferred && !!agent.threadId,
-      placeholder: active
-        ? followUps === "steer" && canSteer("steer", 0)
-          ? "Steer the current turn…"
-          : "Add a follow-up to the queue…"
-        : "Message your agent",
+      placeholder: prompt,
       active,
       canSend:
         connected &&
@@ -977,6 +979,7 @@ export function AgentComposer({
       {(agent.engine ?? agent.provider) === "codex" && !!effortModel?.serviceTiers?.length && (
         <ControlPicker
           label="Speed"
+          showValue={!!compact}
           value={settings.serviceTier ?? ""}
           icon={<Zap className={`size-4 ${settings.serviceTier ? "text-amber-500" : ""}`} />}
           disabled={!connected || busy || configuring}
@@ -990,6 +993,132 @@ export function AgentComposer({
           onSelect={(serviceTier) =>
             void configure({ ...settings, serviceTier: serviceTier || null })
           }
+        />
+      )}
+    </>
+  );
+  const settingControls = (
+    <>
+      {!!effortModel?.efforts.length && (
+        <ControlPicker
+          label="Thinking effort"
+          showValue
+          value={settings.effort ?? ""}
+          icon={<Brain className="size-4" />}
+          disabled={!advanced || !connected || busy || configuring}
+          options={[
+            {
+              id: "",
+              label: `Default (${effortModel?.defaultEffort ?? "automatic"})`,
+              icon: <Brain className="size-4" />,
+            },
+            ...(effortModel?.efforts ?? []).map((effort) => ({
+              id: effort,
+              label: effort.charAt(0).toUpperCase() + effort.slice(1),
+              icon: <Brain className="size-4" />,
+            })),
+          ]}
+          onSelect={(effort) => void configure({ ...settings, effort: effort || null })}
+        />
+      )}
+      {!!agent.controls?.modes.length && (agent.engine ?? agent.provider) !== "codex" && (
+        <ControlPicker
+          label="Agent mode"
+          showValue
+          value={settings.nativeMode ?? agent.controls.currentMode ?? ""}
+          icon={
+            (settings.nativeMode ?? agent.controls.currentMode) === "bypassPermissions" ? (
+              <ShieldOff className="size-4 text-amber-500" />
+            ) : (
+              <Shield className="size-4" />
+            )
+          }
+          disabled={controlsDisabled}
+          options={agent.controls.modes}
+          onSelect={(nativeMode) => void configure({ ...settings, nativeMode })}
+        />
+      )}
+      {(agent.controls?.features ?? []).map((feature) =>
+        feature.id === "fast_mode" ? (
+          <FastModeToggle
+            key={feature.id}
+            on={(settings.features?.[feature.id] ?? feature.value) === true}
+            showLabel={!compact}
+            disabled={controlsDisabled}
+            onToggle={() =>
+              void configure({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  [feature.id]: (settings.features?.[feature.id] ?? feature.value) !== true,
+                },
+              })
+            }
+          />
+        ) : (
+          <ControlPicker
+            key={feature.id}
+            label={feature.label}
+            showValue
+            value={String(settings.features?.[feature.id] ?? feature.value)}
+            icon={<SlidersHorizontal className="size-4" />}
+            searchable={!!feature.options}
+            disabled={controlsDisabled}
+            options={
+              feature.options ?? [
+                { id: "true", label: "On" },
+                { id: "false", label: "Off" },
+              ]
+            }
+            onSelect={(value) =>
+              void configure({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  [feature.id]: feature.options ? value : value === "true",
+                },
+              })
+            }
+          />
+        ),
+      )}
+      {(agent.engine ?? agent.provider) === "codex" && (
+        <ControlPicker
+          label="Permission mode"
+          shortcut="Shift+Tab"
+          showValue
+          value={settings.mode}
+          icon={
+            settings.mode === "auto-review" ? (
+              <ShieldCheck className="size-4" />
+            ) : settings.mode === "full-access" ? (
+              <ShieldOff className="size-4 text-amber-500" />
+            ) : (
+              <Shield className="size-4" />
+            )
+          }
+          disabled={!advanced || !connected || busy || configuring}
+          options={[
+            {
+              id: "default",
+              label: "Default permissions",
+              description: "Workspace access; asks when approval is needed.",
+              icon: <Shield className="size-4" />,
+            },
+            {
+              id: "auto-review",
+              label: "Auto-review",
+              description: "Same sandbox; eligible requests go to the reviewer agent.",
+              icon: <ShieldCheck className="size-4" />,
+            },
+            {
+              id: "full-access",
+              label: "Full access",
+              description: "File and network access without approval prompts.",
+              icon: <ShieldOff className="size-4 text-amber-500" />,
+            },
+          ]}
+          onSelect={(mode) => void configure({ ...settings, mode: mode as AgentSettings["mode"] })}
         />
       )}
     </>
@@ -1295,17 +1424,7 @@ export function AgentComposer({
                 ref={textarea}
                 data-agent-composer
                 aria-label={`Message ${agentProviderName(agent.provider)}`}
-                placeholder={
-                  compact && !expanded
-                    ? "Message your agent"
-                    : !active && placeholder
-                      ? placeholder
-                      : active
-                        ? followUps === "steer" && canSteer("steer", 0)
-                          ? "Steer the current turn…"
-                          : "Add a follow-up to the queue…"
-                        : "Reply…"
-                }
+                placeholder={prompt}
                 value={draft}
                 rows={compact && !expanded ? 1 : 2}
                 onFocus={compact ? expand : undefined}
@@ -1462,139 +1581,12 @@ export function AgentComposer({
                         })
                       }
                     />
-                    {!!effortModel?.efforts.length && (
-                      <ControlPicker
-                        label="Thinking effort"
-                        showValue={!compact}
-                        value={settings.effort ?? ""}
-                        icon={<Brain className="size-4" />}
-                        disabled={!advanced || !connected || busy || configuring}
-                        options={[
-                          {
-                            id: "",
-                            label: `Default (${effortModel?.defaultEffort ?? "automatic"})`,
-                            icon: <Brain className="size-4" />,
-                          },
-                          ...(effortModel?.efforts ?? []).map((effort) => ({
-                            id: effort,
-                            label: effort.charAt(0).toUpperCase() + effort.slice(1),
-                            icon: <Brain className="size-4" />,
-                          })),
-                        ]}
-                        onSelect={(effort) =>
-                          void configure({ ...settings, effort: effort || null })
-                        }
-                      />
-                    )}
-                    {!!agent.controls?.modes.length &&
-                      (agent.engine ?? agent.provider) !== "codex" && (
-                        <ControlPicker
-                          label="Agent mode"
-                          showValue={!compact}
-                          value={settings.nativeMode ?? agent.controls.currentMode ?? ""}
-                          icon={
-                            (settings.nativeMode ?? agent.controls.currentMode) ===
-                            "bypassPermissions" ? (
-                              <ShieldOff className="size-4 text-amber-500" />
-                            ) : (
-                              <Shield className="size-4" />
-                            )
-                          }
-                          disabled={controlsDisabled}
-                          options={agent.controls.modes}
-                          onSelect={(nativeMode) => void configure({ ...settings, nativeMode })}
-                        />
-                      )}
-                    {(agent.controls?.features ?? []).map((feature) =>
-                      feature.id === "fast_mode" ? (
-                        <FastModeToggle
-                          key={feature.id}
-                          on={(settings.features?.[feature.id] ?? feature.value) === true}
-                          showLabel={!compact}
-                          disabled={controlsDisabled}
-                          onToggle={() =>
-                            void configure({
-                              ...settings,
-                              features: {
-                                ...settings.features,
-                                [feature.id]:
-                                  (settings.features?.[feature.id] ?? feature.value) !== true,
-                              },
-                            })
-                          }
-                        />
-                      ) : (
-                        <ControlPicker
-                          key={feature.id}
-                          label={feature.label}
-                          showValue={!compact}
-                          value={String(settings.features?.[feature.id] ?? feature.value)}
-                          icon={<SlidersHorizontal className="size-4" />}
-                          searchable={!!feature.options}
-                          disabled={controlsDisabled}
-                          options={
-                            feature.options ?? [
-                              { id: "true", label: "On" },
-                              { id: "false", label: "Off" },
-                            ]
-                          }
-                          onSelect={(value) =>
-                            void configure({
-                              ...settings,
-                              features: {
-                                ...settings.features,
-                                [feature.id]: feature.options ? value : value === "true",
-                              },
-                            })
-                          }
-                        />
-                      ),
-                    )}
-                    {(agent.engine ?? agent.provider) === "codex" && (
-                      <ControlPicker
-                        label="Permission mode"
-                        shortcut="Shift+Tab"
-                        showValue={!compact}
-                        value={settings.mode}
-                        icon={
-                          settings.mode === "auto-review" ? (
-                            <ShieldCheck className="size-4" />
-                          ) : settings.mode === "full-access" ? (
-                            <ShieldOff className="size-4 text-amber-500" />
-                          ) : (
-                            <Shield className="size-4" />
-                          )
-                        }
-                        disabled={!advanced || !connected || busy || configuring}
-                        options={[
-                          {
-                            id: "default",
-                            label: "Default permissions",
-                            description: "Workspace access; asks when approval is needed.",
-                            icon: <Shield className="size-4" />,
-                          },
-                          {
-                            id: "auto-review",
-                            label: "Auto-review",
-                            description:
-                              "Same sandbox; eligible requests go to the reviewer agent.",
-                            icon: <ShieldCheck className="size-4" />,
-                          },
-                          {
-                            id: "full-access",
-                            label: "Full access",
-                            description: "File and network access without approval prompts.",
-                            icon: <ShieldOff className="size-4 text-amber-500" />,
-                          },
-                        ]}
-                        onSelect={(mode) =>
-                          void configure({ ...settings, mode: mode as AgentSettings["mode"] })
-                        }
-                      />
-                    )}
-                    {compact ? (
+                    {!compact && settingControls}
+                    {!compact ? (
+                      extraControls
+                    ) : hasComposerOptions(agent, effortModel) ? (
                       <Popover.Root>
-                        <ControlTooltip text="Plan mode and speed">
+                        <ControlTooltip text="More options">
                           <Popover.Trigger
                             type="button"
                             className="agent-control"
@@ -1612,14 +1604,14 @@ export function AgentComposer({
                             collisionPadding={12}
                             className="mobile-composer-options"
                           >
-                            <p className="mb-2 px-2 text-sm font-medium">Conversation options</p>
-                            <div className="mobile-composer-options-grid">{extraControls}</div>
+                            <div className="mobile-composer-options-grid">
+                              {settingControls}
+                              {extraControls}
+                            </div>
                           </Popover.Content>
                         </Popover.Portal>
                       </Popover.Root>
-                    ) : (
-                      extraControls
-                    )}
+                    ) : null}
                   </div>
                 </div>
                 {compact && (

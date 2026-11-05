@@ -839,17 +839,25 @@ body {
   font-size: 16px;
   max-height: 128px;
 }
-.mobile-pane form:has([data-agent-composer]) {
-  border-radius: calc(var(--corner-radius) * 3.6);
-}
 .mobile-pane form:has([data-agent-composer]) button {
   min-height: 36px;
 }
-/* Stays a small circle on its attachment's corner, with a fingertip's square around it. */
+/* Stays a small circle inside its attachment's corner, with a fingertip's square around it. */
 .mobile-pane form:has([data-agent-composer]) button.mobile-attachment-remove {
+  top: 2px;
+  left: 2px;
   width: 20px;
   height: 20px;
   min-height: 20px;
+}
+/* Room for that square to leave part of an image open to tap. */
+.mobile-composer :is([data-composer-attachment], [data-composer-attachment-reading]) {
+  width: 56px;
+  height: 56px;
+}
+/* An image shows itself; a file has only its name to go by. */
+.mobile-composer [data-composer-attachment]:not(:has(img)) {
+  width: 112px;
 }
 .mobile-attachment-remove::after {
   content: "";
@@ -1149,14 +1157,12 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   flex-shrink: 0;
 }
 .mobile-composer-primary > button {
-  width: 36px;
-  height: 36px;
   border-radius: var(--mobile-round-radius);
 }
 .mobile-composer-primary > button svg {
@@ -1166,19 +1172,24 @@ body {
   transition:
     border-radius 180ms ease,
     box-shadow 180ms ease;
-  border-radius: calc(var(--corner-radius) * 3.6);
+  /* Concentric with the primary button: its corner (a 44px circle at most), the 8px around it and
+     the 1px border. Square stays square, where the sum would round a box around a square button. */
+  border-radius: calc(min(var(--mobile-round-radius), 22px) + 9px);
+  padding: 8px;
   box-shadow: 0 2px 12px #00000006;
+}
+:root[data-corner-style="square"] .mobile-pane .mobile-composer {
+  border-radius: 0;
 }
 .mobile-composer[data-expanded="true"] {
   box-shadow: 0 4px 20px #0000000b;
 }
 .mobile-composer[data-expanded="false"] {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 36px;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
   grid-template-areas: "attachments attachments attachments" "attach message action";
   align-items: center;
   column-gap: 2px;
-  padding: 6px;
 }
 .mobile-composer[data-expanded="false"] [data-composer-attachments] {
   grid-area: attachments;
@@ -1194,10 +1205,10 @@ body {
 }
 .mobile-pane .mobile-composer[data-expanded="false"] [data-agent-composer] {
   grid-area: message;
-  height: 36px !important;
-  min-height: 36px;
-  max-height: 36px;
-  padding: 6px 4px;
+  height: 44px !important;
+  min-height: 44px;
+  max-height: 44px;
+  padding: 10px 4px;
   line-height: 24px;
   overflow: hidden;
   white-space: pre;
@@ -1208,9 +1219,6 @@ body {
   .mobile-sidebar-head {
     gap: 6px;
     padding-inline: 8px;
-  }
-  .mobile-composer-toolbar button {
-    width: 32px;
   }
 }
 @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
@@ -1229,9 +1237,10 @@ body {
     backdrop-filter: none;
   }
 }
+/* Level with its pickers' menus, which open over its rows and come later in the page. */
 .mobile-composer-options {
-  z-index: 60;
-  width: 260px;
+  z-index: 50;
+  width: 288px;
   max-width: calc(100vw - 24px);
   padding: 12px;
   border: 1px solid var(--border);
@@ -1293,13 +1302,14 @@ body {
 }
 .mobile-composer-options-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  gap: 2px;
 }
-.mobile-composer-options-grid > button {
+/* A row each: icon and name, then the current value or switch at the far end. */
+.mobile-composer-options-grid > button.agent-control {
   display: flex;
   gap: 8px;
   width: 100%;
+  max-width: none;
   min-height: 44px;
   padding: 8px;
   justify-content: flex-start;
@@ -1308,6 +1318,11 @@ body {
 .mobile-composer-options-grid > button::after {
   content: attr(aria-label);
   text-align: left;
+  white-space: nowrap;
+}
+.mobile-composer-options-grid > button > :is(span, [data-switch-track]) {
+  order: 1;
+  margin-left: auto;
 }
 @keyframes mobile-drawer-in {
   from {

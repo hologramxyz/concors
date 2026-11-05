@@ -83,6 +83,11 @@ for (const mode of ["light", "dark"] as const) {
         "border-radius",
         controlRadius,
       );
+      // The button's corner plus the 9px around it, so it sits evenly in the composer's corner.
+      await expect(ui.locator(".mobile-composer")).toHaveCSS(
+        "border-radius",
+        square ? "0px" : shape === "Rounded" ? "31px" : "15px",
+      );
       if (square) await assertSquare(ui.locator("body"));
 
       await ui.getByRole("combobox", { name: "Tabs", exact: true }).click();
