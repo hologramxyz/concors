@@ -162,8 +162,12 @@ export function WorkspaceSidebarItem({
     <li
       className={cn(
         // Keyboard focus shows, but a clicked row does not stay filled once selection moves on.
-        "group relative flex items-center rounded-md hover:bg-sidebar-accent/70 has-[:focus-visible:not([data-pointer-focus])]:bg-sidebar-accent/70 has-[[data-state=open]]:bg-sidebar-accent/70",
-        selected && "bg-sidebar-accent hover:bg-sidebar-accent",
+        // An open menu is matched by `aria-expanded`, as the tooltip around its trigger keeps
+        // `data-state` closed, and by its popup, as the fold chevron is `aria-expanded` too.
+        // `data-state` still marks the pull request count's open hover card.
+        "group relative flex items-center rounded-md hover:bg-sidebar-accent/70 has-[:focus-visible:not([data-pointer-focus])]:bg-sidebar-accent/70 has-[[aria-haspopup=menu][aria-expanded=true]]:bg-sidebar-accent/70 has-[[data-state=open]]:bg-sidebar-accent/70",
+        selected &&
+          "bg-sidebar-accent hover:bg-sidebar-accent has-[[aria-haspopup=menu][aria-expanded=true]]:bg-sidebar-accent",
         mobile && "mobile-project",
       )}
     >
