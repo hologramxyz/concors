@@ -10,7 +10,9 @@ The audit below records the original production/TestFlight findings. The remedia
 from updated main `ca94d003` and adds the following; production/device verification remains separate.
 
 Related changes: [account lifecycle API](https://github.com/hologramxyz/concors-server/pull/21)
-and [public pages/browser deletion](https://github.com/hologramxyz/concors-web/pull/12).
+and [public pages/browser deletion](https://github.com/hologramxyz/concors-web/pull/12), both merged.
+The [browser CORS follow-up](https://github.com/hologramxyz/concors-server/pull/22) allows the fixed
+website callback origin even when an older deployment's configurable allowlist omits it.
 The owner selected **gm@hologram.xyz** for public support and privacy contact. The exact legal
 company name is still unconfirmed.
 
@@ -28,12 +30,19 @@ The existing `readiness.json` gates remain pending/blocked; implementation is no
 store-console approval. No new TestFlight upload or App Review submission is claimed. A new signed
 candidate must replace `0.1.0 (7)` before the new behavior can be reviewed by Apple.
 
-Local remediation checks passed: formatting, lint, full TypeScript checks and **1,668 workspace
+Local remediation checks passed after rebasing: formatting, lint, full TypeScript checks and **1,679 workspace
 tests** (two skipped), including the new protocol permission and same-user reauthentication cases.
 The API passed **517 tests** (13 skipped), including disposable-Postgres lifecycle/concurrency
 tests. Website build/format checks, four static-server/changelog tests and **20 browser checks**
-passed; seven mobile workspace browser smoke checks and an iOS Hermes bundle export also passed. Rust checks could not run locally
-because Cargo is not installed. These checks do not establish signed iPhone acceptance.
+passed; seven mobile workspace browser smoke checks, four direct-connection browser checks
+(including real refusal/review/withdrawal), and an iOS Hermes bundle export also passed. Rust checks
+could not run locally because Cargo is not installed; GitHub's first PR run passed all three Tauri
+platform jobs and the app/daemon bundle job. These checks do not establish signed iPhone acceptance.
+
+Public browser checks on 2026-11-05 verified all four website pages return 200 and render working
+`gm@hologram.xyz` mail links. The API is live with Apple disabled, `/ready` returns 200, and protected
+deletion/capability routes require authentication. These read-only probes do not verify an actual
+customer deletion; recheck the CORS follow-up after its deployment before signing off the web flow.
 
 ## App Store fields completed before remediation
 
