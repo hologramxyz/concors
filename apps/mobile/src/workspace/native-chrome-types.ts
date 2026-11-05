@@ -21,7 +21,14 @@ export function currentNativeSnapshot(
   );
 }
 
-/** Map web geometry once; a clip never changes the size of the glass button itself. */
+/** How far Liquid Glass casts its soft shadow past its own shape. */
+const GLASS_SHADOW = 48;
+
+/**
+ * Map web geometry once; a clip never changes the size of the glass button itself. Only a panel
+ * edge cuts a control: elsewhere the clip leaves room for the glass's shadow, which a clip at the
+ * control's own frame would cut into a faint square behind its rounded corners.
+ */
 export function nativeSurfaceLayout(
   surface: NativeSurface,
   viewport: { width: number; height: number },
@@ -30,19 +37,30 @@ export function nativeSurfaceLayout(
   const scale = size.width ? size.width / viewport.width : 1;
   const shift =
     surface.content.kind === "composer" && size.height ? size.height - viewport.height : 0;
-  const clip = surface.clip ?? surface.frame;
+  const { frame } = surface;
+  const cut = surface.clip ?? frame;
+  const left = cut.x > frame.x ? cut.x : frame.x - GLASS_SHADOW;
+  const top = cut.y > frame.y ? cut.y : frame.y - GLASS_SHADOW;
+  const right =
+    cut.x + cut.width < frame.x + frame.width
+      ? cut.x + cut.width
+      : frame.x + frame.width + GLASS_SHADOW;
+  const bottom =
+    cut.y + cut.height < frame.y + frame.height
+      ? cut.y + cut.height
+      : frame.y + frame.height + GLASS_SHADOW;
   return {
     clip: {
-      left: clip.x * scale,
-      top: clip.y + shift,
-      width: clip.width * scale,
-      height: clip.height,
+      left: left * scale,
+      top: top + shift,
+      width: (right - left) * scale,
+      height: bottom - top,
     },
     content: {
-      left: (surface.frame.x - clip.x) * scale,
-      top: surface.frame.y - clip.y,
-      width: surface.frame.width * scale,
-      height: surface.frame.height,
+      left: (frame.x - left) * scale,
+      top: frame.y - top,
+      width: frame.width * scale,
+      height: frame.height,
     },
   };
 }

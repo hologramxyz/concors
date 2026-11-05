@@ -161,7 +161,8 @@ export function NativeChrome({ host, snapshot, send }: NativeChromeProps) {
         return (
           <View
             key={surface.id}
-            pointerEvents={interactive ? "auto" : "none"}
+            // The clip reaches past the control for its shadow; only the control takes touches.
+            pointerEvents={interactive ? "box-none" : "none"}
             accessibilityElementsHidden={!interactive}
             style={{
               position: "absolute",

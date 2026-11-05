@@ -156,7 +156,7 @@ test("native header surfaces follow both panels throughout real touch drags", as
 });
 
 for (const native of [false, true]) {
-  test(`${native ? "native iPhone keeps its own header" : "web and Android get a header fade and a glass messages button"}`, async ({
+  test(`${native ? "native iPhone gets the header fade under its own glass" : "web and Android get a header fade and a glass messages button"}`, async ({
     page,
   }) => {
     const ui = await enter(page, native);
@@ -165,7 +165,9 @@ for (const native of [false, true]) {
     const trigger = ui.getByRole("button", { name: "Browse your messages", exact: true });
     await expect(trigger).toBeVisible();
     await expect(trigger).toHaveCSS("backdrop-filter", native ? "none" : /blur\(24px\)/);
-    expect(await fade()).toBe(native ? "none" : '""');
+    expect(await fade()).toBe('""');
+    // From the top of the status bar to just past the header's controls.
+    expect(await header.evaluate((el) => getComputedStyle(el, "::before").height)).toBe("139px");
     if (native) return;
     // Pages keep their content below the header, so nothing scrolls under for a fade to soften.
     await ui.locator("#mobile-sidebar-toggle").click();

@@ -1468,13 +1468,12 @@ body {
   scroll-padding-top: 56px;
 }
 
-/* iPhone's header is native and brings its own glass, so these two stay on web and Android.
-   The glass controls already blur what is behind them, but a row still reads sharply in the gaps
-   between them. Pages keep their content below the header, and a notice pushes the chat below it,
-   so only an uninterrupted chat scrolls under. Stays below the messages button and the controls. */
-.mobile-main:has(> .mobile-pane[data-pane-profile="chat"]):not(
-    :has(.mobile-notice, .mobile-header [data-native-surface="true"])
-  )
+/* The glass controls already blur what is behind them, but a row still reads sharply in the gaps
+   between them and behind the status bar. Pages keep their content below the header, and a notice
+   pushes the chat below it, so only an uninterrupted chat scrolls under. Stays below the messages
+   button and the controls. The chat scrolls in the page, not in a native scroll view, so iPhone
+   has no system edge effect to use and takes this fade too, under its native glass. */
+.mobile-main:has(> .mobile-pane[data-pane-profile="chat"]):not(:has(.mobile-notice))
   > .mobile-header::before {
   content: "";
   position: absolute;
@@ -1488,7 +1487,8 @@ body {
     transparent
   );
 }
-/* Rows run the full width, so a narrower chat column would cost every message for one button. */
+/* Glass to match the web header's controls, so it stays on web and Android beside them.
+   Rows run the full width, so a narrower chat column would cost every message for one button. */
 .mobile-main:not(:has(.mobile-header [data-native-surface="true"])) .message-list-trigger {
   border-color: color-mix(in srgb, var(--border) 50%, transparent);
   box-shadow:
