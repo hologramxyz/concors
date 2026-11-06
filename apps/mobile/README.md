@@ -330,8 +330,10 @@ For a real iPhone, use the existing EAS development/preview profile or add `--de
 iOS build, using the private daemon configuration above instead of demo mode when testing real
 sessions. No signing credentials are committed. Native iOS and Android workflows are manual-only
 (`workflow_dispatch`); they do not run on pull requests. Native compilation and simulator startup
-exceed the PR time budget, and their latest UI runs have not passed. Run them explicitly when
-native validation is needed. Android manual runs build the optimized arm64/x86_64 release APK
+exceed the PR time budget. The iPhone simulator control/draft flow passed on November 6, 2026;
+see [the evidence and its limits](release/ios-native-evidence.md). Android native acceptance remains
+unverified. Run these workflows explicitly when native validation is needed. Android manual runs
+build the optimized arm64/x86_64 release APK
 and AAB and audit SDK, permissions, and 16 KB alignment. iOS exercises native headers, composer,
 settings, Files, and draft persistence in an iOS 26 simulator.
 

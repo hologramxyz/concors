@@ -43,8 +43,17 @@ The source run exceeded its UI-step budget after saving this image. A later
 [run, 42171848363](https://github.com/hologramxyz/concors/actions/runs/42171848363), captured all three
 views and typed into the native composer, but did not open the model picker. Its title assertion
 matched the trigger's accessible label; a follow-up now requires an option inside the presented
-picker. The full flow has not passed. Current run:
-[42173390095](https://github.com/hologramxyz/concors/actions/runs/42173390095).
+picker.
+
+The corrected [run, 42173390095](https://github.com/hologramxyz/concors/actions/runs/42173390095),
+**passed** using workflow/test revision `2fdfd25c29f5e535f1689c2e244a023c96cb3410` against the
+simulator artifact identified above: all **63** recorded commands completed.
+The inspected artifacts verify native text input, a presented model picker, repeated provider
+navigation, model selection, effort controls, draft preservation across sheet/file navigation, and
+four header hit areas opening Tabs. This proves the fixture-based simulator flow; production auth,
+remote workspace access and physical-device acceptance remain open.
+The [native evidence artifact](https://github.com/hologramxyz/concors/actions/runs/42173390095/artifacts/13483225700)
+contains the command results, screenshots and XCTest logs.
 
 Visual review rejected that run's agent and file captures for the store: the agent view includes
 demo guidance and the files view is an empty state. Neither was uploaded. Capture these features
