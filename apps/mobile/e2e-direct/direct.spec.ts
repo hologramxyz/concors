@@ -149,7 +149,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     const agentRow = ui.locator(`button[data-agent-id="${agentId}"]`);
     await expect(agentRow.locator('[data-provider="codex"] svg')).toBeVisible();
     await expect(agentRow.getByRole("img", { name: "Agent status: Working" })).toBeVisible();
-    await expect(agentRow.locator("[data-agent-status-badge] svg .animate-spin")).toBeVisible();
+    await expect(agentRow.locator("[data-agent-status-badge] svg.animate-spin")).toBeVisible();
     await agentRow.focus();
     await expect(ui.getByRole("tooltip")).toHaveCount(0);
     await page.screenshot({ path: test.info().outputPath("mobile-agent-status.png") });
