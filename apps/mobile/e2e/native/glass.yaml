@@ -14,7 +14,9 @@ appId: xyz.hologram.concors.preview
     commands:
       - launchApp:
           clearState: true
-- tapOn: "Explore demo"
+- tapOn:
+    text: "Explore demo"
+    waitToSettleTimeoutMs: 500
 - extendedWaitUntil:
     visible:
       id: native-agent-input
@@ -26,8 +28,8 @@ appId: xyz.hologram.concors.preview
 # Retain the store views even if a later control regression fails this same session.
 - runFlow: store-screenshots.yaml
 - tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-agent-input
-- eraseText: 100
 - inputText: "Native Liquid Glass draft"
 - assertVisible:
     id: native-composer-model
@@ -37,49 +39,75 @@ appId: xyz.hologram.concors.preview
     id: native-composer-context
 - takeScreenshot: apps/mobile/test-results/native/composer-expanded
 - tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-composer-model
 - assertVisible: "Codex: Agent and model"
-- tapOn: "← Back to providers"
+- tapOn:
+    text: "← Back to providers"
+    waitToSettleTimeoutMs: 500
 - assertVisible: "Choose an agent provider"
-- tapOn: "Codex:.*"
+- tapOn:
+    text: "Codex:.*"
+    waitToSettleTimeoutMs: 500
 - assertVisible: "Codex: Agent and model"
-- tapOn: "← Back to providers"
+- tapOn:
+    text: "← Back to providers"
+    waitToSettleTimeoutMs: 500
 - assertVisible: "Choose an agent provider"
-- tapOn: "Codex:.*"
-- tapOn: "Codex"
+- tapOn:
+    text: "Codex:.*"
+    waitToSettleTimeoutMs: 500
+- tapOn:
+    text: "Codex"
+    waitToSettleTimeoutMs: 500
 - assertVisible: "Native Liquid Glass draft"
 - tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-composer-brain
 - assertVisible: "Thinking effort.*"
-- tapOn: "Cancel"
+- tapOn:
+    text: "Cancel"
+    waitToSettleTimeoutMs: 500
 - assertVisible: "Native Liquid Glass draft"
 - tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-header-files
 - assertVisible:
     id: native-header-back
 - takeScreenshot: apps/mobile/test-results/native/files-header
 - tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-header-back
 - assertVisible: "Native Liquid Glass draft"
 # Hit testing belongs to the native SwiftUI label, so cover it on-device rather than in a mock.
 # The title/subtitle area and empty vertical padding must open the same drawer as the chevron.
 - tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "20%,35%"
 - assertVisible: "Tabs"
-- tapOn: "Close"
+- tapOn:
+    text: "Close"
+    waitToSettleTimeoutMs: 500
 - assertVisible: "Native Liquid Glass draft"
 - tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "20%,65%"
 - assertVisible: "Tabs"
-- tapOn: "Close"
 - tapOn:
+    text: "Close"
+    waitToSettleTimeoutMs: 500
+- tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "50%,5%"
 - assertVisible: "Tabs"
-- tapOn: "Close"
 - tapOn:
+    text: "Close"
+    waitToSettleTimeoutMs: 500
+- tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "90%,50%"
 - assertVisible: "Tabs"
