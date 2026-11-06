@@ -1,12 +1,17 @@
 {
-  "cli": { "version": ">= 18.0.0", "appVersionSource": "remote" },
+  "cli": {
+    "version": ">= 18.0.0",
+    "appVersionSource": "remote"
+  },
   "build": {
     "base": {
       "node": "24.14.0",
       "pnpm": "11.1.1",
       "ios": {
         "image": "macos-tahoe-26.5-xcode-26.6",
-        "env": { "SHARP_IGNORE_GLOBAL_LIBVIPS": "1" }
+        "env": {
+          "SHARP_IGNORE_GLOBAL_LIBVIPS": "1"
+        }
       }
     },
     "development": {
@@ -14,15 +19,26 @@
       "developmentClient": true,
       "distribution": "internal",
       "environment": "development",
-      "env": { "APP_VARIANT": "development" }
+      "env": {
+        "APP_VARIANT": "development"
+      }
     },
-    "simulator": { "extends": "development", "ios": { "simulator": true } },
+    "simulator": {
+      "extends": "development",
+      "ios": {
+        "simulator": true
+      }
+    },
     "preview": {
       "extends": "base",
       "distribution": "internal",
       "environment": "preview",
-      "env": { "APP_VARIANT": "preview" },
-      "android": { "buildType": "apk" }
+      "env": {
+        "APP_VARIANT": "preview"
+      },
+      "android": {
+        "buildType": "apk"
+      }
     },
     "candidate": {
       "extends": "base",
@@ -34,20 +50,47 @@
         "EXPO_PUBLIC_DEMO": "false",
         "EXPO_PUBLIC_API_URL": "https://api.concors.dev"
       },
-      "android": { "buildType": "app-bundle" }
+      "android": {
+        "buildType": "app-bundle"
+      }
     },
     "production": {
       "extends": "candidate"
+    },
+    "store-capture": {
+      "extends": "base",
+      "distribution": "internal",
+      "environment": "preview",
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "APP_VARIANT": "preview",
+        "EXPO_PUBLIC_DEMO": "true",
+        "EXPO_PUBLIC_API_URL": "https://api.concors.dev"
+      }
     }
   },
   "submit": {
     "candidate": {
-      "ios": { "appleTeamId": "9WN4P724M2", "ascAppId": "6817622624" },
-      "android": { "track": "internal", "releaseStatus": "draft" }
+      "ios": {
+        "appleTeamId": "9WN4P724M2",
+        "ascAppId": "6817622624"
+      },
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
     },
     "production": {
-      "ios": { "appleTeamId": "9WN4P724M2", "ascAppId": "6817622624" },
-      "android": { "track": "internal", "releaseStatus": "draft" }
+      "ios": {
+        "appleTeamId": "9WN4P724M2",
+        "ascAppId": "6817622624"
+      },
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
     }
   }
 }
