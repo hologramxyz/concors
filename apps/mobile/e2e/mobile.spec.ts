@@ -1,5 +1,5 @@
-import { expect, test, type Page, type FrameLocator } from "@playwright/test";
-import { ids, SIDEBAR_TREE_FLAG, treeIds } from "../src/demo/fixtures";
+import { expect, test, type Page, type FrameLocator, type Locator } from "@playwright/test";
+import { ids, SIDEBAR_TREE_FLAG, TERMINAL_PROFILE_FLAG, treeIds } from "../src/demo/fixtures";
 import { swipe as touchSwipe, scrollTimelineUp } from "./support/swipe";
 import { BINDINGS, isCompactCommand } from "../../desktop/src/shortcuts/bindings";
 import {
@@ -44,6 +44,26 @@ async function workspaceActions(ui: FrameLocator) {
   await openPicker(ui);
   const row = ui.locator(`.mobile-pane-row:has([data-pane-choice][data-value="${value}"])`);
   await row.getByRole("button", { name: /^Actions for tab / }).click();
+}
+/**
+ * The New tab sheet as desktop's "+" menu lists it: the chat, then everything that runs in a
+ * terminal, all with the terminal mark, then resuming a chat; no descriptions under the rows.
+ */
+async function expectNewTabGroups(sheet: Locator, terminals: string[]) {
+  await expect(sheet.getByRole("group", { name: "Chat" }).getByRole("button")).toHaveText([
+    "New chat",
+  ]);
+  const terminal = sheet.getByRole("group", { name: "In a terminal" });
+  await expect(terminal.getByRole("button")).toHaveText(terminals);
+  await expect(terminal.locator("button svg")).toHaveCount(terminals.length);
+  await expect(terminal.locator("button svg:not(.lucide-terminal)")).toHaveCount(0);
+  await expect(sheet.getByRole("separator")).toHaveCount(1);
+  await expect(sheet.getByRole("button", { name: "Resume a chat…", exact: true })).toBeVisible();
+  await expect(sheet).not.toContainText(/synced with your desktop|interactive terminal|Reopen a/);
+  for (const box of await sheet
+    .locator(".mobile-select-option")
+    .evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().height)))
+    expect(box).toBeGreaterThanOrEqual(44);
 }
 async function paneCount(ui: FrameLocator, count: number) {
   await openPicker(ui);
@@ -919,11 +939,7 @@ test("flat tab picker opens from its text and padding and dismisses without reop
   await choose(ui, "Tabs", activeChat);
   await newTab(ui);
   const drawer = ui.getByRole("dialog", { name: "New tab", exact: true });
-  for (const name of ["Codex", "Claude Code", "OpenCode"]) {
-    await expect(
-      drawer.getByRole("button", { name, exact: true }).locator(".mobile-session-icon svg"),
-    ).toHaveCount(1);
-  }
+  await expectNewTabGroups(drawer, ["Terminal", "Claude Code", "Codex", "OpenCode"]);
   await expect(drawer.getByRole("button", { name: /Add pane/ })).toHaveCount(0);
   await drawer.getByRole("button", { name: "New chat", exact: true }).click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
@@ -1811,4 +1827,17 @@ test("workspace rows show their fold chevron, and their menu starts a tab there"
   await expect(
     sidebar.getByRole("list", { name: "Concors tabs" }).nth(1).getByRole("listitem"),
   ).toHaveCount(2);
+});
+test("the New tab sheet lists a saved terminal profile after the built-in ones", async ({
+  page,
+}) => {
+  await page.goto(`/?${TERMINAL_PROFILE_FLAG}`);
+  await page.getByRole("button", { name: "Explore demo" }).click();
+  const ui = workspace(page);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+  await newTab(ui);
+  const sheet = ui.getByRole("dialog", { name: "New tab", exact: true });
+  await expectNewTabGroups(sheet, ["Terminal", "Claude Code", "Codex", "OpenCode", "Dev server"]);
+  await sheet.getByRole("button", { name: "Dev server", exact: true }).click();
+  await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
 });

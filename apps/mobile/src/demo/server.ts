@@ -34,6 +34,8 @@ import {
   ids,
   SIDEBAR_TREE_FLAG,
   sidebarTreeDemo,
+  TERMINAL_PROFILE_FLAG,
+  demoTerminalProfiles,
 } from "./fixtures";
 
 const DEMO_DICTATION = "This is a simulated dictation.";
@@ -49,14 +51,18 @@ interface TerminalState {
   output: string;
   owner: string | null;
 }
-/** Whether the page asked for the sidebar tree's extra rows (see `sidebarTreeDemo`). */
-const sidebarTreeRequested = () =>
-  typeof location !== "undefined" && new URLSearchParams(location.search).has(SIDEBAR_TREE_FLAG);
+/** Whether the page asked for one of the demo's opt-in extras, such as `SIDEBAR_TREE_FLAG`. */
+const requested = (flag: string) =>
+  typeof location !== "undefined" && new URLSearchParams(location.search).has(flag);
 /** In-memory fixture: all actions are simulated, including files, processes, machines and billing. */
-export function createDemoServer({ sidebarTree = sidebarTreeRequested() } = {}) {
+export function createDemoServer({
+  sidebarTree = requested(SIDEBAR_TREE_FLAG),
+  terminalProfile = requested(TERMINAL_PROFILE_FLAG),
+} = {}) {
   const resources = demoResources();
   const tree = sidebarTree ? sidebarTreeDemo() : null;
   let workspace = structuredClone(tree?.workspace ?? demoWorkspace);
+  if (terminalProfile) workspace.terminalProfiles = structuredClone(demoTerminalProfiles);
   const conversations = new Map<string, Conversation>([
     [ids.agent, { agent: structuredClone(demoAgent), items: structuredClone(demoItems) }],
   ]);

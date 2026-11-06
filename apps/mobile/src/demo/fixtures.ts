@@ -1,4 +1,5 @@
 import {
+  DEFAULT_TERMINAL_PROFILES,
   AgentInfoSchema,
   AgentItemSchema,
   TerminalInfoSchema,
@@ -427,3 +428,19 @@ export function sidebarTreeDemo() {
     failing: treeIds.failed,
   };
 }
+
+/**
+ * A terminal profile saved on the machine, only with `?demo-terminal-profile`, so the New tab
+ * sheet's specs and screenshots show one after the built-in ones.
+ */
+export const TERMINAL_PROFILE_FLAG = "demo-terminal-profile";
+export const demoTerminalProfiles = [
+  ...DEFAULT_TERMINAL_PROFILES,
+  {
+    id: "d0000000-0000-4000-8000-000000000001",
+    name: "Dev server",
+    command: "pnpm",
+    args: ["dev"],
+    version: 1,
+  },
+];

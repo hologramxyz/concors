@@ -1147,41 +1147,6 @@ body {
 .mobile-search-drawer [data-slot="command-shortcut"] {
   display: none;
 }
-.mobile-session-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.mobile-session-list > button {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  text-align: left;
-  padding: 12px 8px;
-  border-radius: var(--radius-lg);
-}
-.mobile-session-list > button:active {
-  background: var(--accent);
-}
-@media (hover: hover) {
-  .mobile-session-list > button:hover {
-    background: var(--accent);
-  }
-}
-.mobile-session-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-lg);
-  background: var(--muted);
-}
-.mobile-session-icon svg {
-  width: 20px;
-  height: 20px;
-}
 .mobile-new-empty {
   display: flex;
   align-items: center;
