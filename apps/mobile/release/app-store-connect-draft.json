@@ -5,22 +5,25 @@
   "locale": "en-US",
   "primaryCategory": "DEVELOPER_TOOLS",
   "status": "draft-populated-not-ready-not-submitted",
-  "checkedAt": "2026-11-06T01:49:38.601Z",
+  "checkedAt": "2026-11-06T02:33:54.186Z",
   "versionString": "0.1.0",
   "versionId": "2d5df58b-5d90-457e-85b9-61f93041ea07",
   "name": "Concors: Coding Workspace",
   "subtitle": "Code, agents and terminals",
   "description": "Keep your coding workspace close with Concors. Follow coding agents, review their requests, and continue work on a compatible connected computer or server from your iPhone.\n\nFOLLOW YOUR AGENTS\nRead conversations, follow progress, review tool requests, and send messages to your coding agents.\n\nCONTINUE YOUR WORKSPACE\nSwitch between workspaces and tabs. Browse project files, read Markdown, inspect code, and save edits. Continue terminal sessions on your connected machine.\n\nSTAY IN SYNC\nYour agents and terminal sessions run on the connected machine and can keep working when you leave the app. Return to your workspace from your phone.\n\nAn account and a compatible connected machine are required. AI features may require separate provider accounts and are subject to those providers' availability and terms. Commands run on the connected machine; AI requests use its configured providers. Review generated output and tool requests before acting on them.\n\nConcors is free at launch. Add your machine using the desktop app before connecting to it from your iPhone.",
-  "keywords": null,
-  "promotionalText": null,
-  "marketingUrl": null,
+  "keywords": "code,coding,workspace,terminal,agents,developer,files,remote,git,AI",
+  "promotionalText": "Follow coding agents, review tool requests and continue your workspace from iPhone. Add a compatible machine from the desktop app to get started.",
+  "marketingUrl": "https://concors.dev",
   "supportUrl": "https://concors.dev/support",
   "privacyPolicyUrl": "https://concors.dev/privacy",
-  "reviewNotes": "Concors is a coding-workspace client for a compatible connected computer or server. The iPhone interface and workspace renderer are bundled in the app. It exchanges structured workspace data rather than mirroring a remote screen. Terminal commands and coding-agent tools run on the connected machine; AI requests use that machine's configured providers. The app does not download and execute new native software on the iPhone, and it does not contain an app marketplace.\n\nThe mobile app provides agent conversations, tool approvals, terminal sessions, project files, and workspace navigation. It does not sell or provision machines or offer subscription checkout. Sign-in is through an in-app authentication session.\n\nReview flow after signing in: select the assigned connected machine, open its review workspace, read an agent conversation, review a harmless tool request, open Files, and use the terminal for a harmless command. The connected machine needs to remain available throughout review.",
+  "reviewNotes": "\n\nLaunch is free. Users add machines from the desktop app; iPhone users connect to machines already on their account. Settings > Account contains AI-sharing permission controls, private content/problem reporting, and permanent account deletion with same-user reauthentication and a private status receipt. Concors is a native client for coding workspaces and agents on authorized computers. It has no public social feed, user-to-user messaging, embedded general-purpose browser, or app marketplace. External web links require confirmation and open the system browser.",
   "reviewerCredentials": null,
-  "reviewContact": null,
+  "reviewContact": {
+    "configured": true,
+    "source": "Existing Concors beta review contact; private values remain only in Apple"
+  },
   "ageRatingCompleted": false,
-  "privacyLabelsVerified": false,
+  "privacyLabelsVerified": true,
   "screenshotsUploaded": false,
   "buildAttached": true,
   "currentTestFlightBuild": {
@@ -37,34 +40,40 @@
     "price": "free",
     "machineSetup": "Users add machines from the desktop app",
     "storePricingVerified": true,
-    "launchCountries": null,
-    "supportAndPrivacyEmail": "gm@hologram.xyz"
+    "launchCountries": "All 175 App Store territories selected, including future territories; actual regional eligibility remains subject to Apple",
+    "supportAndPrivacyEmail": "gm@hologram.xyz",
+    "legalOperator": "Rolling Inc.",
+    "minimumAgeRequested": 13
   },
   "privacyDisclosureDraft": {
-    "status": "saved-not-published-owner-provider-facts-pending",
+    "status": "published",
     "dataTypes": [
       "NAME",
       "EMAIL_ADDRESS",
       "USER_ID",
+      "DEVICE_ID",
+      "PRODUCT_INTERACTION",
       "OTHER_USER_CONTENT",
       "PHOTOS_OR_VIDEOS",
       "CUSTOMER_SUPPORT",
       "OTHER_DIAGNOSTIC_DATA"
     ],
     "protection": "DATA_LINKED_TO_YOU",
-    "purpose": "APP_FUNCTIONALITY"
-  },
-  "pendingDraftUpdates": {
-    "status": "review-contact-and-working-account-required",
-    "reviewNotesAddition": "The owner confirms Concors is free at launch. Users add machines from the desktop app; iPhone users connect to machines already on their account. Provide reviewers with an already connected, available machine so they can review the full iPhone experience without provisioning one. Settings \u2192 Account provides AI-sharing permission controls, private content/problem reporting and permanent account deletion with same-user reauthentication and a private status receipt. Use a dedicated reviewer account and already connected machine.",
-    "condition": "Apple rejects review-detail updates while required contact and functioning account fields are missing; do not fill placeholders."
+    "purposes": ["APP_FUNCTIONALITY", "ANALYTICS"],
+    "analyticsCategories": ["USER_ID", "DEVICE_ID", "PRODUCT_INTERACTION", "OTHER_DIAGNOSTIC_DATA"],
+    "tracking": false
   },
   "remainingOwnerFields": [
-    "Account Holder acceptance of updated Apple Program License Agreement",
-    "Legal copyright/controller name, launch countries and intended minimum age",
-    "Production provider uses, processors, security-log/backup retention and monitored support",
-    "Review contact name and phone, dedicated reviewer account and available machine/provider access",
-    "Physical iPhone acceptance on the signed release build"
+    "Resolve requested 13+ minimum against Privy policy requiring users to be at least 16",
+    "Complete prepared Apple provider configuration in Privy and enable test accounts",
+    "Working dedicated reviewer account, available isolated machine and scoped AI-provider access",
+    "Confirm necessary content rights before Apple declaration",
+    "Physical iPhone acceptance and operating support/report triage"
   ],
-  "note": "Draft version now matches binary 0.1.0 (11). Internal TestFlight is verified. Production Apple login is disabled; privacy publication, native screenshot upload and review access remain incomplete. Keep all reviewer credentials and private keys out of this repository."
+  "note": "Free-app agreement is active/current. Apple App ID, Services ID and dedicated sign-in key are prepared; backend signing-key support is deployed. Apple login remains disabled pending Privy setup. Build 12 is in progress from updated main. Public App Review has not been submitted.",
+  "copyright": "2026 Rolling Inc.",
+  "ageRatingQuestionnaireSaved": true,
+  "ageRatingOverride": "THIRTEEN_PLUS",
+  "ageRatingDecision": "Owner requested 13+; unresolved conflict with Privy under-16 restriction",
+  "contentRightsDeclaration": null
 }
