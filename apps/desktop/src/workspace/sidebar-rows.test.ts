@@ -103,7 +103,7 @@ it("lists each workspace's open tabs in tab-bar order, then its closed chats new
     rows.get("p")?.map((row) => [row.key, row.kind === "closed" ? row.chat.title : row.title]),
   ).toEqual([
     ["tab:chat-tab", "hello?"],
-    // A split tab is one row, named and timed after its first pane.
+    // A split tab is one row, named after its first pane and timed by its newest.
     ["tab:split-tab", "Claude Code"],
     // A plain terminal is listed too, before it has even started.
     ["tab:shell-tab", "Terminal"],
@@ -112,7 +112,8 @@ it("lists each workspace's open tabs in tab-bar order, then its closed chats new
   ]);
   const [chat, split, shell] = rows.get("p") ?? [];
   expect(chat).toMatchObject({ tool: "chat", time: "2026-09-20T00:00:00Z" });
-  expect(split).toMatchObject({ tool: "claude", time: "2026-09-21T00:00:00Z" });
+  // Claude Code started on the 21st, the shell beside it on the 22nd.
+  expect(split).toMatchObject({ tool: "claude", time: "2026-09-22T00:00:00Z" });
   // Not started yet, so timed from when the list first showed it.
   expect(Date.parse(shell!.time)).toBeGreaterThan(Date.parse("2026-01-01T00:00:00Z"));
   expect(rows.get("empty")).toEqual([]);
@@ -403,4 +404,61 @@ it("lists pinned chats first, open or closed, and keeps the rest in their order"
   ]);
   const pinnedOpen = sidebarRows(workspace, [agent("open", { pinned: true })], []).rows.get("p");
   expect(pinnedOpen?.[0]?.key).toBe("tab:chat-tab");
+});
+
+it("times a split tab by the newest activity in any of its panes, not only its main one", () => {
+  const split: Pick<WorkspaceSnapshot, "projects"> = {
+    projects: [
+      {
+        id: "p",
+        name: "studio",
+        directory: "/repos/studio",
+        version: 1,
+        tabs: [
+          {
+            id: "router",
+            name: "Router",
+            root: "root",
+            nodes: [
+              {
+                kind: "split",
+                id: "root",
+                axis: "horizontal",
+                ratio: 0.5,
+                first: "a",
+                second: "s",
+              },
+              { kind: "split", id: "s", axis: "vertical", ratio: 0.5, first: "b", second: "c" },
+              { kind: "pane", id: "a", profile: "chat", sessionId: "main" },
+              { kind: "pane", id: "b", profile: "chat", sessionId: "side" },
+              { kind: "pane", id: "c", profile: "shell", sessionId: "shell" },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const time = (chats: AgentInfo[], terminals: TerminalInfo[] = []) =>
+    sidebarRows(split, chats, terminals).rows.get("p")![0]!.time;
+  // The main chat last ran yesterday; a prompt just now in the second pane is what the row shows.
+  expect(
+    time([
+      agent("main", { updatedAt: "2026-11-05T08:00:00Z" }),
+      agent("side", { updatedAt: "2026-11-06T00:30:00Z" }),
+    ]),
+  ).toBe("2026-11-06T00:30:00Z");
+  // A terminal counts from when it started, like a terminal's own row.
+  expect(
+    time(
+      [agent("main", { updatedAt: "2026-11-05T08:00:00Z" })],
+      [terminal("shell", { startedAt: "2026-11-05T09:00:00Z" })],
+    ),
+  ).toBe("2026-11-05T09:00:00Z");
+  // Main pane newest: unchanged from before.
+  expect(
+    time([
+      agent("main", { updatedAt: "2026-11-06T02:00:00Z" }),
+      agent("side", { updatedAt: "2026-11-06T00:30:00Z" }),
+    ]),
+  ).toBe("2026-11-06T02:00:00Z");
 });
