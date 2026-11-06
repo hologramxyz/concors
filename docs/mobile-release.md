@@ -116,6 +116,31 @@ Record device, OS, build and evidence on a physical iPhone and Android:
 Browser fixtures/unit tests do not satisfy this table, especially signing, WebView/IME,
 backgrounding or APNs/FCM.
 
+## Native iPhone store captures
+
+Use the configured Concors Expo account and project from `apps/mobile`:
+
+```bash
+APP_VARIANT=preview pnpm dlx eas-cli@25.1.1 build --platform ios --profile store-capture
+pnpm dlx eas-cli@25.1.1 build:view YOUR-SIMULATOR-BUILD-UUID --json
+```
+
+The `store-capture` profile produces a simulator app with fictional workspace data. The production
+and TestFlight candidate profiles keep their existing production configuration.
+
+Run **Mobile iOS native** in GitHub Actions on the reviewed ref. Supply the simulator build's
+`artifacts.buildUrl` in `simulator_artifact` to exercise that prebuilt app. Leaving the field empty
+compiles the app on the runner. The workflow uses an iPhone 17 Pro Max at **1320 × 2868**, preserves
+the original simulator signature and exercises native controls before capturing workspace, agent
+and file views in one XCTest session.
+
+Download `mobile-ios-native-evidence` after the run. Visually inspect `store-workspaces.png`,
+`store-agent.png` and `store-files.png` for legible content, correct layout and synthetic data.
+Export store PNGs as RGB without alpha, preserve the rendered pixels, and retain original and
+uploaded hashes with the verification evidence. Upload the accepted images to the iOS 6.9-inch
+screenshot set and read back Apple's completed processing state. Production sign-in, a working
+reviewer account/machine and physical-iPhone acceptance remain separate release requirements.
+
 ## Store material
 
 - Final name/subtitle/description, categories/ratings and real device screenshots.
@@ -221,7 +246,7 @@ GitHub runners started successfully again on November 6, 2026, including the opt
 workflow. The account-billing block below describes the September runs, not the current account
 state. Check the actual native run results before claiming device or simulator acceptance.
 
-GitHub's latest native jobs did not start: the check annotation reports failed account
+Those native jobs did not start: the check annotation reported failed account
 payments or an exhausted spending limit. There are no compiler/test logs for those runs.
 The retained mobile CI changes kept native workflows manual-only and automatic jobs
 bounded to seven minutes. Those runs required the repository owner to resolve **Billing & plans**
