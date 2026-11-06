@@ -25,7 +25,14 @@
         "https://github.com/hologramxyz/concors-server/pull/21",
         "https://github.com/hologramxyz/concors-server/pull/23",
         "Apple primary App ID enabled, Services ID and dedicated signing key prepared; backend signing-key configuration stored and new code deployed.",
-        "Privy Apple settings / OAuth-token return / test account setup and real signed-iPhone acceptance remain required; production currently advertises apple:false."
+        "Privy Apple is enabled with the Concors Services ID. The deployed production API advertises apple:true; its normal sign-in page generates the matching Apple authorization request. Actual Apple account sign-in, OAuth-token return and signed-iPhone acceptance remain required.",
+        "reviewer-access.json",
+        "Normal production email-code sign-in and PKCE exchange passed for the Privy test account in Chromium. This does not verify Apple sign-in or the signed iPhone authentication session.",
+        "apple-provider-activation.json",
+        "https://github.com/hologramxyz/concors-server/pull/24",
+        "https://github.com/hologramxyz/concors-server/pull/25",
+        "Social OAuth retries clear partial Privy state and prevent duplicate starts; real GitHub sign-in on the owner’s iPhone remains unverified after the fix.",
+        "social-sign-in-recovery.md"
       ]
     },
     {
@@ -35,7 +42,10 @@
       "status": "blocked",
       "evidence": [
         "https://github.com/hologramxyz/concors/pull/163",
-        "Automated browser/daemon checks pass; a dedicated production review machine and phone acceptance are still needed."
+        "An isolated company review VM is connected. Production TLS, file listing/read, terminal tests, reconnect and gateway-restart preservation pass. Working AI access and signed-iPhone acceptance remain required.",
+        "reviewer-access.json",
+        "The verified reviewer account has one isolated connected machine. AI-provider access is not configured; the full reviewer workspace remains incomplete.",
+        "review-host.json"
       ]
     },
     {
@@ -81,8 +91,8 @@
       "owner": "website + signing owner",
       "status": "verified",
       "evidence": [
-        "ios-build-12.json",
-        "Build 12 signed Mach-O has no associated-domains entitlement; supported custom authentication schemes remain."
+        "ios-build-13.json",
+        "Build 13 signed Mach-O has no associated-domains entitlement; supported custom authentication schemes remain."
       ],
       "verifiedBy": "Codex source and signed-binary audit",
       "verifiedAt": "2026-11-06T01:34:00Z"
@@ -106,11 +116,14 @@
         "app-store-connect-draft.json",
         "Apple draft 0.1.0 has description/keywords/promotion, concors.dev URLs, Rolling Inc. copyright, private contact and a verified attached build.",
         "Nine linked privacy categories are published. All 175 territories are selected.",
-        "Working reviewer account/machine, final screenshot review and physical-device acceptance remain required.",
+        "Working AI access on the connected isolated review machine, final screenshot review and physical-device acceptance remain required.",
         "ios-native-evidence.md",
         "One inspected native 6.9-inch workspace capture is processed and active in Apple. Agent/files captures with demo guidance or empty states were rejected. The native simulator control/draft flow passed in run 42173390095 (63 commands); production and physical-device acceptance remain required.",
         "launch-policy.json",
-        "Owner confirmed necessary content rights and authorized repository/machine access. Apple USES_THIRD_PARTY_CONTENT declaration and SIXTEEN_PLUS age override read back on November 6, 2026."
+        "Owner confirmed necessary content rights and authorized repository/machine access. Apple USES_THIRD_PARTY_CONTENT declaration and SIXTEEN_PLUS age override read back on November 6, 2026.",
+        "reviewer-access.json",
+        "Verified Privy test-account login and fixed-code instructions are stored in Apple’s private App Review fields; credential values are excluded from the repository.",
+        "review-host.json"
       ]
     },
     {
@@ -135,7 +148,9 @@
         "https://github.com/hologramxyz/concors/pull/157",
         "https://github.com/hologramxyz/concors-server/pull/21",
         "privacy-disclosures.md",
-        "AI decline/review/withdrawal browser checks pass; actual provider practices, reporting operations and signed-phone acceptance still need confirmation."
+        "AI decline/review/withdrawal browser checks pass; actual provider practices, reporting operations and signed-phone acceptance still need confirmation.",
+        "https://github.com/hologramxyz/concors/pull/180",
+        "Seventeen focused permission regressions pass. Signed-device permission, decline and withdrawal checks remain pending."
       ]
     },
     {
@@ -144,11 +159,11 @@
       "owner": "native QA + privacy owner",
       "status": "verified",
       "evidence": [
-        "ios-build-12.json",
+        "ios-build-13.json",
         "privacy-disclosures.md",
-        "Signed 0.1.0 (12) contains all nine collection types, the exact functionality/analytics purposes, and all three SDK required-reason API entries. Store manifest and code-signing identity match the intended app/team."
+        "Signed 0.1.0 (13) contains all nine collection types, the exact functionality/analytics purposes, and all three SDK required-reason API entries. Store manifest and code-signing identity match the intended app/team."
       ],
-      "verifiedAt": "2026-11-06T02:41:58.496098Z",
+      "verifiedAt": "2026-11-06T22:17:29.688Z",
       "verifiedBy": "Codex signed-IPA inspection"
     }
   ],

@@ -256,13 +256,13 @@ export function SettingsDrawer({
               </Section>
               <Section
                 title="AI data sharing"
-                description="Agent requests can share prompts, code, attachments and tool context with the configured AI services. Permission applies to the named configuration on this connection."
+                description="Agent requests can share prompts, code, attachments and tool context with the configured AI services. Your choice is saved on this device for this account and machine. Changes to the configured services require permission again."
               >
                 <p className="py-3 text-sm text-muted-foreground">
                   {host.aiSharing === "blocked"
                     ? "New agent requests from this iPhone are blocked."
                     : host.aiSharing === "allowed"
-                      ? "You have allowed sharing with one or more configurations on this connection."
+                      ? "You have allowed sharing with this machine’s configured services."
                       : "You will be asked before an agent action shares data."}{" "}
                   Work already running on your machine continues until you stop it there.
                 </p>

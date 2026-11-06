@@ -5,7 +5,12 @@ import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 import { isSea } from "node:sea";
 import { createPersistentGateway } from "./hosting/gateway.ts";
-import { runSessionHost, stopSessionHost, waitForSessionHost } from "./hosting/session-host.ts";
+import {
+  hostBuild,
+  runSessionHost,
+  stopSessionHost,
+  waitForSessionHost,
+} from "./hosting/session-host.ts";
 
 import { DaemonConfigError, loadDaemonConfig } from "./config.ts";
 import { createDaemonServer } from "./server.ts";
@@ -190,6 +195,12 @@ export async function main(argv: readonly string[]): Promise<number> {
       await waitForSessionHost(resolveDataDir(profileEnv(cli)));
       return 0;
     case "session-host":
+      // A service manager starts this process directly. Its build must match the gateway's
+      // fingerprint so the first connection keeps the service-owned host and its sessions.
+      process.env["CONCORS_HOST_BUILD"] ??= await hostBuild({
+        executable: process.execPath,
+        args: isSea() ? [] : [fileURLToPath(import.meta.url)],
+      });
       // Agent CLIs and terminals run here, and restored chats start right away.
       await adoptLoginPath();
       await runSessionHost(

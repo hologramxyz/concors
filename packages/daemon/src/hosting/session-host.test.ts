@@ -3,10 +3,16 @@ import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { DAEMON_VERSION } from "../version.ts";
-import { ensureSessionHost, hostBuild, stopSessionHost } from "./session-host.ts";
+import {
+  ensureSessionHost,
+  hostBuild,
+  stopSessionHost,
+  waitForSessionHost,
+} from "./session-host.ts";
 
 const cli = fileURLToPath(new URL("../cli.ts", import.meta.url));
 const launch = {
@@ -60,6 +66,23 @@ describe("hostBuild", () => {
 });
 
 describe("ensureSessionHost", () => {
+  it("keeps a host started directly by the service manager", async () => {
+    const directory = await fixture();
+    const env: NodeJS.ProcessEnv = { ...process.env, CONCORS_DATA_DIR: directory };
+    delete env["CONCORS_HOST_BUILD"];
+    const service = spawn(launch.executable, launch.args, { env, stdio: "ignore" });
+    const exited = new Promise<void>((resolve) => service.once("exit", () => resolve()));
+    try {
+      await waitForSessionHost(directory);
+      const current = await ensureSessionHost(directory, launch);
+      expect(current.pid).toBe(service.pid);
+      expect(current.build).toBe(await hostBuild(launch));
+    } finally {
+      service.kill("SIGTERM");
+      await exited;
+    }
+  });
+
   it("keeps the running host when the build is unchanged", async () => {
     const directory = await fixture();
     const first = await ensureSessionHost(directory, launch);

@@ -497,29 +497,26 @@
   }
 }
 
-/* DOM adaptation of Paseo's tool-call text shimmer (message.tsx), Apache-2.0.
-   Copyright (c) 2025-present Mohamed Boudra; third-party/paseo-LICENSE. */
-@keyframes tool-activity-shimmer {
-  0% {
-    background-position: 100% 0;
-  }
-  100% {
-    background-position: -100% 0;
+/* What an agent is doing right now ("Working…", a running tool) breathes slowly. Opacity only:
+   WebKit (the Mac and iPhone webviews) animates it without repainting the text, where the
+   gradient that used to sweep across it was repainted every frame, about a tenth of a core for
+   each one on screen. */
+@keyframes agent-working-fade {
+  50% {
+    opacity: 0.45;
   }
 }
 .agent-shimmer {
-  color: transparent;
-  background: linear-gradient(
-    100deg,
-    var(--muted-foreground) 30%,
-    var(--foreground) 50%,
-    var(--muted-foreground) 70%
-  );
-  background-size: 200% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: tool-activity-shimmer 2s linear infinite;
+  animation: agent-working-fade 2s ease-in-out infinite;
+}
+/* `BrailleSpinner`: its frames, one above the other, step up through the one-line window. */
+@keyframes braille-frames {
+  to {
+    transform: translateY(-100%);
+  }
+}
+.braille-frames {
+  animation: braille-frames 0.9s steps(10) infinite;
 }
 .pane-resize-handle {
   position: relative;
@@ -868,11 +865,9 @@ html[data-pane-resizing="row"] * {
   font-weight: 500;
 }
 @media (prefers-reduced-motion: reduce) {
-  .agent-shimmer {
+  .agent-shimmer,
+  .braille-frames {
     animation: none;
-    background: none;
-    color: var(--muted-foreground);
-    -webkit-text-fill-color: currentColor;
   }
 }
 :root {
