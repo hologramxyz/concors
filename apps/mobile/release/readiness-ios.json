@@ -13,7 +13,7 @@
         "Dedicated Concors EAS Submit assigned; previous exposed key revoked.",
         "Apple free-app agreement Active/current/in effect on 2026-11-06. App Information declares trader status for this app. Paid agreement remains outside this free iPhone release."
       ],
-      "verifiedAt": "2026-11-06T02:38:20.055724Z",
+      "verifiedAt": "2026-11-06T06:13:22.521Z",
       "verifiedBy": "Codex Apple/Expo identity, credential and agreement readback"
     },
     {
@@ -106,7 +106,9 @@
         "app-store-connect-draft.json",
         "Apple draft 0.1.0 has description/keywords/promotion, concors.dev URLs, Rolling Inc. copyright, private contact and a verified attached build.",
         "Nine linked privacy categories are published. All 175 territories are selected.",
-        "Working reviewer account/machine, content-rights attestation, minimum-age resolution and visually approved native screenshots remain required."
+        "Working reviewer account/machine, content-rights attestation, minimum-age resolution, final screenshot review and physical-device acceptance remain required.",
+        "ios-native-evidence.md",
+        "One inspected native 6.9-inch workspace capture is processed and active in Apple. Agent/files captures with demo guidance or empty states were rejected; a complete native interaction run has not passed."
       ]
     },
     {
