@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AgentInfo, TerminalInfo, WorkspaceSnapshot } from "@concors/protocol";
+import type { AgentInfo, TerminalInfo, WorkspaceSnapshot, WorkspaceTab } from "@concors/protocol";
 import {
   chatAgentStatus,
   chatDot,
@@ -103,7 +103,7 @@ export function sidebarRows(
         terminal,
         tool,
         dot: strongestDot(tabAgentStatuses(tab, chats, terminals).map((status) => status.dot)),
-        time: chat?.updatedAt ?? terminal?.startedAt ?? firstSeen(tab.id),
+        time: latestActivity(tab, chats, terminals) ?? firstSeen(tab.id),
       };
     });
     rows.set(project.id, open);
@@ -139,6 +139,26 @@ export function rowPinned(row: SidebarRow): boolean {
     : row.kind === "closed"
       ? !!row.chat.agent.pinned
       : false;
+}
+
+/**
+ * When anything in a tab last happened: the newest of its panes' chats, and of when its terminals
+ * started. Not only the main pane's: a prompt in the second pane of a split is news for the tab.
+ */
+function latestActivity(
+  tab: WorkspaceTab,
+  chats: readonly AgentInfo[],
+  terminals: readonly TerminalInfo[],
+): string | undefined {
+  let latest: string | undefined;
+  for (const pane of tabPanes(tab)) {
+    const time =
+      pane.profile === "chat"
+        ? chats.find((item) => item.id === pane.sessionId)?.updatedAt
+        : terminals.find((item) => item.id === pane.sessionId)?.startedAt;
+    if (time && (!latest || Date.parse(time) > Date.parse(latest))) latest = time;
+  }
+  return latest;
 }
 
 // A tab that has not started its session yet has no time of its own, so it is timed from when this
