@@ -3,6 +3,11 @@ name: Mobile iOS native
 on:
   # Native compilation and simulator tests are opt-in, outside the PR time budget.
   workflow_dispatch:
+    inputs:
+      reuse_matching_cached_app:
+        description: Reuse a cached simulator app only after verifying unchanged runtime sources
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -25,6 +30,21 @@ jobs:
       CI: "1"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Start the clean runner's iPhone before compilation
+        id: simulator
+        timeout-minutes: 2
+        run: |
+          MOBILE_SIMULATOR_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"].get("com.apple.CoreSimulator.SimRuntime.iOS-26-5",[]); print(next((d["udid"] for d in devices if d["name"]=="iPhone 17 Pro Max"),""))')
+          if [ -z "$MOBILE_SIMULATOR_ID" ]; then
+            MOBILE_SIMULATOR_ID=$(xcrun simctl create "Concors Glass CI" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max com.apple.CoreSimulator.SimRuntime.iOS-26-5)
+          fi
+          echo "id=$MOBILE_SIMULATOR_ID" >> "$GITHUB_OUTPUT"
+          MOBILE_SIMULATOR_STATE=$(xcrun simctl list devices --json | python3 -c 'import json,sys; target=sys.argv[1]; print(next(d["state"] for ds in json.load(sys.stdin)["devices"].values() for d in ds if d["udid"]==target))' "$MOBILE_SIMULATOR_ID")
+          if [ "$MOBILE_SIMULATOR_STATE" != Booted ]; then
+            xcrun simctl boot "$MOBILE_SIMULATOR_ID"
+          fi
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -45,14 +65,25 @@ jobs:
           restore-keys: |
             ios-native-v1-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/app.config.ts', '.github/workflows/mobile-ios.yml') }}-
             ios-native-v1-${{ runner.arch }}-
+      - name: Check simulator cache validation rules
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+      - name: Validate optional cached simulator app
+        id: cached-app
+        if: inputs.reuse_matching_cached_app
+        run: |
+          MOBILE_APP=$(find "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' -print -quit 2>/dev/null || true)
+          python3 .github/scripts/reuse-ios-simulator.py "${MOBILE_APP:-/nonexistent}" --github-output "$GITHUB_OUTPUT"
       - name: Generate native iOS project
+        if: steps.cached-app.outputs.reuse != 'true'
         working-directory: apps/mobile
         run: pnpm exec expo prebuild --platform ios --no-install
       - name: Install native dependencies
+        if: steps.cached-app.outputs.reuse != 'true'
         timeout-minutes: 4
         working-directory: apps/mobile/ios
         run: pod install
       - name: Build one simulator architecture
+        if: steps.cached-app.outputs.reuse != 'true'
         # A cold Intel simulator build exceeded 15 minutes before UI tests could start.
         timeout-minutes: 30
         working-directory: apps/mobile/ios
@@ -70,16 +101,12 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO GCC_OPTIMIZATION_LEVEL=0 \
             SWIFT_OPTIMIZATION_LEVEL=-Onone GCC_GENERATE_DEBUGGING_SYMBOLS=NO \
             build > ../test-results/native/xcodebuild.log 2>&1 || { tail -100 ../test-results/native/xcodebuild.log; exit 1; }
-      - name: Create isolated iOS 26 simulator
-        timeout-minutes: 10
-        id: simulator
+      - name: Wait for the iPhone simulator
+        timeout-minutes: 4
         run: |
-          # Capture the largest supported iPhone size for App Store screenshot requirements.
-          MOBILE_SIMULATOR_ID=$(xcrun simctl create "Concors Glass CI" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max com.apple.CoreSimulator.SimRuntime.iOS-26-5)
-          echo "id=$MOBILE_SIMULATOR_ID" >> "$GITHUB_OUTPUT"
-          xcrun simctl boot "$MOBILE_SIMULATOR_ID"
-          xcrun simctl bootstatus "$MOBILE_SIMULATOR_ID" -b
-          xcrun simctl status_bar "$MOBILE_SIMULATOR_ID" override --time '9:41' \
+          mkdir -p apps/mobile/test-results/native
+          xcrun simctl bootstatus '${{ steps.simulator.outputs.id }}' -b > apps/mobile/test-results/native/simulator-boot.log 2>&1 || { cat apps/mobile/test-results/native/simulator-boot.log; exit 1; }
+          xcrun simctl status_bar '${{ steps.simulator.outputs.id }}' override --time '9:41' \
             --dataNetwork wifi --wifiMode active --wifiBars 3 --batteryState charged --batteryLevel 100
       - name: Install simulator app
         run: |
@@ -92,6 +119,7 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :application-identifier' "$RUNNER_TEMP/mobile-entitlements.plist"
           xcrun simctl install '${{ steps.simulator.outputs.id }}' "$MOBILE_APP"
           xcrun simctl launch '${{ steps.simulator.outputs.id }}' xyz.hologram.concors.preview
+          python3 .github/scripts/reuse-ios-simulator.py "$MOBILE_APP" --record
       - name: Install pinned native UI test runner
         timeout-minutes: 2
         run: |
