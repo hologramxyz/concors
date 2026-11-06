@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "appVersion": "0.1.0",
+  "releaseModel": "free-existing-machines",
+  "gates": [
+    {
+      "id": "developer-accounts",
+      "title": "Hologram Expo/Apple identity, signing and accepted Apple agreements",
+      "owner": "release owner",
+      "status": "blocked",
+      "evidence": [
+        "submission-packet.md#submission-credential-replacement",
+        "https://expo.dev/accounts/guitong35/projects/concors/builds/421d499e-1b5c-4854-9af1-58a8ebb4650f",
+        "Apple developer portal on 2026-11-06 requires Account Holder acceptance of the updated Program License Agreement."
+      ]
+    },
+    {
+      "id": "production-auth",
+      "title": "Production iPhone sign-in, private Apple email, recovery and session revocation",
+      "owner": "backend + QA",
+      "status": "blocked",
+      "evidence": [
+        "https://github.com/hologramxyz/concors-server/pull/21",
+        "Production /api/v1/native-auth/providers reports apple:false; Apple/Privy setup and signed-iPhone acceptance remain required."
+      ]
+    },
+    {
+      "id": "production-workspace",
+      "title": "Authenticated production iPhone workspace and available daemon",
+      "owner": "backend",
+      "status": "blocked",
+      "evidence": [
+        "https://github.com/hologramxyz/concors/pull/163",
+        "Automated browser/daemon checks pass; a dedicated production review machine and phone acceptance are still needed."
+      ]
+    },
+    {
+      "id": "account-deletion",
+      "title": "iPhone deletion, shared resources, cloud erasure and retained records",
+      "owner": "backend + privacy owner",
+      "status": "blocked",
+      "evidence": [
+        "https://github.com/hologramxyz/concors-server/pull/21",
+        "https://github.com/hologramxyz/concors-web/pull/12",
+        "Disposable-database lifecycle tests pass; signed-phone and non-customer live cleanup acceptance remain required."
+      ]
+    },
+    {
+      "id": "public-pages",
+      "title": "Live accurate privacy/support/deletion pages and monitored support",
+      "owner": "website + privacy owner",
+      "status": "blocked",
+      "evidence": [
+        "https://concors.dev/privacy",
+        "https://concors.dev/support",
+        "https://concors.dev/account/delete",
+        "https://concors.dev/terms",
+        "Live HTTP/rendered-page checks pass; confirm legal controller, processors, log/backup retention and support operation."
+      ]
+    },
+    {
+      "id": "push",
+      "title": "Push excluded from the first iPhone release",
+      "owner": "backend + release owner",
+      "status": "verified",
+      "evidence": [
+        "Server src/modules/account/routes.ts explicitly advertises pushNotifications:false; mobile host hides enrollment when unsupported.",
+        "No push delivery is advertised in the iOS listing; push installation/delivery/revocation is outside this release."
+      ],
+      "verifiedBy": "Codex source and signed-binary audit",
+      "verifiedAt": "2026-11-06T01:34:00Z"
+    },
+    {
+      "id": "domain-links",
+      "title": "Unsupported iOS Universal Links removed; supported auth schemes retained",
+      "owner": "website + signing owner",
+      "status": "verified",
+      "evidence": [
+        "Build 10 signed Mach-O entitlements contain no com.apple.developer.associated-domains entry.",
+        "Build 10 Info.plist retains concors and xyz.hologram.concors auth URL schemes; app.config.ts declares no associated domains."
+      ],
+      "verifiedBy": "Codex source and signed-binary audit",
+      "verifiedAt": "2026-11-06T01:34:00Z"
+    },
+    {
+      "id": "physical-devices",
+      "title": "Physical iPhone install/upgrade, permissions, keyboard, reconnect and accessibility",
+      "owner": "device QA",
+      "status": "blocked",
+      "evidence": [
+        "https://appstoreconnect.apple.com/apps/6817622624/testflight/ios",
+        "Build 10 is VALID / IN_BETA_TESTING; simulator and browser checks do not establish physical-device acceptance."
+      ]
+    },
+    {
+      "id": "store-material",
+      "title": "iOS listing, screenshots, privacy labels, rating, territories and reviewer access",
+      "owner": "release + privacy owners",
+      "status": "blocked",
+      "evidence": [
+        "app-store-connect-draft.json",
+        "Apple draft 0.1.0 has support/privacy URLs and attached build 10; privacy disclosures are saved but unpublished.",
+        "Review contact/account, age answers, countries and approved native screenshot assets are still required."
+      ]
+    },
+    {
+      "id": "commerce-policy",
+      "title": "Free iPhone companion scope, free App Store price and launch availability",
+      "owner": "product + policy review",
+      "status": "blocked",
+      "evidence": [
+        "Owner confirmed free launch, with machines added from desktop.",
+        "App Store price schedule 6817622624: USA manual price 0 and all 174 automatic prices 0, verified 2026-11-06.",
+        "No app availability record is configured; launch countries remain unconfirmed."
+      ]
+    },
+    {
+      "id": "ai-data-and-safety",
+      "title": "iPhone AI permission, provider handling and content-report operations",
+      "owner": "client + backend + privacy owner",
+      "status": "blocked",
+      "evidence": [
+        "https://github.com/hologramxyz/concors/pull/157",
+        "https://github.com/hologramxyz/concors-server/pull/21",
+        "privacy-disclosures.md",
+        "AI decline/review/withdrawal browser checks pass; actual provider practices, reporting operations and signed-phone acceptance still need confirmation."
+      ]
+    },
+    {
+      "id": "native-privacy-and-permissions",
+      "title": "Signed iPhone collection manifest, required-reason APIs, permissions and SDK",
+      "owner": "native QA + privacy owner",
+      "status": "blocked",
+      "evidence": [
+        "privacy-disclosures.md",
+        "https://github.com/hologramxyz/concors/pull/163",
+        "Build 10 inspection found the missing collection declarations; inspect the corrected signed build 11 before verification."
+      ]
+    }
+  ],
+  "platform": "ios"
+}
