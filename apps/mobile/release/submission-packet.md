@@ -1,180 +1,71 @@
-# App Store submission packet — not ready to submit
+# iPhone App Store submission — not ready to submit
 
-Reviewed on **2026-11-04 UTC** against the current [Apple App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/), production endpoints, App Store Connect, and the signed **0.1.0 (7)** IPA. Evaluated source: `aa3a9fddbbbc08994a14868910446f0064f3ed3a`.
+Reviewed November 6, 2026 against [Apple's App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/), the repositories, production configuration, App Store Connect and signed iOS artifacts. This packet concerns iOS; the separate macOS draft has no reviewed Mac App Store binary.
 
-The owner confirmed **Concors: Coding Workspace**, reported no prior rejection, and confirmed a **free launch**, with machines added from the desktop app. The app is [`6817622624`](https://appstoreconnect.apple.com/apps/6817622624), bundle `xyz.hologram.concors`, Apple team `9WN4P724M2`. The current build is in internal TestFlight. This review did not submit a public version or certify readiness.
+The owner chose **Concors: Coding Workspace**, a **free launch**, machines added on desktop,
+**concors.dev** for the public site, **gm@hologram.xyz** for support/privacy, **Rolling Inc.** as the
+operator, and **all available countries**. There has been no previous rejection. The requested
+minimum age is **13+**, but that conflicts with Privy's current under-16 restriction and remains
+unresolved. Do not submit while that conflict or the production acceptance items below remain open.
 
-## Remediation prepared on 2026-11-05
+App: [`6817622624`](https://appstoreconnect.apple.com/apps/6817622624), bundle
+`xyz.hologram.concors`, Apple team `9WN4P724M2`, Expo `@guitong35/concors`.
+The previous audits and implementation history are in [the November 4–5 audit](audits/2026-11-04-05.md).
 
-The audit below records the original production/TestFlight findings. The remediation branch starts
-from updated main `ca94d003` and adds the following; production/device verification remains separate.
+## Verified store and production preparation
 
-Related changes: [account lifecycle API](https://github.com/hologramxyz/concors-server/pull/21)
-and [public pages/browser deletion](https://github.com/hologramxyz/concors-web/pull/12), both merged.
-The [browser CORS follow-up](https://github.com/hologramxyz/concors-server/pull/22) allows the fixed
-website callback origin even when an older deployment's configurable allowlist omits it.
-The owner selected **gm@hologram.xyz** for public support and privacy contact. The exact legal
-company name is still unconfirmed.
+| Area                | Verified state                                                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| App Store draft     | iOS **0.1.0**, PREPARE_FOR_SUBMISSION. Name, subtitle, feature description, keywords, promotional copy, concors.dev marketing/support/privacy URLs and **2026 Rolling Inc.** copyright saved.                                                                                                                                                                                                                 |
+| Private contact     | Complete contact details reused from this same app's existing beta review record. Private details and reviewer secrets are not stored in the repository.                                                                                                                                                                                                                                                      |
+| Price and countries | Price zero in the USA and all 174 automatic price territories. All 175 territories selected, including future territories. Selection does not override Apple's regional eligibility requirements.                                                                                                                                                                                                             |
+| Agreements / EU     | Free-app agreement is **Active**, current and in effect after the Account Holder's acceptance. App Information identifies this developer as a trader for this app. Paid-app agreement still needs information; this launch has no iPhone commerce.                                                                                                                                                            |
+| Credentials         | Dedicated **Concors EAS Submit**, App Manager role, assigned in Expo. The exposed old key was revoked. Apple's team-key role spans apps; the Expo submission assignment is specific to Concors.                                                                                                                                                                                                               |
+| Privacy             | Nine linked categories published, with app functionality and the documented Privy sign-in analytics purposes. No tracking declared. See [privacy-disclosures.md](privacy-disclosures.md).                                                                                                                                                                                                                     |
+| Website             | [Website PR 13](https://github.com/hologramxyz/concors-web/pull/13) merged and deployed; live policy identifies Rolling Inc., Railway hosting, Privy diagnostics, log-history limits and observed backup configuration. [Website PR 14](https://github.com/hologramxyz/concors-web/pull/14) also explicitly discloses the current 16+ account sign-in requirement; the launch audience decision remains open. |
+| Apple provider      | Primary App ID enabled, Services ID `xyz.hologram.concors.auth` and dedicated signing key created; callback `https://auth.privy.io/api/v1/oauth/callback`. Backend signing material stored in production server credentials. Privy configuration and actual user acceptance remain incomplete; production advertises `apple:false`.                                                                           |
+| Durable revocation  | [API PR 23](https://github.com/hologramxyz/concors-server/pull/23) merged/deployed: fresh five-minute Apple client proofs avoid a manual six-month JWT expiry breaking deletion. Signing material is not included here.                                                                                                                                                                                       |
+| Native artifact     | [Build 12](https://expo.dev/accounts/guitong35/projects/concors/builds/e633163f-9dc7-40e9-b57e-3ee8d4a15504), **0.1.0 (12)** from main `89efcccb5412af7cd1b18a9fce904e11d3a2bf3d`, is VALID / IN_BETA_TESTING, in Internal beta and attached to draft 0.1.0. [Signed inspection](ios-build-12.json) verifies all nine categories/purposes and preserved SDK reasons.                                          |
+| Native screenshots  | CI capture uses real iPhone simulator UI and fictional workspace content. Asset upload and visual acceptance remain pending; browser captures are not iPhone screenshots.                                                                                                                                                                                                                                     |
 
-| Finding                        | Implemented change                                                                                                                                                | Remaining acceptance                                                               |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Missing public pages           | Real privacy/support/terms pages, **gm@hologram.xyz**, and a PKCE-protected web deletion page                                                                     | Verify deployed URLs, mailbox, owner retention/processor facts                     |
-| No account deletion            | Native same-user reauthentication, affected-resource plan, durable cleanup/receipt, revocation, owned disk erasure and billing cancellation                       | Signed iPhone and dedicated non-customer live acceptance; monitor delayed jobs     |
-| Social login without Apple     | API + iPhone + desktop Apple login, private relay address support, verified encrypted refresh tokens and Apple revocation                                         | Private Apple/Privy Services ID/client secret/relay configuration and device tests |
-| AI sharing permission absent   | Native boundary enforces configuration/model/connection permission, including scheduled work and tool responses; decline/withdrawal stops new applicable requests | Verify actual custom recipients and provider terms; physical-device acceptance     |
-| Content reporting absent       | In-app private report form, authorized API, rate limiting, operator triage and bounded resolved-report retention                                                  | Run the moderation/support process and confirm applicable safety rules             |
-| Unsupported associated domains | Remove unused production Universal/App Link declarations; retain supported authentication schemes                                                                 | New signed build and actual sign-in/link acceptance                                |
-| Stale release scope            | Record free launch with desktop machine setup and account creation through normal sign-in                                                                         | Countries, age ratings, privacy labels and public version/build alignment          |
+## Remaining release blockers
 
-The existing `readiness.json` gates remain pending/blocked; implementation is not signed-device or
-store-console approval. No new TestFlight upload or App Review submission is claimed. A new signed
-candidate must replace `0.1.0 (7)` before the new behavior can be reviewed by Apple.
+1. **Production Apple / Privy acceptance.** Configure the prepared custom Apple key in the existing
+   Privy app, enable return of OAuth tokens, and enable Apple only after correct provider settings.
+   Keep allowed domains. Verify first-time/returning sign-in, Hide My Email, cancellation and revocation
+   on a signed iPhone. The environment's backend app secret does not replace dashboard access.
+2. **Reviewer access.** Enable Privy's generated test accounts; retrieve credentials securely and
+   populate Apple's private review fields. Assign an isolated, already connected machine and working
+   AI-provider access that remain available throughout review. Do not expose a customer's workspace,
+   a developer host or the agent's credentials. Verify the exact review route and deletion on a
+   separate disposable account before final handoff.
+3. **Age.** The owner requested 13+. [Privy's policy](https://www.privy.io/privacy-policy), updated
+   May 20, 2026, says people under 16 should not register/use its service. Either obtain confirmation
+   supporting the intended audience/change authentication, or use an owner-approved 16+ minimum.
+   The current 13+ App Store override and website copy must be aligned with the resolved decision.
+4. **Content rights.** Apple's content-rights declaration is unset. Confirm the necessary rights
+   for displayed assets/content and users' authorized repository/workspace access before attesting.
+5. **Screenshots and real device acceptance.** Upload visually checked, native 6.9-inch captures.
+   Complete install/upgrade, permissions, keyboard, reconnect, accessibility, AI decline/withdrawal,
+   support reporting and deletion on a physical iPhone. Native simulator/browser checks alone do not
+   establish this acceptance. Confirm support/report triage is operated.
 
-Local remediation checks passed after rebasing: formatting, lint, full TypeScript checks and **1,679 workspace
-tests** (two skipped), including the new protocol permission and same-user reauthentication cases.
-The API passed **517 tests** (13 skipped), including disposable-Postgres lifecycle/concurrency
-tests. Website build/format checks, four static-server/changelog tests and **20 browser checks**
-passed; seven mobile workspace browser smoke checks, four direct-connection browser checks
-(including real refusal/review/withdrawal), and an iOS Hermes bundle export also passed. Rust checks
-could not run locally because Cargo is not installed; GitHub's first PR run passed all three Tauri
-platform jobs and the app/daemon bundle job. These checks do not establish signed iPhone acceptance.
+Do not infer readiness from a successful upload. The iOS-only gate file is
+[readiness-ios.json](readiness-ios.json); the Android/combined gates remain separate.
+`node apps/mobile/scripts/release-check.mjs --platform=ios --json` must continue failing until the
+remaining evidence exists. No public App Review or external beta review has been submitted.
 
-Public browser checks on 2026-11-05 verified all four website pages return 200 and render working
-`gm@hologram.xyz` mail links. The API is live with Apple disabled, `/ready` returns 200, and protected
-deletion/capability routes require authentication. These read-only probes do not verify an actual
-customer deletion; recheck the CORS follow-up after its deployment before signing off the web flow.
+## Review guidance
 
-## App Store fields completed before remediation
+The app bundles its native interface and workspace renderer; structured workspace data is exchanged
+with authorized computers. Coding tools/terminal commands run on the connected machine. It has no
+public social feed, user-to-user chat, embedded unrestricted browser, app marketplace or mobile
+machine/subscription checkout. Explain these actual boundaries in review notes; Apple determines
+which remote-client or software rules apply.
 
-The verified iOS draft is exported in [`app-store-connect-draft.json`](app-store-connect-draft.json). `store-listing.json` remains the earlier generic cross-platform draft; use the verified export for current iOS copy.
-
-| Field                                              | Current state                                               |
-| -------------------------------------------------- | ----------------------------------------------------------- |
-| Name                                               | Concors: Coding Workspace, retained as requested            |
-| Subtitle                                           | Code, agents and terminals                                  |
-| Primary category                                   | Developer Tools                                             |
-| Description, keywords, promotional text            | Filled from implemented features and read back from Apple   |
-| Marketing URL                                      | `https://concors.dev/`, reachable                           |
-| Review notes                                       | Filled with architecture, requirements and navigation steps |
-| Review-account-required flag                       | Enabled; actual login details still missing                 |
-| iOS draft                                          | Version `1.0`, PREPARE_FOR_SUBMISSION                       |
-| Available binary                                   | TestFlight `0.1.0 (7)`; no build attached to version `1.0`  |
-| Screenshots                                        | None uploaded                                               |
-| Support/privacy URLs                               | Empty in Apple; configured destinations return 404          |
-| Age rating                                         | Questionnaire unanswered                                    |
-| App Privacy labels                                 | Not verified through available API; console review needed   |
-| Copyright, content rights, review contact          | Owner information needed                                    |
-| Pricing, territories, agreements, EU trader status | Not changed or certified                                    |
-
-The existing release type is **AFTER_APPROVAL**. Choose intended release timing before eventual submission. Reviewer credentials belong only in Apple's private fields.
-
-The owner confirmed the launch model after the verified Apple writes. `pendingDraftUpdates` in the export contains the prepared description/review-note clarification: launch is free, machines are added on desktop, and reviewers receive an already connected machine. These additions have **not** been uploaded to Apple. Store pricing and launch countries also remain unverified.
-
-### Submission credential replacement
-
-The original audit found a credential named **Heist EAS Submit** assigned to Concors. The owner
-confirmed Heist is unrelated. A private key was accidentally exposed in diagnostic output during
-that audit; saved diagnostics were sanitized, but the key still required revocation.
-
-**Resolved on 2026-11-06:** after the owner completed private Apple authentication, a new
-**Concors EAS Submit** team key with **App Manager** permissions was generated and assigned to
-Concors in Expo. Its stored credential was read back and verified against Apple app `6817622624`
-and bundle `xyz.hologram.concors`. The exact exposed key was revoked in Apple, and its replacement
-was confirmed active. The temporary local copy of the new private key was removed after Expo
-storage and verification. No signing certificate or unrelated API key was revoked.
-
-The dedicated Expo assignment identifies which app uses this credential. Apple's team-key role
-permissions apply across the Apple account; keep private key material in Expo's credential store
-and never include it in diagnostic object serialization, source control, or chat.
-
-## Confirmed implementation gaps
-
-### Public pages and links
-
-Public GET checks on 2026-11-04 returned **404 Not found** for `https://concors.dev/privacy`, `/support`, `/account/delete`, `/terms`, and `/.well-known/apple-app-site-association`.
-
-The first three are configured in `src/config.ts`; account settings link to privacy and support. Publish accurate privacy/support content and a functioning deletion flow, then test rendered pages and forms. A terms page is useful for the service; the missing terms URL is not described here as a universal standalone Apple requirement. See [Apple's privacy information instructions](https://developer.apple.com/help/app-store-connect/manage-app-information/manage-app-privacy/).
-
-The missing association file is a separate engineering issue: production declares Universal Links. Current native authentication uses a custom URL scheme, so the 404 does not by itself prove sign-in is broken. Fix/test Universal Links or remove that unsupported declaration from release scope.
-
-### Account creation and deletion
-
-`src/auth/sign-in-choices.tsx` explicitly tells new users that continuing creates an account. The native API request does not restrict sign-in to existing accounts; server `modules/auth/accounts.ts` can create a user and personal organization. The historical existing-account-only description is therefore incomplete.
-
-Production `/api/v1/native-auth/providers` returns GitHub, Google and email enabled. `/api/v1/mobile/capabilities` returns route-not-found 404. The API client maps that response to disabled optional capabilities, so account settings show deletion unavailable. This combines public observations with the client fallback; no destructive request was made.
-
-Implement durable deletion, reauthentication and session revocation, including shared organization/machine ownership, subscriptions and retained records. The existing deletion form asks for a password although current Privy social/email-code users may have none. The flow must support those accounts. See [Apple's account-deletion guidance](https://developer.apple.com/help/app-review/guideline-reference/5-1-1-account-deletion). Emailing support is not the intended deletion mechanism for this ordinary developer service.
-
-### Version, screenshots and reviewer access
-
-The App Store draft is version `1.0`; the tested IPA is `0.1.0 (7)`. Align the public version, binary and readiness evidence after the product fixes. No screenshot sets or build are attached to the iOS draft.
-
-Capture the actual native app with a dedicated workspace: agent conversation/tool request, sub-agent progress, files, terminal and workspace navigation. Use fictional data, never customer code or credentials. Browser/demo captures do not establish the native glass UI. Apple's [screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/) include accepted 6.9-inch images such as 1320 × 2868 or 1290 × 2796, without transparency.
-
-Review contact and account fields are empty. Provide a non-customer account, accessible live machine and functioning provider access throughout review. Current sign-in uses social login or email codes; an invented password in Apple's form will not work. Resolve independent access without the owner forwarding fresh OTP codes. Do not add a global authentication bypass or replace production with the engineering demo. See [Apple's complete-review instructions](https://developer.apple.com/help/app-review/before-submitting-for-review/complete-review/).
-
-## Policy assessments requiring decisions
-
-These are assessments, not predictions of a specific rejection. Numbered references are to the [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/).
-
-| Area                                       | Current evidence and recommended action                                                                                                                                                                                                                                                                                          |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Login — 4.8                                | GitHub/Google authenticate the primary account; no Apple/equivalent private-email option is exposed. Add an equivalent option, normally Sign in with Apple, or establish a documented exception. Email OTP alone does not establish private-email creation.                                                                      |
-| AI sharing — 5.1.2(i)                      | Prompts, code, tool context and attachments can reach configured providers. The earlier separate consent gate was removed. Define recipients/data and obtain explicit permission before sharing personal data with external AI. A model-picker label does not establish permission.                                              |
-| AI content — 1.2 / possibly 4.7            | Generated content and shared workspaces are exposed; no functioning content-report workflow was found. Determine applicable safeguards/reporting and response handling. User blocking depends on actual user-to-user features; do not invent a social-network classification.                                                    |
-| Commerce — 3.1                             | Owner confirmed launch is free, with machines added on desktop; mobile hides/rejects purchasing, provisioning and billing. Verify there is no required paid Concors entitlement for launch. Assess separate AI-provider requirements and the 3.1.3(f) companion rationale where applicable; launch countries remain unconfirmed. |
-| Remote functionality — 2.5.2 / 4.2 / 4.2.7 | Bundled UI exchanges structured workspace data; it is not streamed host-screen mirroring. Explain and demonstrate that architecture. Apple decides the classification; do not assume arbitrary cloud thin clients are allowed.                                                                                                   |
-| Software offered inside the app — 4.7      | No app marketplace or remote feature bundle was identified, but coding agents expose AI/chatbot functions. Assess the actual offered software before claiming all or none of 4.7 applies.                                                                                                                                        |
-
-If the remote-workspace/commerce classification remains uncertain after factual fixes, consider an App Review appointment through [App Review help](https://developer.apple.com/help/app-review/before-submitting-for-review/complete-review/).
-
-## Privacy and age-rating worksheet
-
-No analytics or advertising SDK was intentionally added to mobile. That does not establish that the service or authentication provider collects no data.
-
-| Data                                                   | Observed path                                                              | Owner confirmation needed                                              |
-| ------------------------------------------------------ | -------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Name, email, user/org IDs                              | Privy and Concors account service                                          | Controller, processors, retention and linked functionality disclosures |
-| Session/network information                            | Server session creation records IP/user agent; mobile uses SecureStore     | Logs, retention, access and revocation                                 |
-| Prompts, responses, code, terminal output, attachments | Connected daemon and configured AI providers; machine conversation history | Downstream storage/training settings, linkage and deletion             |
-| Selected photos/videos/files                           | Picker and message attachments                                             | Cache cleanup and downstream retention                                 |
-| Dictation audio                                        | Host relay to machine transcription                                        | Actual retention before applying any real-time-processing exclusion    |
-| Push/device tokens                                     | Push is disabled by current production capability fallback                 | Reassess if enabled; no delivery claim                                 |
-
-[App Privacy details](https://developer.apple.com/app-store/app-privacy-details/) cover collection beyond real-time processing. Do not derive service-wide answers from SDK manifests alone. The available API rejected privacy-label relationships; the current label state remains unverified, rather than known empty.
-
-Age-rating responses are empty. Assess AI output, accessible files and shared content using the [age-rating definitions](https://developer.apple.com/help/app-store-connect/reference/app-information/age-ratings-values-and-definitions/). Messaging/chat there concerns user-to-user communication; AI chat alone does not establish that checkbox. Do not automatically answer every content question None or select 4+ from the developer-tool category.
-
-## Binary and test evidence
-
-Inspected `0.1.0 (7)`: store provisioning, team `9WN4P724M2`, iPhone device family, minimum iOS 16.4, Xcode 26.6 / iPhoneOS 26.5 SDK, approved API and source revision embedded. Microphone and selected-photo purpose text is present; camera/tracking purpose strings and background modes are absent. `EXUpdatesEnabled=false` supports the bundled-renderer description.
-
-Twelve privacy manifests were found, including the app's merged manifest. Recorded API-reason categories are file timestamps, user defaults and system boot time. They declare no tracking; that is binary evidence, not a backend/provider declaration. See [Apple's SDK requirements](https://developer.apple.com/support/third-party-SDK-requirements/).
-
-The release passed 1,602 workspace tests, with two skipped; formatting, lint and type checks passed. Seven browser checks passed across the initial run and timeout rerun documented in `docs/mobile-testflight.md`. Record actual iPhone/iOS versions and sign-in, upgrade, microphone allow/deny, files, keyboard, background/reconnect, tool approvals and accessibility before signoff. Those physical-device results were not established in this review.
-
-## Guideline coverage and platform scope
-
-| Section         | Review scope                                                                                                                                                |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 — Safety      | AI/UGC handling, support contact and security. No proposed Kids Category, medical, gambling or physical-harm feature.                                       |
-| 2 — Performance | Completeness, metadata, screenshots, age rating, bundled UI/code, network/device behavior, microphone/files. Native acceptance remains incomplete.          |
-| 3 — Business    | Billing/provisioning exclusions, paid external services, storefront differences and companion classification.                                               |
-| 4 — Design      | Native utility, remote-client classification, possible 4.7 applicability, login and optional push. No keyboard extension, Game Center or Apple Pay feature. |
-| 5 — Legal       | Privacy, deletion, provider handling, content/IP rights and developer identity. Owner/legal facts remain outstanding.                                       |
-
-The Apple record also has a macOS `1.0` draft without a build. The desktop DMG uses `dev.concors.desktop`; its Tauri config enables `macOSPrivateApi`. Mac App Store sandboxing, public APIs, local runtime/CLI installation and updates need a separate assessment. iPhone TestFlight acceptance does not cover a Mac App Store submission.
-
-## Information needed from the owner
-
-1. Launch countries and legal copyright holder. Public support/privacy contact is **gm@hologram.xyz**; verify the inbox is monitored. Launch is confirmed free, with machines added from desktop. Apple signing organization Rolling Inc. is not proof of the copyright owner.
-2. Approved processor, retention/deletion and AI handling/training facts; intended audience/minimum age and third-party content/service rights.
-3. Review contact name/email/phone and durable dedicated account/machine access. Enter credentials privately in App Store Connect, never in this repository.
-4. Native iPhone screenshots and final physical-device acceptance results.
-5. Account-holder verification of agreements and, for EU launch, accurate [DSA trader information](https://developer.apple.com/help/app-store-connect/manage-compliance-information/manage-european-union-digital-services-act-trader-requirements/).
-
-## Route to submission
-
-Replace the exposed submission credential. Fix public pages, deletion/reauthentication, login and AI disclosure/reporting decisions. Confirm the commerce/remote rationale and owner facts; provide working review access, screenshots and device evidence. Then choose the public version, build/inspect the corrected iOS candidate, complete declarations and attach the matching build before submission.
-
-`readiness.json` remains unverified. The production checker returns exit 1 and includes Android/Play gates alongside real iOS gaps. Google/Android gates are repository workflow requirements, not Apple requirements. Define an honest iOS signoff path rather than marking unrelated requirements verified. Follow `docs/mobile-release.md`; do not bypass the gate.
+Check guideline **2.1** with working reviewer access; **2.3** with accurate screenshots, rating and
+metadata; **3.1** with the free companion scope; **4.2 / 4.2.7 / 4.7** against the implemented remote
+workspace behavior; **4.8** with configured Apple sign-in; **5.1.1** with same-user deletion and
+retention; and **5.1.2** with named third-party AI permission. Reporting/abuse operations must match
+app capabilities and Apple's applicable **1.2 / 4.7** requirements. A guideline review cannot
+promise approval.
