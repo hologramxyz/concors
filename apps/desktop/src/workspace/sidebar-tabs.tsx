@@ -26,6 +26,13 @@ import {
 import { BrailleSpinner } from "@/agents/activity";
 import { AGENT_DOT_COLOR, type AgentDot, type AgentStatus } from "@/agents/agent-status";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
+import { CompactLayoutContext } from "@/components/compact-layout";
+import {
+  RowMenuGroup,
+  RowMenuItem,
+  RowMenuSeparator,
+  RowMenuSheet,
+} from "@/components/row-menu-sheet";
 import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
 import { shortAge } from "@/lib/format-date";
 import {
@@ -114,6 +121,7 @@ export function SidebarTabRow({
   const title = row.kind === "closed" ? row.chat.title : row.title;
   const status = rowAgentStatus(row);
   const background = useContext(BackgroundTerminalsContext);
+  const phone = useContext(CompactLayoutContext);
   const terminal = row.kind === "terminal" && background ? row.terminal : undefined;
   // Mirrors the tab rename: the ref stops blur after Enter/Escape from committing a second time.
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -188,6 +196,7 @@ export function SidebarTabRow({
         "group/row flex items-center rounded-md hover:bg-sidebar-accent/70 has-[[aria-expanded=true]]:bg-sidebar-accent/70",
         selected &&
           "bg-sidebar-accent hover:bg-sidebar-accent has-[[aria-expanded=true]]:bg-sidebar-accent",
+        phone && "mobile-sidebar-tab",
       )}
     >
       {renaming !== null ? (
@@ -219,7 +228,65 @@ export function SidebarTabRow({
       ) : (
         button
       )}
-      {actions ? (
+      {actions && phone ? (
+        // A phone opens row menus as sheets, with the same items; each runs once the sheet has gone.
+        <RowMenuSheet
+          label={`Actions for ${title}`}
+          title={title}
+          className={cn(
+            "mobile-tap-target flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground",
+            renaming !== null && "invisible",
+          )}
+          icon={<Ellipsis className="size-4" />}
+        >
+          {onPin && (
+            <RowMenuItem icon={pinned ? <PinOff /> : <Pin />} onSelect={onPin}>
+              {pinned ? "Unpin" : "Pin"}
+            </RowMenuItem>
+          )}
+          {onRename && (
+            <RowMenuItem icon={<Pencil />} onSelect={() => setRename(title)}>
+              Rename tab
+            </RowMenuItem>
+          )}
+          {onFork && (
+            <RowMenuItem icon={<GitFork />} onSelect={onFork}>
+              Fork chat
+            </RowMenuItem>
+          )}
+          {canMove && (
+            <RowMenuGroup label="Move to workspace">
+              {moveTargets.map((target) => (
+                <RowMenuItem
+                  key={target.id}
+                  icon={<ArrowRightLeft />}
+                  onSelect={() => onMove?.(target.id)}
+                >
+                  {target.name}
+                </RowMenuItem>
+              ))}
+            </RowMenuGroup>
+          )}
+          {onDelete && (
+            <>
+              <RowMenuSeparator />
+              <RowMenuItem icon={<Trash2 />} destructive onSelect={onDelete}>
+                Delete
+              </RowMenuItem>
+            </>
+          )}
+          {terminal && (
+            <>
+              <RowMenuItem icon={<RotateCcw />} onSelect={() => background?.reopen(terminal)}>
+                Reopen
+              </RowMenuItem>
+              <RowMenuItem icon={<Square />} onSelect={() => background?.stop(terminal)}>
+                Stop
+              </RowMenuItem>
+            </>
+          )}
+        </RowMenuSheet>
+      ) : actions ? (
         <DropdownMenu>
           <SidebarTooltip content="Tab options">
             <DropdownMenuTrigger

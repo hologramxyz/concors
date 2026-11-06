@@ -81,12 +81,12 @@ test("a launch reopens the last tab, and each workspace keeps its own last tab",
         .click();
       await expect(picker()).toHaveAttribute("data-value", value);
     };
+    // The sidebar's workspace rows only fold now, so a workspace is opened from search.
     const openWorkspace = async (name: string) => {
       await ui.locator("#mobile-sidebar-toggle").click();
-      await ui
-        .getByRole("dialog", { name: "Workspace sidebar" })
-        .getByRole("button", { name, exact: true })
-        .click();
+      await ui.getByRole("button", { name: "Search workspace", exact: true }).click();
+      await ui.getByRole("combobox", { name: "Search workspaces and tabs" }).fill(name);
+      await ui.locator('[data-search-result="workspace"]', { hasText: name }).click();
     };
     await expect(picker()).toHaveAttribute("data-value", alpha.first);
 

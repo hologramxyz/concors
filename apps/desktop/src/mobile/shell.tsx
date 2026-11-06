@@ -2,8 +2,6 @@ import { SchedulesNav } from "@/schedules/nav";
 import { SchedulesPage } from "@/schedules/page";
 import { PullRequestsNav } from "@/pull-requests/nav";
 import { PullRequestsPage } from "@/pull-requests/page";
-import { pullRequestKey } from "@/pull-requests/store";
-import { usePullRequests } from "@/pull-requests/use-pull-requests";
 import { allPullRequests, type PullRequestsView } from "@/pull-requests/view";
 import { ColorThemeProvider } from "@/theme/color-theme-provider";
 import { machineAvailability } from "@concors/client-core";
@@ -20,29 +18,33 @@ import {
 import { FolderOpen, LoaderCircle, Menu, Search } from "lucide-react";
 import type { DaemonConnection } from "@concors/daemon-client";
 import type { MobileState, MobileTarget } from "@concors/client-core";
-import type { PaneProfile, WorkspaceOperation, WorkspaceSnapshot } from "@concors/protocol";
+import type {
+  PaneProfile,
+  TerminalInfo,
+  WorkspaceOperation,
+  WorkspaceSnapshot,
+} from "@concors/protocol";
 import { ShortcutProvider } from "@/shortcuts/provider";
 import { useCommand } from "@/shortcuts/context";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { TerminalProfilesContext } from "@/terminal/profiles-context";
+import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
+import { useBackgroundTerminals } from "@/terminal/use-background-terminals";
 import { DEFAULT_TERMINAL_PROFILES } from "@concors/protocol";
 import { AgentsProvider } from "@/agents/state";
 import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
 import { NotificationProvider } from "@/notifications/provider";
 import { setNotificationPreferences } from "@/notifications/preferences";
-import { MobileAgentSidebar } from "./agent-sidebar";
+import { MobileWorkspaceTree } from "./workspace-tree";
 import { ChatMenuProvider } from "./chat-menu";
 import { ChatPane } from "@/agents/chat";
 import { AgentDraftScopeContext } from "@/agents/draft";
 import { TerminalPane } from "@/terminal/terminal-pane";
-import { WorkspaceSidebarItem } from "@/workspace/sidebar-item";
 import { ProjectSetupDialog } from "@/workspace/project-setup-dialog";
 import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
 import { recentlyClosed } from "@/workspace/closed-workspaces";
 import { useNewWorkspace } from "@/workspace/use-new-workspace";
-import { useProjectIcons } from "@/workspace/use-project-icons";
-import { projectIconKey } from "@/workspace/project-icons";
 import { SidebarEmpty, SidebarSection } from "@/components/sidebar-section";
 import { NewTabMenu } from "@/workspace/new-tab-menu";
 import { ResumeChatDialog } from "@/agents/resume-chat";
@@ -190,8 +192,6 @@ function MobileWorkspaceContent({
     };
   }, [reconnecting]);
   const draftScope = useMemo(() => ({ machineId: host.machineId }), [host.machineId]);
-  const icons = useProjectIcons(workspace);
-  const pullRequests = usePullRequests(workspace);
   const openPullRequests = (projectId?: string, repository?: string) => {
     setPage({
       kind: "pull-requests",
@@ -449,6 +449,21 @@ function MobileWorkspaceContent({
       }
     }
   };
+  // Desktop's actions for the terminals the sidebar lists as left running with their tab closed.
+  // Reopening one shows the tab it comes back in.
+  const background = useBackgroundTerminals(
+    { transport: connection, workspace, execute: (operation) => execute(operation) },
+    { onReopen: () => undefined, onError: setError },
+  );
+  const backgroundActions = {
+    ...background.actions,
+    reopen: (terminal: TerminalInfo) => {
+      setPage(null);
+      setLocal({ machineId: host.machineId, target: { sessionId: terminal.id } });
+      setSidebarOpen(false);
+      background.actions.reopen(terminal);
+    },
+  };
   const command = (operation: WorkspaceOperation) => {
     setError(null);
     void execute(operation).catch((cause: unknown) =>
@@ -649,39 +664,27 @@ function MobileWorkspaceContent({
                           />
                         }
                       >
-                        <ul>
-                          {workspace?.projects.map((item) => (
-                            <WorkspaceSidebarItem
-                              key={item.id}
-                              project={item}
-                              compact={false}
-                              selected={project?.id === item.id}
-                              canEdit={canEdit}
-                              icon={icons.get(projectIconKey(workspace.epoch, item))}
-                              pullRequests={pullRequests.workspaces.get(
-                                pullRequestKey(workspace.epoch, item),
-                              )}
-                              onSelect={selectProject}
-                              onOpenPullRequests={openPullRequests}
-                              execute={execute}
-                              onCommand={command}
-                            />
-                          ))}
-                        </ul>
+                        <BackgroundTerminalsContext value={backgroundActions}>
+                          <MobileWorkspaceTree
+                            workspace={workspace}
+                            canEdit={canEdit}
+                            collapsed={false}
+                            selection={
+                              page || !project
+                                ? null
+                                : { projectId: project.id, tabId: tab?.id ?? null }
+                            }
+                            onSelectAgent={openAgent}
+                            onSelectTab={(projectId, tabId) => select({ projectId, tabId })}
+                            onSelectProject={selectProject}
+                            onOpenPullRequests={openPullRequests}
+                            execute={execute}
+                            onCommand={command}
+                          />
+                        </BackgroundTerminalsContext>
                         {!workspace?.projects.length && (
                           <SidebarEmpty>No workspaces yet.</SidebarEmpty>
                         )}
-                      </SidebarSection>
-                      <SidebarSection title="Agents">
-                        <MobileAgentSidebar
-                          onSelect={openAgent}
-                          workspace={workspace}
-                          paneId={pane?.id}
-                          canEdit={canEdit}
-                          execute={execute}
-                          command={command}
-                          select={select}
-                        />
                       </SidebarSection>
                       <PreviewsSidebar />
                     </nav>

@@ -415,6 +415,29 @@ body {
 .mobile-project > button:last-child {
   opacity: 1;
 }
+/* Desktop's tab rows under each workspace. Spaced as the workspace row is, so a title lines up
+   with the workspace's name above it. */
+.mobile-sidebar-tab {
+  border-radius: var(--radius-lg);
+}
+.mobile-sidebar-tab > button:first-child {
+  gap: 10px;
+  padding-left: 8px;
+  font-size: 14px;
+}
+/* Desktop's 6px status dots, and the workspace icon's, are hard to make out on a phone. */
+.mobile-sidebar-content :is([data-row-state], [data-show-more-dot]) > span.rounded-full {
+  width: 8px;
+  height: 8px;
+}
+.mobile-sidebar-content [data-workspace-attention] {
+  width: 14px;
+  height: 14px;
+}
+.mobile-sidebar-content [data-workspace-attention] > span {
+  width: 9px;
+  height: 9px;
+}
 /* Every row's "…" ends at the same edge. */
 .mobile-sidebar-content .mobile-tap-target {
   margin-right: 0;

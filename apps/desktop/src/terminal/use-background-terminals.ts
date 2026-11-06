@@ -26,7 +26,7 @@ interface Closing {
  * into a new tab of its workspace.
  */
 export function useBackgroundTerminals(
-  connection: DaemonConnectionHandle,
+  connection: Pick<DaemonConnectionHandle, "transport" | "workspace" | "execute">,
   {
     onReopen,
     onError,

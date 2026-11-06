@@ -1,5 +1,5 @@
 import { expect, test, type Page, type FrameLocator } from "@playwright/test";
-import { ids } from "../src/demo/fixtures";
+import { ids, SIDEBAR_TREE_FLAG, treeIds } from "../src/demo/fixtures";
 import { swipe as touchSwipe, scrollTimelineUp } from "./support/swipe";
 import { BINDINGS, isCompactCommand } from "../../desktop/src/shortcuts/bindings";
 import {
@@ -11,6 +11,14 @@ import {
 } from "../../desktop/src/shortcuts/keymap";
 const workspace = (page: Page) => page.frameLocator('iframe[title="Concors workspace"]');
 const activeChat = `${ids.tab}:${ids.pane}`;
+/** A tab's row under its workspace in the sidebar, which opens the tab. */
+const tabRow = (ui: FrameLocator, title: string, workspaceName = "Concors") =>
+  ui
+    .getByRole("list", { name: `${workspaceName} tabs`, exact: true })
+    .getByRole("listitem")
+    .filter({ hasText: title })
+    .getByRole("button")
+    .first();
 const activeTerminal = `${ids.tab}:${ids.terminalPane}`;
 async function choose(ui: FrameLocator, label: string, value: string) {
   await ui.getByRole("combobox", { name: label, exact: true }).click();
@@ -512,7 +520,9 @@ test("sidebar pushes the workspace and settings opens as a drawer over the same 
   const sidebar = ui.getByRole("dialog", { name: "Workspace sidebar" });
   await expect(sidebar).toBeVisible();
   await expect(sidebar.getByText("Workspaces", { exact: true })).toBeVisible();
-  await expect(sidebar.getByText("Agents", { exact: true })).toBeVisible();
+  // Chats are listed under their workspace, as on desktop, not in a section of their own.
+  await expect(sidebar.getByText("Agents", { exact: true })).toHaveCount(0);
+  await expect(tabRow(ui, "Mobile launch")).toBeVisible();
   await expect(sidebar.getByText("Previews", { exact: true })).toBeVisible();
   await expect
     .poll(() => ui.getByTestId("mobile-workspace").evaluate((el) => el.getBoundingClientRect().x))
@@ -634,7 +644,7 @@ test("new workspace completion opens its own project and closes the sidebar", as
     "New workspace",
   );
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await ui.getByRole("button", { name: /^Concors(, |$)/ }).click();
+  await tabRow(ui, "Mobile launch").click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue(
     "Keep my original draft",
   );
@@ -1033,13 +1043,14 @@ test("tab menus pin, fork and delete chats with desktop's actions, and undo a de
   await paneCount(ui, 4);
   await expect(picker).not.toHaveAttribute("data-value", chat);
 
-  // The sidebar's Agents rows open the same menu.
+  // The sidebar's tab rows open desktop's sidebar menu as a sheet: no tab type or close, which
+  // are the tab's own.
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await ui
     .getByRole("dialog", { name: "Workspace sidebar" })
     .getByRole("button", { name: /^Actions for .*\(fork\)$/ })
     .click();
-  expect(await menuItems()).toEqual(["Pin", "Rename tab", "Fork chat", "Close tab…", "Delete…"]);
+  expect(await menuItems()).toEqual(["Pin", "Rename tab", "Fork chat", "Delete"]);
 });
 test("glass controls retain their shape and composer height animates with reduced-motion support", async ({
   page,
@@ -1567,7 +1578,6 @@ test("pages opened from a chat start below the header, and the chat scrolls unde
   const header = ui.locator(".mobile-header");
   const openFromSidebar = async (name: string) => {
     await ui.locator("#mobile-sidebar-toggle").click();
-    // A workspace's row also says when one of its chats needs attention.
     await ui
       .getByRole("dialog", { name: "Workspace sidebar" })
       .getByRole("button", { name: new RegExp(`^${name}(,|$)`) })
@@ -1591,7 +1601,8 @@ test("pages opened from a chat start below the header, and the chat scrolls unde
       })
       .toBeGreaterThanOrEqual(0);
   }
-  await openFromSidebar("Concors");
+  await ui.locator("#mobile-sidebar-toggle").click();
+  await tabRow(ui, "Mobile launch").click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
   await expect(ui.locator(".mobile-pane")).toHaveCSS("padding-top", "0px");
 });
@@ -1639,4 +1650,80 @@ test("the app reopens the tab last opened on this machine", async ({ page }) => 
   await choose(ui, "Tabs", activeChat);
   await enter(page);
   await expect(tabs).toHaveAttribute("data-value", activeChat);
+});
+test("the sidebar lists each workspace's tabs under it, as desktop does", async ({ page }) => {
+  const enterTree = async () => {
+    await page.goto(`/?${SIDEBAR_TREE_FLAG}`);
+    await page.getByRole("button", { name: "Explore demo" }).click();
+    const ui = workspace(page);
+    await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+    await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+    return ui;
+  };
+  let ui = await enterTree();
+  const sidebar = ui.getByRole("dialog", { name: "Workspace sidebar" });
+  const row = (id: string) => sidebar.locator(`[data-sidebar-row$="${id}"]`);
+  const state = (id: string) => row(id).locator("[data-row-state]");
+  // Two workspaces with one name are told apart by their parent folders.
+  const workspaces = sidebar.locator("[data-workspace-id]");
+  await expect(workspaces).toHaveCount(2);
+  await expect(workspaces.nth(0)).toContainText(/Concors\s*alex/);
+  await expect(workspaces.nth(1)).toContainText(/Concors\s*forks/);
+  // Pins first, then open tabs in the tab bar's order, then what closed, newest first.
+  const first = sidebar.getByRole("list", { name: "Concors tabs" }).first();
+  await expect(first.getByRole("listitem")).toHaveText([
+    /^Roadmap/,
+    /^Mobile launch/,
+    /Release notes/,
+    /^Fix sign-in/,
+    /^Flaky upload test/,
+    /^pnpm dev/,
+    /^Old onboarding copy/,
+  ]);
+  await expect(row(treeIds.pinnedTab).getByLabel("Pinned")).toBeVisible();
+  await expect(row(treeIds.closed).locator("[data-agent-closed]")).toBeVisible();
+  // Each status as desktop shows it: a spinner while replying, red for a question or a failure,
+  // the accent once finished, grey for a terminal running with its tab closed.
+  await expect(state(treeIds.workingTab)).toHaveAttribute("data-row-state", "working");
+  await expect(state(ids.tab)).toHaveAttribute("data-row-state", "attention");
+  await expect(state(treeIds.failedTab)).toHaveAttribute("data-row-state", "attention");
+  await expect(state(treeIds.doneTab)).toHaveAttribute("data-row-state", "done");
+  await expect(state(treeIds.background)).toHaveAttribute("data-row-state", "running");
+  // Rows and their menus are 44pt targets.
+  for (const target of [
+    workspaces.nth(0),
+    row(treeIds.doneTab).locator("> button").first(),
+    row(treeIds.doneTab).getByRole("button", { name: "Actions for Fix sign-in" }),
+  ])
+    expect((await target.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+
+  // Tapping a workspace folds it alone, keeps the sidebar open, and moves its dot to the folder.
+  const fork = workspaces.nth(1);
+  await expect(fork).toHaveAttribute("aria-expanded", "true");
+  await expect(sidebar.locator("[data-workspace-attention]")).toHaveCount(0);
+  await fork.click();
+  await expect(fork).toHaveAttribute("aria-expanded", "false");
+  await expect(workspaces.nth(0)).toHaveAttribute("aria-expanded", "true");
+  await expect(row(treeIds.forkTab)).toBeHidden();
+  await expect(sidebar.locator('[data-workspace-attention="done"]')).toBeVisible();
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
+  // Folded stays folded, as desktop remembers it.
+  ui = await enterTree();
+  await expect(fork).toHaveAttribute("aria-expanded", "false");
+  await fork.click();
+  await expect(row(treeIds.forkTab)).toBeVisible();
+
+  // Tapping a tab opens it, in its own workspace, and closes the sidebar.
+  await row(treeIds.forkTab).locator("> button").first().click();
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
+  await expect(ui.getByRole("combobox", { name: "Tabs", exact: true })).toContainText(
+    "Try the new parser",
+  );
+  // A closed chat opens again from its row.
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await row(treeIds.closed).locator("> button").first().click();
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
+  await expect(ui.getByRole("log", { name: "Chat timeline" })).toContainText(
+    "Old onboarding copy: can you take this on?",
+  );
 });

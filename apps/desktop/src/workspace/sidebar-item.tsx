@@ -36,6 +36,7 @@ export function WorkspaceSidebarItem({
   icon,
   pullRequests,
   onSelect,
+  toggles = false,
   onToggleExpanded,
   onOpenPullRequests,
   execute,
@@ -59,6 +60,8 @@ export function WorkspaceSidebarItem({
   /** Its open list shows each dot on its own row, so the folder has no dot of its own. */
   expanded?: boolean;
   onSelect: (id: string) => void;
+  /** Choosing the row only expands or collapses it, so it says so to a screen reader. */
+  toggles?: boolean;
   /** Offers a chevron over the icon on hover and keyboard focus, which only folds the workspace. */
   onToggleExpanded?: () => void;
   onOpenPullRequests?: (projectId: string, repository?: string) => void;
@@ -138,6 +141,7 @@ export function WorkspaceSidebarItem({
       onClick={() => onSelect(project.id)}
       // The workspace you are in, even while one of its tab rows carries the selection's fill.
       aria-current={(current ?? selected) ? "page" : undefined}
+      aria-expanded={toggles ? !!expanded : undefined}
       className={cn(
         "flex min-w-0 flex-1 items-center rounded-md text-ui disabled:opacity-50",
         compact ? "sidebar-rail-control font-semibold" : "h-8 gap-2 px-2",

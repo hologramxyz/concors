@@ -32,6 +32,8 @@ import {
   demoTerminal,
   demoWorkspace,
   ids,
+  SIDEBAR_TREE_FLAG,
+  sidebarTreeDemo,
 } from "./fixtures";
 
 const DEMO_DICTATION = "This is a simulated dictation.";
@@ -47,10 +49,14 @@ interface TerminalState {
   output: string;
   owner: string | null;
 }
+/** Whether the page asked for the sidebar tree's extra rows (see `sidebarTreeDemo`). */
+const sidebarTreeRequested = () =>
+  typeof location !== "undefined" && new URLSearchParams(location.search).has(SIDEBAR_TREE_FLAG);
 /** In-memory fixture: all actions are simulated, including files, processes, machines and billing. */
-export function createDemoServer() {
+export function createDemoServer({ sidebarTree = sidebarTreeRequested() } = {}) {
   const resources = demoResources();
-  let workspace = structuredClone(demoWorkspace);
+  const tree = sidebarTree ? sidebarTreeDemo() : null;
+  let workspace = structuredClone(tree?.workspace ?? demoWorkspace);
   const conversations = new Map<string, Conversation>([
     [ids.agent, { agent: structuredClone(demoAgent), items: structuredClone(demoItems) }],
   ]);
@@ -66,6 +72,14 @@ export function createDemoServer() {
       },
     ],
   ]);
+  for (const chat of tree?.chats ?? []) conversations.set(chat.agent.id, chat);
+  for (const session of tree?.terminals ?? [])
+    terminals.set(session.id, {
+      session,
+      sequence: 0,
+      output: "~/concors $ pnpm dev\r\n",
+      owner: null,
+    });
   const setups = new Map<string, ProjectSetup>();
   const sockets = new Set<DemoSocket>();
   const replies = new Map<string, DaemonMessage>();
@@ -76,6 +90,20 @@ export function createDemoServer() {
     for (const socket of sockets) socket.emit(message);
   };
   const snapshot = () => broadcast({ type: "workspace.snapshot", snapshot: workspace });
+  /** Fails a working chat a moment after the app subscribes, so it shows as a new failure. */
+  const failSoon = (id: string) =>
+    setTimeout(() => {
+      const conversation = conversations.get(id);
+      if (conversation?.agent.status !== "working") return;
+      conversation.agent = {
+        ...conversation.agent,
+        status: "failed",
+        error: "The test run exited with code 1.",
+        updatedAt: new Date().toISOString(),
+        revision: conversation.agent.revision + 1,
+      };
+      broadcast({ type: "agent.state", agent: conversation.agent });
+    }, 1_000);
   const state = (conversation: Conversation) => {
     conversation.agent = {
       ...conversation.agent,
@@ -495,6 +523,7 @@ export function createDemoServer() {
               break;
             case "workspace.subscribe":
               this.emit({ type: "workspace.snapshot", snapshot: workspace });
+              if (tree) failSoon(tree.failing);
               this.emit({
                 type: "agent.list",
                 agents: [...conversations.values()].map((entry) => entry.agent),

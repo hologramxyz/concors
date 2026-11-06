@@ -3,6 +3,7 @@ import {
   AgentItemSchema,
   TerminalInfoSchema,
   WorkspaceSnapshotSchema,
+  type AgentInfo,
   type AgentPlanUsage,
 } from "@concors/protocol";
 import { MeSchema, MachineSchema } from "@concors/api-client";
@@ -299,3 +300,130 @@ export const demoMachine = MachineSchema.parse({
   updatedAt: date,
   deletedAt: null,
 });
+
+/**
+ * Extra rows for the sidebar's workspace tree, only when the demo is opened with
+ * `?demo-sidebar-tree`, so its specs and screenshots see every row state without changing the
+ * demo everyone else gets: a second workspace with the same name in another folder, a pinned chat,
+ * a closed one, one chat per status, and a terminal left running with its tab closed.
+ */
+export const SIDEBAR_TREE_FLAG = "demo-sidebar-tree";
+const treeId = (n: number) => `c0000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+export const treeIds = {
+  fork: treeId(1),
+  forkTab: treeId(2),
+  forkPane: treeId(3),
+  forkAgent: treeId(4),
+  working: treeId(10),
+  workingTab: treeId(11),
+  done: treeId(20),
+  doneTab: treeId(21),
+  failed: treeId(30),
+  failedTab: treeId(31),
+  pinned: treeId(40),
+  pinnedTab: treeId(41),
+  closed: treeId(50),
+  background: treeId(60),
+};
+const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+const treeChat = (
+  id: string,
+  projectId: string,
+  name: string,
+  status: "working" | "done" | "idle",
+  minutes: number,
+  extra: Record<string, unknown> = {},
+) =>
+  AgentInfoSchema.parse({
+    ...demoAgent,
+    id,
+    projectId,
+    name,
+    status,
+    pending: [],
+    // A finished turn nobody has looked at yet. The same number under another prefix, as an
+    // attention ID is a UUID of its own.
+    attention:
+      status === "done"
+        ? { id: id.replace(/^c/, "a"), kind: "done", createdAt: minutesAgo(minutes), seen: false }
+        : null,
+    turnId: `${id}-turn`,
+    startedAt: minutesAgo(minutes + 5),
+    turnStartedAt: minutesAgo(minutes),
+    updatedAt: minutesAgo(minutes),
+    ...extra,
+  });
+/** A tab holding one chat pane. */
+const chatTab = (id: string, paneId: string, name: string, sessionId: string) => ({
+  id,
+  name,
+  root: paneId,
+  nodes: [{ id: paneId, kind: "pane", profile: "chat", sessionId }],
+});
+/** A question and its answer, so a chat opened from the tree has something to show. */
+const treeItems = (agent: AgentInfo) =>
+  [
+    { kind: "user", title: "You", text: `${agent.name}: can you take this on?` },
+    { kind: "assistant", title: "Codex", text: "On it. Everything in this preview is simulated." },
+  ].map((item, position) =>
+    AgentItemSchema.parse({
+      ...item,
+      id: `${agent.id}-item-${position}`,
+      sessionId: agent.id,
+      turnId: agent.turnId,
+      position,
+      revision: 0,
+      detail: "",
+      status: "completed",
+      createdAt: agent.turnStartedAt,
+    }),
+  );
+export function sidebarTreeDemo() {
+  const [concors] = demoWorkspace.projects;
+  if (!concors) throw new Error("The demo has no workspace");
+  const workspace = WorkspaceSnapshotSchema.parse({
+    ...demoWorkspace,
+    projects: [
+      {
+        ...concors,
+        tabs: [
+          ...concors.tabs,
+          chatTab(treeIds.workingTab, treeId(12), "Release notes", treeIds.working),
+          chatTab(treeIds.doneTab, treeId(22), "Fix sign-in", treeIds.done),
+          chatTab(treeIds.failedTab, treeId(32), "Flaky upload test", treeIds.failed),
+          chatTab(treeIds.pinnedTab, treeId(42), "Roadmap", treeIds.pinned),
+        ],
+      },
+      {
+        id: treeIds.fork,
+        // The same name in another folder: the sidebar tells them apart by the parent folder.
+        name: "Concors",
+        directory: "/home/alex/forks/concors",
+        version: 1,
+        tabs: [chatTab(treeIds.forkTab, treeIds.forkPane, "Try the new parser", treeIds.forkAgent)],
+      },
+    ],
+  });
+  const agents = [
+    treeChat(treeIds.working, ids.project, "Release notes", "working", 1),
+    treeChat(treeIds.done, ids.project, "Fix sign-in", "done", 12),
+    // Working until the app is watching: a failure from before it opened counts as seen.
+    treeChat(treeIds.failed, ids.project, "Flaky upload test", "working", 25),
+    treeChat(treeIds.pinned, ids.project, "Roadmap", "idle", 180, { pinned: true }),
+    // No tab shows it, so it is listed closed, muted, under its workspace.
+    treeChat(treeIds.closed, ids.project, "Old onboarding copy", "idle", 60 * 26),
+    treeChat(treeIds.forkAgent, treeIds.fork, "Try the new parser", "done", 40),
+  ];
+  const terminal = TerminalInfoSchema.parse({
+    ...demoTerminal,
+    id: treeIds.background,
+    foregroundCommand: "pnpm dev",
+    startedAt: minutesAgo(90),
+  });
+  return {
+    workspace,
+    chats: agents.map((agent) => ({ agent, items: treeItems(agent) })),
+    terminals: [terminal],
+    failing: treeIds.failed,
+  };
+}
