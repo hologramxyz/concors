@@ -18,6 +18,7 @@ The previous audits and implementation history are in [the November 4–5 audit]
 | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | App Store draft     | iOS **0.1.0**, PREPARE_FOR_SUBMISSION. Name, subtitle, feature description, keywords, promotional copy, concors.dev marketing/support/privacy URLs and **2026 Rolling Inc.** copyright saved.                                                                                                                                                                        |
 | Private contact     | Complete contact details reused from this same app's existing beta review record. Private details and reviewer secrets are not stored in the repository.                                                                                                                                                                                                             |
+| Reviewer login      | Privy test accounts enabled; one issued account completed normal production email sign-in and PKCE exchange. Its login and fixed-code instructions are saved in Apple’s private App Review fields. It has **zero connected machines**; see [reviewer-access.json](reviewer-access.json). Browser verification does not establish signed-iPhone acceptance.           |
 | Price and countries | Price zero in the USA and all 174 automatic price territories. All 175 territories selected, including future territories. Selection does not override Apple's regional eligibility requirements.                                                                                                                                                                    |
 | Agreements / EU     | Free-app agreement is **Active**, current and in effect after the Account Holder's acceptance. App Information identifies this developer as a trader for this app. Paid-app agreement still needs information; this launch has no iPhone commerce.                                                                                                                   |
 | Credentials         | Dedicated **Concors EAS Submit**, App Manager role, assigned in Expo. The exposed old key was revoked. Apple's team-key role spans apps; the Expo submission assignment is specific to Concors.                                                                                                                                                                      |
@@ -36,11 +37,12 @@ The previous audits and implementation history are in [the November 4–5 audit]
    Privy app, enable return of OAuth tokens, and enable Apple only after correct provider settings.
    Keep allowed domains. Verify first-time/returning sign-in, Hide My Email, cancellation and revocation
    on a signed iPhone. The environment's backend app secret does not replace dashboard access.
-2. **Reviewer access.** Enable Privy's generated test accounts; retrieve credentials securely and
-   populate Apple's private review fields. Assign an isolated, already connected machine and working
-   AI-provider access that remain available throughout review. Do not expose a customer's workspace,
-   a developer host or the agent's credentials. Verify the exact review route and deletion on a
-   separate disposable account before final handoff.
+2. **Reviewer workspace.** The dedicated email login is verified and saved privately in Apple.
+   Assign an isolated, connected machine and working AI-provider access that remain available
+   throughout review; the reviewer account currently has no machines. Do not expose a customer's
+   workspace, a developer host or the agent's credentials. Verify the exact review route and deletion
+   on a separate disposable account before final handoff. Keep Privy test accounts enabled throughout
+   review: disabling/re-enabling rotates the credentials, which would require updating Apple's fields.
 3. **Screenshots and real device acceptance.** Finish the native screenshot set and interaction checks.
    Complete install/upgrade, permissions, keyboard, reconnect, accessibility, AI decline/withdrawal,
    support reporting and deletion on a physical iPhone. Native simulator/browser checks alone do not

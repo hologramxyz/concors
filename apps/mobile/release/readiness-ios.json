@@ -25,7 +25,9 @@
         "https://github.com/hologramxyz/concors-server/pull/21",
         "https://github.com/hologramxyz/concors-server/pull/23",
         "Apple primary App ID enabled, Services ID and dedicated signing key prepared; backend signing-key configuration stored and new code deployed.",
-        "Privy Apple settings / OAuth-token return / test account setup and real signed-iPhone acceptance remain required; production currently advertises apple:false."
+        "Privy Apple settings / OAuth-token return and real signed-iPhone acceptance remain required; production currently advertises apple:false.",
+        "reviewer-access.json",
+        "Normal production email-code sign-in and PKCE exchange passed for the Privy test account in Chromium. This does not verify Apple sign-in or the signed iPhone authentication session."
       ]
     },
     {
@@ -35,7 +37,9 @@
       "status": "blocked",
       "evidence": [
         "https://github.com/hologramxyz/concors/pull/163",
-        "Automated browser/daemon checks pass; a dedicated production review machine and phone acceptance are still needed."
+        "Automated browser/daemon checks pass; a dedicated production review machine and phone acceptance are still needed.",
+        "reviewer-access.json",
+        "The verified reviewer account has zero connected machines; isolated machine and AI-provider access remain required."
       ]
     },
     {
@@ -106,11 +110,13 @@
         "app-store-connect-draft.json",
         "Apple draft 0.1.0 has description/keywords/promotion, concors.dev URLs, Rolling Inc. copyright, private contact and a verified attached build.",
         "Nine linked privacy categories are published. All 175 territories are selected.",
-        "Working reviewer account/machine, final screenshot review and physical-device acceptance remain required.",
+        "An isolated reviewer machine with working AI access, final screenshot review and physical-device acceptance remain required.",
         "ios-native-evidence.md",
         "One inspected native 6.9-inch workspace capture is processed and active in Apple. Agent/files captures with demo guidance or empty states were rejected. The native simulator control/draft flow passed in run 42173390095 (63 commands); production and physical-device acceptance remain required.",
         "launch-policy.json",
-        "Owner confirmed necessary content rights and authorized repository/machine access. Apple USES_THIRD_PARTY_CONTENT declaration and SIXTEEN_PLUS age override read back on November 6, 2026."
+        "Owner confirmed necessary content rights and authorized repository/machine access. Apple USES_THIRD_PARTY_CONTENT declaration and SIXTEEN_PLUS age override read back on November 6, 2026.",
+        "reviewer-access.json",
+        "Verified Privy test-account login and fixed-code instructions are stored in Apple\u2019s private App Review fields; credential values are excluded from the repository."
       ]
     },
     {
