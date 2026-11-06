@@ -74,12 +74,72 @@ function recipient(provider: ProviderStatus) {
   return `${provider.label} (${vendor})${provider.customized ? "; custom configuration: check its endpoints on desktop" : ""}${provider.mcpServerNames?.length ? `; connected tools: ${provider.mcpServerNames.join(", ")}` : ""}`;
 }
 
-/** Permission lives only on this account/machine connection. Registry revisions invalidate grants
- * even when secret endpoint values are redacted; private configuration values never enter the UI. */
+interface SavedPermission {
+  blocked: boolean;
+  grant: string | null;
+}
+
+/** One account/machine record. Serialize writes so withdrawal wins over an earlier approval. */
+export function createAISharingStore(storage: {
+  read(): Promise<string | null>;
+  write(value: string): Promise<void>;
+}) {
+  let loaded: Promise<SavedPermission> | undefined;
+  let writes: Promise<void> = Promise.resolve();
+  const prompts = new Map<string, Promise<boolean>>();
+  let promptQueue: Promise<unknown> = Promise.resolve();
+  return {
+    read() {
+      return (loaded ??= storage.read().then((raw): SavedPermission => {
+        try {
+          const saved = JSON.parse(raw ?? "null") as SavedPermission | null;
+          if (
+            saved &&
+            typeof saved.blocked === "boolean" &&
+            (saved.grant === null || typeof saved.grant === "string")
+          )
+            return saved;
+        } catch {
+          /* A missing or invalid record requires fresh permission. */
+        }
+        return { blocked: false, grant: null };
+      }));
+    },
+    confirm(key: string, ask: () => Promise<boolean>) {
+      let pending = prompts.get(key);
+      if (!pending) {
+        pending = promptQueue.then(ask);
+        prompts.set(key, pending);
+        promptQueue = pending.catch(() => undefined);
+        // Keep an explicit approval for a replacement controller that joins just after the
+        // dialog closes. It still rechecks the recipients before sending anything.
+        void pending.then(
+          (allowed) => {
+            if (!allowed) prompts.delete(key);
+          },
+          () => prompts.delete(key),
+        );
+      }
+      return pending;
+    },
+    write(value: SavedPermission) {
+      if (value.grant === null) prompts.clear();
+      else for (const key of prompts.keys()) if (key !== value.grant) prompts.delete(key);
+      loaded = Promise.resolve(value);
+      const next = writes.catch(() => undefined).then(() => storage.write(JSON.stringify(value)));
+      writes = next;
+      return next;
+    },
+  };
+}
+
+/** Approval covers the named recipients on one account/machine, across conversations and
+ * reconnects. Registry revisions invalidate it even when private endpoint values are redacted. */
 export function createAISharingPermission(
   context: Context,
   ask: (disclosure: string) => Promise<boolean>,
   changed: (state: "ask" | "allowed" | "blocked") => void = () => undefined,
+  store?: ReturnType<typeof createAISharingStore>,
 ) {
   const grants = new Set<string>();
   const pending = new Map<string, Promise<boolean>>();
@@ -94,9 +154,9 @@ export function createAISharingPermission(
     );
     if (result.outcome.status !== "ok") throw new Error("Provider discovery failed");
     const target = selected(message, context);
-    let providers = target.provider
-      ? result.outcome.providers.filter((p) => p.id === target.provider)
-      : result.outcome.providers.filter((p) => p.enabled);
+    // Disclose the machine's configured recipients together: restoring several conversations
+    // must not ask again for every agent or model using those same services.
+    let providers = result.outcome.providers.filter((p) => p.enabled || p.id === target.provider);
     if (message.type === "provider.request" && message.operation.kind === "save") {
       const proposed = message.operation.config;
       providers = [
@@ -113,29 +173,30 @@ export function createAISharingPermission(
     }
     if (!providers.length || providers.length > 12)
       throw new Error("Choose a configured provider before continuing");
+    providers.sort((a, b) => a.id.localeCompare(b.id));
     const names = providers.map(recipient);
-    const model = target.model ?? "the model selected on your machine";
     return {
       key: JSON.stringify([
         result.outcome.revision,
-        providers.map((p) => [p.id, p.engine, p.label, p.mcpServerNames]),
-        model,
+        providers.map((p) => [p.id, p.engine, p.label, p.customized, p.mcpServerNames]),
       ]),
-      text: `Recipients: ${names.join("\n\n")}\nModel: ${model}\n\nOpening a conversation can resume its agent. Your prompts, code, attachments, conversation history and tool context may be sent from your connected machine to these AI services and configured tools. Their retention and training rules depend on your provider/account settings. Check custom endpoints and tool recipients on desktop before agreeing.\n\nAllow sharing with this configuration for this connection? You can withdraw permission in Settings → Account → AI data sharing. Existing work on your machine keeps running until you stop it.`,
+      text: `Recipients: ${names.join("\n\n")}\nModels: those configured for these services on your machine\n\nOpening a conversation can resume its agent. Your prompts, code, attachments, conversation history and tool context may be sent from your connected machine to these AI services and configured tools. Their retention and training rules depend on your provider/account settings. Check custom endpoints and tool recipients on desktop before agreeing.\n\nAllow sharing with these services on this machine? Your choice is saved on this device for this account and machine. You will be asked again if the configuration changes. You can withdraw permission in Settings → Account → AI data sharing. Existing work on your machine keeps running until you stop it.`,
     };
   };
   return {
-    withdraw() {
+    async withdraw() {
       blocked = true;
       generation++;
       grants.clear();
       changed("blocked");
+      await store?.write({ blocked: true, grant: null });
     },
-    review() {
+    async review() {
       blocked = false;
       generation++;
       grants.clear();
       changed("ask");
+      await store?.write({ blocked: false, grant: null });
     },
     dispose() {
       disposed = true;
@@ -152,27 +213,38 @@ export function createAISharingPermission(
       const version = generation;
       try {
         const disclosure = await describe(message);
+        const saved = await store?.read();
+        if (saved?.blocked) {
+          blocked = true;
+          changed("blocked");
+        }
         if (disposed || blocked || generation !== version)
           return rejected(message, "AI sharing permission changed. Try again.");
         if (
-          grants.has(disclosure.key) &&
+          (grants.has(disclosure.key) || saved?.grant === disclosure.key) &&
           !(message.type === "provider.request" && message.operation.kind === "save")
-        )
+        ) {
+          changed("allowed");
           return null;
+        }
         let approval = pending.get(disclosure.key);
         if (!approval) {
           approval = queue.then(async () => {
             if (disposed || blocked || generation !== version) return false;
-            const allowed = await ask(disclosure.text);
+            const question = () => ask(disclosure.text);
+            const allowed = await (store ? store.confirm(disclosure.key, question) : question());
             if (!allowed && !disposed && generation === version) {
               blocked = true;
               generation++;
               grants.clear();
               changed("blocked");
+              await store?.write({ blocked: true, grant: null });
             }
             if (!allowed || disposed || blocked || generation !== version) return false;
             const current = await describe(message);
             if (current.key !== disclosure.key) return false;
+            await store?.write({ blocked: false, grant: disclosure.key });
+            if (disposed || blocked || generation !== version) return false;
             grants.add(disclosure.key);
             changed("allowed");
             return true;
