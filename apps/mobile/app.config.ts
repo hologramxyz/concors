@@ -71,6 +71,8 @@ const config: ExpoConfig = {
         "Name",
         "EmailAddress",
         "UserID",
+        "DeviceID",
+        "ProductInteraction",
         "OtherUserContent",
         "PhotosorVideos",
         "CustomerSupport",
@@ -79,7 +81,13 @@ const config: ExpoConfig = {
         NSPrivacyCollectedDataType: `NSPrivacyCollectedDataType${type}`,
         NSPrivacyCollectedDataTypeLinked: true,
         NSPrivacyCollectedDataTypeTracking: false,
-        NSPrivacyCollectedDataTypePurposes: ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+        // Privy's browser sign-in uses a stable browser ID and authenticated analytics events.
+        NSPrivacyCollectedDataTypePurposes: [
+          "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+          ...(["UserID", "DeviceID", "ProductInteraction", "OtherDiagnosticData"].includes(type)
+            ? ["NSPrivacyCollectedDataTypePurposeAnalytics"]
+            : []),
+        ],
       })),
     },
     // Add Universal Links only once the website serves and tests the association file.

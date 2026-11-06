@@ -1,0 +1,44 @@
+{
+  "identity": {
+    "CFBundleIdentifier": "xyz.hologram.concors",
+    "CFBundleShortVersionString": "0.1.0",
+    "CFBundleVersion": "11"
+  },
+  "teamId": "9WN4P724M2",
+  "storeProvisioning": true,
+  "sourceRevisionEmbedded": "8f02642056f9da0d3b313b77d58784f2a7252dd8",
+  "approvedApiEmbedded": true,
+  "photoPickerConfigured": true,
+  "microphonePurposeConfigured": true,
+  "cameraPurposeAbsent": true,
+  "iosWorkspaceOriginEmbedded": true,
+  "profileExpires": "2027-08-10T03:03:54",
+  "sdk": "iphoneos26.5",
+  "xcode": "2660",
+  "minimumOSVersion": "16.4",
+  "deviceFamily": [1],
+  "usesNonExemptEncryption": false,
+  "associatedDomainsAbsentFromSignedEntitlements": true,
+  "collectedDataTypes": [
+    "NSPrivacyCollectedDataTypeCustomerSupport",
+    "NSPrivacyCollectedDataTypeEmailAddress",
+    "NSPrivacyCollectedDataTypeName",
+    "NSPrivacyCollectedDataTypeOtherDiagnosticData",
+    "NSPrivacyCollectedDataTypeOtherUserContent",
+    "NSPrivacyCollectedDataTypePhotosorVideos",
+    "NSPrivacyCollectedDataTypeUserID"
+  ],
+  "collectedDataLinkedToUser": true,
+  "collectedDataUsedForTracking": false,
+  "collectedDataPurpose": "AppFunctionality",
+  "requiredReasonAPIs": {
+    "NSPrivacyAccessedAPICategoryFileTimestamp": ["C617.1"],
+    "NSPrivacyAccessedAPICategoryUserDefaults": ["CA92.1"],
+    "NSPrivacyAccessedAPICategorySystemBootTime": ["35F9.1"]
+  },
+  "checkedAt": "2026-11-06T01:42:00Z",
+  "buildId": "c6dee6f9-7e1c-4cb7-b9b5-05c414bad92d",
+  "artifactSha256": "7e16ddd3611bb2270f2c554789ffe3111893c12e7cb890421d337b170b3934d5",
+  "buildUrl": "https://expo.dev/accounts/guitong35/projects/concors/builds/c6dee6f9-7e1c-4cb7-b9b5-05c414bad92d",
+  "scope": "Static inspection of the signed iPhone artifact; not physical-device or production-account acceptance"
+}

@@ -1,4 +1,5 @@
 import { AgentDraftScopeContext, useAgentDraft, type InputDraft as Draft } from "./draft";
+import { NO_RECALL, recallStep, type PromptRecall } from "./prompt-history";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowUp,
@@ -102,6 +103,7 @@ export function AgentComposer({
   onInterrupt,
   onSend,
   placeholder,
+  history = [],
 }: {
   agent: AgentInfo;
   connected: boolean;
@@ -115,6 +117,8 @@ export function AgentComposer({
   onSend?: () => void;
   /** Replaces the idle prompt, as the start screen does under its own heading. */
   placeholder?: string | undefined;
+  /** The prompts sent in this chat, oldest first, which Up and Down bring back. */
+  history?: readonly string[];
 }) {
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
@@ -125,6 +129,7 @@ export function AgentComposer({
   const [nativeExpanded, setNativeExpanded] = useState(false);
   const [nativeHeight, setNativeHeight] = useState(66);
   const [editAck, setEditAck] = useState(0);
+  const [recall, setRecall] = useState<PromptRecall>(NO_RECALL);
   const nativeEditSequence = useRef(0);
   const nativeField = useRef<HTMLDivElement>(null);
   const expanded = native ? nativeExpanded : webExpanded;
@@ -1371,6 +1376,32 @@ export function AgentComposer({
                       e.preventDefault();
                       e.stopPropagation();
                       setSlashDismissed(draft);
+                      return;
+                    }
+                  }
+                  if (
+                    (e.key === "ArrowUp" || e.key === "ArrowDown") &&
+                    !e.shiftKey &&
+                    !e.altKey &&
+                    !e.metaKey &&
+                    !e.ctrlKey &&
+                    !e.nativeEvent.isComposing
+                  ) {
+                    const field = e.currentTarget;
+                    const step = recallStep({
+                      key: e.key,
+                      history,
+                      recall,
+                      // The box itself, not the draft store, which can trail a key just typed.
+                      draft: field.value,
+                      selectionStart: field.selectionStart,
+                      selectionEnd: field.selectionEnd,
+                    });
+                    if (step) {
+                      e.preventDefault();
+                      setRecall(step.recall);
+                      // Replacing a text box's value puts the caret at its end, as a shell does.
+                      setDraft(step.draft);
                       return;
                     }
                   }

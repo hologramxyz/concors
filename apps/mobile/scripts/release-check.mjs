@@ -4,22 +4,30 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { candidateFailures, releaseFailures } from "./release-requirements.mjs";
 
-export async function checkRelease({ candidate = false, json = false } = {}) {
+export async function checkRelease({
+  candidate = false,
+  json = false,
+  platform = process.env.EAS_BUILD_PLATFORM === "ios" ? "ios" : "all",
+} = {}) {
   try {
     const readiness = JSON.parse(
-      await readFile(new URL("../release/readiness.json", import.meta.url), "utf8"),
+      await readFile(
+        new URL(
+          platform === "ios" ? "../release/readiness-ios.json" : "../release/readiness.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
     );
     const { version } = JSON.parse(
       await readFile(new URL("../package.json", import.meta.url), "utf8"),
     );
-    const failures = (candidate ? candidateFailures : releaseFailures)(
-      readiness,
-      process.env,
-      version,
-    );
+    const failures = candidate
+      ? candidateFailures(readiness, process.env, version)
+      : releaseFailures(readiness, process.env, version, platform);
     if (json)
       process.stdout.write(
-        `${JSON.stringify({ check: candidate ? "candidate-build" : "store-submission", ready: failures.length === 0, failures }, null, 2)}\n`,
+        `${JSON.stringify({ check: candidate ? "candidate-build" : "store-submission", platform, ready: failures.length === 0, failures }, null, 2)}\n`,
       );
     else if (failures.length)
       console.error(
@@ -44,8 +52,20 @@ export async function checkRelease({ candidate = false, json = false } = {}) {
 if (
   process.argv[1] &&
   realpathSync(resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url))
-)
-  await checkRelease({
-    candidate: process.argv.includes("--candidate"),
-    json: process.argv.includes("--json"),
-  });
+) {
+  const args = process.argv.slice(2);
+  if (
+    args.some(
+      (arg) => !["--candidate", "--json", "--platform=ios", "--platform=all"].includes(arg),
+    ) ||
+    args.filter((arg) => arg.startsWith("--platform=")).length > 1
+  ) {
+    console.error("Usage: release:check [--candidate] [--json] [--platform=ios|all]");
+    process.exitCode = 1;
+  } else
+    await checkRelease({
+      candidate: args.includes("--candidate"),
+      json: args.includes("--json"),
+      platform: args.find((arg) => arg.startsWith("--platform="))?.split("=")[1],
+    });
+}

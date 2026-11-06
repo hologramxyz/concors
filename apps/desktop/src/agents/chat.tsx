@@ -36,6 +36,7 @@ import { ProviderSwitchNotice } from "./provider-switch-notice";
 import { useConversationScroll } from "./conversation-scroll";
 import { useTabVisible } from "@/workspace/tab-visibility";
 import { MessageNavigation } from "./message-navigation";
+import { sentPrompts } from "./prompt-history";
 import { useMessageIndex } from "./message-index";
 import { Button } from "@/components/ui/button";
 import { forgetPendingResume, pendingResume } from "./pending-resume";
@@ -496,6 +497,7 @@ export function Chat({
   );
   const footers = useMemo(() => completedTurnFooters(conversation.items), [conversation.items]);
   const replies = useMemo(() => forkReplies(conversation.items), [conversation.items]);
+  const sent = useMemo(() => sentPrompts(conversation.items), [conversation.items]);
   const latestReply = conversation.hasNewer
     ? undefined
     : conversation.items.findLast((item) => item.kind === "assistant")?.id;
@@ -669,6 +671,7 @@ export function Chat({
       onInterrupt={interrupt}
       // The phone has no start screen, only the composer to say what a new chat is for.
       placeholder={(start || compact) && fresh ? START_PLACEHOLDER : undefined}
+      history={sent}
     />
   );
   return (

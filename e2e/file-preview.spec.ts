@@ -69,6 +69,17 @@ test("videos play in a file tab, and one that cannot play says so", async ({ pag
       0,
     );
     await expect(video).toHaveAttribute("controls");
+    // Shows its first frame before anyone presses play: WebKit, the Mac's and iPhone's webview,
+    // draws none until a video is played or moved, so the tab steps it to its first instant.
+    await expect
+      .poll(() =>
+        video.evaluate((element: HTMLVideoElement) => [
+          element.paused,
+          element.currentTime > 0,
+          element.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA,
+        ]),
+      )
+      .toEqual([true, true, true]);
     await expect(tab.getByText(/Read-only preview, \d+ (B|KB)/)).toBeVisible();
 
     await page.screenshot({ path: test.info().outputPath("video.png") });
