@@ -5,7 +5,7 @@
   "locale": "en-US",
   "primaryCategory": "DEVELOPER_TOOLS",
   "status": "draft-populated-not-ready-not-submitted",
-  "checkedAt": "2026-11-06T06:13:57.946Z",
+  "checkedAt": "2026-11-06T22:17:29.688Z",
   "versionString": "0.1.0",
   "versionId": "2d5df58b-5d90-457e-85b9-61f93041ea07",
   "name": "Concors: Coding Workspace",
@@ -28,10 +28,10 @@
   "buildAttached": true,
   "currentTestFlightBuild": {
     "version": "0.1.0",
-    "buildNumber": "12",
-    "sourceRevision": "89efcccb5412af7cd1b18a9fce904e11d3a2bf3d",
-    "easBuildId": "e633163f-9dc7-40e9-b57e-3ee8d4a15504",
-    "appleBuildId": "128562aa-8a62-41a6-9b28-8383ce5415c6",
+    "buildNumber": "13",
+    "sourceRevision": "1bfc77273fd39a85e84057eb0a63150e2c233504",
+    "easBuildId": "5c740345-095d-416e-83cd-ed4e5223e946",
+    "appleBuildId": "d2740933-b9f2-4743-a645-7ca7828db51c",
     "processingState": "VALID",
     "internalBuildState": "IN_BETA_TESTING"
   },
@@ -68,11 +68,11 @@
     "Configure working company AI access with bounded billing on the connected isolated review machine",
     "Physical iPhone acceptance and operating support/report triage"
   ],
-  "note": "Free-app agreement is active/current. Apple App ID, Services ID and dedicated sign-in key are prepared; backend signing-key support is deployed. Apple login remains disabled pending Privy setup. Build 12 is VALID / IN_BETA_TESTING, in the Internal beta group and attached to draft 0.1.0. Public App Review has not been submitted.",
+  "note": "Build 13 is VALID / IN_BETA_TESTING, in Internal beta and attached to draft 0.1.0. AI-sharing permission is saved per account and machine and provider changes require renewed permission. Social-login retry cleanup is deployed. Apple provider is enabled; real Apple-account acceptance, reviewer AI access and physical-iPhone acceptance remain required. Public App Review has not been submitted.",
   "copyright": "2026 Rolling Inc.",
   "ageRatingQuestionnaireSaved": true,
   "ageRatingOverride": "SIXTEEN_PLUS",
-  "ageRatingDecision": "Owner approved 16+ for launch, matching Privy\u2019s current minimum",
+  "ageRatingDecision": "Owner approved 16+ for launch, matching Privy’s current minimum",
   "contentRightsDeclaration": "USES_THIRD_PARTY_CONTENT",
   "screenshotEvidence": {
     "record": "ios-native-evidence.md",
