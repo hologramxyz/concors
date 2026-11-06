@@ -81,9 +81,8 @@
       "owner": "website + signing owner",
       "status": "verified",
       "evidence": [
-        "ios-build-11.json",
-        "Build 10 signed Mach-O entitlements contain no com.apple.developer.associated-domains entry.",
-        "Build 10 Info.plist retains concors and xyz.hologram.concors auth URL schemes; app.config.ts declares no associated domains."
+        "ios-build-12.json",
+        "Build 12 signed Mach-O has no associated-domains entitlement; supported custom authentication schemes remain."
       ],
       "verifiedBy": "Codex source and signed-binary audit",
       "verifiedAt": "2026-11-06T01:34:00Z"
@@ -95,7 +94,7 @@
       "status": "blocked",
       "evidence": [
         "https://appstoreconnect.apple.com/apps/6817622624/testflight/ios",
-        "Build 10 is VALID / IN_BETA_TESTING; simulator and browser checks do not establish physical-device acceptance."
+        "Signed 0.1.0 (12) is VALID / IN_BETA_TESTING and attached to draft 0.1.0. Physical-device acceptance remains required."
       ]
     },
     {
@@ -139,12 +138,14 @@
       "id": "native-privacy-and-permissions",
       "title": "Signed iPhone collection manifest, required-reason APIs, permissions and SDK",
       "owner": "native QA + privacy owner",
-      "status": "blocked",
+      "status": "verified",
       "evidence": [
-        "ios-build-11.json",
+        "ios-build-12.json",
         "privacy-disclosures.md",
-        "PR 168 adds the Privy browser identifier, sign-in interactions and analytics purposes. Build 12 is in progress and must be inspected before this gate can be verified."
-      ]
+        "Signed 0.1.0 (12) contains all nine collection types, the exact functionality/analytics purposes, and all three SDK required-reason API entries. Store manifest and code-signing identity match the intended app/team."
+      ],
+      "verifiedAt": "2026-11-06T02:41:58.496098Z",
+      "verifiedBy": "Codex signed-IPA inspection"
     }
   ],
   "platform": "ios"
