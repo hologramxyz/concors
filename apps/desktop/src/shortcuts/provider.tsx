@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
-import { isTauri } from "@/tauri";
+import { isTauri, onMenuCloseTab } from "@/tauri";
 import { Context, createCommands } from "./context";
 import {
   Dialog,
@@ -32,6 +32,20 @@ function ShortcutHandler({ children }: { children: ReactNode }) {
   const { keymap, mac } = useShortcutPreferences();
   const [commands] = useState(createCommands);
   const available = useSyncExternalStore(commands.subscribe, commands.snapshot);
+  // The Mac menu's ⌘W arrives here rather than as a key press: the menu takes the key first.
+  useEffect(() => {
+    if (!isTauri()) return;
+    let stop: (() => void) | undefined;
+    let stopped = false;
+    void onMenuCloseTab(() => commands.run("close-tab")).then((off) => {
+      if (stopped) off();
+      else stop = off;
+    });
+    return () => {
+      stopped = true;
+      stop?.();
+    };
+  }, [commands]);
   const [sequenceKeymap, setSequenceKeymap] = useState(keymap);
   const [sequence, setSequence] = useState<readonly KeymapEntry[] | null>(null);
   const armed = useRef<readonly KeymapEntry[] | null>(null);

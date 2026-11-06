@@ -39,6 +39,7 @@ export {
 } from "./notifications";
 
 export { nativeWindow, type WindowChromeState, type ResizeDirection } from "./window";
+export { onMenuCloseTab } from "./menu";
 
 export {
   clipboardHasImage,
