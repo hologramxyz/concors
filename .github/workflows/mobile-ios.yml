@@ -84,7 +84,10 @@ jobs:
       - name: Install simulator app
         run: |
           MOBILE_APP=$(find "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' -print -quit)
-          # Simulator ad-hoc signing needs no Apple account, but SecureStore needs its app identity.
+          # Xcode's actual ad-hoc signature can be empty even when its simulator section has
+          # FAKETEAMID entitlements. Give SecureStore a consistent identity without Apple credentials.
+          python3 -c 'import plistlib,sys; plistlib.dump({"application-identifier":"FAKETEAMID.xyz.hologram.concors.preview","keychain-access-groups":["FAKETEAMID.xyz.hologram.concors.preview"]},open(sys.argv[1],"wb"))' "$RUNNER_TEMP/simulator-entitlements.plist"
+          codesign --force --sign - --entitlements "$RUNNER_TEMP/simulator-entitlements.plist" "$MOBILE_APP"
           codesign -d --entitlements :- "$MOBILE_APP" > "$RUNNER_TEMP/mobile-entitlements.plist"
           /usr/libexec/PlistBuddy -c 'Print :application-identifier' "$RUNNER_TEMP/mobile-entitlements.plist"
           xcrun simctl install '${{ steps.simulator.outputs.id }}' "$MOBILE_APP"
