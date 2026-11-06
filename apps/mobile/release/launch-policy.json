@@ -1,0 +1,15 @@
+{
+  "checkedAt": "2026-11-06T06:45:16.551Z",
+  "appId": "6817622624",
+  "bundleIdentifier": "xyz.hologram.concors",
+  "appInfoId": "e6e94fc8-0074-4e03-952a-e06b82c3ab8f",
+  "ageRatingDeclarationId": "e6e94fc8-0074-4e03-952a-e06b82c3ab8f",
+  "minimumAge": 16,
+  "ageRatingOverrideV2": "SIXTEEN_PLUS",
+  "developerAgeRatingInfoUrl": "https://concors.dev/terms",
+  "ageAssurance": false,
+  "parentalControls": false,
+  "questionnaireUnchanged": true,
+  "contentRightsDeclaration": "USES_THIRD_PARTY_CONTENT",
+  "authorization": "Owner chose 16+ for launch and confirmed the necessary content rights and authorized repository/machine access on November 6, 2026."
+}

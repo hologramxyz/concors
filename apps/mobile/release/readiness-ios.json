@@ -7,12 +7,14 @@
       "id": "developer-accounts",
       "title": "Hologram Expo/Apple identity, signing and accepted Apple agreements",
       "owner": "release owner",
-      "status": "blocked",
+      "status": "verified",
       "evidence": [
-        "submission-packet.md#submission-credential-replacement",
-        "https://expo.dev/accounts/guitong35/projects/concors/builds/421d499e-1b5c-4854-9af1-58a8ebb4650f",
-        "Apple developer portal on 2026-11-06 requires Account Holder acceptance of the updated Program License Agreement."
-      ]
+        "App 6817622624 / bundle xyz.hologram.concors / team 9WN4P724M2; Expo @guitong35/concors verified.",
+        "Dedicated Concors EAS Submit assigned; previous exposed key revoked.",
+        "Apple free-app agreement Active/current/in effect on 2026-11-06. App Information declares trader status for this app. Paid agreement remains outside this free iPhone release."
+      ],
+      "verifiedAt": "2026-11-06T06:13:22.521Z",
+      "verifiedBy": "Codex Apple/Expo identity, credential and agreement readback"
     },
     {
       "id": "production-auth",
@@ -21,7 +23,9 @@
       "status": "blocked",
       "evidence": [
         "https://github.com/hologramxyz/concors-server/pull/21",
-        "Production /api/v1/native-auth/providers reports apple:false; Apple/Privy setup and signed-iPhone acceptance remain required."
+        "https://github.com/hologramxyz/concors-server/pull/23",
+        "Apple primary App ID enabled, Services ID and dedicated signing key prepared; backend signing-key configuration stored and new code deployed.",
+        "Privy Apple settings / OAuth-token return / test account setup and real signed-iPhone acceptance remain required; production currently advertises apple:false."
       ]
     },
     {
@@ -55,7 +59,8 @@
         "https://concors.dev/support",
         "https://concors.dev/account/delete",
         "https://concors.dev/terms",
-        "Live HTTP/rendered-page checks pass; confirm legal controller, processors, log/backup retention and support operation."
+        "Website PR 13 merged/deployed. Rolling Inc., Privy diagnostics, Railway hosting and inspected retention settings are disclosed.",
+        "Owner approved 16+ for launch; Apple SIXTEEN_PLUS override verified. Terms/privacy alignment is in website PR 15. Support/report operations still require confirmation."
       ]
     },
     {
@@ -76,9 +81,8 @@
       "owner": "website + signing owner",
       "status": "verified",
       "evidence": [
-        "ios-build-11.json",
-        "Build 10 signed Mach-O entitlements contain no com.apple.developer.associated-domains entry.",
-        "Build 10 Info.plist retains concors and xyz.hologram.concors auth URL schemes; app.config.ts declares no associated domains."
+        "ios-build-12.json",
+        "Build 12 signed Mach-O has no associated-domains entitlement; supported custom authentication schemes remain."
       ],
       "verifiedBy": "Codex source and signed-binary audit",
       "verifiedAt": "2026-11-06T01:34:00Z"
@@ -90,7 +94,7 @@
       "status": "blocked",
       "evidence": [
         "https://appstoreconnect.apple.com/apps/6817622624/testflight/ios",
-        "Build 10 is VALID / IN_BETA_TESTING; simulator and browser checks do not establish physical-device acceptance."
+        "Signed 0.1.0 (12) is VALID / IN_BETA_TESTING and attached to draft 0.1.0. Physical-device acceptance remains required."
       ]
     },
     {
@@ -100,20 +104,27 @@
       "status": "blocked",
       "evidence": [
         "app-store-connect-draft.json",
-        "Apple draft 0.1.0 has support/privacy URLs and attached build 10; privacy disclosures are saved but unpublished.",
-        "Review contact/account, age answers, countries and approved native screenshot assets are still required."
+        "Apple draft 0.1.0 has description/keywords/promotion, concors.dev URLs, Rolling Inc. copyright, private contact and a verified attached build.",
+        "Nine linked privacy categories are published. All 175 territories are selected.",
+        "Working reviewer account/machine, final screenshot review and physical-device acceptance remain required.",
+        "ios-native-evidence.md",
+        "One inspected native 6.9-inch workspace capture is processed and active in Apple. Agent/files captures with demo guidance or empty states were rejected. The native simulator control/draft flow passed in run 42173390095 (63 commands); production and physical-device acceptance remain required.",
+        "launch-policy.json",
+        "Owner confirmed necessary content rights and authorized repository/machine access. Apple USES_THIRD_PARTY_CONTENT declaration and SIXTEEN_PLUS age override read back on November 6, 2026."
       ]
     },
     {
       "id": "commerce-policy",
       "title": "Free iPhone companion scope, free App Store price and launch availability",
       "owner": "product + policy review",
-      "status": "blocked",
+      "status": "verified",
       "evidence": [
-        "Owner confirmed free launch, with machines added from desktop.",
-        "App Store price schedule 6817622624: USA manual price 0 and all 174 automatic prices 0, verified 2026-11-06.",
-        "No app availability record is configured; launch countries remain unconfirmed."
-      ]
+        "Owner confirmed free launch; machines are added on desktop.",
+        "USA manual price and all 174 automatic prices are zero.",
+        "All 175 territories selected, including future territories. Selection does not override regional eligibility requirements."
+      ],
+      "verifiedAt": "2026-11-06T02:38:20.055724Z",
+      "verifiedBy": "Codex free-price and territory readback"
     },
     {
       "id": "ai-data-and-safety",
@@ -133,12 +144,12 @@
       "owner": "native QA + privacy owner",
       "status": "verified",
       "evidence": [
-        "ios-build-11.json",
+        "ios-build-12.json",
         "privacy-disclosures.md",
-        "Signed build 11 contains the seven collection declarations and all three SDK required-reason API entries; App Store privacy publication and physical permissions acceptance remain separate gates."
+        "Signed 0.1.0 (12) contains all nine collection types, the exact functionality/analytics purposes, and all three SDK required-reason API entries. Store manifest and code-signing identity match the intended app/team."
       ],
-      "verifiedBy": "Codex signed-IPA and configuration audit",
-      "verifiedAt": "2026-11-06T01:42:00Z"
+      "verifiedAt": "2026-11-06T02:41:58.496098Z",
+      "verifiedBy": "Codex signed-IPA inspection"
     }
   ],
   "platform": "ios"

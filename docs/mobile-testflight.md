@@ -149,8 +149,9 @@ libvips. Leave dependency lifecycle scripts and release checks enabled; this is 
 setting, not an app permission or signing change.
 
 Record build URL/ID, source commit, version/build, API and signing team; inspect logs and artifact
-metadata. A JS export or unsigned prebuild is not an installable IPA. GitHub native CI was billing
-blocked; resolve that before rerunning those jobs. Check EAS account/build availability separately.
+metadata. A JS export or unsigned prebuild is not an installable IPA. GitHub runners are available
+again as of November 6, 2026; inspect the actual native job results separately. Check EAS account/build
+availability independently.
 
 ## 4. Upload exactly that build and install
 
