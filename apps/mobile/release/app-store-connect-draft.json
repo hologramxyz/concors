@@ -66,7 +66,6 @@
   "remainingOwnerFields": [
     "Complete prepared Apple provider configuration in Privy and enable test accounts",
     "Working dedicated reviewer account, available isolated machine and scoped AI-provider access",
-    "Confirm necessary content rights before Apple declaration",
     "Physical iPhone acceptance and operating support/report triage"
   ],
   "note": "Free-app agreement is active/current. Apple App ID, Services ID and dedicated sign-in key are prepared; backend signing-key support is deployed. Apple login remains disabled pending Privy setup. Build 12 is VALID / IN_BETA_TESTING, in the Internal beta group and attached to draft 0.1.0. Public App Review has not been submitted.",
@@ -74,7 +73,7 @@
   "ageRatingQuestionnaireSaved": true,
   "ageRatingOverride": "SIXTEEN_PLUS",
   "ageRatingDecision": "Owner approved 16+ for launch, matching Privy\u2019s current minimum",
-  "contentRightsDeclaration": null,
+  "contentRightsDeclaration": "USES_THIRD_PARTY_CONTENT",
   "screenshotEvidence": {
     "record": "ios-native-evidence.md",
     "checkedAt": "2026-11-06T06:02:45.529Z",
@@ -83,5 +82,8 @@
     "nativeAcceptanceComplete": false,
     "status": "One inspected native workspace image is processed and active. New agent/files captures were rejected for store use; further captures need suitable workspace content."
   },
-  "ageRatingVerifiedAt": "2026-11-06T06:45:16.551Z"
+  "ageRatingVerifiedAt": "2026-11-06T06:45:16.551Z",
+  "contentRightsOwnerConfirmed": true,
+  "contentRightsVerifiedAt": "2026-11-06T06:45:16.551Z",
+  "launchPolicyEvidence": "launch-policy.json"
 }
