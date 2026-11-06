@@ -68,5 +68,7 @@
   },
   "verifiedAt": "2026-11-06T02:41:58.496098Z",
   "easBuildId": "e633163f-9dc7-40e9-b57e-3ee8d4a15504",
-  "artifactSha256": "31afcf56df055729b8ed7e9eadbd8eb834268acf59d2b7143bdfc8a9f8a97986"
+  "artifactSha256": "31afcf56df055729b8ed7e9eadbd8eb834268acf59d2b7143bdfc8a9f8a97986",
+  "rendererSourceStamp": "89efcccb5412af7cd1b18a9fce904e11d3a2bf3d-dirty",
+  "sourceProvenanceNote": "EAS identifies the archive as revision 89efcccb5412af7cd1b18a9fce904e11d3a2bf3d, uploaded from a clean local checkout. The renderer stamp includes -dirty during build; asset generation rewrites tracked PNGs. This stamp alone is not a claim that all build-time files remained unchanged."
 }
