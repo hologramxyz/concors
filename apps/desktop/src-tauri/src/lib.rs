@@ -11,6 +11,8 @@
 
 mod daemon;
 mod downloads;
+#[cfg(target_os = "macos")]
+mod menu;
 mod microphone;
 mod notifications;
 mod sign_in;
@@ -45,6 +47,12 @@ pub fn run() {
         .setup(|app| {
             for window in app.webview_windows().values() {
                 microphone::allow(window);
+            }
+            // ⌘W closes the active tab, not the app's one window.
+            #[cfg(target_os = "macos")]
+            {
+                app.set_menu(menu::build(app.handle())?)?;
+                app.on_menu_event(menu::handle);
             }
             Ok(())
         })

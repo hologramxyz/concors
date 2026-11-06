@@ -13,6 +13,10 @@ export async function dismissNativeNotification() {
 export async function onNativeNotificationClick() {
   return () => undefined;
 }
+/** Phones have no menu bar; tabs close from their own controls. */
+export async function onMenuCloseTab() {
+  return () => undefined;
+}
 export async function playNativeSound() {
   /* isTauri() is false, so mobile plays through Web Audio. */
 }
