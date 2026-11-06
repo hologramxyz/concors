@@ -1,0 +1,75 @@
+{
+  "identity": {
+    "CFBundleIdentifier": "xyz.hologram.concors",
+    "CFBundleShortVersionString": "0.1.0",
+    "CFBundleVersion": "13"
+  },
+  "teamId": "9WN4P724M2",
+  "storeProvisioning": true,
+  "sourceRevisionEmbedded": "1bfc77273fd39a85e84057eb0a63150e2c233504",
+  "approvedApiEmbedded": true,
+  "photoPickerConfigured": true,
+  "microphonePurposeConfigured": true,
+  "cameraPurposeAbsent": true,
+  "iosWorkspaceOriginEmbedded": true,
+  "savedAISharingImplementationEmbedded": true,
+  "profileExpires": "2027-08-10T03:03:54",
+  "sdk": "iphoneos26.5",
+  "xcode": "2660",
+  "minimumOSVersion": "16.4",
+  "deviceFamily": [1],
+  "usesNonExemptEncryption": false,
+  "associatedDomainsAbsentFromSignedEntitlements": true,
+  "collectedDataTypes": [
+    "NSPrivacyCollectedDataTypeCustomerSupport",
+    "NSPrivacyCollectedDataTypeDeviceID",
+    "NSPrivacyCollectedDataTypeEmailAddress",
+    "NSPrivacyCollectedDataTypeName",
+    "NSPrivacyCollectedDataTypeOtherDiagnosticData",
+    "NSPrivacyCollectedDataTypeOtherUserContent",
+    "NSPrivacyCollectedDataTypePhotosorVideos",
+    "NSPrivacyCollectedDataTypeProductInteraction",
+    "NSPrivacyCollectedDataTypeUserID"
+  ],
+  "collectedDataLinkedToUser": true,
+  "collectedDataUsedForTracking": false,
+  "collectedDataPurposes": {
+    "NSPrivacyCollectedDataTypeName": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+    "NSPrivacyCollectedDataTypeEmailAddress": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+    "NSPrivacyCollectedDataTypeUserID": [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      "NSPrivacyCollectedDataTypePurposeAnalytics"
+    ],
+    "NSPrivacyCollectedDataTypeDeviceID": [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      "NSPrivacyCollectedDataTypePurposeAnalytics"
+    ],
+    "NSPrivacyCollectedDataTypeProductInteraction": [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      "NSPrivacyCollectedDataTypePurposeAnalytics"
+    ],
+    "NSPrivacyCollectedDataTypeOtherUserContent": [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+    ],
+    "NSPrivacyCollectedDataTypePhotosorVideos": [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+    ],
+    "NSPrivacyCollectedDataTypeCustomerSupport": [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+    ],
+    "NSPrivacyCollectedDataTypeOtherDiagnosticData": [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      "NSPrivacyCollectedDataTypePurposeAnalytics"
+    ]
+  },
+  "requiredReasonAPIs": {
+    "NSPrivacyAccessedAPICategoryFileTimestamp": ["C617.1"],
+    "NSPrivacyAccessedAPICategoryUserDefaults": ["CA92.1"],
+    "NSPrivacyAccessedAPICategorySystemBootTime": ["35F9.1"]
+  },
+  "verifiedAt": "2026-11-06T22:17:29.688Z",
+  "easBuildId": "5c740345-095d-416e-83cd-ed4e5223e946",
+  "artifactSha256": "ee0871aec094b9ac37e822c8c2264c0615fbc220ec8d519e6b801b2f01ca837e",
+  "physicalIPhoneAcceptanceVerified": false,
+  "sourceProvenanceNote": "EAS archive from a clean main checkout. Signed bundle embeds the expected source revision; build-time generated assets may add a dirty renderer stamp. Physical iPhone installation and acceptance remain separate checks."
+}
