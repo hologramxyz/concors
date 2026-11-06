@@ -643,6 +643,13 @@ test("new workspace completion opens its own project and closes the sidebar", as
   await expect(ui.getByRole("combobox", { name: "Tabs", exact: true })).toContainText(
     "New workspace",
   );
+  // An empty workspace starts its first tab from its row's menu.
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await ui.getByRole("button", { name: "Actions for New workspace", exact: true }).click();
+  await ui.getByRole("menuitem", { name: "New tab", exact: true }).click();
+  await ui.getByRole("button", { name: "New chat", exact: true }).click();
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+  await expect(ui.locator('[aria-label="New workspace tabs"] > li')).toHaveCount(1);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await tabRow(ui, "Mobile launch").click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue(
@@ -1726,4 +1733,42 @@ test("the sidebar lists each workspace's tabs under it, as desktop does", async 
   await expect(ui.getByRole("log", { name: "Chat timeline" })).toContainText(
     "Old onboarding copy: can you take this on?",
   );
+});
+test("workspace rows show their fold chevron, and their menu starts a tab there", async ({
+  page,
+}) => {
+  await page.goto(`/?${SIDEBAR_TREE_FLAG}`);
+  await page.getByRole("button", { name: "Explore demo" }).click();
+  const ui = workspace(page);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  const sidebar = ui.getByRole("dialog", { name: "Workspace sidebar" });
+  const rows = sidebar.locator("li:has(> button[data-workspace-id])");
+  const fork = rows.nth(1);
+  const chevron = fork.locator("[data-workspace-chevron]");
+  // Desktop's hover chevron, always shown: down while open, right once folded, where the dot goes.
+  await expect(sidebar.locator('[data-workspace-chevron="expanded"]')).toHaveCount(2);
+  await fork.locator("[data-workspace-id]").click();
+  await expect(chevron).toHaveAttribute("data-workspace-chevron", "collapsed");
+  await expect(fork.locator('[data-workspace-attention="done"]')).toBeVisible();
+  await fork.locator("[data-workspace-id]").click();
+  await expect(chevron).toHaveAttribute("data-workspace-chevron", "expanded");
+  await expect(fork.locator("[data-workspace-attention]")).toHaveCount(0);
+
+  // "New tab" leads the workspace's menu and opens the New tab sheet in that workspace.
+  await fork.getByRole("button", { name: "Actions for Concors", exact: true }).click();
+  const menu = ui.getByRole("menu", { name: "Concors" });
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    "New tab",
+    "Rename workspace",
+    "Close workspace…",
+  ]);
+  await menu.getByRole("menuitem", { name: "New tab" }).click();
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
+  await ui.getByRole("button", { name: "New chat", exact: true }).click();
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await expect(
+    sidebar.getByRole("list", { name: "Concors tabs" }).nth(1).getByRole("listitem"),
+  ).toHaveCount(2);
 });

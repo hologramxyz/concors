@@ -65,6 +65,8 @@ export interface WorkspaceTreeProps {
    * screen; "toggle" only folds it, for a phone, whose tabs open from their own rows.
    */
   workspaceTap?: "select" | "toggle";
+  /** Starts a tab in a workspace from its row's menu, which only a phone offers. */
+  onNewTab?: ((projectId: string) => void) | undefined;
   /**
    * Chat row actions shared with the app's other menus, so one undo and one toast serve them all;
    * without them the tree keeps its own.
@@ -348,6 +350,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                   }
                   onSelect={selectWorkspace}
                   toggles={props.workspaceTap === "toggle"}
+                  onNewTab={props.onNewTab}
                   onToggleExpanded={() => setWorkspaceExpanded(project.id, !expanded)}
                   onOpenPullRequests={props.onOpenPullRequests}
                   execute={props.execute}

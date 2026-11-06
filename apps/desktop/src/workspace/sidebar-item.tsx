@@ -38,6 +38,7 @@ export function WorkspaceSidebarItem({
   pullRequests,
   onSelect,
   toggles = false,
+  onNewTab,
   onToggleExpanded,
   onOpenPullRequests,
   execute,
@@ -61,8 +62,13 @@ export function WorkspaceSidebarItem({
   /** Its open list shows each dot on its own row, so the folder has no dot of its own. */
   expanded?: boolean;
   onSelect: (id: string) => void;
-  /** Choosing the row only expands or collapses it, so it says so to a screen reader. */
+  /**
+   * Choosing the row only expands or collapses it, so it says so to a screen reader and shows
+   * desktop's fold chevron in place of its icon.
+   */
   toggles?: boolean;
+  /** Offers New tab in the workspace's phone menu. */
+  onNewTab?: ((projectId: string) => void) | undefined;
   /** Offers a chevron over the icon on hover and keyboard focus, which only folds the workspace. */
   onToggleExpanded?: () => void;
   onOpenPullRequests?: (projectId: string, repository?: string) => void;
@@ -121,12 +127,29 @@ export function WorkspaceSidebarItem({
             "group-hover:opacity-0 group-has-[:focus-visible:not([data-pointer-focus])]:opacity-0",
         )}
       >
-        <ProjectImage
-          key={icon?.source ?? "fallback"}
-          source={icon?.source ?? null}
-          isGit={icon?.isGit ?? false}
-          name={project.name}
-        />
+        {toggles && !compact ? (
+          // Desktop's fold chevron, shown for good where touch has no hover to reveal it. The row
+          // itself is the toggle, so this only shows which way it is folded.
+          <span
+            aria-hidden="true"
+            data-workspace-chevron={expanded ? "expanded" : "collapsed"}
+            className="flex size-[20px] items-center justify-center text-muted-foreground"
+          >
+            <ChevronRight
+              className={cn(
+                "size-[16px] transition-transform duration-200 motion-reduce:transition-none",
+                expanded && "rotate-90",
+              )}
+            />
+          </span>
+        ) : (
+          <ProjectImage
+            key={icon?.source ?? "fallback"}
+            source={icon?.source ?? null}
+            isGit={icon?.isGit ?? false}
+            name={project.name}
+          />
+        )}
       </span>
       <AttentionBadge attention={attention} label={attentionLabel} />
     </span>
@@ -250,6 +273,7 @@ export function WorkspaceSidebarItem({
           execute={execute}
           renaming={renaming !== null}
           onRename={canRename ? () => setRename(project.name) : undefined}
+          onNewTab={onNewTab && (() => onNewTab(project.id))}
           onCloseAutoFocus={(event) => {
             // The menu's focus trap outlives the input's autoFocus, so hand focus over here
             // instead of returning it to the trigger.

@@ -1,5 +1,5 @@
 import { useContext, useState } from "react";
-import { Ellipsis, FolderX, Pencil, Trash2 } from "lucide-react";
+import { Ellipsis, FolderX, Pencil, Plus, Trash2 } from "lucide-react";
 import { cn } from "cn";
 import {
   PROJECT_CLOSE_CAPABILITY,
@@ -33,6 +33,7 @@ export function ProjectActions({
   execute,
   renaming,
   onRename,
+  onNewTab,
   onCloseAutoFocus,
 }: {
   project: WorkspaceProject;
@@ -42,6 +43,8 @@ export function ProjectActions({
   renaming: boolean;
   /** Absent when the workspace cannot be renamed right now; the item is then disabled. */
   onRename: (() => void) | undefined;
+  /** Opens the phone's New tab sheet in this workspace; only a phone's sheet offers it. */
+  onNewTab?: (() => void) | undefined;
   onCloseAutoFocus: (event: Event) => void;
 }) {
   const [confirming, setConfirming] = useState(false);
@@ -79,6 +82,11 @@ export function ProjectActions({
           className={triggerClass}
           icon={<Ellipsis className="size-4" />}
         >
+          {onNewTab && (
+            <RowMenuItem icon={<Plus />} disabled={!canEdit} onSelect={onNewTab}>
+              New tab
+            </RowMenuItem>
+          )}
           <RowMenuItem icon={<Pencil />} disabled={!onRename} onSelect={() => onRename?.()}>
             Rename workspace
           </RowMenuItem>

@@ -470,6 +470,18 @@ function MobileWorkspaceContent({
       setError(cause instanceof Error ? cause.message : "Could not update workspace"),
     );
   };
+  // The header's New tab sheet, for a workspace row's "New tab": that workspace is shown first, so
+  // the sheet and the tab it creates are that workspace's, as they are from the Tabs picker.
+  const openNewTab = useRef<(() => void) | null>(null);
+  const newTabIn = useRef<string | null>(null);
+  useEffect(() => {
+    const id = newTabIn.current;
+    if (!id) return;
+    // Once only: selecting the workspace (and closing the sidebar) rendered once already, so it
+    // is shown by now or not at all.
+    newTabIn.current = null;
+    if (project?.id === id) openNewTab.current?.();
+  });
   const createTab = (profile: PaneProfile, terminalProfileId?: string) => {
     if (!project) return;
     const tabId = crypto.randomUUID(),
@@ -678,6 +690,10 @@ function MobileWorkspaceContent({
                             onSelectTab={(projectId, tabId) => select({ projectId, tabId })}
                             onSelectProject={selectProject}
                             onOpenPullRequests={openPullRequests}
+                            onNewTab={(projectId) => {
+                              selectProject(projectId);
+                              newTabIn.current = projectId;
+                            }}
                             execute={execute}
                             onCommand={command}
                           />
@@ -762,19 +778,22 @@ function MobileWorkspaceContent({
                             tabLimitReached={project.tabs.length >= 32}
                             onCreate={createTab}
                             onResume={() => setResumeOpen(true)}
-                            renderTrigger={(open) => (
-                              <WorkspacePicker
-                                project={project}
-                                tab={tab}
-                                pane={pane}
-                                canEdit={canEdit}
-                                keyboard={commandsAvailable}
-                                execute={execute}
-                                command={command}
-                                onSelect={select}
-                                onNewTab={open}
-                              />
-                            )}
+                            renderTrigger={(open) => {
+                              openNewTab.current = open;
+                              return (
+                                <WorkspacePicker
+                                  project={project}
+                                  tab={tab}
+                                  pane={pane}
+                                  canEdit={canEdit}
+                                  keyboard={commandsAvailable}
+                                  execute={execute}
+                                  command={command}
+                                  onSelect={select}
+                                  onNewTab={open}
+                                />
+                              );
+                            }}
                           />
                         ) : (
                           <h1 className="min-w-0 flex-1 truncate text-base font-medium">
