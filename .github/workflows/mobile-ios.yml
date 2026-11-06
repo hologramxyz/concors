@@ -156,7 +156,7 @@ jobs:
       # Keep captures in the same XCTest session instead of paying the cold driver startup twice.
       - name: Exercise native controls and capture store screenshots
         timeout-minutes: 20
-        run: maestro --device "${{ steps.simulator.outputs.id }}" test -e FRESH_SIMULATOR=true --test-output-dir apps/mobile/test-results/native apps/mobile/e2e/native/glass.yaml
+        run: maestro --device "${{ steps.simulator.outputs.id }}" test --test-output-dir apps/mobile/test-results/native apps/mobile/e2e/native/glass.yaml
       - name: Retain native launch diagnostics
         if: failure()
         timeout-minutes: 1

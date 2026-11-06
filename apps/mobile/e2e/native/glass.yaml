@@ -1,26 +1,15 @@
 appId: xyz.hologram.concors.preview
 ---
-# CI just installed and launched the app on a new simulator. Preserve that cold start
-# instead of clearing/relaunching it through XCTest; local reruns still reset state.
-- runFlow:
-    when:
-      true: ${typeof FRESH_SIMULATOR !== 'undefined' && FRESH_SIMULATOR == 'true'}
-    commands:
-      - launchApp:
-          stopApp: false
-- runFlow:
-    when:
-      true: ${typeof FRESH_SIMULATOR === 'undefined' || FRESH_SIMULATOR != 'true'}
-    commands:
-      - launchApp:
-          clearState: true
+# XCTest owns the launch so its first tap reaches the active app window.
+- launchApp:
+    clearState: true
 - tapOn:
     text: "Explore demo"
-    waitToSettleTimeoutMs: 500
+    retryTapIfNoChange: true
 - extendedWaitUntil:
     visible:
       id: native-agent-input
-    timeout: 45000
+    timeout: 90000
 - assertVisible:
     id: native-header-menu
 - assertVisible:
