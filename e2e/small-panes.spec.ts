@@ -117,10 +117,13 @@ test("a short pane with an existing chat scrolls its messages above a whole comp
   const { directory, pane } = await chatOverAnotherPane(page, "Short chat");
   try {
     const composer = pane.getByRole("textbox", { name: "Message Codex" });
-    for (const message of ["first message", "second message", "third message"]) {
+    // Seed completed history for the layout check before starting another turn.
+    for (const [index, message] of ["first message", "second message", "third message"].entries()) {
       await composer.fill(message);
       await page.keyboard.press("Enter");
       await expect(pane.getByRole("log", { name: "Chat timeline" })).toContainText(message);
+      await expect(pane.getByText(/^Worked for /)).toHaveCount(index + 1);
+      await expect(pane.getByRole("button", { name: "Send message", exact: true })).toBeVisible();
       await expect(composer).toBeEnabled();
     }
     const handle = await splitVertically(page);
