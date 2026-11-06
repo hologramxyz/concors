@@ -71,14 +71,10 @@ test("a launch reopens the last tab, and each workspace keeps its own last tab",
     await execute({ kind: "selection.set", projectId: alpha.projectId, tabId: alpha.firstTab });
 
     let ui = await launch(page);
-    const picker = () =>
-      ui.getByRole("combobox", { name: "Tabs", exact: true, includeHidden: true });
+    // The strip's current tab, under the header.
+    const picker = () => ui.locator('.mobile-tab-strip [data-pane-choice][aria-pressed="true"]');
     const pick = async (value: string) => {
-      await picker().click();
-      await ui
-        .getByRole("dialog", { name: "Tabs", exact: true })
-        .locator(`[data-value="${value}"]`)
-        .click();
+      await ui.locator(`.mobile-tab-strip [data-pane-choice][data-value="${value}"]`).click();
       await expect(picker()).toHaveAttribute("data-value", value);
     };
     // The sidebar's workspace rows only fold now, so a workspace is opened from search.

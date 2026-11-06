@@ -48,6 +48,7 @@ export function WorkspaceActions({
   step,
   onStep,
   onComplete,
+  opened,
 }: {
   project: WorkspaceProject;
   tab: WorkspaceTab;
@@ -72,6 +73,8 @@ export function WorkspaceActions({
    */
   onStep?(step: TabStep): void;
   onComplete?(): void;
+  /** Shows the menu sheet at once, without its "…" button: the tab strip opens it on a long-press. */
+  opened?: { returnFocus(): HTMLElement | null } | undefined;
 }) {
   const profiles = useTerminalProfiles();
   const options = paneProfiles(profiles.profiles);
@@ -112,10 +115,11 @@ export function WorkspaceActions({
   useCommand("close-tab", canEdit && keyboard, () => setClosing(true));
   return (
     <>
-      {showTrigger && (
+      {(showTrigger || opened) && (
         <RowMenuSheet
           label={label}
           title={title}
+          opened={opened}
           className={
             sidebar
               ? "mobile-tap-target mr-1 flex items-center justify-center rounded p-1 text-muted-foreground hover:text-sidebar-foreground"

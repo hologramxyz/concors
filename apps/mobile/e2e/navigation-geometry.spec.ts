@@ -42,6 +42,7 @@ test("iPhone backgrounds fill the screen while controls respect notch and home i
         menu: rect("#mobile-sidebar-toggle"),
         files: rect("#mobile-files-toggle"),
         tabs: rect(".mobile-header .mobile-picker"),
+        strip: rect(".mobile-tab-strip"),
         sidebar: rect(".mobile-sidebar"),
         search: rect('[aria-label="Search workspace"]'),
         picker: rect(".mobile-sidebar-machine button"),
@@ -68,6 +69,11 @@ test("iPhone backgrounds fill the screen while controls respect notch and home i
     expect(control.height).toBe(44);
     expect(control.y).toBe(metrics.menu.y);
   }
+  // The tab strip sits under the header's controls, 4px below them, within the side insets.
+  expect(metrics.strip.height).toBe(44);
+  expect(metrics.strip.y).toBe(metrics.menu.y + 48);
+  expect(metrics.strip.x).toBe(metrics.menu.x);
+  expect(metrics.strip.right).toBe(metrics.files.right);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await page.screenshot({ path: test.info().outputPath("iphone-safe-area-sidebar.png") });
   await ui.getByRole("button", { name: /^Account:/ }).click();
@@ -132,8 +138,9 @@ test("native header surfaces follow both panels throughout real touch drags", as
     await end();
     await expect.poll(async () => await button("Search workspace")).toBeUndefined();
     await expect.poll(async () => (await button("Open sidebar"))?.interactive).toBe(true);
-    // Incoming Files controls are visible before the drag commits (panel is still inert).
-    await start(350);
+    // Incoming Files controls are visible before the drag commits (panel is still inert). Left of
+    // the messages button, which sits at this height under the tab strip and keeps its own touches.
+    await start(315);
     await move(180);
     await expect.poll(async () => !!(await button("Back to chat"))).toBe(true);
     expect((await button("Back to chat"))?.interactive).toBe(false);
@@ -166,8 +173,8 @@ for (const native of [false, true]) {
     await expect(trigger).toBeVisible();
     await expect(trigger).toHaveCSS("backdrop-filter", native ? "none" : /blur\(24px\)/);
     expect(await fade()).toBe('""');
-    // From the top of the status bar to just past the header's controls.
-    expect(await header.evaluate((el) => getComputedStyle(el, "::before").height)).toBe("139px");
+    // From the top of the status bar to just past the tab strip under the header's controls.
+    expect(await header.evaluate((el) => getComputedStyle(el, "::before").height)).toBe("183px");
     if (native) return;
     // Pages keep their content below the header, so nothing scrolls under for a fade to soften.
     await ui.locator("#mobile-sidebar-toggle").click();

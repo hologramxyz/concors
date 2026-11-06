@@ -57,7 +57,7 @@ test("mobile Search is a sidebar-preserving drawer with real pane navigation and
     await expect(dialog.getByRole("option")).toHaveCount(1);
     await input.press("Enter");
     await expect(shell).toHaveAttribute("data-sidebar-open", "false");
-    const picker = ui.getByRole("combobox", { name: "Tabs", exact: true });
+    const picker = ui.locator('.mobile-tab-strip [data-pane-choice][aria-pressed="true"]');
     await expect(picker).toHaveAttribute("data-value", `${fixture.tabId}:${fixture.terminalId}`);
     await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
     await open();

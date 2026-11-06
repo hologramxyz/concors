@@ -29,6 +29,8 @@ export function NewWorkspaceMenu({
   closed = [],
   onReopen,
   rail = false,
+  open: shown,
+  onOpenChange,
 }: {
   disabled: boolean;
   onNew: () => void;
@@ -37,10 +39,15 @@ export function NewWorkspaceMenu({
   closed?: readonly RecentlyClosed[];
   onReopen?: (projectId: string) => void;
   rail?: boolean;
+  /** The phone's sheet, for its workspace switcher to open from elsewhere. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const recent = onReopen ? closed : [];
   const compact = useContext(CompactLayoutContext);
-  const [open, setOpen] = useState(false);
+  const [own, setOwn] = useState(false);
+  const open = shown ?? own;
+  const setOpen = onOpenChange ?? setOwn;
   const homePath = useHomePath();
   const trigger = useRef<HTMLButtonElement>(null);
   if (compact)

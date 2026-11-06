@@ -56,7 +56,8 @@ import { embeddedConnection, getHostState, hostAction, subscribeHost } from "./b
 import { resolveMobileSelection, projectPanes } from "./selection";
 import { useSidebarGesture } from "./sidebar-gesture";
 import { SettingsDrawer } from "./settings-drawer";
-import { WorkspacePicker } from "./workspace-picker";
+import { MobileTabStrip } from "./tab-strip";
+import { WorkspaceSwitcher } from "./workspace-switcher";
 import { MobileFiles, MobileFilesProvider } from "./files";
 import { fileScope, useFiles } from "@/files/context";
 import { ProjectFileLinks } from "@/files/provider";
@@ -150,6 +151,8 @@ function MobileWorkspaceContent({
   const [searchOpen, setSearchOpen] = useState(false);
   const [resumeOpen, setResumeOpen] = useState(false);
   const [addingProject, setAddingProject] = useState<"open" | "clone" | null>(null);
+  // The sidebar's "+" sheet, which the header's workspace switcher also opens.
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const mutating = useRef(false);
@@ -471,7 +474,7 @@ function MobileWorkspaceContent({
     );
   };
   // The header's New tab sheet, for a workspace row's "New tab": that workspace is shown first, so
-  // the sheet and the tab it creates are that workspace's, as they are from the Tabs picker.
+  // the sheet and the tab it creates are that workspace's, as they are from the tab strip's "+".
   const openNewTab = useRef<(() => void) | null>(null);
   const newTabIn = useRef<string | null>(null);
   useEffect(() => {
@@ -673,6 +676,8 @@ function MobileWorkspaceContent({
                             onOpen={setAddingProject}
                             closed={recentlyClosed(workspace)}
                             onReopen={(projectId) => command({ kind: "project.reopen", projectId })}
+                            open={workspaceMenuOpen}
+                            onOpenChange={setWorkspaceMenuOpen}
                           />
                         }
                       >
@@ -756,22 +761,55 @@ function MobileWorkspaceContent({
                       aria-hidden={sidebarOpen || files.sidebar.open || undefined}
                     >
                       <header className="mobile-header">
-                        <NativeHeaderButton
-                          icon="menu"
-                          id="mobile-sidebar-toggle"
-                          className="mobile-icon mobile-glass"
-                          aria-label="Open sidebar"
-                          aria-controls="mobile-sidebar"
-                          aria-expanded={sidebarOpen}
-                          onClick={() => setSidebarOpen(true)}
-                        >
-                          <Menu />
-                        </NativeHeaderButton>
-                        {page ? (
-                          <h1 className="min-w-0 flex-1 truncate text-base font-medium">
-                            {page.kind === "schedules" ? "Schedules" : "Pull requests"}
-                          </h1>
-                        ) : project ? (
+                        <div className="mobile-header-row">
+                          <NativeHeaderButton
+                            icon="menu"
+                            id="mobile-sidebar-toggle"
+                            className="mobile-icon mobile-glass"
+                            aria-label="Open sidebar"
+                            aria-controls="mobile-sidebar"
+                            aria-expanded={sidebarOpen}
+                            onClick={() => setSidebarOpen(true)}
+                          >
+                            <Menu />
+                          </NativeHeaderButton>
+                          {page ? (
+                            <h1 className="min-w-0 flex-1 truncate text-base font-medium">
+                              {page.kind === "schedules" ? "Schedules" : "Pull requests"}
+                            </h1>
+                          ) : project && workspace ? (
+                            <WorkspaceSwitcher
+                              workspace={workspace}
+                              project={project}
+                              onSelectProject={selectProject}
+                              onOpenWorkspace={() => setWorkspaceMenuOpen(true)}
+                              canOpenWorkspace={canEdit && !newWorkspace.busy}
+                            />
+                          ) : (
+                            <h1 className="min-w-0 flex-1 truncate text-base font-medium">
+                              Workspace
+                            </h1>
+                          )}
+                          <NativeHeaderButton
+                            icon="files"
+                            id="mobile-files-toggle"
+                            className="mobile-icon mobile-glass"
+                            hidden={!!page}
+                            aria-label="Project files"
+                            aria-controls="mobile-project-files"
+                            aria-expanded={files.sidebar.open}
+                            onPointerEnter={preloadCodeEditor}
+                            onFocus={preloadCodeEditor}
+                            onClick={() => {
+                              preloadCodeEditor();
+                              files.select(scope, null);
+                              files.sidebar.setOpen(true);
+                            }}
+                          >
+                            <FolderOpen />
+                          </NativeHeaderButton>
+                        </div>
+                        {!page && project && (
                           <NewTabMenu
                             keyboard={commandsAvailable}
                             disabled={!canEdit}
@@ -781,7 +819,7 @@ function MobileWorkspaceContent({
                             renderTrigger={(open) => {
                               openNewTab.current = open;
                               return (
-                                <WorkspacePicker
+                                <MobileTabStrip
                                   project={project}
                                   tab={tab}
                                   pane={pane}
@@ -795,29 +833,7 @@ function MobileWorkspaceContent({
                               );
                             }}
                           />
-                        ) : (
-                          <h1 className="min-w-0 flex-1 truncate text-base font-medium">
-                            Workspace
-                          </h1>
                         )}
-                        <NativeHeaderButton
-                          icon="files"
-                          id="mobile-files-toggle"
-                          className="mobile-icon mobile-glass"
-                          hidden={!!page}
-                          aria-label="Project files"
-                          aria-controls="mobile-project-files"
-                          aria-expanded={files.sidebar.open}
-                          onPointerEnter={preloadCodeEditor}
-                          onFocus={preloadCodeEditor}
-                          onClick={() => {
-                            preloadCodeEditor();
-                            files.select(scope, null);
-                            files.sidebar.setOpen(true);
-                          }}
-                        >
-                          <FolderOpen />
-                        </NativeHeaderButton>
                       </header>
                       {(error || host.message) && (
                         <div role="alert" className="mobile-notice">

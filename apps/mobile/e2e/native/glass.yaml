@@ -96,7 +96,7 @@ appId: xyz.hologram.concors.preview
     waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "20%,35%"
-- assertVisible: "Tabs"
+- assertVisible: "Workspaces"
 - tapOn:
     text: "Close"
     waitToSettleTimeoutMs: 500
@@ -105,7 +105,7 @@ appId: xyz.hologram.concors.preview
     waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "20%,65%"
-- assertVisible: "Tabs"
+- assertVisible: "Workspaces"
 - tapOn:
     text: "Close"
     waitToSettleTimeoutMs: 500
@@ -113,7 +113,7 @@ appId: xyz.hologram.concors.preview
     waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "50%,5%"
-- assertVisible: "Tabs"
+- assertVisible: "Workspaces"
 - tapOn:
     text: "Close"
     waitToSettleTimeoutMs: 500
@@ -121,5 +121,5 @@ appId: xyz.hologram.concors.preview
     waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "90%,50%"
-- assertVisible: "Tabs"
-- takeScreenshot: apps/mobile/test-results/native/tabs-drawer
+- assertVisible: "Workspaces"
+- takeScreenshot: apps/mobile/test-results/native/workspace-switcher

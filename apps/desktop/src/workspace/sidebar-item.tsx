@@ -292,7 +292,13 @@ export function WorkspaceSidebarItem({
  * finished turn, or, folded, an agent still at work, with the spinner a tab's badge has. Unfolded,
  * work in progress shows on its own row instead.
  */
-function AttentionBadge({ attention, label }: { attention: WorkspaceAttention; label: string }) {
+export function AttentionBadge({
+  attention,
+  label,
+}: {
+  attention: WorkspaceAttention;
+  label: string;
+}) {
   if (!attention.kind) return null;
   return (
     <span

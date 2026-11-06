@@ -1,4 +1,3 @@
-import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures";
 import { mobileDesktopSocket } from "../../../e2e/support/mobile-direct-ports.cjs";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -13,30 +12,6 @@ type TestWindow = Window & {
   nativeSnapshot?: Extract<MobileRendererMessage, { type: "native-surfaces" }>;
   concorsMobileReceive?(message: MobileHostMessage): void;
 };
-
-/** Presses a button the phone draws in native chrome, as the native host would. */
-async function pressNative(page: Page, label: string) {
-  const find = () =>
-    page.evaluate(
-      (label) =>
-        (window as TestWindow).nativeSnapshot?.surfaces.find(
-          (item) => item.content.kind === "button" && item.content.label === label,
-        )?.id,
-      label,
-    );
-  await expect.poll(find).toBeTruthy();
-  const state = await page.evaluate(() => (window as TestWindow).nativeSnapshot);
-  const surfaceId = await find();
-  const frame = page.frames().find((item) => item !== page.mainFrame());
-  if (!state || !surfaceId || !frame) throw new Error(`Missing native surface ${label}`);
-  await frame.evaluate((message) => (window as TestWindow).concorsMobileReceive?.(message), {
-    type: "native-event",
-    scope: state.scope,
-    connectionId: state.connectionId,
-    surfaceId,
-    event: { kind: "press", control: "activate" },
-  } satisfies MobileHostMessage);
-}
 
 for (const native of [false, true]) {
   test(`mobile ${native ? "native bridge" : "web composer"} resumes a CLI session in a new tab`, async ({
@@ -98,10 +73,11 @@ for (const native of [false, true]) {
       const ui = page.frameLocator('iframe[title="Concors workspace"]');
       await chooseProvider(ui);
       // The New tab sheet opens the one Resume a chat list, closed chats and CLI sessions alike.
-      // In native chrome the phone draws the Tabs button, so the bridge presses it.
-      if (native) await pressNative(page, "Tabs");
-      else await ui.getByRole("combobox", { name: "Tabs" }).click();
-      await ui.getByRole("button", { name: "New tab", exact: true }).click();
+      // The strip's "+" is the page's own button, in native chrome too.
+      await ui
+        .getByRole("group", { name: "Tabs", exact: true })
+        .getByRole("button", { name: "New tab", exact: true })
+        .click();
       await ui
         .getByRole("dialog", { name: "New tab", exact: true })
         .getByRole("button", { name: "Resume a chat…", exact: true })

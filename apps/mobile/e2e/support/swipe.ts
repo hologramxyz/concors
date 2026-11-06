@@ -25,6 +25,18 @@ export async function swipe(
   }
 }
 
+/** A finger held still on one point past the system long-press delay, then lifted. */
+export async function hold(page: Page, at: { x: number; y: number }, ms = 700) {
+  const client = await page.context().newCDPSession(page);
+  try {
+    await client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [at] });
+    await page.waitForTimeout(ms);
+    await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  } finally {
+    await client.detach();
+  }
+}
+
 /**
  * Scrolls a chat timeline up with real input from the reader. A live chat stays pinned to its
  * latest message until then, and snaps back from a programmatic scroll such as Playwright's own

@@ -43,7 +43,7 @@ const GROUPS: readonly {
     title: "Tabs",
     description: "Switch between tabs and organize your workspace.",
     compactDescription:
-      "Move through the flat Tabs list. Closing a tab closes only that view, not its desktop siblings.",
+      "Move through the tabs in the strip under the header. Closing a tab closes only that view, not its desktop siblings.",
     commands: [
       "new-tab",
       "resume-chat",

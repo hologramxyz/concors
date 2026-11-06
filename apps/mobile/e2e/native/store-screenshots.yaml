@@ -5,7 +5,7 @@ appId: xyz.hologram.concors.preview
 - tapOn:
     id: native-header-chevron
     waitToSettleTimeoutMs: 500
-- assertVisible: "Tabs"
+- assertVisible: "Workspaces"
 - takeScreenshot: apps/mobile/test-results/native/store-workspaces
 - tapOn:
     text: "Close"

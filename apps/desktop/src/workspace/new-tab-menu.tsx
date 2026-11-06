@@ -56,7 +56,11 @@ export function NewTabMenu({
     event.preventDefault();
     requestAnimationFrame(() => {
       if (!document.querySelector('[data-slot="dialog-content"][data-state="open"]'))
-        triggerContainer.current?.querySelector("button")?.focus({ preventScroll: true });
+        // A trigger made of several buttons (the phone's tab strip) marks the one that opens it.
+        (
+          triggerContainer.current?.querySelector<HTMLElement>("[data-new-tab-trigger]") ??
+          triggerContainer.current?.querySelector("button")
+        )?.focus({ preventScroll: true });
     });
   };
   return (

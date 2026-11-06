@@ -219,10 +219,13 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       tabId,
       name: "Renamed from desktop",
     });
-    const picker = ui.getByRole("combobox", { name: "Tabs" });
+    // The strip's current tab, under the header.
+    const picker = ui.locator('.mobile-tab-strip [data-pane-choice][aria-pressed="true"]');
     await expect(picker).toContainText("Renamed from desktop");
-    await picker.click();
-    await ui.getByRole("button", { name: "New tab", exact: true }).click();
+    await ui
+      .getByRole("group", { name: "Tabs", exact: true })
+      .getByRole("button", { name: "New tab", exact: true })
+      .click();
     await ui
       .getByRole("dialog", { name: "New tab", exact: true })
       .getByRole("button", { name: "Terminal", exact: true })
@@ -238,8 +241,9 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     expect(project().tabs.map((tab) => tab.name)).toEqual(["Renamed from desktop", "Tab 2"]);
     await expect.poll(() => desktop.terminals.length).toBe(1);
     const terminalId = desktop.terminals[0]?.id;
-    await picker.click();
-    await ui.locator(`[data-pane-choice][data-value="${tabId}:${paneId}"]`).click();
+    await ui
+      .locator(`.mobile-tab-strip [data-pane-choice][data-value="${tabId}:${paneId}"]`)
+      .click();
     await expect(input).toBeEnabled();
     await input.fill("Unsent draft survives reconnect");
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();

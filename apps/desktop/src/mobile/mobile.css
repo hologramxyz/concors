@@ -16,6 +16,11 @@
   --mobile-safe-left: env(safe-area-inset-left, 0px);
   --mobile-safe-right: env(safe-area-inset-right, 0px);
   --mobile-header-height: calc(68px + var(--mobile-safe-top));
+  /* The workspace header's tab strip, under its controls; nothing on pages without one. */
+  --mobile-strip-height: 0px;
+}
+:root:has(.mobile-header .mobile-tab-strip) {
+  --mobile-strip-height: 44px;
 }
 :root[data-corner-style="square"] {
   --corner-radius: 0px;
@@ -259,7 +264,7 @@ body {
   gap: 2px;
   border-radius: var(--radius-3xl);
 }
-.mobile-pane-row:has([aria-pressed="true"]) {
+.mobile-pane-row:has([aria-current="page"]) {
   background: var(--accent);
 }
 .mobile-pane-choice {
@@ -281,11 +286,6 @@ body {
 /* The name; the sidebar's status dot and spinner keep their own size. */
 .mobile-pane-choice > span:not([data-row-state], [data-row-working]) {
   font-size: 14px;
-}
-.mobile-pane-choice > .mobile-pane-pinned {
-  width: 15px;
-  height: 15px;
-  color: var(--muted-foreground);
 }
 .mobile-pane-choice > .mobile-pane-selected {
   width: 15px;
@@ -575,6 +575,76 @@ body {
   margin-bottom: calc(-1 * var(--mobile-header-height));
   pointer-events: none;
 }
+/* The controls on one row, the tab strip under them, the two 44px rows 4px apart. */
+.mobile-header {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  height: calc(var(--mobile-header-height) + var(--mobile-strip-height));
+  margin-bottom: calc(-1 * (var(--mobile-header-height) + var(--mobile-strip-height)));
+}
+.mobile-header:has(.mobile-tab-strip) {
+  padding-bottom: 8px;
+}
+.mobile-header-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.mobile-tab-strip {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  min-width: 0;
+  pointer-events: auto;
+  /* A held tab opens its menu, not the system's text selection or link preview. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.mobile-tab-strip > :first-child {
+  flex: 1;
+}
+.mobile-tab-strip .tab-strip {
+  touch-action: pan-x;
+}
+.mobile-tab-strip-tab {
+  height: 44px;
+}
+.mobile-tab-strip-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  min-width: 0;
+  max-width: 220px;
+  padding: 0 12px;
+  font-size: 14px;
+}
+.mobile-tab-strip-new {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--mobile-round-radius);
+  color: var(--muted-foreground);
+}
+.mobile-tab-strip-new svg {
+  width: 20px;
+  height: 20px;
+}
+.mobile-tab-strip-new:active {
+  background: var(--muted);
+}
+.mobile-tab-strip-new:disabled {
+  opacity: 0.4;
+}
 .mobile-files-header {
   margin-bottom: 0;
 }
@@ -620,10 +690,10 @@ body {
   white-space: nowrap;
 }
 .mobile-header + .mobile-notice {
-  margin-top: var(--mobile-header-height);
+  margin-top: calc(var(--mobile-header-height) + var(--mobile-strip-height));
 }
 .mobile-pane:not([data-pane-profile="chat"]) {
-  padding-top: var(--mobile-header-height);
+  padding-top: calc(var(--mobile-header-height) + var(--mobile-strip-height));
 }
 .mobile-main:has(.mobile-notice) .mobile-pane {
   padding-top: 0;
@@ -1007,7 +1077,7 @@ body {
 }
 /* Desktop's undo toast, moved from under desktop's title bar to under the phone's header. */
 .mobile-undo-toast > [role="status"] {
-  top: calc(var(--mobile-header-height) + 4px);
+  top: calc(var(--mobile-header-height) + var(--mobile-strip-height) + 4px);
   padding-block: 0;
   padding-inline: 16px 0;
 }
@@ -1251,10 +1321,14 @@ body {
   white-space: pre;
 }
 @media (max-width: 360px) {
-  .mobile-header,
+  .mobile-header-row,
   .mobile-files-header,
   .mobile-sidebar-head {
     gap: 6px;
+  }
+  .mobile-header,
+  .mobile-files-header,
+  .mobile-sidebar-head {
     padding-inline: 8px;
   }
 }
@@ -1498,15 +1572,15 @@ body {
 
 /* Keep message navigation below the floating header, with room for touch targets. */
 .mobile-pane .message-list-trigger {
-  top: var(--mobile-header-height);
+  top: calc(var(--mobile-header-height) + var(--mobile-strip-height));
   right: 16px;
   width: 44px;
   height: 44px;
   border-radius: var(--radius-3xl);
 }
 .mobile-pane .chat-timeline-shell [aria-label="Chat timeline"] {
-  padding-top: calc(var(--mobile-header-height) + 52px);
-  scroll-padding-top: calc(var(--mobile-header-height) + 52px);
+  padding-top: calc(var(--mobile-header-height) + var(--mobile-strip-height) + 52px);
+  scroll-padding-top: calc(var(--mobile-header-height) + var(--mobile-strip-height) + 52px);
 }
 .mobile-main:has(.mobile-notice) .message-list-trigger {
   top: 4px;
@@ -1527,11 +1601,25 @@ body {
   position: absolute;
   z-index: 5;
   inset: 0 0 auto;
-  height: calc(var(--mobile-header-height) + 12px);
+  height: calc(var(--mobile-header-height) + var(--mobile-strip-height) + 12px);
   background: linear-gradient(
     to bottom,
     var(--background),
     color-mix(in srgb, var(--background) 85%, transparent) calc(100% - 24px),
+    transparent
+  );
+}
+/* The strip's tabs are not glass, so nothing may read through behind their names or in the gap
+   above them: the fade is solid from the control row's bottom edge down to the strip's, and eases
+   out below it. */
+.mobile-main:has(> .mobile-pane[data-pane-profile="chat"]):not(:has(.mobile-notice))
+  > .mobile-header:has(.mobile-tab-strip)::before {
+  background: linear-gradient(
+    to bottom,
+    var(--background),
+    color-mix(in srgb, var(--background) 85%, transparent) calc(var(--mobile-header-height) - 28px),
+    var(--background) calc(var(--mobile-header-height) - 12px),
+    var(--background) calc(100% - 20px),
     transparent
   );
 }

@@ -415,9 +415,12 @@ test("terminal taps and horizontal swipes open real files and the sidebar withou
   try {
     const chat = ui.getByRole("textbox", { name: "Message Codex" });
     await chat.fill("Keep my chat draft during terminal gestures");
-    const picker = ui.getByRole("combobox", { name: "Tabs" });
-    await picker.click();
-    await ui.getByRole("button", { name: "New tab", exact: true }).click();
+    // The strip's current tab, under the header.
+    const picker = ui.locator('.mobile-tab-strip [data-pane-choice][aria-pressed="true"]');
+    await ui
+      .getByRole("group", { name: "Tabs", exact: true })
+      .getByRole("button", { name: "New tab", exact: true })
+      .click();
     await ui
       .getByRole("dialog", { name: "New tab", exact: true })
       .getByRole("button", { name: "Terminal", exact: true })
@@ -473,8 +476,9 @@ test("terminal taps and horizontal swipes open real files and the sidebar withou
     await page.keyboard.type("printf 'gesture-%s\\n' still-connected");
     await page.keyboard.press("Enter");
     await expect(terminal).toContainText("gesture-still-connected");
-    await picker.click();
-    await ui.locator(`[data-pane-choice][data-value="${tabId}:${paneId}"]`).click();
+    await ui
+      .locator(`.mobile-tab-strip [data-pane-choice][data-value="${tabId}:${paneId}"]`)
+      .click();
     await expect(chat).toHaveValue("Keep my chat draft during terminal gestures");
   } finally {
     await cleanup();

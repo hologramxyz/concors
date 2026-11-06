@@ -293,7 +293,7 @@ function HeaderButton({
               spacing={8}
               modifiers={[
                 padding({ horizontal: 12 }),
-                ...(content.icon === "chevron" && content.label === "Tabs"
+                ...(content.icon === "chevron"
                   ? [
                       // Plain buttons hit-test their label, not the outer glass frame.
                       frame({ width, height }),

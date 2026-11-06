@@ -18,6 +18,7 @@ export function RowMenuSheet({
   className,
   children,
   icon,
+  opened,
 }: {
   /** The trigger's accessible name. */
   label: string;
@@ -27,8 +28,13 @@ export function RowMenuSheet({
   /** The trigger's icon. */
   icon: ReactNode;
   children: ReactNode;
+  /**
+   * Shows the sheet at once with no trigger of its own, for a row that opens it some other way (a
+   * long-press); focus goes back to what `returnFocus` names.
+   */
+  opened?: { returnFocus(): HTMLElement | null } | undefined;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!!opened);
   const next = useRef<(() => void) | null>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -39,17 +45,19 @@ export function RowMenuSheet({
   };
   return (
     <>
-      <button
-        ref={trigger}
-        type="button"
-        aria-label={label}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        className={className}
-        onClick={() => setOpen(true)}
-      >
-        {icon}
-      </button>
+      {!opened && (
+        <button
+          ref={trigger}
+          type="button"
+          aria-label={label}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          className={className}
+          onClick={() => setOpen(true)}
+        >
+          {icon}
+        </button>
+      )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           className="mobile-select-sheet mobile-row-sheet"
@@ -68,7 +76,7 @@ export function RowMenuSheet({
             if (action) action();
             else
               requestAnimationFrame(() => {
-                const target = trigger.current;
+                const target = opened ? opened.returnFocus() : trigger.current;
                 if (target?.isConnected && !target.closest("[inert]"))
                   target.focus({ preventScroll: true });
               });

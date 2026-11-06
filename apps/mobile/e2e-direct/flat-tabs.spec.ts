@@ -108,20 +108,25 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     await chooseProvider(ui);
     const input = ui.getByRole("textbox", { name: "Message Codex" });
     await input.fill("Keep this draft while switching tabs");
-    const picker = ui.getByRole("combobox", { name: "Tabs", exact: true, includeHidden: true });
-    const drawer = ui.getByRole("dialog", { name: "Tabs", exact: true });
+    // The strip under the header, and its current tab.
+    const strip = ui.getByRole("group", { name: "Tabs", exact: true });
+    const picker = ui.locator('.mobile-tab-strip [data-pane-choice][aria-pressed="true"]');
+    const tab = (value: string) =>
+      ui.locator(`.mobile-tab-strip [data-pane-choice][data-value="${value}"]`);
+    const actions = (value: string) =>
+      ui
+        .locator(`.mobile-tab-strip [data-tab-id="${value}"]`)
+        .getByRole("button", { name: /^More actions for / })
+        .press("Enter");
     const before = layout();
     const selection = { ...snapshot().selection };
-    await picker.click();
-    await expect(drawer.locator(".mobile-tab-card")).toHaveCount(0);
     // Each leaf by name alone, as the sidebar names tabs.
-    await expect(drawer.locator("[data-pane-choice]")).toHaveText([
+    await expect(strip.locator("[data-pane-choice]")).toHaveText([
       "Development 1",
       "Development 2",
       "Development 3",
       "Notes",
     ]);
-    await drawer.getByRole("button", { name: "Close", exact: true }).click();
     for (const value of [
       `${tabId}:${second}`,
       `${tabId}:${third}`,
@@ -138,8 +143,7 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     const session = splitTab().nodes.find((node) => node.id === paneId);
     expect(session?.kind === "pane" && session.sessionId).toBeTruthy();
 
-    // An open drawer updates immediately when desktop changes its existing layout.
-    await picker.click();
+    // The strip updates at once when desktop changes its existing layout.
     await execute({
       kind: "tab.rename",
       projectId,
@@ -147,9 +151,7 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
       tabId,
       name: "Renamed on desktop",
     });
-    await expect(drawer.locator("[data-pane-choice]").first()).toContainText(
-      "Renamed on desktop 1",
-    );
+    await expect(strip.locator("[data-pane-choice]").first()).toContainText("Renamed on desktop 1");
     const fourth = crypto.randomUUID();
     await execute({
       kind: "pane.split",
@@ -162,7 +164,7 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
       axis: "horizontal",
       profile: "shell",
     });
-    await expect(drawer.locator("[data-pane-choice]")).toHaveCount(5);
+    await expect(strip.locator("[data-pane-choice]")).toHaveCount(5);
     await execute({
       kind: "pane.close",
       projectId,
@@ -170,11 +172,11 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
       tabId: notesTab,
       paneId: fourth,
     });
-    await expect(drawer.locator("[data-pane-choice]")).toHaveCount(4);
+    await expect(strip.locator("[data-pane-choice]")).toHaveCount(4);
 
     // New mobile tabs are single-pane desktop tabs, not additional splits.
     const originalLayout = layout();
-    await drawer.getByRole("button", { name: "New tab", exact: true }).click();
+    await strip.getByRole("button", { name: "New tab", exact: true }).click();
     const create = ui.getByRole("dialog", { name: "New tab", exact: true });
     await expect(create.getByRole("button", { name: /Add pane/ })).toHaveCount(0);
     await create.getByRole("button", { name: "New chat", exact: true }).click();
@@ -185,8 +187,7 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     expect(added.nodes).toHaveLength(1);
     expect(layout().slice(0, 2)).toEqual(originalLayout);
     await expect(picker).toHaveAttribute("data-value", `${added.id}:${added.root}`);
-    await picker.click();
-    await drawer.getByRole("button", { name: "Actions for tab Tab 3", exact: true }).click();
+    await actions(`${added.id}:${added.root}`);
     await ui.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
     await ui.getByLabel("Tab name", { exact: true }).fill("Mobile review");
     await ui.getByRole("button", { name: "Save", exact: true }).click();
@@ -195,15 +196,11 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
       .toBe("Mobile review");
     // Renaming does not change the tab/pane identity shared with desktop.
     await expect(picker).toHaveAttribute("data-value", `${added.id}:${added.root}`);
-    await expect(drawer).not.toBeVisible();
-    await picker.click();
-    await drawer.locator(`[data-value="${tabId}:${paneId}"]`).click();
+    await tab(`${tabId}:${paneId}`).click();
     await expect(input).toHaveValue("Keep this draft while switching tabs");
 
-    // An inactive row changes only its own leaf, not the active view or sibling sessions.
-    await picker.click();
-    const row = drawer.locator(`.mobile-pane-row:has([data-value="${tabId}:${second}"])`);
-    await row.getByRole("button", { name: /^Actions for tab / }).click();
+    // An inactive tab changes only its own leaf, not the active view or sibling sessions.
+    await actions(`${tabId}:${second}`);
     await expect(ui.getByRole("menuitem", { name: "Rename tab", exact: true })).toHaveCount(0);
     await ui.getByRole("menuitemradio", { name: "OpenCode", exact: true }).click();
     await expect
@@ -212,7 +209,7 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
         return node?.kind === "pane" ? node.profile : null;
       })
       .toBe("opencode");
-    await row.getByRole("button", { name: /^Actions for tab / }).click();
+    await actions(`${tabId}:${second}`);
     await ui.getByRole("menuitem", { name: "Close tab…", exact: true }).click();
     await ui.getByRole("button", { name: "Close tab", exact: true }).click();
     await expect(picker).toHaveAttribute("data-value", `${tabId}:${paneId}`);
@@ -226,8 +223,7 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     await picker.press("Backspace");
     await ui.getByRole("button", { name: "Close tab", exact: true }).click();
     await expect(picker).toHaveAttribute("data-value", `${tabId}:${third}`);
-    await picker.click();
-    await drawer.locator(`[data-value="${added.id}:${added.root}"]`).click();
+    await tab(`${added.id}:${added.root}`).click();
     await picker.press("Control+Shift+t");
     await picker.press("Backspace");
     await ui.getByRole("button", { name: "Close tab", exact: true }).click();
