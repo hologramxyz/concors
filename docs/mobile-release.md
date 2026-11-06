@@ -9,7 +9,9 @@ Start with the [submission packet](../apps/mobile/release/submission-packet.md):
 store copy, data inventory, public URL audit, and ownership for each blocker. The first
 release is free, with machines added on desktop. Normal sign-in can create an account. AI-sharing
 permission is enforced by the native host before applicable agent/provider/schedule requests,
-with named configurations, a per-connection grant and withdrawal in account settings. The new
+with named services, permission saved on this device per account/organization/machine, and
+withdrawal in account settings. Restoring conversations or switching models reuses that choice;
+provider configuration changes require fresh permission. The new
 account-deletion and reporting APIs must deploy before the app. Owner privacy facts, provider
 setup, signed-device acceptance and store materials remain unverified release gates.
 
