@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-11-06T20:03:07.354Z",
+  "checkedAt": "2026-11-06T21:20:52.023Z",
   "appId": "6817622624",
   "version": "0.1.0",
   "versionState": "PREPARE_FOR_SUBMISSION",
@@ -13,8 +13,12 @@
   "fixedEmailCodeInstructionsConfigured": true,
   "credentialValuesIncluded": false,
   "credentialStorage": "Private App Review fields and mode-0600 local operator files; values excluded from the repository",
-  "machineCount": 0,
+  "machineCount": 1,
   "reviewerWorkspaceReady": false,
   "physicalIPhoneVerified": false,
-  "productionAppleSignInEnabled": false
+  "productionAppleSignInEnabled": true,
+  "credentialVerificationAt": "2026-11-06T20:03:07.354Z",
+  "machineVerificationAt": "2026-11-06T21:20:52.023Z",
+  "appleProviderEvidence": "apple-provider-activation.json",
+  "reviewHostEvidence": "review-host.json"
 }
