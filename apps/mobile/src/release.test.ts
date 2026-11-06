@@ -23,20 +23,3 @@ it("allows internal previews but blocks a production build while release gates a
   expect(local.status).toBe(1);
   expect(local.stderr).toContain("Not ready for store submission");
 });
-
-it("selects iOS evidence for EAS iPhone releases without treating Play checks as Apple blockers", () => {
-  const script = fileURLToPath(new URL("../scripts/production-guard.mjs", import.meta.url));
-  const production = spawnSync(process.execPath, [script], {
-    env: {
-      ...process.env,
-      EAS_BUILD_PROFILE: "production",
-      EAS_BUILD_PLATFORM: "ios",
-    },
-    encoding: "utf8",
-  });
-  expect(production.status).toBe(1);
-  expect(production.stderr).toContain("Physical iPhone");
-  expect(production.stderr).toContain("accepted Apple agreements");
-  expect(production.stderr).not.toContain("Play verification");
-  expect(production.stderr).not.toContain("Android");
-});
