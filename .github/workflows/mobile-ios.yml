@@ -40,7 +40,7 @@ jobs:
           fetch-depth: 0
       - name: Start the clean runner's iPhone before compilation
         id: simulator
-        timeout-minutes: 2
+        timeout-minutes: 5
         run: |
           MOBILE_SIMULATOR_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"].get("com.apple.CoreSimulator.SimRuntime.iOS-26-5",[]); print(next((d["udid"] for d in devices if d["name"]=="iPhone 17 Pro Max"),""))')
           if [ -z "$MOBILE_SIMULATOR_ID" ]; then
@@ -181,6 +181,7 @@ jobs:
         timeout-minutes: 3
         with:
           name: mobile-ios-native-evidence
+          include-hidden-files: true
           path: |
             apps/mobile/test-results/native/
             apps/mobile/.expo/xcodebuild.log
