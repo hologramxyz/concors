@@ -23,7 +23,7 @@ concurrency:
 jobs:
   simulator:
     name: Native iOS glass and composer
-    # CoreSimulator and XCTest exhausted the smaller Apple Silicon runner during capture.
+    # CoreSimulator and XCTest stalled on the smaller Apple Silicon runner during capture.
     # Expo's universal simulator artifact also runs on this 14 GB Intel runner.
     runs-on: macos-26-intel
     timeout-minutes: 50
@@ -152,12 +152,10 @@ jobs:
           echo '29b675e10cc12080e445e9bfb2e2b4e4dfb9c0f2e30d5884120d258b5e1cd991  maestro.zip' | (cd "$RUNNER_TEMP" && shasum -a 256 --check)
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro-cli"
           echo "$RUNNER_TEMP/maestro-cli/maestro/bin" >> "$GITHUB_PATH"
-      - name: Exercise real SwiftUI controls and native text input
-        timeout-minutes: 8
+      # Keep captures in the same XCTest session instead of paying the cold driver startup twice.
+      - name: Exercise native controls and capture store screenshots
+        timeout-minutes: 15
         run: maestro --device "${{ steps.simulator.outputs.id }}" test -e FRESH_SIMULATOR=true --test-output-dir apps/mobile/test-results/native apps/mobile/e2e/native/glass.yaml
-      - name: Capture iPhone store screenshots with fictional workspace content
-        timeout-minutes: 2
-        run: maestro --device "${{ steps.simulator.outputs.id }}" test --test-output-dir apps/mobile/test-results/native apps/mobile/e2e/native/store-screenshots.yaml
       - name: Retain native launch diagnostics
         if: failure()
         timeout-minutes: 1

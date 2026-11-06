@@ -11,4 +11,14 @@ appId: xyz.hologram.concors.preview
 - inputText: "Review the changes and run the tests."
 - assertVisible:
     id: native-composer-model
+# Show the sample task and progress instead of the fixture's demo instructions at the end.
+- scrollUntilVisible:
+    element: "Help me get the mobile client ready to test."
+    direction: UP
+    timeout: 30000
 - takeScreenshot: apps/mobile/test-results/native/store-agent
+- tapOn:
+    id: native-header-files
+- assertVisible:
+    id: native-header-back
+- takeScreenshot: apps/mobile/test-results/native/store-files

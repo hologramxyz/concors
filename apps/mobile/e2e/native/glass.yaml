@@ -1,18 +1,16 @@
 appId: xyz.hologram.concors.preview
-env:
-  FRESH_SIMULATOR: "false"
 ---
 # CI just installed and launched the app on a new simulator. Preserve that cold start
 # instead of clearing/relaunching it through XCTest; local reruns still reset state.
 - runFlow:
     when:
-      true: ${FRESH_SIMULATOR == 'true'}
+      true: ${typeof FRESH_SIMULATOR !== 'undefined' && FRESH_SIMULATOR == 'true'}
     commands:
       - launchApp:
           stopApp: false
 - runFlow:
     when:
-      true: ${FRESH_SIMULATOR != 'true'}
+      true: ${typeof FRESH_SIMULATOR === 'undefined' || FRESH_SIMULATOR != 'true'}
     commands:
       - launchApp:
           clearState: true
@@ -83,3 +81,4 @@ env:
     point: "90%,50%"
 - assertVisible: "Tabs"
 - takeScreenshot: apps/mobile/test-results/native/tabs-drawer
+- runFlow: store-screenshots.yaml
