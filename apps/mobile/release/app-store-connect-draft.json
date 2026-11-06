@@ -65,7 +65,7 @@
   },
   "remainingOwnerFields": [
     "Verify Apple account sign-in, OAuth-token return, private email and revocation on a signed iPhone",
-    "Available isolated machine and scoped AI-provider access for the verified reviewer account",
+    "Configure working company AI access with bounded billing on the connected isolated review machine",
     "Physical iPhone acceptance and operating support/report triage"
   ],
   "note": "Free-app agreement is active/current. Apple App ID, Services ID and dedicated sign-in key are prepared; backend signing-key support is deployed. Apple login remains disabled pending Privy setup. Build 12 is VALID / IN_BETA_TESTING, in the Internal beta group and attached to draft 0.1.0. Public App Review has not been submitted.",
@@ -93,5 +93,8 @@
   "appleProviderConfigured": true,
   "appleProviderConfigurationVerifiedAt": "2026-11-06T20:37:28.048Z",
   "appleProviderConfigurationEvidence": "apple-provider-activation.json",
-  "appleAccountAcceptanceVerified": false
+  "appleAccountAcceptanceVerified": false,
+  "reviewMachineConnected": true,
+  "reviewMachineEvidence": "review-host.json",
+  "reviewAiAccessConfigured": false
 }

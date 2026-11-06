@@ -18,7 +18,7 @@ The previous audits and implementation history are in [the November 4–5 audit]
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | App Store draft     | iOS **0.1.0**, PREPARE_FOR_SUBMISSION. Name, subtitle, feature description, keywords, promotional copy, concors.dev marketing/support/privacy URLs and **2026 Rolling Inc.** copyright saved.                                                                                                                                                                                                                                                                                                                                                             |
 | Private contact     | Complete contact details reused from this same app's existing beta review record. Private details and reviewer secrets are not stored in the repository.                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Reviewer login      | Privy test accounts enabled; one issued account completed normal production email sign-in and PKCE exchange. Its login and fixed-code instructions are saved in Apple’s private App Review fields. It has **zero connected machines**; see [reviewer-access.json](reviewer-access.json). Browser verification does not establish signed-iPhone acceptance.                                                                                                                                                                                                |
+| Reviewer login      | Privy test accounts enabled; one issued account completed normal production email sign-in and PKCE exchange. Its login and fixed-code instructions are saved in Apple’s private App Review fields. It has **one isolated connected machine** with verified files/terminal/reconnect; AI access remains pending. See [reviewer-access.json](reviewer-access.json) and [host proof](review-host.json). Browser verification does not establish signed-iPhone acceptance.                                                                                    |
 | Price and countries | Price zero in the USA and all 174 automatic price territories. All 175 territories selected, including future territories. Selection does not override Apple's regional eligibility requirements.                                                                                                                                                                                                                                                                                                                                                         |
 | Agreements / EU     | Free-app agreement is **Active**, current and in effect after the Account Holder's acceptance. App Information identifies this developer as a trader for this app. Paid-app agreement still needs information; this launch has no iPhone commerce.                                                                                                                                                                                                                                                                                                        |
 | Credentials         | Dedicated **Concors EAS Submit**, App Manager role, assigned in Expo. The exposed old key was revoked. Apple's team-key role spans apps; the Expo submission assignment is specific to Concors.                                                                                                                                                                                                                                                                                                                                                           |
@@ -39,8 +39,8 @@ The previous audits and implementation history are in [the November 4–5 audit]
    of OAuth tokens, first-time/returning sign-in, Hide My Email, cancellation and revocation on a
    signed iPhone. Keep allowed domains. See [activation evidence](apple-provider-activation.json).
 2. **Reviewer workspace.** The dedicated email login is verified and saved privately in Apple.
-   Assign an isolated, connected machine and working AI-provider access that remain available
-   throughout review; the reviewer account currently has no machines. Do not expose a customer's
+   Its isolated VM is connected and files/terminal/reconnect checks pass. Configure working company
+   AI-provider access with bounded billing and keep the machine available throughout review. Do not expose a customer's
    workspace, a developer host or the agent's credentials. Verify the exact review route and deletion
    on a separate disposable account before final handoff. Keep Privy test accounts enabled throughout
    review: disabling/re-enabling rotates the credentials, which would require updating Apple's fields.
@@ -54,66 +54,52 @@ Do not infer readiness from a successful upload. The iOS-only gate file is
 `node apps/mobile/scripts/release-check.mjs --platform=ios --json` must continue failing until the
 remaining evidence exists. No public App Review or external beta review has been submitted.
 
-## Dedicated reviewer machine proposal — not provisioned
+## Dedicated reviewer machine — provisioned; AI pending
 
-The owner requested a hosting proposal on November 6. This proposal does not authorize a purchase
-or establish working reviewer access. The existing reviewer account has no connected machine.
+The owner approved **USD 30/month** while App Review remains open. One company-owned OVH US
+VPS-1 is provisioned in Virginia with Ubuntu 24.04, x86_64, **2 vCores / 4 GB RAM / 40 GB disk**.
+The first one-month order, including mandatory options and tax, was **USD 5.35**. It is attached as
+an **external machine** only to the isolated reviewer organization; no Stripe machine subscription
+was created on the review account. [Deployment and verification](review-host.json) excludes access
+credentials, addresses and provider account identifiers.
 
-Use a **company-owned OVH US VPS-1**, Ubuntu 24.04, x86_64, **2 vCores / 4 GB RAM / 40 GB disk**,
-in Virginia if available. Connect it as an **external machine** to the isolated reviewer
-organization through the normal desktop setup. This keeps the reviewer out of machine checkout
-and avoids creating a Stripe subscription on the reviewer account. Production already has OVH
-credentials and external-machine SSH/daemon configuration; capacity and order availability still
-need checking immediately before any approved purchase.
+| Item    | Actual state / remaining work                                                                                                                                                                                                                                                                  |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hosting | USD 5.35 initial monthly charge; one-month billing and automatic renewal. Keep it online through review and follow-up, then verify cancellation and deletion.                                                                                                                                  |
+| AI      | Pi 1.5.0 is installed. A working company provider credential and billing limit remain required. A separate Anthropic workspace/key is an optional isolation method; an existing company key with an appropriate limit is acceptable. No new Claude subscription is required for this proposal. |
+| Budget  | Owner approved USD 30/month total. USD 20/month is the proposed AI allowance; its provider-side limit is not configured because AI access is not yet supplied. No optional hosting add-ons were purchased.                                                                                     |
+| Access  | TLS, scoped machine-token connection, sample file listing/read, real terminal tests and reconnect verified. The account sees exactly this one machine. Signed-iPhone acceptance remains pending.                                                                                               |
 
-| Item            | Proposed amount / behavior                                                                                                                                                                                                                                             |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| VM              | **USD 5.35 per month**, current US catalog monthly renewal price for `vps-2027-model1`, checked November 6 at 20:12 UTC. The public site advertises a lower starting price; use the live order quote for approval.                                                     |
-| AI access       | One supported provider, initially Pi with an Anthropic API key scoped to a new review-only workspace. Set a **USD 20 monthly workspace spend limit**, with a usage alert before exhaustion. The API account must have usable credit and support the selected model.    |
-| Proposed budget | **USD 30/month**, including the VM and AI allowance, subject to the final order quote and taxes. No automatic upgrades, paid backup add-ons or additional machines. Usage caps reset on the provider's billing schedule; this is a monthly budget, not a lifetime cap. |
-| Availability    | Always on through App Review, follow-up questions and any appeal. Check renewal and AI headroom before submission and monitor during review. Do not schedule shutdown while review is pending.                                                                         |
-| Alternative     | A DigitalOcean Basic bundled VM with 2 vCPUs / 4 GiB / 80 GiB is **USD 24/month**, plus AI. It exceeds this proposal's total budget, needs separate approval and account access, and is a fallback if OVH cannot supply the machine.                                   |
-
-Pricing sources: [OVH public US catalog](https://api.us.ovhcloud.com/1.0/order/catalog/public/vps?ovhSubsidiary=US),
-[OVH VPS specifications](https://us.ovhcloud.com/vps/),
-[DigitalOcean bundled pricing](https://www.digitalocean.com/pricing/droplets), and
+Pricing references: [OVH US catalog](https://api.us.ovhcloud.com/1.0/order/catalog/public/vps?ovhSubsidiary=US),
+[OVH VPS specifications](https://us.ovhcloud.com/vps/), and
 [Anthropic workspace limits](https://platform.claude.com/docs/en/manage-claude/workspaces).
-These are November 6 observations, not a reserved quote.
+The order quote was checked before the authorized purchase. Review future hosting/provider charges
+against the approved monthly budget.
 
-The standard Concors installer requires Debian/Ubuntu with systemd and SSH. An ordinary Railway
-service container does not satisfy that installation contract without additional engineering.
-This proposal uses a separate VM and the existing installation route.
+The standard installer requires Ubuntu/Debian with systemd and SSH. The normal relay connection,
+TLS and machine-token checks are in use. SSH password/root login are disabled, SSH uses keys and the
+host firewall is active. The runtime's standard `ubuntu` user has sudo, so the entire VM is treated
+as disposable; it contains no customer repository, shared production credential or developer login.
 
-Isolation and operation:
+The original **Task Notes** sample is a local Git repository with a README, source files, three
+passing Node tests and a useful next task. File inspection, test execution and reconnect were
+verified through the review account's normal authenticated machine protocol. The released daemon
+is **0.13.0**. A gateway restart initially interrupted the terminal: the direct systemd host used a
+different build identity and was replaced by a gateway-owned child. The review host now supplies the
+matching fingerprint through a service wrapper. Its session host remains owned by its own systemd
+service, and another gateway restart preserved the **same running terminal**. The accompanying CLI
+fix and regression test make direct service launches compute that fingerprint in a normal daemon
+release.
 
-- Give only the reviewer organization access. Seed a small, original sample repository with a
-  README, source files, an executable test and a useful starter task. Include no customer code,
-  production database access, production environment files, GitHub write token or developer login.
-- Install the released daemon and a pinned supported AI CLI; record the versions. Keep the normal
-  machine-token checks and TLS. Restrict SSH to the control plane and operator; expose only the
-  daemon/preview ports needed by the demonstrated flow. Validate the firewall with the installer.
-- Treat the entire VM as disposable. The standard installer grants the `ubuntu` user passwordless
-  sudo, and the terminal can read credentials available to its user. A review-only model credential
-  must therefore have limited spending and no administration rights; never copy a shared key onto
-  this host. Place it through a private operator channel, outside the repository, chat and Apple
-  review notes. Verify that the session host inherits it after restart.
-- The company supplies the provider account/key and owns the usage. Confirm that its permitted-use
-  terms cover this isolated review demonstration. Use the app's normal named-provider AI consent
-  before sending the sample code; do not simulate provider responses or bypass permissions.
-- Keep health, certificate, heartbeat, disk and AI-credit checks running, with alerts to an operated
-  support contact. Start from a saved sample-repository revision so an operator can restore the
-  exercise without rotating the review login or deleting an active session unexpectedly.
+After company AI access is configured, verify a real response and permitted edit through the app's
+normal named-provider consent, then finish the saved reviewer's signed-iPhone route, token renewal,
+background/reconnect and final screenshots. Verify deletion with a separate disposable account.
+Keep Privy test accounts enabled throughout review: toggling the feature rotates the saved login.
+Health/credit checks and support/report handling must be operated throughout review.
 
-After purchase approval and secure provider setup, acceptance must demonstrate the **exact saved
-reviewer login on the signed iPhone**, machine discovery, a real agent response, file inspection,
-a permitted edit, terminal/test execution, app background/reconnect, and renewed machine access
-after token expiry. Verify deletion on a separate disposable account rather than deleting the
-App Review account. Capture the final screenshots from this working route, then update Apple's
-private review notes with the machine, sample task and recovery/contact instructions.
-
-After review is closed, revoke the dedicated model key, detach the external machine, destroy the
-VM and its backups, and verify that provider billing/renewal stopped. Removing an external machine
-from Concors alone does **not** destroy the VPS or stop its hosting bill.
+Once review is closed, revoke the review-only provider credential, detach the external machine,
+destroy the VPS and backups, and verify that renewal/billing stopped. Removing an external machine
+from Concors alone does **not** destroy the VM or stop hosting charges.
 
 ## Review guidance
 
