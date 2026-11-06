@@ -1,7 +1,9 @@
 appId: xyz.hologram.concors.preview
 ---
-# Continue glass.yaml's final Tabs drawer. These are real simulator captures of the shared
+# Begin on the agent pane. These are real simulator captures of the shared
 # workspace UI with fictional fixture data; inspect the output before uploading store assets.
+- tapOn:
+    id: native-header-chevron
 - assertVisible: "Tabs"
 - takeScreenshot: apps/mobile/test-results/native/store-workspaces
 - tapOn: "Close"
@@ -22,3 +24,7 @@ appId: xyz.hologram.concors.preview
 - assertVisible:
     id: native-header-back
 - takeScreenshot: apps/mobile/test-results/native/store-files
+- tapOn:
+    id: native-header-back
+- assertVisible:
+    id: native-agent-input

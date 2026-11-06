@@ -23,8 +23,11 @@ appId: xyz.hologram.concors.preview
     id: native-header-menu
 - assertVisible:
     id: native-header-files
+# Retain the store views even if a later control regression fails this same session.
+- runFlow: store-screenshots.yaml
 - tapOn:
     id: native-agent-input
+- eraseText: 100
 - inputText: "Native Liquid Glass draft"
 - assertVisible:
     id: native-composer-model
@@ -81,4 +84,3 @@ appId: xyz.hologram.concors.preview
     point: "90%,50%"
 - assertVisible: "Tabs"
 - takeScreenshot: apps/mobile/test-results/native/tabs-drawer
-- runFlow: store-screenshots.yaml
