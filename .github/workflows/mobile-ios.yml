@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
     inputs:
       simulator_artifact:
-        description: Optional Expo simulator artifact URL; run its prebuilt ARM app on Apple Silicon
+        description: Optional universal Expo simulator artifact URL; skip native compilation
         type: string
         default: ""
       reuse_matching_cached_app:
@@ -23,8 +23,9 @@ concurrency:
 jobs:
   simulator:
     name: Native iOS glass and composer
-    # Compile locally on Intel's 14 GB runner, or exercise a prebuilt Expo app on Apple Silicon.
-    runs-on: ${{ inputs.simulator_artifact != '' && 'macos-26' || 'macos-26-intel' }}
+    # CoreSimulator and XCTest exhausted the smaller Apple Silicon runner during capture.
+    # Expo's universal simulator artifact also runs on this 14 GB Intel runner.
+    runs-on: macos-26-intel
     timeout-minutes: 50
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
@@ -32,6 +33,7 @@ jobs:
       EXPO_PUBLIC_DEMO: "true"
       EXPO_NO_TELEMETRY: "1"
       CI: "1"
+      MAESTRO_DRIVER_STARTUP_TIMEOUT: "180000"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,7 +51,7 @@ jobs:
           if [ "$MOBILE_SIMULATOR_STATE" != Booted ]; then
             xcrun simctl boot "$MOBILE_SIMULATOR_ID"
           fi
-          open -a Simulator --args -CurrentDeviceUDID "$MOBILE_SIMULATOR_ID"
+          open "$DEVELOPER_DIR/Applications/Simulator.app" --args -CurrentDeviceUDID "$MOBILE_SIMULATOR_ID"
       - name: Download optional Expo simulator artifact
         if: inputs.simulator_artifact != ''
         env:
@@ -137,6 +139,12 @@ jobs:
           xcrun simctl install '${{ steps.simulator.outputs.id }}' "$MOBILE_APP"
           xcrun simctl launch '${{ steps.simulator.outputs.id }}' xyz.hologram.concors.preview
           python3 .github/scripts/reuse-ios-simulator.py "$MOBILE_APP" --arch "$(uname -m)" --record
+      - name: Record the app before starting XCTest
+        timeout-minutes: 2
+        run: |
+          vm_stat > apps/mobile/test-results/native/memory-before-xctest.log
+          ps -Ao pid,comm,rss -r | head -25 >> apps/mobile/test-results/native/memory-before-xctest.log || true
+          xcrun simctl io '${{ steps.simulator.outputs.id }}' screenshot apps/mobile/test-results/native/before-xctest.png
       - name: Install pinned native UI test runner
         timeout-minutes: 2
         run: |
@@ -145,7 +153,7 @@ jobs:
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro-cli"
           echo "$RUNNER_TEMP/maestro-cli/maestro/bin" >> "$GITHUB_PATH"
       - name: Exercise real SwiftUI controls and native text input
-        timeout-minutes: 5
+        timeout-minutes: 8
         run: maestro --device "${{ steps.simulator.outputs.id }}" test -e FRESH_SIMULATOR=true --test-output-dir apps/mobile/test-results/native apps/mobile/e2e/native/glass.yaml
       - name: Capture iPhone store screenshots with fictional workspace content
         timeout-minutes: 2
@@ -155,15 +163,31 @@ jobs:
         timeout-minutes: 1
         run: |
           mkdir -p apps/mobile/test-results/native
-          xcrun simctl io '${{ steps.simulator.outputs.id }}' screenshot apps/mobile/test-results/native/failure-screen.png || true
-          xcrun simctl spawn '${{ steps.simulator.outputs.id }}' log show --last 5m --style compact --predicate 'process == "ConcorsPreview" OR process == "amfid" OR eventMessage CONTAINS[c] "xyz.hologram.concors.preview"' > apps/mobile/test-results/native/launch-diagnostics.log 2>&1 || true
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+          destination = Path('apps/mobile/test-results/native')
+          commands = {
+              'screenshot-diagnostics.log': ['xcrun', 'simctl', 'io', '${{ steps.simulator.outputs.id }}', 'screenshot', str(destination / 'failure-screen.png')],
+              'launch-diagnostics.log': ['xcrun', 'simctl', 'spawn', '${{ steps.simulator.outputs.id }}', 'log', 'show', '--last', '5m', '--style', 'compact', '--predicate', 'process == "ConcorsPreview" OR process == "amfid" OR eventMessage CONTAINS[c] "xyz.hologram.concors.preview"'],
+          }
+          for name, command in commands.items():
+              with (destination / name).open('w') as output:
+                  try:
+                      subprocess.run(command, stdout=output, stderr=subprocess.STDOUT, timeout=20, check=False)
+                  except subprocess.TimeoutExpired:
+                      output.write('\nSimulator diagnostic exceeded 20 seconds.\n')
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
+        timeout-minutes: 3
         with:
           name: mobile-ios-native-evidence
           path: |
             apps/mobile/test-results/native/
             apps/mobile/.expo/xcodebuild.log
+            ~/.maestro/tests/
+            ~/.maestro/maestro.log
       # Preserve diagnostics before a large native cache upload can consume the job budget.
       - uses: actions/cache/save@v4
         if: ${{ !cancelled() && inputs.simulator_artifact == '' && steps.native-cache.outputs.cache-matched-key != steps.native-cache.outputs.cache-primary-key }}
