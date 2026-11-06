@@ -8,6 +8,7 @@ import {
   type AuthRefreshedMessage,
 } from "@concors/protocol";
 import { bearerProtocol, type Principal, type TokenVerifier } from "../managed/auth.ts";
+import type { PromptSenders } from "../managed/attention.ts";
 
 /** Stop reading from the host while this much is still queued for a slow client. */
 const HIGH_WATER = 1024 * 1024;
@@ -31,6 +32,8 @@ export interface ManagedRelayOptions {
   host: { port: number; token: string };
   principal: Principal;
   verifier: TokenVerifier;
+  /** Notes who sends each chat's prompts, for its push notifications. */
+  senders?: PromptSenders;
   /** Lets the gateway cut the private socket on shutdown. */
   track: (socket: Socket) => void;
   onConnected: () => void;
@@ -68,7 +71,7 @@ export function relayManagedSocket(options: ManagedRelayOptions): void {
     server.handleUpgrade(req, downstream as Socket, options.head, (socket) => {
       client = socket;
       options.onConnected();
-      bridge(socket, upstream, principal, options.verifier);
+      bridge(socket, upstream, principal, options.verifier, options.senders);
     });
     // The gateway paused the socket while it authenticated and found the host.
     downstream.resume();
@@ -80,6 +83,7 @@ function bridge(
   upstream: WebSocket,
   principal: Principal,
   verifier: TokenVerifier,
+  senders?: PromptSenders,
 ) {
   let expiresAt = principal.expiresAt;
   let expiry: ReturnType<typeof setTimeout> | undefined;
@@ -128,6 +132,7 @@ function bridge(
       void refresh(data);
       return;
     }
+    if (!isBinary) senders?.note(data, principal.userId);
     if (upstream.readyState === WebSocket.OPEN) upstream.send(data, { binary: isBinary });
   });
 

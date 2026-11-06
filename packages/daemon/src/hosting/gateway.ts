@@ -11,6 +11,7 @@ import type { ManagedConfig, TlsMaterial } from "../managed/config.ts";
 import type { Logger } from "../managed/log.ts";
 import { collectMachineResources } from "../managed/resources.ts";
 import { createHeartbeat } from "../managed/heartbeat.ts";
+import { createAttentionReporter, PromptSenders } from "../managed/attention.ts";
 import { countHostSessions } from "../managed/sessions.ts";
 import { relayManagedSocket } from "./managed-relay.ts";
 import { DAEMON_VERSION } from "../version.ts";
@@ -39,6 +40,8 @@ export interface ManagedGatewayOptions {
   /** Omitted only by tests. The CLI always loads the TLS pair before constructing a gateway. */
   tls?: TlsMaterial;
   heartbeatFetch?: typeof fetch;
+  /** Tests: how often a dropped connection to the host is retried by the attention reporter. */
+  attentionRetryMs?: number;
 }
 
 /** Restartable transport only. The detached host is the sole owner of sessions and SQLite. */
@@ -71,6 +74,18 @@ export function createPersistentGateway(
         countSessions: async () => countHostSessions(await host()),
         logger: managed.logger,
         ...(managed.heartbeatFetch ? { fetchImpl: managed.heartbeatFetch } : {}),
+      })
+    : undefined;
+  // Who sent each chat's latest prompt, so its push notification reaches them (see attention.ts).
+  const senders = new PromptSenders();
+  const attention = managed
+    ? createAttentionReporter({
+        ...managed.config,
+        host,
+        senders,
+        logger: managed.logger,
+        ...(managed.heartbeatFetch ? { fetchImpl: managed.heartbeatFetch } : {}),
+        ...(managed.attentionRetryMs ? { retryMs: managed.attentionRetryMs } : {}),
       })
     : undefined;
   const bindHost = managed ? "0.0.0.0" : config.host;
@@ -278,6 +293,7 @@ export function createPersistentGateway(
             host: runtime,
             principal: authenticated,
             verifier: managed.verifier,
+            senders,
             track: (socket) => {
               sockets.add(socket);
               socket.once("close", () => sockets.delete(socket));
@@ -360,12 +376,14 @@ export function createPersistentGateway(
       const address = server.address();
       if (!address || typeof address === "string") throw new Error("Gateway did not start");
       heartbeat?.start();
+      attention?.start();
       const hostname = managed ? managed.config.hostname : config.host;
       return `${managed?.tls ? "https" : "http"}://${hostname.includes(":") ? `[${hostname}]` : hostname}:${address.port}`;
     },
     async close(): Promise<void> {
       closing = true;
       heartbeat?.stop();
+      await attention?.stop();
       for (const socket of sockets) socket.destroy();
       await new Promise<void>((resolve, reject) =>
         server.close((error) => (error ? reject(error) : resolve())),
