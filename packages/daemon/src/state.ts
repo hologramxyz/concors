@@ -28,6 +28,7 @@ import {
   PROJECT_CLOSE_CAPABILITY,
   TERMINAL_IMAGE_PASTE_CAPABILITY,
   TERMINAL_BIND_NEW_TAB_CAPABILITY,
+  SCHEDULE_FILES_CAPABILITY,
 } from "@concors/protocol";
 
 import { DAEMON_VERSION } from "./version.ts";
@@ -61,6 +62,7 @@ export class DaemonState {
       status: this.#status,
       capabilities: [
         "agent-schedules-v1",
+        SCHEDULE_FILES_CAPABILITY,
         HOST_USAGE_CAPABILITY,
         RESOURCES_CAPABILITY,
         PREVIEW_NAMES_CAPABILITY,

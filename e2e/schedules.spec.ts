@@ -112,6 +112,72 @@ test("schedules create, run, reopen their agent, pause, edit and delete", async 
   }
 });
 
+test("a schedule's files are uploaded, kept, edited and sent with each run", async ({ page }) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-schedule-files-"));
+  const file = (name: string, text: string) => ({
+    name,
+    mimeType: "application/pdf",
+    buffer: Buffer.from(text),
+  });
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Job search", directory);
+    await page.getByRole("button", { name: "Schedules", exact: true }).click();
+    await page.getByRole("button", { name: "New schedule", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Name", { exact: true }).fill("Find internships");
+    await pick(dialog, "Provider", "Codex");
+    await dialog.getByLabel("Model", { exact: true }).fill("fixture");
+    await dialog.getByLabel("Prompt", { exact: true }).fill("Apply to new internships");
+    await expect(dialog.getByText(/^Sent with every run/)).toBeVisible();
+    const files = dialog.getByRole("list", { name: "Files" });
+    const picker = dialog.getByLabel("Choose files to attach");
+    await picker.setInputFiles([file("resume.pdf", "my resume"), file("draft.pdf", "draft")]);
+    await expect(files.getByRole("listitem")).toHaveCount(2);
+    await expect(files.getByRole("listitem").first()).toContainText("resume.pdf9 B");
+    await dialog.getByRole("button", { name: "Remove draft.pdf", exact: true }).click();
+    await expect(files.getByRole("listitem")).toHaveText(["resume.pdf9 B"]);
+    await page.screenshot({ path: test.info().outputPath("schedule-files-form.png") });
+    await dialog.getByRole("button", { name: "Create schedule", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+
+    // The edit form lists what the schedule keeps; a file added and saved joins it.
+    await page.getByRole("button", { name: "Edit Find internships", exact: true }).click();
+    await expect(files.getByRole("listitem")).toHaveText(["resume.pdf9 B"]);
+    await picker.setInputFiles([file("letter.pdf", "cover letter")]);
+    await expect(files.getByRole("listitem")).toHaveText(["resume.pdf9 B", "letter.pdf12 B"]);
+    await dialog.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+
+    await page.getByRole("button", { name: "Run Find internships now", exact: true }).click();
+    await page.getByText("Recent runs", { exact: true }).click();
+    await expect(page.getByRole("article").getByRole("status")).toHaveText("Done");
+    await page.getByRole("button", { name: "Open agent", exact: true }).click();
+    const log = page.getByRole("log");
+    await expect(log).toContainText("Apply to new internships");
+    await expect(log).toContainText("resume.pdf");
+    await expect(log).toContainText("letter.pdf");
+    await page.screenshot({ path: test.info().outputPath("schedule-files-run.png") });
+
+    // Removing one in an edit takes it off the schedule.
+    await page.getByRole("button", { name: "Schedules", exact: true }).click();
+    await page.getByRole("button", { name: "Edit Find internships", exact: true }).click();
+    await dialog.getByRole("button", { name: "Remove letter.pdf", exact: true }).click();
+    await dialog.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    await page.getByRole("button", { name: "Edit Find internships", exact: true }).click();
+    await expect(files.getByRole("listitem")).toHaveText(["resume.pdf9 B"]);
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    // The machine is shared with the tests after this one, which start with no schedules.
+    await page.getByRole("button", { name: "Delete Find internships", exact: true }).click();
+    await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "No schedules yet" })).toBeVisible();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("pages without tabs start where a chat's content does, under an empty strip", async ({
   page,
 }) => {
@@ -168,6 +234,10 @@ test("the schedule form keeps to its labels and to the window", async ({ page })
 
     // Short enough that the weekly form cannot fit: the body scrolls, its ends stay.
     await page.setViewportSize({ width: 900, height: 420 });
+    // Repeat now sits below the fold, under Files. Scrolled to as a person would: Playwright's own
+    // scrolling also moves the dialog's clipped outer box, which then springs back under the menu.
+    await dialog.locator(".chat-scroll").hover();
+    await page.mouse.wheel(0, 400);
     await pick(dialog, "Repeat", "Weekly");
     await expect(dialog.getByRole("heading", { name: "New schedule" })).toBeInViewport();
     await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeInViewport();

@@ -6,7 +6,7 @@ import type {
   ProviderStatus,
   WorkspaceSnapshot,
 } from "@concors/protocol";
-import { ScheduleDefinitionSchema } from "@concors/protocol";
+import { SCHEDULE_FILES_CAPABILITY, ScheduleDefinitionSchema } from "@concors/protocol";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +22,8 @@ import { useHomePath } from "@/workspace/home-path";
 import { useSchedules } from "./use-schedules";
 import { days, parseTime, timeLabel } from "./schedule-labels";
 import { ScheduleSelect } from "./schedule-select";
+import { ScheduleFiles } from "./schedule-files";
+import { useScheduleFiles } from "./use-schedule-files";
 const repeatOptions = [
   { value: "interval", label: "On an interval" },
   { value: "daily", label: "Daily" },
@@ -85,6 +87,12 @@ export function ScheduleForm({
   const [loading, setLoading] = useState(true),
     [pending, setPending] = useState(false),
     [error, setError] = useState<string | null>(null);
+  // An older machine would silently drop the files, so it is not offered them.
+  const canAttach =
+    connection?.state.status === "ready" &&
+    !!connection.state.daemon.capabilities?.includes(SCHEDULE_FILES_CAPABILITY) &&
+    !!connection.uploads;
+  const attached = useScheduleFiles(connection ?? null, schedule?.files);
   useEffect(() => {
     let current = true;
     if (!connection) return;
@@ -128,11 +136,16 @@ export function ScheduleForm({
       setError(`Enter a time like ${timeLabel("09:00")}`);
       return;
     }
+    if (attached.failed) {
+      setError(`${attached.failed.name} did not upload. Remove it, or attach it again.`);
+      return;
+    }
     const value = ScheduleDefinitionSchema.safeParse({
       name,
       prompt,
       projectId,
       enabled,
+      ...(canAttach ? { files: attached.uploads() } : {}),
       target:
         target === "new"
           ? { kind: "agent", provider, model: model.trim() || null }
@@ -171,6 +184,7 @@ export function ScheduleForm({
       )
       .then((result) => {
         if (result.outcome.status === "error") throw new Error(result.outcome.message);
+        attached.commit();
         onClose();
       })
       .catch((cause) =>
@@ -278,6 +292,14 @@ export function ScheduleForm({
           required
         />
       </label>
+      {canAttach && (
+        <ScheduleFiles
+          files={attached.files}
+          disabled={pending}
+          onAdd={(files) => setError(attached.add(files))}
+          onRemove={attached.remove}
+        />
+      )}
       <div className="grid gap-4 sm:grid-cols-2">
         <ScheduleSelect
           label="Repeat"
@@ -371,8 +393,17 @@ export function ScheduleForm({
     </Button>
   );
   const save = (
-    <Button type="submit" disabled={pending || !projectId || (target === "new" && !provider)}>
-      {pending ? "Saving…" : schedule ? "Save changes" : "Create schedule"}
+    <Button
+      type="submit"
+      disabled={pending || attached.uploading || !projectId || (target === "new" && !provider)}
+    >
+      {pending
+        ? "Saving…"
+        : attached.uploading
+          ? "Uploading files…"
+          : schedule
+            ? "Save changes"
+            : "Create schedule"}
     </Button>
   );
   if (compact)

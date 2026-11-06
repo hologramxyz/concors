@@ -55,9 +55,25 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await expect(
       page.getByRole("region", { name: "Agent pane", exact: true }).locator("header .truncate"),
     ).toHaveText("hold this stream");
-    // A working row shows a quiet dot, no spinner.
     await expect(status).toHaveAttribute("data-row-state", "working");
     const row = agentList.locator("button[data-agent-id]").first();
+    // A working row spins at its end, where its age would only say "now".
+    await expect(row.locator("[data-row-working] svg")).toBeVisible();
+    await expect(row.locator(".tabular-nums")).toHaveCount(0);
+    await page.screenshot({ path: test.info().outputPath("working-row.png") });
+    // Folded, the workspace keeps showing that one of its chats is working.
+    const fold = page.locator("[data-workspace-toggle]").first();
+    await fold.hover({ force: true });
+    await fold.click();
+    await expect(fold).toHaveAttribute("aria-expanded", "false");
+    const folded = page.locator('[data-workspace-attention="working"]');
+    await expect(folded).toHaveAttribute("aria-label", "1 chat working");
+    await expect(folded.locator("svg")).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("working-workspace.png") });
+    await fold.hover({ force: true });
+    await fold.click();
+    await expect(fold).toHaveAttribute("aria-expanded", "true");
+    await expect(folded).toHaveCount(0);
     expect((await row.boundingBox())?.height).toBeLessThanOrEqual(28);
     await expect(row.locator(".truncate")).toHaveCSS("white-space", "nowrap");
     await expect(row.locator(".truncate")).toHaveCSS("text-overflow", "ellipsis");

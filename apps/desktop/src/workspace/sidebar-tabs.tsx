@@ -23,7 +23,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { BrailleSpinner } from "@/agents/activity";
+import { AgentLoadingIcon } from "@/agents/activity";
 import { AGENT_DOT_COLOR, type AgentDot, type AgentStatus } from "@/agents/agent-status";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { CompactLayoutContext } from "@/components/compact-layout";
@@ -44,10 +44,10 @@ import {
 } from "./sidebar-rows";
 
 /**
- * Sits under the workspace's icon, one indent in, so the row reads as the workspace's. The chat's
- * braille spinner while an agent replies, open or closed (closed rows are told apart by their
- * muted name), a grey dot while a terminal runs, its `AgentDot` until it has been opened, and
- * nothing otherwise.
+ * Sits under the workspace's icon, one indent in, so the row reads as the workspace's. A grey dot
+ * while a terminal runs, its `AgentDot` until it has been opened, and nothing otherwise. An agent
+ * at work, open or closed (closed rows are told apart by their muted name), shows a spinner at the
+ * row's other end instead, where its age would only say "now".
  */
 function RowDot({ row, status }: { row: SidebarRow; status: AgentStatus | undefined }) {
   const state = rowState(row);
@@ -62,12 +62,10 @@ function RowDot({ row, status }: { row: SidebarRow; status: AgentStatus | undefi
       // The workspace icon is 20px, not a spacing step, so titles line up with workspace names.
       className="flex size-[20px] shrink-0 items-center justify-center"
     >
-      {state === "working" ? (
-        <BrailleSpinner />
-      ) : state === "running" ? (
+      {state === "running" ? (
         <span aria-hidden="true" className="size-1.5 rounded-full bg-muted-foreground" />
       ) : (
-        state && <SidebarDot dot={state} />
+        (state === "attention" || state === "done") && <SidebarDot dot={state} />
       )}
     </span>
   );
@@ -143,6 +141,7 @@ export function SidebarTabRow({
       ? (row.chat.agent.providerLabel ?? agentProviderName(row.chat.agent.provider))
       : undefined);
   const statusLabel = rowStatusLabel(row);
+  const working = rowState(row) === "working";
   const pinned = rowPinned(row);
   const canMove = !!onMove && moveTargets.length > 0;
   const actions = !!onRename || !!onFork || !!onPin || !!onDelete || !!terminal || canMove;
@@ -176,9 +175,15 @@ export function SidebarTabRow({
       {scheduled && (
         <Clock className="size-3.5 shrink-0 text-muted-foreground" aria-label="Scheduled agent" />
       )}
-      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-        {shortAge(row.time, now)}
-      </span>
+      {working ? (
+        <span data-row-working className="flex size-4 shrink-0 items-center justify-center">
+          <AgentLoadingIcon className="size-3.5" />
+        </span>
+      ) : (
+        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          {shortAge(row.time, now)}
+        </span>
+      )}
     </button>
   );
   return (
