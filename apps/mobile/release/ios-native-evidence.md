@@ -9,6 +9,8 @@ the iOS 0.1.0 draft. The internal group includes the owner's confirmed email add
 The workspace capture was produced by the actual iPhone simulator app with fictional workspace
 data, visually inspected, uploaded, and read back through Apple's asset-library and placement APIs.
 It shows the native Tabs drawer with agent and terminal choices. It contains no customer data.
+The exact [uploaded PNG](store-assets/en-US/iphone-6.9/store-workspaces.png) is retained here for
+review; the draft still needs its final screenshot selection.
 
 | Field                      | Verified value                                                                 |
 | -------------------------- | ------------------------------------------------------------------------------ |
@@ -56,3 +58,7 @@ Physical-iPhone install/upgrade, permissions, keyboard/reconnect, accessibility,
 sign-in, AI decline/withdrawal, reporting and disposable-account deletion remain unverified. A stable
 reviewer account, machine and AI-provider access are also required. These gates stay blocked in
 [readiness-ios.json](readiness-ios.json).
+
+Production readback at 06:19 UTC still reports Apple disabled in both Privy and the backend, and
+the Privy test-credential endpoint returned no issued credentials. No private credential values or
+customer workspace data are included in this record.
