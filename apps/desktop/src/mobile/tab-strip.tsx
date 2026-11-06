@@ -1,6 +1,5 @@
 import { useRef, useState, type PointerEvent } from "react";
 import { Plus } from "lucide-react";
-import { cn } from "cn";
 import type { MobileTarget } from "@concors/client-core";
 import type { WorkspaceOperation, WorkspaceProject, WorkspaceTab } from "@concors/protocol";
 import { TabStrip } from "@/workspace/tab-strip";
@@ -143,12 +142,9 @@ export function MobileTabStrip({
                 key={key}
                 data-tab-id={key}
                 data-active-tab={selected ? "" : undefined}
-                // Desktop's tab shape and its fill while selected, without its transparent border, which
-                // would take 2pt from the 44pt the finger gets.
-                className={cn(
-                  "mobile-tab-strip-tab flex shrink-0 items-center rounded-md",
-                  selected && "bg-raised-fill",
-                )}
+                // The whole 44pt box takes the tap; the selected fill is drawn smaller inside it,
+                // in the phone's corner style (mobile.css).
+                className="mobile-tab-strip-tab flex shrink-0 items-center"
               >
                 <TabButton
                   tab={item}

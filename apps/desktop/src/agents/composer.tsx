@@ -1056,6 +1056,51 @@ export function AgentComposer({
       </ControlTooltip>
     </>
   );
+  const durableRows = agent.queue?.map((entry, i, all) => (
+    <div
+      key={entry.id}
+      className="mobile-queue-row flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-xs"
+    >
+      <span className="text-muted-foreground">Queued</span>
+      <span className="min-w-0 flex-1 truncate">
+        {entry.text || entry.attachments.map((a) => a.name).join(", ")}
+      </span>
+      {compact && <QueuePosition index={i} count={all.length} />}
+      {queueSteer && canSteer(entry.text, entry.attachments.length) && (
+        <SidebarTooltip
+          place="above"
+          content="Send it into the current turn now instead of after it"
+        >
+          <button
+            type="button"
+            className="mobile-tap-target text-primary"
+            disabled={!connected}
+            onClick={() =>
+              void queueAction({
+                kind: "queue-steer",
+                sessionId: agent.id,
+                id: entry.id,
+                turnId: agent.turnId ?? "",
+              })
+            }
+          >
+            Steer
+          </button>
+        </SidebarTooltip>
+      )}
+      <button
+        type="button"
+        aria-label="Remove queued message"
+        className="mobile-tap-target flex items-center justify-center"
+        disabled={!connected}
+        onClick={() =>
+          void queueAction({ kind: "queue-remove", sessionId: agent.id, id: entry.id })
+        }
+      >
+        <X className="size-3" />
+      </button>
+    </div>
+  ));
   return (
     <ComposerSurfaceContext value={owner}>
       <div className="space-y-2">
@@ -1067,7 +1112,10 @@ export function AgentComposer({
           </p>
         )}
         {durableQueue && !!agent.queue?.length && (
-          <div data-composer-queue className="max-h-28 space-y-2 overflow-y-auto">
+          <div
+            data-composer-queue
+            className={compact ? "space-y-2" : "max-h-28 space-y-2 overflow-y-auto"}
+          >
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>{agent.queuePaused ? "Queue paused" : "Follow-ups run on this machine"}</span>
               <button
@@ -1084,57 +1132,12 @@ export function AgentComposer({
                 {agent.queuePaused ? "Resume queue" : "Pause queue"}
               </button>
             </div>
-            {agent.queue.map((entry) => (
-              <div
-                key={entry.id}
-                className="mobile-queue-row flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-xs"
-              >
-                <span className="text-muted-foreground">Queued</span>
-                <span className="min-w-0 flex-1 truncate">
-                  {entry.text || entry.attachments.map((a) => a.name).join(", ")}
-                </span>
-                {queueSteer && canSteer(entry.text, entry.attachments.length) && (
-                  <SidebarTooltip
-                    place="above"
-                    content="Send it into the current turn now instead of after it"
-                  >
-                    <button
-                      type="button"
-                      className="mobile-tap-target text-primary"
-                      disabled={!connected}
-                      onClick={() =>
-                        void queueAction({
-                          kind: "queue-steer",
-                          sessionId: agent.id,
-                          id: entry.id,
-                          turnId: agent.turnId ?? "",
-                        })
-                      }
-                    >
-                      Steer
-                    </button>
-                  </SidebarTooltip>
-                )}
-                <button
-                  type="button"
-                  aria-label="Remove queued message"
-                  className="mobile-tap-target flex items-center justify-center"
-                  disabled={!connected}
-                  onClick={() =>
-                    void queueAction({ kind: "queue-remove", sessionId: agent.id, id: entry.id })
-                  }
-                >
-                  <X className="size-3" />
-                </button>
-              </div>
-            ))}
+            {/* The phone shows its rows one at a time, under the status line, in a list of their own. */}
+            {compact ? <div className="mobile-queue-list">{durableRows}</div> : durableRows}
           </div>
         )}
         {!durableQueue && !!queue.length && (
-          <div
-            data-composer-queue
-            className={compact ? "max-h-20 space-y-2 overflow-y-auto" : "space-y-2"}
-          >
+          <div data-composer-queue className={compact ? "mobile-queue-list" : "space-y-2"}>
             {queue.map((entry, i) => (
               <div
                 key={i}
@@ -1144,6 +1147,7 @@ export function AgentComposer({
                 <span className="min-w-0 flex-1 truncate">
                   {entry.message || entry.attachments.map((a) => a.name).join(", ")}
                 </span>
+                {compact && <QueuePosition index={i} count={queue.length} />}
                 {!active && !busy && !uncertain && (
                   <button
                     type="button"
@@ -1766,5 +1770,18 @@ function AttachmentChip({
         </button>
       </SidebarTooltip>
     </div>
+  );
+}
+
+/**
+ * Where a queued message stands, muted as desktop's pane count on a tab is: the phone shows one
+ * queued message at a time, so the others are counted rather than peeking out under it.
+ */
+function QueuePosition({ index, count }: { index: number; count: number }) {
+  if (count < 2) return null;
+  return (
+    <span className="shrink-0 text-muted-foreground tabular-nums">
+      {index + 1} of {count}
+    </span>
   );
 }

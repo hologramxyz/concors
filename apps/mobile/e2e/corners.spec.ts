@@ -77,6 +77,14 @@ for (const mode of ["light", "dark"] as const) {
         "border-radius",
         controlRadius,
       );
+      // The strip's selected fill is shaped as the header's controls are.
+      await expect
+        .poll(() =>
+          ui
+            .locator(".mobile-tab-strip [data-active-tab]")
+            .evaluate((el) => getComputedStyle(el, "::before").borderTopLeftRadius),
+        )
+        .toBe(controlRadius);
       await expect(input).toHaveValue("Shape changes keep this draft");
       await input.click();
       await expect(ui.locator(".mobile-composer-primary > button")).toHaveCSS(

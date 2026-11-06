@@ -415,6 +415,9 @@ test("terminal taps and horizontal swipes open real files and the sidebar withou
   try {
     const chat = ui.getByRole("textbox", { name: "Message Codex" });
     await chat.fill("Keep my chat draft during terminal gestures");
+    // The tab strip hides while the keyboard is up; closing it brings "+" back.
+    await ui.getByRole("log", { name: "Chat timeline" }).click({ position: { x: 200, y: 300 } });
+    await expect(ui.locator('.mobile-composer[data-expanded="true"]')).toHaveCount(0);
     // The strip's current tab, under the header.
     const picker = ui.locator('.mobile-tab-strip [data-pane-choice][aria-pressed="true"]');
     await ui

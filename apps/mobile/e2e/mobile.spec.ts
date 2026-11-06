@@ -33,8 +33,16 @@ async function box(locator: Locator) {
   if (!bounds) throw new Error("Element is not visible");
   return bounds;
 }
+/** The strip hides while the composer is typed in; closing the keyboard brings it back. */
+async function closeKeyboard(ui: FrameLocator) {
+  const composer = ui.locator('.mobile-composer[data-expanded="true"]');
+  if (!(await composer.count())) return;
+  await ui.getByRole("log", { name: "Chat timeline" }).click({ position: { x: 200, y: 300 } });
+  await expect(composer).toHaveCount(0);
+}
 async function choose(ui: FrameLocator, label: string, value: string) {
   if (label === "Tabs") {
+    await closeKeyboard(ui);
     await stripTab(ui, value).click();
     await expect(stripTab(ui, value)).toHaveAttribute("aria-pressed", "true");
     return;
@@ -43,6 +51,7 @@ async function choose(ui: FrameLocator, label: string, value: string) {
   await ui.locator(`[role="option"][data-value="${value}"]`).click();
 }
 async function newTab(ui: FrameLocator) {
+  await closeKeyboard(ui);
   await tabStrip(ui).getByRole("button", { name: "New tab", exact: true }).click();
 }
 /** A tab's "…" sheet, through the button a screen reader finds beside it (long-press elsewhere). */
@@ -946,10 +955,11 @@ test("tapping a strip tab shows it, and + opens the New tab sheet", async ({ pag
   await stripTab(ui, activeTerminal).tap();
   await expect(currentTab(ui)).toHaveAttribute("data-value", activeTerminal);
   await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
-  // Desktop's selected fill marks the current tab, and only that one.
+  // The selected fill marks the current tab, and only that one.
   await expect(ui.locator(".mobile-tab-strip [data-active-tab]")).toHaveCount(1);
-  await expect(ui.locator(`.mobile-tab-strip [data-tab-id="${activeTerminal}"]`)).toHaveClass(
-    /bg-raised-fill/,
+  await expect(ui.locator(`.mobile-tab-strip [data-tab-id="${activeTerminal}"]`)).toHaveAttribute(
+    "data-active-tab",
+    "",
   );
   await choose(ui, "Tabs", activeChat);
   await newTab(ui);
@@ -1606,9 +1616,25 @@ test("the tab strip draws each tab as desktop's tab bar does", async ({ page }) 
   await expect(terminal.locator("[data-agent-status-badge]")).toHaveCount(0);
   await expect(terminal.locator("svg.lucide-terminal")).toBeVisible();
   await expect(terminal).toHaveText("Mobile launch 2");
-  // Tabs are 44pt tall, in a strip directly under the header's controls.
+  // Each tab takes taps across 44pt, with the selected fill drawn inside at the tasks pill's 35pt,
+  // and every tab padded alike so a name stays put as the selection moves.
   for (const tab of [chat, terminal])
     expect((await tab.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  const fill = await ui.locator(".mobile-tab-strip [data-active-tab]").evaluate((el) => {
+    const style = getComputedStyle(el, "::before");
+    return el.getBoundingClientRect().height - parseFloat(style.top) - parseFloat(style.bottom);
+  });
+  expect(fill).toBe(35);
+  const pill = await ui.locator('[aria-label="Agent tasks"]').boundingBox();
+  if (pill) expect(Math.round(pill.height)).toBe(fill);
+  const padding = (tab: Locator) => tab.evaluate((el) => getComputedStyle(el).paddingInline);
+  expect(await padding(chat)).toBe(await padding(terminal));
+  // Neighbouring tabs' tap areas never overlap.
+  const [first, second] = await Promise.all([
+    box(ui.locator(`.mobile-tab-strip [data-tab-id="${activeChat}"]`)),
+    box(ui.locator(`.mobile-tab-strip [data-tab-id="${activeTerminal}"]`)),
+  ]);
+  expect(first.x + first.width).toBeLessThanOrEqual(second.x);
   const [row, strip] = await Promise.all([
     box(ui.locator(".mobile-header-row")),
     box(tabStrip(ui)),
@@ -1762,6 +1788,65 @@ test("schedules and pull requests keep their page title in the header, with no t
   await expect(ui.getByRole("heading", { level: 1, name: "Schedules", exact: true })).toBeVisible();
   await expect(ui.locator(".mobile-tab-strip")).toHaveCount(0);
   await expect(switcher(ui)).toHaveCount(0);
+});
+test("the tab strip slides away while typing and returns when the keyboard closes", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const strip = ui.locator(".mobile-tab-strip");
+  const stripHeight = () =>
+    ui
+      .locator("html")
+      .evaluate((el) => getComputedStyle(el).getPropertyValue("--mobile-strip-height").trim());
+  const fade = () =>
+    ui.locator(".mobile-header").evaluate((el) => getComputedStyle(el, "::before").height);
+  await expect(strip).toBeVisible();
+  await expect.poll(stripHeight).toBe("44px");
+  const open = await fade();
+  // Focusing the composer stands for the keyboard opening.
+  await ui.getByRole("textbox", { name: "Message Codex" }).click();
+  await expect(ui.locator(".mobile-composer")).toHaveAttribute("data-expanded", "true");
+  await expect(strip).toBeHidden();
+  await expect.poll(stripHeight).toBe("0px");
+  // The header's controls stay, and its fade shrinks by the strip's height.
+  for (const name of ["Open sidebar", "Project files"])
+    await expect(ui.getByRole("button", { name, exact: true })).toBeVisible();
+  await expect(ui.getByRole("button", { name: /^Workspace: / })).toBeVisible();
+  await expect.poll(fade).toBe(`${parseFloat(open) - 44}px`);
+  await page.screenshot({ path: test.info().outputPath("mobile-typing-strip-hidden.png") });
+  // The keyboard closing brings it back.
+  await ui.getByRole("log", { name: "Chat timeline" }).click({ position: { x: 200, y: 300 } });
+  await expect(ui.locator(".mobile-composer")).toHaveAttribute("data-expanded", "false");
+  await expect(strip).toBeVisible();
+  await expect.poll(stripHeight).toBe("44px");
+  await expect.poll(fade).toBe(open);
+});
+test("queued messages show one at a time with their place, never a row peeking out", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const input = ui.getByRole("textbox", { name: "Message Codex" });
+  const list = ui.locator(".mobile-queue-list");
+  const rows = list.locator(".mobile-queue-row");
+  for (const count of [1, 2, 3]) {
+    await input.fill(`Queued follow-up ${count}`);
+    await ui.getByRole("button", { name: "Queue message", exact: true }).click();
+    await expect(rows).toHaveCount(count);
+    // Exactly one whole row shows: the list is as tall as a row.
+    const [shown, row] = await Promise.all([box(list), box(rows.first())]);
+    expect(Math.round(shown.height)).toBe(Math.round(row.height));
+    if (count === 1) await expect(rows.first()).not.toContainText(/of \d/);
+    else await expect(rows.first()).toContainText(`1 of ${count}`);
+  }
+  // Scrolling the list moves one whole row: the next message, never part of one.
+  await list.evaluate((el) => el.scrollBy({ top: 30, behavior: "instant" }));
+  await expect
+    .poll(async () => {
+      const [shown, next] = await Promise.all([box(list), box(rows.nth(1))]);
+      return Math.round(next.y - shown.y);
+    })
+    .toBe(0);
+  await expect(rows.nth(1)).toContainText("2 of 3");
 });
 test("pages opened from a chat start below the header, and the chat scrolls under it again", async ({
   page,
