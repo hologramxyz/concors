@@ -196,8 +196,9 @@ it("sums a workspace's agents across its tabs, most urgent first, counting updat
   expect(workspaceAttentionLabel({ ...none, kind: "needs_input", needsInput: 1 })).toBe(
     "1 chat needs input",
   );
-  // Working alone shows no dot, so there is nothing to say about one.
-  expect(workspaceAttentionLabel({ ...none, kind: "working", working: 2 })).toBe("");
+  // Working alone shows a spinner on a folded workspace, which says how many.
+  expect(workspaceAttentionLabel({ ...none, kind: "working", working: 2 })).toBe("2 chats working");
+  expect(workspaceAttentionLabel({ ...none, kind: "working", working: 1 })).toBe("1 chat working");
 });
 
 it("a tab's icon follows the most urgent pane, and the focused pane only breaks ties", () => {

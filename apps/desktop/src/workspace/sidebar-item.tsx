@@ -6,6 +6,7 @@ import {
   type WorkspacePullRequests,
 } from "@concors/protocol";
 import { cn } from "cn";
+import { AgentLoadingIcon } from "@/agents/activity";
 import { ChevronRight } from "lucide-react";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { ProjectActions } from "./project-actions";
@@ -69,7 +70,7 @@ export function WorkspaceSidebarItem({
   const connection = useContext(TerminalConnectionContext);
   const summed = workspaceAttention(project, useAgents(), useTerminalSessions());
   const attention = expanded
-    ? { ...summed, kind: null, needsInput: 0, failed: 0, done: 0 }
+    ? { ...summed, kind: null, needsInput: 0, failed: 0, done: 0, working: 0 }
     : summed;
   // Older daemons reject `project.rename` outright, so the menu item stays disabled for them.
   const canRename =
@@ -260,10 +261,11 @@ export function WorkspaceSidebarItem({
 
 /**
  * The corner of a workspace's icon, when something in it wants a look: a question, a failure or a
- * finished turn. Work in progress shows on its own row instead, so the icon stays still.
+ * finished turn, or, folded, an agent still at work, with the spinner a tab's badge has. Unfolded,
+ * work in progress shows on its own row instead.
  */
 function AttentionBadge({ attention, label }: { attention: WorkspaceAttention; label: string }) {
-  if (!attention.kind || attention.kind === "working") return null;
+  if (!attention.kind) return null;
   return (
     <span
       role="img"
@@ -272,12 +274,16 @@ function AttentionBadge({ attention, label }: { attention: WorkspaceAttention; l
       // Above the chevron that replaces the icon on hover, which still takes the click.
       className="pointer-events-none absolute -right-1 -bottom-1 z-20 flex size-3 items-center justify-center rounded-full bg-sidebar ring-1 ring-sidebar"
     >
-      <span
-        className={cn(
-          "size-2 rounded-full",
-          AGENT_DOT_COLOR[attention.kind === "done" ? "done" : "attention"],
-        )}
-      />
+      {attention.kind === "working" ? (
+        <AgentLoadingIcon className="size-3" />
+      ) : (
+        <span
+          className={cn(
+            "size-2 rounded-full",
+            AGENT_DOT_COLOR[attention.kind === "done" ? "done" : "attention"],
+          )}
+        />
+      )}
     </span>
   );
 }
