@@ -57,6 +57,34 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     ).toHaveText("hold this stream");
     await expect(status).toHaveAttribute("data-row-state", "working");
     const row = agentList.locator("button[data-agent-id]").first();
+    // Working indicators animate whole elements in CSS. WebKit (the Mac app) lays the whole window
+    // out again for each frame of an animated part inside an SVG, or for a character swapped by a
+    // timer, which with long chats on screen kept a core busy while an agent worked.
+    expect(
+      await page.evaluate(() =>
+        document
+          .getAnimations()
+          .map((animation) => (animation.effect as KeyframeEffect | null)?.target)
+          .filter((target) => target instanceof SVGElement && !(target instanceof SVGSVGElement))
+          .map((target) => (target as Element).tagName),
+      ),
+    ).toEqual([]);
+    const mutations = await page.evaluate(
+      () =>
+        new Promise<number>((resolve) => {
+          const log = document.querySelector('[role="log"]');
+          if (!log) return resolve(-1);
+          let count = 0;
+          const observer = new MutationObserver((records) => (count += records.length));
+          observer.observe(log, { subtree: true, childList: true, characterData: true });
+          setTimeout(() => {
+            observer.disconnect();
+            resolve(count);
+          }, 600);
+        }),
+    );
+    // Only the elapsed time may change, once a second.
+    expect(mutations).toBeLessThanOrEqual(2);
     // A working row spins at its end, where its age would only say "now".
     await expect(row.locator("[data-row-working] svg")).toBeVisible();
     await expect(row.locator(".tabular-nums")).toHaveCount(0);

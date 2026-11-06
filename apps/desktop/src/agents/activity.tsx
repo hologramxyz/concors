@@ -6,13 +6,22 @@ import { ProviderIcon } from "./provider-icon";
 import { useAgents } from "./context";
 import { AGENT_DOT_COLOR, chatAgentStatus, type AgentStatus } from "./agent-status";
 
+/**
+ * Spins as a whole, the faint ring with its arc: the ring is round, so turning it shows nothing,
+ * and WebKit (the Mac and iPhone webviews) moves a whole element without laying the page out
+ * again. Spinning a group inside the SVG instead made WebKit lay out the entire window on every
+ * frame, a whole core with long chats on screen.
+ */
 export function AgentLoadingIcon({ className = "size-4" }: { className?: string }) {
   return (
-    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none" className={`${className} text-primary`}>
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      fill="none"
+      className={`${className} animate-spin text-primary [animation-duration:1.4s] motion-reduce:animate-none`}
+    >
       <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.5" opacity="0.2" />
-      <g className="origin-center animate-spin [animation-duration:1.4s] motion-reduce:animate-none">
-        <path d="M10 3a7 7 0 0 1 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-      </g>
+      <path d="M10 3a7 7 0 0 1 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
@@ -97,28 +106,25 @@ export function AgentStatusIcon({
 
 // A quiet braille indicator accompanies the animated activity label.
 const frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+/**
+ * All ten frames stacked in a one-character window, slid up a frame at a time by a CSS animation.
+ * No timer and no re-render: WebKit (the Mac and iPhone webviews) moves the column without laying
+ * out or repainting the chat around it, which changing the character ten times a second did, a
+ * cost that grew with the length of the chat on screen.
+ */
 export function BrailleSpinner() {
-  const [frame, setFrame] = useState(0);
-  useEffect(() => {
-    const motion = matchMedia("(prefers-reduced-motion: reduce)");
-    let timer: ReturnType<typeof setInterval> | undefined;
-    const update = () => {
-      clearInterval(timer);
-      if (!motion.matches) timer = setInterval(() => setFrame((f) => (f + 1) % frames.length), 90);
-    };
-    update();
-    motion.addEventListener("change", update);
-    return () => {
-      clearInterval(timer);
-      motion.removeEventListener("change", update);
-    };
-  }, []);
   return (
     <span
       aria-hidden="true"
-      className="inline-block w-4 shrink-0 font-mono text-[16px] text-muted-foreground"
+      className="inline-block h-5 w-4 shrink-0 overflow-hidden font-mono text-[16px] leading-5 text-muted-foreground [contain:strict]"
     >
-      {frames[frame]}
+      <span className="braille-frames block">
+        {frames.map((frame) => (
+          <span key={frame} className="block h-5">
+            {frame}
+          </span>
+        ))}
+      </span>
     </span>
   );
 }

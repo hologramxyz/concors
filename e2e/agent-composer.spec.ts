@@ -110,18 +110,19 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     await expect(page.getByTestId("pane-agent-loading")).toBeVisible();
     await expect(page.getByRole("log").locator(".agent-shimmer").first()).toHaveCSS(
       "animation-name",
-      "tool-activity-shimmer",
+      "agent-working-fade",
     );
     const runningTools = page.locator('[data-tool-status="running"]');
     await expect(runningTools).toHaveCount(3);
     for (const tool of await runningTools.all()) {
+      // Running labels breathe in opacity, which WebKit animates without repainting their text.
       const label = tool.locator("button .agent-shimmer").first();
-      await expect(label).toHaveCSS("animation-name", "tool-activity-shimmer");
-      await expect(label).toHaveCSS("-webkit-text-fill-color", "rgba(0, 0, 0, 0)");
-      const position = await label.evaluate((el) => getComputedStyle(el).backgroundPosition);
+      await expect(label).toHaveCSS("animation-name", "agent-working-fade");
+      await expect(label).toHaveCSS("background-image", "none");
+      const opacity = await label.evaluate((el) => getComputedStyle(el).opacity);
       await expect
-        .poll(() => label.evaluate((el) => getComputedStyle(el).backgroundPosition))
-        .not.toBe(position);
+        .poll(() => label.evaluate((el) => getComputedStyle(el).opacity))
+        .not.toBe(opacity);
     }
     await expect(page.locator('[data-tool-status="completed"] .agent-shimmer')).toHaveCount(0);
     const elapsed = page.getByLabel("Elapsed time", { exact: true });
@@ -173,7 +174,7 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
         .getByRole("button", { name: /^Shell/ })
         .locator(".agent-shimmer")
         .first(),
-    ).toHaveCSS("animation-name", "tool-activity-shimmer");
+    ).toHaveCSS("animation-name", "agent-working-fade");
     await expect(page.getByLabel("Tool call").filter({ hasText: "fixture output" })).toBeVisible();
     await page.getByRole("button", { name: /^Edit/ }).click();
     await expect(page.getByText("+new line", { exact: true })).toBeVisible();
