@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgentInfo, ClientMessage, ProviderStatus } from "@concors/protocol";
-import { createAISharingPermission } from "./ai-sharing";
+import { createAISharingPermission, createAISharingStore } from "./ai-sharing";
 const id = "11111111-1111-4111-8111-111111111111";
 const send = {
   type: "agent.request",
@@ -75,7 +75,7 @@ describe("AI sharing permission at the native protocol boundary", () => {
       "OpenAI",
       "Work Codex",
       "Issue tracker",
-      "model-a",
+      "Models:",
       "attachments",
       "retention",
     ])
@@ -83,21 +83,159 @@ describe("AI sharing permission at the native protocol boundary", () => {
     expect(text).not.toContain("private code");
     expect(text).not.toContain("should-not-appear");
   });
-  it("reuses a grant only for the same model/configuration on this connection", async () => {
+  it("reuses permission across models and asks again when the provider configuration changes", async () => {
     const { permission, ask, context } = setup();
     await permission.beforeSend(send);
     await permission.beforeSend(send);
     expect(ask).toHaveBeenCalledOnce();
     context.agents[0]!.model = "model-b";
     await permission.beforeSend(send);
-    expect(ask).toHaveBeenCalledTimes(2);
+    expect(ask).toHaveBeenCalledOnce();
     context.requestProvider.mockImplementation(async (_op, requestId) => ({
       type: "provider.result",
       requestId,
       outcome: { status: "ok", revision: 2, providers: [setup().provider] },
     }));
     await permission.beforeSend(send);
-    expect(ask).toHaveBeenCalledTimes(3);
+    expect(ask).toHaveBeenCalledTimes(2);
+  });
+  it("asks once when seven conversations using different models restore together", async () => {
+    const { permission, ask, context } = setup();
+    context.agents = Array.from({ length: 7 }, (_, i) => ({
+      ...context.agents[0]!,
+      id: `session-${i}`,
+      model: `model-${i}`,
+    }));
+    const replies = await Promise.all(
+      context.agents.map((agent) =>
+        permission.beforeSend({
+          ...send,
+          operation: { kind: "read", sessionId: agent.id },
+        }),
+      ),
+    );
+    expect(replies).toEqual(Array(7).fill(null));
+    expect(ask).toHaveBeenCalledOnce();
+  });
+  it("names all enabled services once, so switching agents does not ask repeatedly", async () => {
+    const { permission, ask, context, provider } = setup();
+    const second = { ...provider, id: "claude", engine: "claude" as const, label: "Work Claude" };
+    context.requestProvider.mockResolvedValue({
+      type: "provider.result",
+      requestId: id,
+      outcome: { status: "ok", revision: 1, providers: [second, provider] },
+    });
+    await permission.beforeSend(send);
+    context.agents[0]!.provider = "claude";
+    context.requestProvider.mockResolvedValue({
+      type: "provider.result",
+      requestId: id,
+      outcome: { status: "ok", revision: 1, providers: [provider, second] },
+    });
+    expect(await permission.beforeSend(send)).toBeNull();
+    expect(ask).toHaveBeenCalledOnce();
+    expect(ask.mock.calls[0]![0]).toContain("Anthropic");
+    expect(ask.mock.calls[0]![0]).toContain("OpenAI");
+  });
+  it("remembers approval after reconnect and after loading the device record again", async () => {
+    const { context, ask } = setup();
+    let saved: string | null = null;
+    const storage = {
+      read: async () => saved,
+      write: async (value: string) => {
+        saved = value;
+      },
+    };
+    const store = createAISharingStore(storage);
+    const first = createAISharingPermission(context, ask, undefined, store);
+    expect(await first.beforeSend(send)).toBeNull();
+    first.dispose();
+    const reconnected = createAISharingPermission(context, ask, undefined, store);
+    expect(await reconnected.beforeSend(send)).toBeNull();
+    reconnected.dispose();
+    const relaunched = createAISharingPermission(
+      context,
+      ask,
+      undefined,
+      createAISharingStore(storage),
+    );
+    expect(await relaunched.beforeSend(send)).toBeNull();
+    expect(ask).toHaveBeenCalledOnce();
+    // A different account/machine has its own storage, so needs its own approval.
+    const other = createAISharingPermission(
+      context,
+      ask,
+      undefined,
+      createAISharingStore({
+        read: async () => null,
+        write: async () => undefined,
+      }),
+    );
+    await other.beforeSend(send);
+    expect(ask).toHaveBeenCalledTimes(2);
+  });
+  it("does not open a second prompt if the transport reconnects while one is showing", async () => {
+    const { context, ask } = setup();
+    const store = createAISharingStore({ read: async () => null, write: async () => undefined });
+    let approve!: (value: boolean) => void;
+    ask.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          approve = resolve;
+        }),
+    );
+    const first = createAISharingPermission(context, ask, undefined, store);
+    const oldRequest = first.beforeSend(send);
+    await vi.waitFor(() => expect(ask).toHaveBeenCalledOnce());
+    first.dispose();
+    const next = createAISharingPermission(context, ask, undefined, store);
+    const newRequest = next.beforeSend(send);
+    await vi.waitFor(() => expect(context.requestProvider).toHaveBeenCalledTimes(2));
+    approve(true);
+    expect(await oldRequest).toMatchObject({ outcome: { status: "error" } });
+    expect(await newRequest).toBeNull();
+    expect(ask).toHaveBeenCalledOnce();
+  });
+  it("keeps withdrawal after reconnect until permission is explicitly reviewed", async () => {
+    const { context, ask } = setup();
+    let saved: string | null = null;
+    const store = createAISharingStore({
+      read: async () => saved,
+      write: async (value) => {
+        saved = value;
+      },
+    });
+    const first = createAISharingPermission(context, ask, undefined, store);
+    await first.beforeSend(send);
+    await first.withdraw();
+    first.dispose();
+    const next = createAISharingPermission(context, ask, undefined, store);
+    expect(await next.beforeSend(send)).toMatchObject({ outcome: { status: "error" } });
+    expect(ask).toHaveBeenCalledOnce();
+    await next.review();
+    expect(await next.beforeSend(send)).toBeNull();
+    expect(ask).toHaveBeenCalledTimes(2);
+  });
+  it("asks again after the persisted configuration changes", async () => {
+    const { context, ask, provider } = setup();
+    let saved: string | null = null;
+    const storage = {
+      read: async () => saved,
+      write: async (value: string) => {
+        saved = value;
+      },
+    };
+    const first = createAISharingPermission(context, ask, undefined, createAISharingStore(storage));
+    await first.beforeSend(send);
+    first.dispose();
+    context.requestProvider.mockResolvedValue({
+      type: "provider.result",
+      requestId: id,
+      outcome: { status: "ok", revision: 2, providers: [provider] },
+    });
+    const next = createAISharingPermission(context, ask, undefined, createAISharingStore(storage));
+    expect(await next.beforeSend(send)).toBeNull();
+    expect(ask).toHaveBeenCalledTimes(2);
   });
   it("settles the original request with an error when permission is declined", async () => {
     const { permission, ask } = setup();
@@ -119,13 +257,13 @@ describe("AI sharing permission at the native protocol boundary", () => {
     );
     const waiting = permission.beforeSend(send);
     await vi.waitFor(() => expect(ask).toHaveBeenCalledOnce());
-    permission.withdraw();
+    await permission.withdraw();
     approve(true);
     expect(await waiting).toMatchObject({ outcome: { status: "error" } });
     expect(await permission.beforeSend(send)).toMatchObject({ outcome: { status: "error" } });
     expect(ask).toHaveBeenCalledOnce();
     expect(changed).toHaveBeenCalledWith("blocked");
-    permission.review();
+    await permission.review();
     ask.mockResolvedValue(true);
     expect(await permission.beforeSend(send)).toBeNull();
   });
