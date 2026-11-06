@@ -51,6 +51,67 @@ Do not infer readiness from a successful upload. The iOS-only gate file is
 `node apps/mobile/scripts/release-check.mjs --platform=ios --json` must continue failing until the
 remaining evidence exists. No public App Review or external beta review has been submitted.
 
+## Dedicated reviewer machine proposal — not provisioned
+
+The owner requested a hosting proposal on November 6. This proposal does not authorize a purchase
+or establish working reviewer access. The existing reviewer account has no connected machine.
+
+Use a **company-owned OVH US VPS-1**, Ubuntu 24.04, x86_64, **2 vCores / 4 GB RAM / 40 GB disk**,
+in Virginia if available. Connect it as an **external machine** to the isolated reviewer
+organization through the normal desktop setup. This keeps the reviewer out of machine checkout
+and avoids creating a Stripe subscription on the reviewer account. Production already has OVH
+credentials and external-machine SSH/daemon configuration; capacity and order availability still
+need checking immediately before any approved purchase.
+
+| Item            | Proposed amount / behavior                                                                                                                                                                                                                                             |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VM              | **USD 5.35 per month**, current US catalog monthly renewal price for `vps-2027-model1`, checked November 6 at 20:12 UTC. The public site advertises a lower starting price; use the live order quote for approval.                                                     |
+| AI access       | One supported provider, initially Pi with an Anthropic API key scoped to a new review-only workspace. Set a **USD 20 monthly workspace spend limit**, with a usage alert before exhaustion. The API account must have usable credit and support the selected model.    |
+| Proposed budget | **USD 30/month**, including the VM and AI allowance, subject to the final order quote and taxes. No automatic upgrades, paid backup add-ons or additional machines. Usage caps reset on the provider's billing schedule; this is a monthly budget, not a lifetime cap. |
+| Availability    | Always on through App Review, follow-up questions and any appeal. Check renewal and AI headroom before submission and monitor during review. Do not schedule shutdown while review is pending.                                                                         |
+| Alternative     | A DigitalOcean Basic bundled VM with 2 vCPUs / 4 GiB / 80 GiB is **USD 24/month**, plus AI. It exceeds this proposal's total budget, needs separate approval and account access, and is a fallback if OVH cannot supply the machine.                                   |
+
+Pricing sources: [OVH public US catalog](https://api.us.ovhcloud.com/1.0/order/catalog/public/vps?ovhSubsidiary=US),
+[OVH VPS specifications](https://us.ovhcloud.com/vps/),
+[DigitalOcean bundled pricing](https://www.digitalocean.com/pricing/droplets), and
+[Anthropic workspace limits](https://platform.claude.com/docs/en/manage-claude/workspaces).
+These are November 6 observations, not a reserved quote.
+
+The standard Concors installer requires Debian/Ubuntu with systemd and SSH. An ordinary Railway
+service container does not satisfy that installation contract without additional engineering.
+This proposal uses a separate VM and the existing installation route.
+
+Isolation and operation:
+
+- Give only the reviewer organization access. Seed a small, original sample repository with a
+  README, source files, an executable test and a useful starter task. Include no customer code,
+  production database access, production environment files, GitHub write token or developer login.
+- Install the released daemon and a pinned supported AI CLI; record the versions. Keep the normal
+  machine-token checks and TLS. Restrict SSH to the control plane and operator; expose only the
+  daemon/preview ports needed by the demonstrated flow. Validate the firewall with the installer.
+- Treat the entire VM as disposable. The standard installer grants the `ubuntu` user passwordless
+  sudo, and the terminal can read credentials available to its user. A review-only model credential
+  must therefore have limited spending and no administration rights; never copy a shared key onto
+  this host. Place it through a private operator channel, outside the repository, chat and Apple
+  review notes. Verify that the session host inherits it after restart.
+- The company supplies the provider account/key and owns the usage. Confirm that its permitted-use
+  terms cover this isolated review demonstration. Use the app's normal named-provider AI consent
+  before sending the sample code; do not simulate provider responses or bypass permissions.
+- Keep health, certificate, heartbeat, disk and AI-credit checks running, with alerts to an operated
+  support contact. Start from a saved sample-repository revision so an operator can restore the
+  exercise without rotating the review login or deleting an active session unexpectedly.
+
+After purchase approval and secure provider setup, acceptance must demonstrate the **exact saved
+reviewer login on the signed iPhone**, machine discovery, a real agent response, file inspection,
+a permitted edit, terminal/test execution, app background/reconnect, and renewed machine access
+after token expiry. Verify deletion on a separate disposable account rather than deleting the
+App Review account. Capture the final screenshots from this working route, then update Apple's
+private review notes with the machine, sample task and recovery/contact instructions.
+
+After review is closed, revoke the dedicated model key, detach the external machine, destroy the
+VM and its backups, and verify that provider billing/renewal stopped. Removing an external machine
+from Concors alone does **not** destroy the VPS or stop its hosting bill.
+
 ## Review guidance
 
 The app bundles its native interface and workspace renderer; structured workspace data is exchanged
