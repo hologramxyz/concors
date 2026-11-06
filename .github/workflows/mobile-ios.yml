@@ -4,6 +4,10 @@ on:
   # Native compilation and simulator tests are opt-in, outside the PR time budget.
   workflow_dispatch:
     inputs:
+      simulator_artifact:
+        description: Optional Expo simulator artifact URL; run its prebuilt ARM app on Apple Silicon
+        type: string
+        default: ""
       reuse_matching_cached_app:
         description: Reuse a cached simulator app only after verifying unchanged runtime sources
         type: boolean
@@ -19,8 +23,8 @@ concurrency:
 jobs:
   simulator:
     name: Native iOS glass and composer
-    # The standard Intel runner has 14 GB RAM for CoreSimulator + XCTest (ARM has 7 GB).
-    runs-on: macos-26-intel
+    # Compile locally on Intel's 14 GB runner, or exercise a prebuilt Expo app on Apple Silicon.
+    runs-on: ${{ inputs.simulator_artifact != '' && 'macos-26' || 'macos-26-intel' }}
     timeout-minutes: 50
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
@@ -45,14 +49,28 @@ jobs:
           if [ "$MOBILE_SIMULATOR_STATE" != Booted ]; then
             xcrun simctl boot "$MOBILE_SIMULATOR_ID"
           fi
+      - name: Download optional Expo simulator artifact
+        if: inputs.simulator_artifact != ''
+        env:
+          SIMULATOR_ARTIFACT_URL: ${{ inputs.simulator_artifact }}
+        run: |
+          python3 -c 'import os,urllib.parse; u=urllib.parse.urlparse(os.environ["SIMULATOR_ARTIFACT_URL"]); assert u.scheme=="https" and (u.hostname=="expo.dev" or u.hostname.endswith(".eascdn.net")) and not u.username and not u.password'
+          curl --fail --location --retry 3 "$SIMULATOR_ARTIFACT_URL" --output "$RUNNER_TEMP/simulator-app.tar.gz"
+          mkdir -p "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI/Build/Products/Release-iphonesimulator"
+          python3 -c 'import sys,tarfile; tarfile.open(sys.argv[1]).extractall(sys.argv[2],filter="data")' "$RUNNER_TEMP/simulator-app.tar.gz" "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI/Build/Products/Release-iphonesimulator"
       - uses: pnpm/action-setup@v4
+        if: inputs.simulator_artifact == ''
       - uses: actions/setup-node@v4
+        if: inputs.simulator_artifact == ''
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+        if: inputs.simulator_artifact == ''
       - run: pnpm --filter @concors/mobile assets
+        if: inputs.simulator_artifact == ''
       - uses: actions/cache/restore@v4
+        if: inputs.simulator_artifact == ''
         id: native-cache
         with:
           path: |
@@ -69,21 +87,21 @@ jobs:
         run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
       - name: Validate optional cached simulator app
         id: cached-app
-        if: inputs.reuse_matching_cached_app
+        if: inputs.simulator_artifact == '' && inputs.reuse_matching_cached_app
         run: |
           MOBILE_APP=$(find "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' -print -quit 2>/dev/null || true)
           python3 .github/scripts/reuse-ios-simulator.py "${MOBILE_APP:-/nonexistent}" --github-output "$GITHUB_OUTPUT"
       - name: Generate native iOS project
-        if: steps.cached-app.outputs.reuse != 'true'
+        if: inputs.simulator_artifact == '' && steps.cached-app.outputs.reuse != 'true'
         working-directory: apps/mobile
         run: pnpm exec expo prebuild --platform ios --no-install
       - name: Install native dependencies
-        if: steps.cached-app.outputs.reuse != 'true'
+        if: inputs.simulator_artifact == '' && steps.cached-app.outputs.reuse != 'true'
         timeout-minutes: 4
         working-directory: apps/mobile/ios
         run: pod install
       - name: Build one simulator architecture
-        if: steps.cached-app.outputs.reuse != 'true'
+        if: inputs.simulator_artifact == '' && steps.cached-app.outputs.reuse != 'true'
         # A cold Intel simulator build exceeded 15 minutes before UI tests could start.
         timeout-minutes: 30
         working-directory: apps/mobile/ios
@@ -119,7 +137,7 @@ jobs:
           /usr/libexec/PlistBuddy -c 'Print :application-identifier' "$RUNNER_TEMP/mobile-entitlements.plist"
           xcrun simctl install '${{ steps.simulator.outputs.id }}' "$MOBILE_APP"
           xcrun simctl launch '${{ steps.simulator.outputs.id }}' xyz.hologram.concors.preview
-          python3 .github/scripts/reuse-ios-simulator.py "$MOBILE_APP" --record
+          python3 .github/scripts/reuse-ios-simulator.py "$MOBILE_APP" --arch "$(uname -m)" --record
       - name: Install pinned native UI test runner
         timeout-minutes: 2
         run: |
@@ -142,7 +160,7 @@ jobs:
             apps/mobile/.expo/xcodebuild.log
       # Preserve diagnostics before a large native cache upload can consume the job budget.
       - uses: actions/cache/save@v4
-        if: ${{ !cancelled() && steps.native-cache.outputs.cache-matched-key != steps.native-cache.outputs.cache-primary-key }}
+        if: ${{ !cancelled() && inputs.simulator_artifact == '' && steps.native-cache.outputs.cache-matched-key != steps.native-cache.outputs.cache-primary-key }}
         with:
           path: |
             apps/mobile/ios/Pods
