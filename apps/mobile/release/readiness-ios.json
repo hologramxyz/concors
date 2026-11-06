@@ -25,9 +25,10 @@
         "https://github.com/hologramxyz/concors-server/pull/21",
         "https://github.com/hologramxyz/concors-server/pull/23",
         "Apple primary App ID enabled, Services ID and dedicated signing key prepared; backend signing-key configuration stored and new code deployed.",
-        "Privy Apple settings / OAuth-token return and real signed-iPhone acceptance remain required; production currently advertises apple:false.",
+        "Privy Apple is enabled with the Concors Services ID. The deployed production API advertises apple:true; its normal sign-in page generates the matching Apple authorization request. Actual Apple account sign-in, OAuth-token return and signed-iPhone acceptance remain required.",
         "reviewer-access.json",
-        "Normal production email-code sign-in and PKCE exchange passed for the Privy test account in Chromium. This does not verify Apple sign-in or the signed iPhone authentication session."
+        "Normal production email-code sign-in and PKCE exchange passed for the Privy test account in Chromium. This does not verify Apple sign-in or the signed iPhone authentication session.",
+        "apple-provider-activation.json"
       ]
     },
     {

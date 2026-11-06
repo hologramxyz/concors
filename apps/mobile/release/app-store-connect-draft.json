@@ -64,7 +64,7 @@
     "tracking": false
   },
   "remainingOwnerFields": [
-    "Complete prepared Apple provider configuration in Privy and enable OAuth-token return",
+    "Verify Apple account sign-in, OAuth-token return, private email and revocation on a signed iPhone",
     "Available isolated machine and scoped AI-provider access for the verified reviewer account",
     "Physical iPhone acceptance and operating support/report triage"
   ],
@@ -89,5 +89,9 @@
   "reviewerAccountConfigured": true,
   "reviewerAccountVerifiedAt": "2026-11-06T20:03:07.354Z",
   "reviewerCredentialStorage": "App Store Connect private App Review fields; values intentionally excluded here",
-  "reviewerAccessEvidence": "reviewer-access.json"
+  "reviewerAccessEvidence": "reviewer-access.json",
+  "appleProviderConfigured": true,
+  "appleProviderConfigurationVerifiedAt": "2026-11-06T20:37:28.048Z",
+  "appleProviderConfigurationEvidence": "apple-provider-activation.json",
+  "appleAccountAcceptanceVerified": false
 }
