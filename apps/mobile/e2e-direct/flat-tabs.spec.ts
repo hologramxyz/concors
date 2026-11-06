@@ -110,6 +110,12 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     await input.fill("Keep this draft while switching tabs");
     // The strip under the header, and its current tab.
     const strip = ui.getByRole("group", { name: "Tabs", exact: true });
+    // Typing raises the keyboard, which takes the strip's room; it hides only once its 260ms slide
+    // ends, so asserting on it straight after typing passes on a fast machine and fails on CI.
+    // Dismissing the keyboard brings it back.
+    await expect(strip).toBeHidden();
+    await ui.getByRole("log", { name: "Chat timeline" }).click({ position: { x: 200, y: 300 } });
+    await expect(ui.locator('.mobile-composer[data-expanded="true"]')).toHaveCount(0);
     const picker = ui.locator('.mobile-tab-strip [data-pane-choice][aria-pressed="true"]');
     const tab = (value: string) =>
       ui.locator(`.mobile-tab-strip [data-pane-choice][data-value="${value}"]`);

@@ -261,6 +261,10 @@ test("mobile project sidebar displays the repo favicon through the shared daemon
     const project = ui
       .getByRole("navigation", { name: "Primary" })
       .getByRole("button", { name: "Mobile favicon", exact: true });
+    // The favicon loads lazily, as it should for a long list. Earlier tests on the shared daemon
+    // leave workspaces whose tab rows now sit in the tree above this one, which pushes it below the
+    // fold, so bring it into view the way someone looking for it would.
+    await project.scrollIntoViewIfNeeded();
     await expect(project.locator('[data-project-icon="favicon"]')).toBeVisible();
     await expect(project.locator("img")).toHaveAttribute("src", /^data:image\/svg\+xml;base64,/);
     // The row folds the workspace (its tabs open from their own rows), and its chevron says so.
