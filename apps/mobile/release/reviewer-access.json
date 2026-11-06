@@ -1,0 +1,20 @@
+{
+  "checkedAt": "2026-11-06T20:03:07.354Z",
+  "appId": "6817622624",
+  "version": "0.1.0",
+  "versionState": "PREPARE_FOR_SUBMISSION",
+  "credentialSource": "Privy generated test account",
+  "testAccountsEnabled": true,
+  "testAccountCount": 1,
+  "productionEmailLoginVerified": true,
+  "nativePkceExchangeVerified": true,
+  "verificationEnvironment": "Chromium at 390x844 through the production sign-in page and a local loopback callback",
+  "privateAppleReviewFieldsConfigured": true,
+  "fixedEmailCodeInstructionsConfigured": true,
+  "credentialValuesIncluded": false,
+  "credentialStorage": "Private App Review fields and mode-0600 local operator files; values excluded from the repository",
+  "machineCount": 0,
+  "reviewerWorkspaceReady": false,
+  "physicalIPhoneVerified": false,
+  "productionAppleSignInEnabled": false
+}

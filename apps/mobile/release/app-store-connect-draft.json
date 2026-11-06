@@ -64,8 +64,8 @@
     "tracking": false
   },
   "remainingOwnerFields": [
-    "Complete prepared Apple provider configuration in Privy and enable test accounts",
-    "Working dedicated reviewer account, available isolated machine and scoped AI-provider access",
+    "Complete prepared Apple provider configuration in Privy and enable OAuth-token return",
+    "Available isolated machine and scoped AI-provider access for the verified reviewer account",
     "Physical iPhone acceptance and operating support/report triage"
   ],
   "note": "Free-app agreement is active/current. Apple App ID, Services ID and dedicated sign-in key are prepared; backend signing-key support is deployed. Apple login remains disabled pending Privy setup. Build 12 is VALID / IN_BETA_TESTING, in the Internal beta group and attached to draft 0.1.0. Public App Review has not been submitted.",
@@ -85,5 +85,9 @@
   "ageRatingVerifiedAt": "2026-11-06T06:45:16.551Z",
   "contentRightsOwnerConfirmed": true,
   "contentRightsVerifiedAt": "2026-11-06T06:45:16.551Z",
-  "launchPolicyEvidence": "launch-policy.json"
+  "launchPolicyEvidence": "launch-policy.json",
+  "reviewerAccountConfigured": true,
+  "reviewerAccountVerifiedAt": "2026-11-06T20:03:07.354Z",
+  "reviewerCredentialStorage": "App Store Connect private App Review fields; values intentionally excluded here",
+  "reviewerAccessEvidence": "reviewer-access.json"
 }
