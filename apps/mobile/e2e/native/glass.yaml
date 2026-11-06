@@ -28,8 +28,13 @@ appId: xyz.hologram.concors.preview
     id: native-composer-context
 - takeScreenshot: apps/mobile/test-results/native/composer-expanded
 - tapOn:
-    waitToSettleTimeoutMs: 500
     id: native-composer-model
+    retryTapIfNoChange: true
+# The trigger has the same accessible label as the sheet title. Its label alone cannot prove
+# that XCTest opened the sheet; require an option that exists only in the presented picker.
+- extendedWaitUntil:
+    visible: "← Back to providers"
+    timeout: 30000
 - assertVisible: "Codex: Agent and model"
 - tapOn:
     text: "← Back to providers"
