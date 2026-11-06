@@ -64,7 +64,7 @@ export function WorkspaceSidebarItem({
   onSelect: (id: string) => void;
   /**
    * Choosing the row only expands or collapses it, so it says so to a screen reader and shows
-   * desktop's fold chevron in place of its icon.
+   * desktop's fold chevron at its end.
    */
   toggles?: boolean;
   /** Offers New tab in the workspace's phone menu. */
@@ -127,29 +127,12 @@ export function WorkspaceSidebarItem({
             "group-hover:opacity-0 group-has-[:focus-visible:not([data-pointer-focus])]:opacity-0",
         )}
       >
-        {toggles && !compact ? (
-          // Desktop's fold chevron, shown for good where touch has no hover to reveal it. The row
-          // itself is the toggle, so this only shows which way it is folded.
-          <span
-            aria-hidden="true"
-            data-workspace-chevron={expanded ? "expanded" : "collapsed"}
-            className="flex size-[20px] items-center justify-center text-muted-foreground"
-          >
-            <ChevronRight
-              className={cn(
-                "size-[16px] transition-transform duration-200 motion-reduce:transition-none",
-                expanded && "rotate-90",
-              )}
-            />
-          </span>
-        ) : (
-          <ProjectImage
-            key={icon?.source ?? "fallback"}
-            source={icon?.source ?? null}
-            isGit={icon?.isGit ?? false}
-            name={project.name}
-          />
-        )}
+        <ProjectImage
+          key={icon?.source ?? "fallback"}
+          source={icon?.source ?? null}
+          isGit={icon?.isGit ?? false}
+          name={project.name}
+        />
       </span>
       <AttentionBadge attention={attention} label={attentionLabel} />
     </span>
@@ -186,6 +169,23 @@ export function WorkspaceSidebarItem({
       )}
       {!compact && parent && (
         <span className="min-w-0 shrink-[2] truncate text-muted-foreground">{parent}</span>
+      )}
+      {toggles && !compact && (
+        // Desktop's fold chevron, shown for good where touch has no hover to reveal it, at the
+        // row's end so the workspace keeps its icon. The row itself is the toggle, so this only
+        // shows which way it is folded.
+        <span
+          aria-hidden="true"
+          data-workspace-chevron={expanded ? "expanded" : "collapsed"}
+          className="ml-auto flex size-[20px] shrink-0 items-center justify-center text-muted-foreground"
+        >
+          <ChevronRight
+            className={cn(
+              "size-[16px] transition-transform duration-200 motion-reduce:transition-none",
+              expanded && "rotate-90",
+            )}
+          />
+        </span>
       )}
     </button>
   );

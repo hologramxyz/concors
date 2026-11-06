@@ -1802,8 +1802,15 @@ test("workspace rows show their fold chevron, and their menu starts a tab there"
   const rows = sidebar.locator("li:has(> button[data-workspace-id])");
   const fork = rows.nth(1);
   const chevron = fork.locator("[data-workspace-chevron]");
-  // Desktop's hover chevron, always shown: down while open, right once folded, where the dot goes.
+  // Desktop's hover chevron, always shown at the row's end: down while open, right once folded.
+  // The workspace keeps its icon, which carries the folded workspace's dot.
   await expect(sidebar.locator('[data-workspace-chevron="expanded"]')).toHaveCount(2);
+  await expect(fork.locator("[data-project-icon]")).toBeVisible();
+  const [icon, mark] = await Promise.all([
+    fork.locator("[data-project-icon]").boundingBox(),
+    chevron.boundingBox(),
+  ]);
+  expect(mark && icon && mark.x > icon.x + 100).toBe(true);
   await fork.locator("[data-workspace-id]").click();
   await expect(chevron).toHaveAttribute("data-workspace-chevron", "collapsed");
   await expect(fork.locator('[data-workspace-attention="done"]')).toBeVisible();

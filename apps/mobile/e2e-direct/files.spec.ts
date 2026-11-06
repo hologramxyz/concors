@@ -263,9 +263,13 @@ test("mobile project sidebar displays the repo favicon through the shared daemon
       .getByRole("button", { name: "Mobile favicon", exact: true });
     await expect(project.locator('[data-project-icon="favicon"]')).toBeVisible();
     await expect(project.locator("img")).toHaveAttribute("src", /^data:image\/svg\+xml;base64,/);
+    // The row folds the workspace (its tabs open from their own rows), and its chevron says so.
+    await expect(project.locator('[data-workspace-chevron="expanded"]')).toBeVisible();
     await project.click();
-    await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
-    await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    await expect(project).toHaveAttribute("aria-expanded", "false");
+    await expect(project.locator('[data-workspace-chevron="collapsed"]')).toBeVisible();
+    await expect(project.locator('[data-project-icon="favicon"]')).toBeVisible();
+    await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
   } finally {
     await cleanup();
   }
