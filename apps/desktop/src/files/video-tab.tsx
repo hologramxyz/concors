@@ -167,7 +167,13 @@ export function VideoFileTab({ file }: { file: OpenFile }) {
             src={current.url}
             controls
             playsInline
-            preload="metadata"
+            // The whole file is already in memory, so loading it costs nothing. WebKit (the Mac
+            // and iPhone webviews) also draws no frame of a video nobody has played or moved, so
+            // stepping to its first instant shows that frame instead of an empty box.
+            preload="auto"
+            onLoadedMetadata={(event) => {
+              if (event.currentTarget.currentTime === 0) event.currentTarget.currentTime = 0.001;
+            }}
             aria-label={`Video ${name}`}
             onError={() => setUnplayable(true)}
             className="m-auto block max-h-full max-w-full"
