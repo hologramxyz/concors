@@ -114,11 +114,12 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     const selection = { ...snapshot().selection };
     await picker.click();
     await expect(drawer.locator(".mobile-tab-card")).toHaveCount(0);
+    // Each leaf by name alone, as the sidebar names tabs.
     await expect(drawer.locator("[data-pane-choice]")).toHaveText([
-      "Development 1Agent",
-      "Development 2Terminal",
-      "Development 3Terminal",
-      "NotesAgent",
+      "Development 1",
+      "Development 2",
+      "Development 3",
+      "Notes",
     ]);
     await drawer.getByRole("button", { name: "Close", exact: true }).click();
     for (const value of [

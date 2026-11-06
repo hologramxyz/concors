@@ -49,8 +49,13 @@ import {
  * at work, open or closed (closed rows are told apart by their muted name), shows a spinner at the
  * row's other end instead, where its age would only say "now".
  */
-function RowDot({ row, status }: { row: SidebarRow; status: AgentStatus | undefined }) {
-  const state = rowState(row);
+export function RowDot({
+  state,
+  status,
+}: {
+  state: ReturnType<typeof rowState>;
+  status: AgentStatus | null | undefined;
+}) {
   const background = status?.background ?? 0;
   return (
     <span
@@ -67,6 +72,15 @@ function RowDot({ row, status }: { row: SidebarRow; status: AgentStatus | undefi
       ) : (
         (state === "attention" || state === "done") && <SidebarDot dot={state} />
       )}
+    </span>
+  );
+}
+
+/** The spinner a row shows at its end while an agent replies. */
+export function RowWorking() {
+  return (
+    <span data-row-working className="flex size-4 shrink-0 items-center justify-center">
+      <AgentLoadingIcon className="size-3.5" />
     </span>
   );
 }
@@ -156,7 +170,7 @@ export function SidebarTabRow({
       onClick={onOpen}
       className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md pl-2 text-left text-ui outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <RowDot row={row} status={status} />
+      <RowDot state={rowState(row)} status={status} />
       <span className={cn("min-w-0 flex-1 truncate", closed && "text-muted-foreground")}>
         {/* Only the name opens the details, so the rest of the row stays free for its "…" menu. */}
         <SidebarTooltip
@@ -176,9 +190,7 @@ export function SidebarTabRow({
         <Clock className="size-3.5 shrink-0 text-muted-foreground" aria-label="Scheduled agent" />
       )}
       {working ? (
-        <span data-row-working className="flex size-4 shrink-0 items-center justify-center">
-          <AgentLoadingIcon className="size-3.5" />
-        </span>
+        <RowWorking />
       ) : (
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
           {shortAge(row.time, now)}

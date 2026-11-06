@@ -267,7 +267,7 @@ body {
   display: flex;
   align-items: center;
   flex: 1;
-  min-height: 54px;
+  min-height: 44px;
   gap: 10px;
   padding: 7px 10px;
   text-align: left;
@@ -278,20 +278,9 @@ body {
   height: 20px;
   flex-shrink: 0;
 }
-.mobile-pane-choice > span:not([data-pane-status]) {
-  min-width: 0;
-  flex: 1;
+/* The name; the sidebar's status dot and spinner keep their own size. */
+.mobile-pane-choice > span:not([data-row-state], [data-row-working]) {
   font-size: 14px;
-}
-/* An agent's logo and status dot sit where the pane's icon would, at its size. */
-.mobile-pane-choice > [data-pane-status] {
-  display: flex;
-  flex-shrink: 0;
-}
-.mobile-pane-choice small {
-  display: block;
-  color: var(--muted-foreground);
-  font-size: 12px;
 }
 .mobile-pane-choice > .mobile-pane-pinned {
   width: 15px;
@@ -425,8 +414,11 @@ body {
   padding-left: 8px;
   font-size: 14px;
 }
-/* Desktop's 6px status dots, and the workspace icon's, are hard to make out on a phone. */
-.mobile-sidebar-content :is([data-row-state], [data-show-more-dot]) > span.rounded-full {
+/* Desktop's 6px status dots, and the workspace icon's, are hard to make out on a phone. The Tabs
+   sheet draws its rows' dots as the sidebar does. */
+:is(.mobile-sidebar-content, .mobile-workspace-list)
+  :is([data-row-state], [data-show-more-dot])
+  > span.rounded-full {
   width: 8px;
   height: 8px;
 }
@@ -626,12 +618,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.mobile-picker-breadcrumb > span:last-child {
-  margin-top: 2px;
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--muted-foreground);
 }
 .mobile-header + .mobile-notice {
   margin-top: var(--mobile-header-height);

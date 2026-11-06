@@ -9,8 +9,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { PaneProfileIcon } from "@/workspace/profile-icon";
-import { AgentStatusIcon } from "@/agents/activity";
+import { RowDot, RowWorking } from "@/workspace/sidebar-tabs";
+import { paneState } from "@/workspace/sidebar-rows";
 import { paneAgentStatus } from "@/agents/agent-status";
 import { useAgents } from "@/agents/context";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
@@ -61,8 +61,8 @@ export function WorkspacePicker({
   const chats = useAgents();
   const terminals = useTerminalSessions();
   const selected = entries.find((entry) => entry.tab.id === tab?.id && entry.pane.id === pane?.id);
+  // The tab's name alone, as the sidebar names it; what kind of tab it is shows on the tab itself.
   const title = selected?.label ?? project.name;
-  const subtitle = selected?.profileLabel ?? "Tabs";
   const native = useNativeSurface(
     trigger,
     {
@@ -70,7 +70,6 @@ export function WorkspacePicker({
       icon: "chevron",
       label: "Tabs",
       title,
-      subtitle,
       disabled: false,
     },
     (event) => {
@@ -142,7 +141,6 @@ export function WorkspacePicker({
           >
             <span className="mobile-picker-breadcrumb">
               <span>{title}</span>
-              <span>{subtitle}</span>
             </span>
             <span className="mobile-select-chevron">
               <ChevronDown />
@@ -208,10 +206,11 @@ export function WorkspacePicker({
               }
             }}
           >
-            {entries.map(({ tab: item, pane: node, label, profileLabel }) => {
+            {entries.map(({ tab: item, pane: node, label }) => {
               const active = tab?.id === item.id && pane?.id === node.id;
-              // The agent's logo and status dot, as desktop's tab strip shows them.
+              // Drawn as the sidebar draws a tab: its dot before the name, a spinner while replying.
               const status = paneAgentStatus(node, chats, terminals);
+              const state = paneState(node, chats, terminals);
               // Marked as desktop's sidebar marks it; the sheet keeps the tab strip's order.
               const pinned = !!chats.find((chat) => chat.id === node.sessionId)?.pinned;
               return (
@@ -228,21 +227,10 @@ export function WorkspacePicker({
                     className="mobile-pane-choice"
                     onClick={() => choose(item.id, node.id)}
                   >
-                    {status ? (
-                      <span aria-hidden="true" data-pane-status={status.status}>
-                        <AgentStatusIcon
-                          agent={status}
-                          surface={active ? "bg-accent ring-accent" : "bg-popover ring-popover"}
-                        />
-                      </span>
-                    ) : (
-                      <PaneProfileIcon profile={node.profile} />
-                    )}
-                    <span>
-                      <span className="block truncate">{label}</span>
-                      <small className="truncate">{profileLabel}</small>
-                    </span>
+                    <RowDot state={state} status={status} />
+                    <span className="block min-w-0 flex-1 truncate">{label}</span>
                     {pinned && <Pin className="mobile-pane-pinned" aria-label="Pinned" />}
+                    {state === "working" && <RowWorking />}
                     {active && <Check className="mobile-pane-selected" />}
                   </button>
                   <WorkspaceActions

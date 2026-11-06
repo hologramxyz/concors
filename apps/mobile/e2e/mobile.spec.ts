@@ -972,12 +972,16 @@ test("flat tab actions configure and close inactive leaves without changing the 
   await expect(ui.getByRole("menuitem", { name: "Rename tab", exact: true })).toHaveCount(0);
   await expect(ui.getByRole("menuitem", { name: /Add pane|Move tab|Split/ })).toHaveCount(0);
   await ui.getByRole("menuitemradio", { name: "OpenCode", exact: true }).click();
-  await expect(inactive.locator("[data-pane-choice]")).toContainText("OpenCode");
   await expect(picker).toHaveAttribute("data-value", selected);
   await page.screenshot({ path: test.info().outputPath("mobile-flat-tabs.png") });
+  // The row names the tab only, so its new type shows as the menu's choice.
   await inactive
     .getByRole("button", { name: "Actions for tab Mobile launch 2", exact: true })
     .click();
+  await expect(ui.getByRole("menuitemradio", { name: "OpenCode", exact: true })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
   await ui.getByRole("menuitem", { name: "Close tab…", exact: true }).click();
   await ui.getByRole("button", { name: "Close tab", exact: true }).click();
   await expect(picker).toHaveAttribute("data-value", selected);
@@ -1564,19 +1568,55 @@ test("an image on the phone's clipboard can be pasted into the composer", async 
   await paste.click();
   await expect(ui.getByLabel("Remove Pasted image.png")).toBeVisible();
 });
-test("the Tabs sheet shows each agent's status, as desktop's tab strip does", async ({ page }) => {
+test("the Tabs sheet and header show tabs as the sidebar does", async ({ page }) => {
   const ui = await enter(page);
-  await ui.getByRole("combobox", { name: "Tabs", exact: true }).click();
+  const picker = ui.getByRole("combobox", { name: "Tabs", exact: true });
+  // The header names the tab alone, with no "Agent" or "Terminal" under it.
+  await expect(picker).toHaveText("Mobile launch 1");
+  await picker.click();
   const sheet = ui.getByRole("dialog", { name: "Tabs", exact: true });
   const chat = sheet.locator(`[data-pane-choice][data-value="${activeChat}"]`);
-  // The agent's logo and status dot replace the plain chat icon; the name stays the tab's.
-  await expect(chat.locator("[data-pane-status]")).toBeVisible();
-  await expect(chat.locator("[data-agent-status-badge]")).toBeVisible();
+  // The sidebar's dot before the name, with no logo, badge or kind of tab under it.
+  await expect(chat.locator('[data-row-state="attention"]')).toBeVisible();
+  await expect(chat.getByRole("img", { name: /^Agent status: / })).toBeVisible();
+  await expect(chat.locator("[data-agent-status-badge], small")).toHaveCount(0);
+  await expect(chat).toHaveText("Mobile launch 1");
   await expect(chat).toHaveAttribute("aria-description", /^Codex: /);
-  // A terminal with no agent in it keeps its terminal icon.
+  // A terminal at a prompt has nothing to show, and no icon of its kind.
   const terminal = sheet.locator(`[data-pane-choice][data-value="${activeTerminal}"]`);
-  await expect(terminal.locator("[data-pane-status]")).toHaveCount(0);
+  await expect(
+    terminal.locator("[data-row-state] > *, svg:not(.mobile-pane-selected)"),
+  ).toHaveCount(0);
+  await expect(terminal).toHaveText("Mobile launch 2");
+  // Rows are 44pt, and the current one keeps its check.
+  expect((await terminal.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  await expect(chat.locator(".mobile-pane-selected")).toBeVisible();
   await page.screenshot({ path: "apps/mobile/test-results/mobile-tabs-status.png" });
+});
+test("the Tabs sheet marks replies in progress, pins and failures as the sidebar does", async ({
+  page,
+}) => {
+  await page.goto(`/?${SIDEBAR_TREE_FLAG}`);
+  await page.getByRole("button", { name: "Explore demo" }).click();
+  const ui = workspace(page);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+  await ui.getByRole("combobox", { name: "Tabs", exact: true }).click();
+  const sheet = ui.getByRole("dialog", { name: "Tabs", exact: true });
+  const row = (name: string) => sheet.locator("[data-pane-choice]", { hasText: name });
+  // Open tabs only, in the tab bar's order: closed chats and background terminals stay in the
+  // sidebar.
+  await expect(sheet.locator("[data-pane-choice]")).toHaveText([
+    "Mobile launch 1",
+    "Mobile launch 2",
+    "Release notes",
+    "Fix sign-in",
+    "Flaky upload test",
+    "Roadmap",
+  ]);
+  await expect(row("Release notes").locator("[data-row-working]")).toBeVisible();
+  await expect(row("Fix sign-in").locator('[data-row-state="done"]')).toBeVisible();
+  await expect(row("Flaky upload test").locator('[data-row-state="attention"]')).toBeVisible();
+  await expect(row("Roadmap").getByLabel("Pinned")).toBeVisible();
 });
 test("pages opened from a chat start below the header, and the chat scrolls under it again", async ({
   page,

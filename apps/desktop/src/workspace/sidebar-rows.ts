@@ -4,6 +4,7 @@ import {
   chatAgentStatus,
   chatDot,
   isLiveTerminalAgent,
+  paneAgentStatus,
   strongestDot,
   tabAgentStatuses,
   terminalAgentStatus,
@@ -187,6 +188,33 @@ export function rowState(
       ? "running"
       : undefined;
   return terminalAgentStatus(row.terminal).running ? "working" : undefined;
+}
+
+/**
+ * What one pane's row shows, decided as `rowState` decides it for a tab: the phone lists each pane
+ * of a split tab as a tab of its own.
+ */
+export function paneState(
+  pane: PaneNode,
+  chats: readonly AgentInfo[],
+  terminals: readonly TerminalInfo[],
+) {
+  const chat =
+    pane.profile === "chat" ? chats.find((item) => item.id === pane.sessionId) : undefined;
+  const terminal =
+    pane.profile === "chat" ? undefined : terminals.find((item) => item.id === pane.sessionId);
+  return rowState({
+    kind: "tab",
+    key: pane.id,
+    projectId: "",
+    tabId: "",
+    title: "",
+    chat,
+    terminal,
+    tool: pane.profile,
+    dot: paneAgentStatus(pane, chats, terminals)?.dot,
+    time: "",
+  });
 }
 
 /** The dot a row shows, if any. */

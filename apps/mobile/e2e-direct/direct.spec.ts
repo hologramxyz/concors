@@ -140,16 +140,16 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(ui.getByRole("log")).toContainText("Hello from Codex");
     await expect.poll(() => agents().length).toBe(1);
-    // The mobile row must retain the provider logo while desktop's working badge animates.
+    // The chat's row in the sidebar tree shows desktop's spinner while it works.
     await input.fill("hold");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
     const agentId = agents()[0]?.id;
     if (!agentId) throw new Error("Missing fixture agent");
     const agentRow = ui.locator(`button[data-agent-id="${agentId}"]`);
-    await expect(agentRow.locator('[data-provider="codex"] svg')).toBeVisible();
+    await expect(agentRow.locator('[data-provider="codex"]')).toBeVisible();
     await expect(agentRow.getByRole("img", { name: "Agent status: Working" })).toBeVisible();
-    await expect(agentRow.locator("[data-agent-status-badge] svg .animate-spin")).toBeVisible();
+    await expect(agentRow.locator("[data-row-working]")).toBeVisible();
     await agentRow.focus();
     await expect(ui.getByRole("tooltip")).toHaveCount(0);
     await page.screenshot({ path: test.info().outputPath("mobile-agent-status.png") });
