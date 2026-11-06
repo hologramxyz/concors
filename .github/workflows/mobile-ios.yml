@@ -71,7 +71,7 @@ jobs:
             SWIFT_OPTIMIZATION_LEVEL=-Onone GCC_GENERATE_DEBUGGING_SYMBOLS=NO \
             build > ../test-results/native/xcodebuild.log 2>&1 || { tail -100 ../test-results/native/xcodebuild.log; exit 1; }
       - name: Create isolated iOS 26 simulator
-        timeout-minutes: 4
+        timeout-minutes: 10
         id: simulator
         run: |
           # Capture the largest supported iPhone size for App Store screenshot requirements.
