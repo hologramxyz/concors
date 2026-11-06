@@ -16,10 +16,20 @@ const readiness = JSON.parse(
 );
 readiness.gates = readiness.gates.map((gate) => ({ ...gate, status: "pending", evidence: [] }));
 writeFileSync(join(fixture, "release/readiness.json"), JSON.stringify(readiness));
+const iosReadiness = JSON.parse(
+  readFileSync(new URL("../release/readiness-ios.json", import.meta.url), "utf8"),
+);
+iosReadiness.gates = iosReadiness.gates.map((gate) => ({
+  ...gate,
+  status: "pending",
+  evidence: [],
+}));
+writeFileSync(join(fixture, "release/readiness-ios.json"), JSON.stringify(iosReadiness));
 afterAll(() => rmSync(fixture, { recursive: true, force: true }));
 
 const environment = {
   ...process.env,
+  EAS_BUILD_PLATFORM: "",
   APP_VARIANT: "production",
   EXPO_PUBLIC_DEMO: "false",
   EXPO_PUBLIC_DEV_DAEMON_URL: "",
@@ -74,9 +84,31 @@ it("keeps standalone previews available and labels candidate reports separately"
   expect(report.status, report.stderr).toBe(0);
   expect(JSON.parse(report.stdout)).toEqual({
     check: "candidate-build",
+    platform: "all",
     ready: true,
     failures: [],
   });
+});
+
+it("uses pending iOS evidence for EAS iPhone builds and explicit iOS reports", () => {
+  const result = guard({ EAS_BUILD_PROFILE: "production", EAS_BUILD_PLATFORM: "ios" });
+  expect(result.status).toBe(1);
+  expect(result.stderr).toContain("Physical iPhone");
+  expect(result.stderr).toContain("accepted Apple agreements");
+  expect(result.stderr).not.toContain("Play verification");
+  expect(result.stderr).not.toContain("Android");
+  const report = spawnSync(
+    process.execPath,
+    [join(fixture, "scripts/release-check.mjs"), "--platform=ios", "--json"],
+    { env: environment, encoding: "utf8", timeout: 10_000 },
+  );
+  expect(report.status).toBe(1);
+  expect(JSON.parse(report.stdout)).toMatchObject({
+    check: "store-submission",
+    platform: "ios",
+    ready: false,
+  });
+  expect(JSON.parse(report.stdout).failures).toHaveLength(iosReadiness.gates.length);
 });
 
 it("allows a production build after every submission gate has genuine evidence recorded", () => {

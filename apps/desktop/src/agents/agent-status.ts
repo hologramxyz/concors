@@ -234,10 +234,12 @@ export function workspaceAttention(
 }
 
 /**
- * What a workspace's dot is saying, such as "1 chat finished" or "2 chats need input, 1 failed".
- * Empty when there is no dot: a chat that is only working does not show one.
+ * What a workspace's badge is saying, such as "1 chat finished" or "2 chats need input, 1 failed",
+ * or, when work in progress is all there is, "2 chats working". Empty when there is no badge.
  */
 export function workspaceAttentionLabel(attention: WorkspaceAttention): string {
+  if (attention.kind === "working")
+    return `${attention.working} chat${attention.working === 1 ? "" : "s"} working`;
   const counts: [number, string, string][] = [
     [attention.needsInput, "needs input", "need input"],
     [attention.failed, "failed", "failed"],

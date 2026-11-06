@@ -63,6 +63,33 @@ const config: ExpoConfig = {
       ITSAppUsesNonExemptEncryption: false,
       NSAppTransportSecurity: { NSAllowsArbitraryLoads: false },
     },
+    privacyManifests: {
+      NSPrivacyTracking: false,
+      // Account records, retained workspace content and security/support records leave the phone.
+      // Keep these aligned with release/privacy-disclosures.md and App Store Connect's labels.
+      NSPrivacyCollectedDataTypes: [
+        "Name",
+        "EmailAddress",
+        "UserID",
+        "DeviceID",
+        "ProductInteraction",
+        "OtherUserContent",
+        "PhotosorVideos",
+        "CustomerSupport",
+        "OtherDiagnosticData",
+      ].map((type) => ({
+        NSPrivacyCollectedDataType: `NSPrivacyCollectedDataType${type}`,
+        NSPrivacyCollectedDataTypeLinked: true,
+        NSPrivacyCollectedDataTypeTracking: false,
+        // Privy's browser sign-in uses a stable browser ID and authenticated analytics events.
+        NSPrivacyCollectedDataTypePurposes: [
+          "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+          ...(["UserID", "DeviceID", "ProductInteraction", "OtherDiagnosticData"].includes(type)
+            ? ["NSPrivacyCollectedDataTypePurposeAnalytics"]
+            : []),
+        ],
+      })),
+    },
     // Add Universal Links only once the website serves and tests the association file.
   },
   android: {

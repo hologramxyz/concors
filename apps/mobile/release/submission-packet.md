@@ -72,7 +72,20 @@ The owner confirmed the launch model after the verified Apple writes. `pendingDr
 
 ### Submission credential replacement
 
-Expo currently assigns the only saved organization submission key, named **Heist EAS Submit**, to the Concors project. The owner confirmed Heist is unrelated. The Apple app identity above is correct; no Heist app was modified. A private key was accidentally exposed in diagnostic output during this review. Saved diagnostics were sanitized, but that does not invalidate the exposed key. Its owner must revoke it in App Store Connect, and a dedicated Concors key must replace the Expo assignment before further Apple uploads or metadata writes. No key was revoked or replaced during this review.
+The original audit found a credential named **Heist EAS Submit** assigned to Concors. The owner
+confirmed Heist is unrelated. A private key was accidentally exposed in diagnostic output during
+that audit; saved diagnostics were sanitized, but the key still required revocation.
+
+**Resolved on 2026-11-06:** after the owner completed private Apple authentication, a new
+**Concors EAS Submit** team key with **App Manager** permissions was generated and assigned to
+Concors in Expo. Its stored credential was read back and verified against Apple app `6817622624`
+and bundle `xyz.hologram.concors`. The exact exposed key was revoked in Apple, and its replacement
+was confirmed active. The temporary local copy of the new private key was removed after Expo
+storage and verification. No signing certificate or unrelated API key was revoked.
+
+The dedicated Expo assignment identifies which app uses this credential. Apple's team-key role
+permissions apply across the Apple account; keep private key material in Expo's credential store
+and never include it in diagnostic object serialization, source control, or chat.
 
 ## Confirmed implementation gaps
 

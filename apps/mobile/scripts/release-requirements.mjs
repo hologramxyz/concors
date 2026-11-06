@@ -16,14 +16,22 @@ export const requiredGates = [
   "native-privacy-and-permissions",
 ];
 
+export const iosRequiredGates = requiredGates.filter((id) => id !== "play-production-access");
+
 /** Workflow checks, not a substitute for store/legal review or signed-device evidence. */
-export function releaseFailures(readiness, environment, appVersion) {
+export function releaseFailures(readiness, environment, appVersion, platform = "all") {
   const failures = candidateFailures(readiness, environment, appVersion);
+  if (!["all", "ios"].includes(platform)) failures.push("Unknown release platform");
+  if (platform === "ios" && readiness?.platform !== "ios")
+    failures.push("Use iOS-specific release evidence for an iOS submission");
+  if (platform === "all" && readiness?.platform === "ios")
+    failures.push("iOS evidence cannot approve a combined mobile release");
   if (!readiness || readiness.schemaVersion !== 1 || !Array.isArray(readiness.gates))
     return failures;
+  const gates = platform === "ios" ? iosRequiredGates : requiredGates;
   const ids = readiness.gates.map((gate) => gate?.id);
   if (new Set(ids).size !== ids.length) failures.push("Release gate IDs must be unique");
-  for (const id of requiredGates) {
+  for (const id of gates) {
     const gate = readiness.gates.find((item) => item?.id === id);
     if (!gate) {
       failures.push(`Missing required release gate: ${id}`);
@@ -47,7 +55,7 @@ export function releaseFailures(readiness, environment, appVersion) {
       failures.push(`${gate.title ?? id}: verification needs a named reviewer, date and evidence`);
   }
   for (const gate of readiness.gates) {
-    if (!requiredGates.includes(gate?.id)) failures.push(`Unknown release gate: ${gate?.id}`);
+    if (!gates.includes(gate?.id)) failures.push(`Unknown release gate: ${gate?.id}`);
   }
   return failures;
 }
