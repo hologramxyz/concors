@@ -76,6 +76,7 @@
       "owner": "website + signing owner",
       "status": "verified",
       "evidence": [
+        "ios-build-11.json",
         "Build 10 signed Mach-O entitlements contain no com.apple.developer.associated-domains entry.",
         "Build 10 Info.plist retains concors and xyz.hologram.concors auth URL schemes; app.config.ts declares no associated domains."
       ],
@@ -130,12 +131,14 @@
       "id": "native-privacy-and-permissions",
       "title": "Signed iPhone collection manifest, required-reason APIs, permissions and SDK",
       "owner": "native QA + privacy owner",
-      "status": "blocked",
+      "status": "verified",
       "evidence": [
+        "ios-build-11.json",
         "privacy-disclosures.md",
-        "https://github.com/hologramxyz/concors/pull/163",
-        "Build 10 inspection found the missing collection declarations; inspect the corrected signed build 11 before verification."
-      ]
+        "Signed build 11 contains the seven collection declarations and all three SDK required-reason API entries; App Store privacy publication and physical permissions acceptance remain separate gates."
+      ],
+      "verifiedBy": "Codex signed-IPA and configuration audit",
+      "verifiedAt": "2026-11-06T01:42:00Z"
     }
   ],
   "platform": "ios"
