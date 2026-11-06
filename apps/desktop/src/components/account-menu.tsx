@@ -168,10 +168,8 @@ export function MobileAccountMenu({
         <div className="mobile-account-identity">
           <AccountAvatar user={person} githubEnabled={!!auth} className="mobile-account-avatar" />
           <div className="min-w-0">
-            <p className="truncate font-medium">{name}</p>
-            <p className="truncate text-sm text-muted-foreground">
-              {person ? person.email : "Sign in to your Concors account"}
-            </p>
+            <p className="truncate font-medium">{person ? name : "Not signed in"}</p>
+            {person && <p className="truncate text-sm text-muted-foreground">{person.email}</p>}
           </div>
         </div>
         {organizationPicker}

@@ -38,7 +38,7 @@ phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
    Enter inserts a newline; the send button submits.
    Allow the pending request, then send a message to see streaming.
 2. While the approval is pending or an agent is working, send a follow-up to queue it.
-   Attach a small file; switch to Terminal · Pane 2 with the top picker and back.
+   Attach a small file; switch to Mobile launch 2 with the top picker and back.
    Drafts, attachments and queued messages survive pane/tab navigation.
 3. Swipe right on the conversation or terminal to open Projects / Agents / Servers.
    The workspace moves right. Swipe left, press Close sidebar, or tap the workspace
@@ -71,14 +71,14 @@ Context usage and dictation sit on the right beside the primary button; the slid
 Plan and Speed. On iPhone, dictation records through the machine, as on desktop; where the webview
 offers no microphone (Android) it focuses the keyboard and explains how to use its microphone.
 There is one primary button: Stop while working with an empty draft, Queue for a follow-up,
-or Send when idle. 7. Select **Mobile launch · 2** (Terminal) for the shared xterm terminal: type, use extra keys,
+or Send when idle. 7. Select **Mobile launch 2** (Terminal) for the shared xterm terminal: type, use extra keys,
 reload the renderer or explicitly stop the process after confirmation.
 
 ### Mobile tabs and desktop sync
 
 Mobile calls each chat or terminal view a **tab**. The picker lists every pane in the
 project at one level, in desktop tab order and split-tree order, with no group headings.
-The initial demo shows **Mobile launch · 1** (Agent) and **Mobile launch · 2** (Terminal).
+The initial demo shows **Mobile launch 1** (Agent) and **Mobile launch 2** (Terminal).
 On desktop these are still two panes inside the original **Mobile launch** tab.
 
 - **New tab** creates a new desktop tab with a single pane. There is no mobile Add pane mode.
@@ -214,7 +214,7 @@ the in-memory demo cannot prove real provider switching or saved profile launch.
 1. Open Settings → Providers. Search the catalog, install a supported CLI on the
    connected machine, and sign into it using a regular terminal. Installed and
    authenticated are separate states. Create a new Agent pane and choose a provider.
-   In an agent chat, tap the composer and its model icon. Go back to providers, choose
+   In an agent chat, tap the composer and its model icon. Open Provider, choose
    an installed Claude Code, OpenCode or Pi provider, then a model. The new chat should
    open automatically; use Tabs to return to the original conversation.
    Current daemons with `agent-accounts` also offer dismissible Codex, Claude and
@@ -310,7 +310,8 @@ The iOS-specific imports do not enter Android or Safari bundles. Android/web ret
 controls and web styling. Older iOS or Reduce Transparency uses native bordered controls and an
 opaque composer. Both native glass availability checks run before mounting glass; accessibility
 changes are observed while running. Reduce Motion disables composer expansion animation.
-The model/effort/permission buttons open native action sheets. The microphone button replaces the
+The model and options buttons open native sheets of grouped rows, whose rows push pages for older
+models, providers, effort, permissions and the other settings. The microphone button replaces the
 field with a recording row, in the webview: its stream runs on the workspace's secure origin
 (`IOS_WORKSPACE_ORIGIN`), which exists because WebKit offers no microphone to a page without one.
 Recording only ever starts from that button. Attachments use the native document picker,

@@ -171,31 +171,24 @@ export function MachinesView({
         description={
           purchases
             ? "Manage this computer and your cloud development machines."
-            : "Your development machines. Add or cancel machines in the Concors desktop app."
+            : "Your development machines."
         }
+        inlineActions={!purchases}
         actions={
-          <>
-            <SidebarTooltip place="title-bar" content="Refresh">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={state.reload}
-                disabled={state.loading}
-                aria-label="Refresh"
-              >
-                <RefreshCw className={cn(state.loading && "animate-spin")} aria-hidden="true" />
-              </Button>
-            </SidebarTooltip>
-            {purchases && !empty && (
-              <NewMachineMenu
-                variant="outline"
-                size="sm"
-                disabled={state.catalog === null || !organization}
-                onNewVps={newVps}
-                onConnectServer={connectServer}
-              />
-            )}
-          </>
+          (purchases || !empty) && (
+            <>
+              <MachinesRefreshButton busy={state.loading} onRefresh={state.reload} />
+              {purchases && !empty && (
+                <NewMachineMenu
+                  variant="outline"
+                  size="sm"
+                  disabled={state.catalog === null || !organization}
+                  onNewVps={newVps}
+                  onConnectServer={connectServer}
+                />
+              )}
+            </>
+          )
         }
       />
       {(state.error ?? actionError) && (
@@ -249,26 +242,28 @@ export function MachinesView({
       )}
 
       {state.machines === null && !state.error ? (
-        <p role="status" className="text-sm text-muted-foreground">
-          Loading machines…
-        </p>
-      ) : empty ? (
-        <div className="flex min-h-80 flex-col items-center justify-center gap-4 rounded-xl border border-dashed bg-card/40 p-8 text-center">
-          <Cloud className="size-10 text-muted-foreground/50" aria-hidden="true" />
-          <h3 className="text-lg font-medium">No cloud machines yet</h3>
-          <p className="max-w-sm text-sm text-muted-foreground">
-            {purchases
-              ? "Create a machine to run agents, clone repositories, and keep your work in one place."
-              : "Add one in the Concors desktop app, with this account and organization, then refresh."}
+        purchases && (
+          <p role="status" className="text-sm text-muted-foreground">
+            Loading machines…
           </p>
-          {purchases && (
-            <NewMachineMenu
-              disabled={state.catalog === null || !organization}
-              onNewVps={newVps}
-              onConnectServer={connectServer}
-            />
-          )}
-        </div>
+        )
+      ) : empty && purchases ? (
+        <MachinesEmptyState title="No cloud machines yet">
+          <p className="max-w-sm text-sm text-muted-foreground">
+            Create a machine to run agents, clone repositories, and keep your work in one place.
+          </p>
+          <NewMachineMenu
+            disabled={state.catalog === null || !organization}
+            onNewVps={newVps}
+            onConnectServer={connectServer}
+          />
+        </MachinesEmptyState>
+      ) : empty ? (
+        <MachinesEmptyState>
+          <Button variant="outline" disabled={state.loading} onClick={state.reload}>
+            Refresh
+          </Button>
+        </MachinesEmptyState>
       ) : (
         <ul aria-label="Cloud machines" className="flex flex-col gap-5">
           {machines.map((machine) => (
@@ -395,6 +390,44 @@ const BADGE_TONE_CLASS: Record<StatusTone | "info", string> = {
   danger: "border-destructive/30 bg-destructive/10 text-destructive",
   info: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-400",
 };
+
+export function MachinesRefreshButton({
+  busy,
+  onRefresh,
+}: {
+  readonly busy: boolean;
+  readonly onRefresh: () => void;
+}) {
+  return (
+    <SidebarTooltip place="title-bar" content="Refresh">
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        onClick={onRefresh}
+        disabled={busy}
+        aria-label="Refresh"
+      >
+        <RefreshCw className={cn(busy && "animate-spin")} aria-hidden="true" />
+      </Button>
+    </SidebarTooltip>
+  );
+}
+
+export function MachinesEmptyState({
+  title = "No machines yet",
+  children,
+}: {
+  readonly title?: string;
+  readonly children: ReactNode;
+}) {
+  return (
+    <div className="flex min-h-80 flex-col items-center justify-center gap-4 rounded-xl border border-dashed bg-card/40 p-8 text-center">
+      <Cloud className="size-10 text-muted-foreground/50" aria-hidden="true" />
+      <h3 className="text-lg font-medium">{title}</h3>
+      {children}
+    </div>
+  );
+}
 
 function MachineCard({
   machine,

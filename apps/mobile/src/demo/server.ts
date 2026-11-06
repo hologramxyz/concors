@@ -1,4 +1,5 @@
 import {
+  AGENT_PIN_DELETE_CAPABILITY,
   AGENT_USAGE_CAPABILITY,
   DICTATION_CAPABILITY,
   PULL_REQUEST_ACTIONS_CAPABILITY,
@@ -7,6 +8,7 @@ import {
   SCHEDULES_CAPABILITY,
   parseClientMessage,
   applyWorkspaceOperation,
+  nextWorkspaceTabName,
   WorkspaceOperationError,
   AgentInfoSchema,
   type DaemonMessage,
@@ -30,6 +32,10 @@ import {
   demoTerminal,
   demoWorkspace,
   ids,
+  SIDEBAR_TREE_FLAG,
+  sidebarTreeDemo,
+  TERMINAL_PROFILE_FLAG,
+  demoTerminalProfiles,
 } from "./fixtures";
 
 const DEMO_DICTATION = "This is a simulated dictation.";
@@ -45,10 +51,18 @@ interface TerminalState {
   output: string;
   owner: string | null;
 }
+/** Whether the page asked for one of the demo's opt-in extras, such as `SIDEBAR_TREE_FLAG`. */
+const requested = (flag: string) =>
+  typeof location !== "undefined" && new URLSearchParams(location.search).has(flag);
 /** In-memory fixture: all actions are simulated, including files, processes, machines and billing. */
-export function createDemoServer() {
+export function createDemoServer({
+  sidebarTree = requested(SIDEBAR_TREE_FLAG),
+  terminalProfile = requested(TERMINAL_PROFILE_FLAG),
+} = {}) {
   const resources = demoResources();
-  let workspace = structuredClone(demoWorkspace);
+  const tree = sidebarTree ? sidebarTreeDemo() : null;
+  let workspace = structuredClone(tree?.workspace ?? demoWorkspace);
+  if (terminalProfile) workspace.terminalProfiles = structuredClone(demoTerminalProfiles);
   const conversations = new Map<string, Conversation>([
     [ids.agent, { agent: structuredClone(demoAgent), items: structuredClone(demoItems) }],
   ]);
@@ -64,6 +78,14 @@ export function createDemoServer() {
       },
     ],
   ]);
+  for (const chat of tree?.chats ?? []) conversations.set(chat.agent.id, chat);
+  for (const session of tree?.terminals ?? [])
+    terminals.set(session.id, {
+      session,
+      sequence: 0,
+      output: "~/concors $ pnpm dev\r\n",
+      owner: null,
+    });
   const setups = new Map<string, ProjectSetup>();
   const sockets = new Set<DemoSocket>();
   const replies = new Map<string, DaemonMessage>();
@@ -74,6 +96,20 @@ export function createDemoServer() {
     for (const socket of sockets) socket.emit(message);
   };
   const snapshot = () => broadcast({ type: "workspace.snapshot", snapshot: workspace });
+  /** Fails a working chat a moment after the app subscribes, so it shows as a new failure. */
+  const failSoon = (id: string) =>
+    setTimeout(() => {
+      const conversation = conversations.get(id);
+      if (conversation?.agent.status !== "working") return;
+      conversation.agent = {
+        ...conversation.agent,
+        status: "failed",
+        error: "The test run exited with code 1.",
+        updatedAt: new Date().toISOString(),
+        revision: conversation.agent.revision + 1,
+      };
+      broadcast({ type: "agent.state", agent: conversation.agent });
+    }, 1_000);
   const state = (conversation: Conversation) => {
     conversation.agent = {
       ...conversation.agent,
@@ -104,6 +140,37 @@ export function createDemoServer() {
     const pane = tab?.nodes.find((item) => item.id === paneId);
     if (!project || !tab || !pane || pane.kind !== "pane") throw new Error("Pane not found");
     return { project, tab, pane };
+  };
+  /** Opens the chat in a new tab of its workspace, unless a tab shows it already. */
+  const showInTab = (agent: AgentInfo) => {
+    const project = workspace.projects.find((item) => item.id === agent.projectId);
+    if (!project) throw new Error("The agent's workspace is unavailable");
+    if (
+      project.tabs.some((tab) =>
+        tab.nodes.some((node) => node.kind === "pane" && node.sessionId === agent.id),
+      )
+    )
+      return;
+    const tabId = newRequestId(),
+      paneId = newRequestId();
+    workspace = applyWorkspaceOperation(workspace, {
+      kind: "tab.create",
+      projectId: project.id,
+      expectedVersion: project.version,
+      tabId,
+      paneId,
+      name: agent.tabName ?? nextWorkspaceTabName(project.tabs),
+      profile: "chat",
+    });
+    const pane = workspace.projects
+      .find((item) => item.id === project.id)
+      ?.tabs.find((tab) => tab.id === tabId)
+      ?.nodes.find((node) => node.id === paneId);
+    if (pane?.kind === "pane") {
+      pane.sessionId = agent.id;
+      if (agent.paneName) pane.name = agent.paneName;
+    }
+    snapshot();
   };
   const requestAgent = (operation: AgentOperation): Conversation => {
     if (operation.kind === "start") {
@@ -147,6 +214,55 @@ export function createDemoServer() {
     }
     const conversation = conversations.get(operation.sessionId);
     if (!conversation) throw new Error("Agent not found");
+    if (operation.kind === "pin") {
+      // As the daemon does: pinning is not activity, so the chat keeps its place.
+      conversation.agent = {
+        ...conversation.agent,
+        pinned: operation.pinned || undefined,
+        revision: conversation.agent.revision + 1,
+      };
+      broadcast({ type: "agent.state", agent: conversation.agent });
+    }
+    if (operation.kind === "delete") {
+      clearInterval(conversation.timer);
+      conversations.delete(conversation.agent.id);
+      broadcast({
+        type: "agent.list",
+        agents: [...conversations.values()].map((entry) => entry.agent),
+      });
+      return { agent: conversation.agent, items: [] };
+    }
+    if (operation.kind === "open-session") showInTab(conversation.agent);
+    if (operation.kind === "fork-session") {
+      if (operation.expectedRevision !== conversation.agent.revision)
+        throw new Error("Agent changed. Try again.");
+      const id = newRequestId(),
+        now = new Date().toISOString();
+      const fork: Conversation = {
+        agent: {
+          ...conversation.agent,
+          id,
+          name: `${conversation.agent.name.slice(0, 70)} (fork)`,
+          tabName: undefined,
+          paneName: undefined,
+          pinned: undefined,
+          threadId: "demo-thread-" + id,
+          turnId: null,
+          status: "idle",
+          pending: [],
+          attention: null,
+          revision: 1,
+          startedAt: now,
+          updatedAt: now,
+          turnStartedAt: null,
+        },
+        items: conversation.items.map((item) => ({ ...item, id: newRequestId(), sessionId: id })),
+      };
+      conversations.set(id, fork);
+      showInTab(fork.agent);
+      state(fork);
+      return fork;
+    }
     if (operation.kind === "respond") {
       if (!conversation.agent.pending.some((pending) => pending.id === operation.pendingId))
         throw new Error("Request is no longer pending");
@@ -359,6 +475,7 @@ export function createDemoServer() {
                   "project-rename",
                   "workspace-pane-rearrangement",
                   "folder-workspaces",
+                  AGENT_PIN_DELETE_CAPABILITY,
                   AGENT_USAGE_CAPABILITY,
                   DICTATION_CAPABILITY,
                   PULL_REQUESTS_CAPABILITY,
@@ -412,6 +529,7 @@ export function createDemoServer() {
               break;
             case "workspace.subscribe":
               this.emit({ type: "workspace.snapshot", snapshot: workspace });
+              if (tree) failSoon(tree.failing);
               this.emit({
                 type: "agent.list",
                 agents: [...conversations.values()].map((entry) => entry.agent),
@@ -502,7 +620,7 @@ export function createDemoServer() {
                       startedAt: new Date().toISOString(),
                     },
                     sequence: 0,
-                    output: "Concors demo · Commands are simulated.\r\n$ ",
+                    output: "Concors demo. Commands are simulated.\r\n$ ",
                     owner: null,
                   };
                   terminals.set(id, terminal);
@@ -739,7 +857,7 @@ export function createDemoServer() {
               monthlyPrice: null,
             },
           ],
-          image: "Ubuntu · simulated",
+          image: "Ubuntu (simulated)",
           sshUser: "ubuntu",
         });
       if (path === "/api/v1/machines") {

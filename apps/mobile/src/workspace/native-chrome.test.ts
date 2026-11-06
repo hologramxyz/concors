@@ -1,5 +1,7 @@
 import { expect, it } from "vitest";
 import {
+  contextRingStroke,
+  contextRingValue,
   currentNativeSnapshot,
   nativeSurfaceLayout,
   reconcileNativeDraft,
@@ -40,9 +42,14 @@ it("clips native controls without resizing their glass or label", () => {
     interactive: false,
   } as const;
   const viewport = { width: 390, height: 844 };
+  // Cut only at the panel's edge on the right; the other sides leave room for the glass's shadow.
   expect(nativeSurfaceLayout(surface, viewport, viewport)).toEqual({
-    clip: { left: 264, top: 70, width: 16, height: 44 },
-    content: { left: 0, top: 0, width: 44, height: 44 },
+    clip: { left: 216, top: 22, width: 64, height: 140 },
+    content: { left: 48, top: 48, width: 44, height: 44 },
+  });
+  expect(nativeSurfaceLayout({ ...surface, clip: surface.frame }, viewport, viewport)).toEqual({
+    clip: { left: 216, top: 22, width: 140, height: 140 },
+    content: { left: 48, top: 48, width: 44, height: 44 },
   });
   expect(nativeSurfaceLayout(surface, viewport, { width: 780, height: 844 }).content.width).toBe(
     88,
@@ -89,4 +96,24 @@ it("bounds the native UI protocol and carries the final text with submission", (
       viewport: { width: 0, height: 844 },
     }),
   ).toBeNull();
+});
+
+it("draws only the used share of the context ring, whatever a provider reports", () => {
+  const circumference = Math.PI * 14;
+  const stroke = (percent: number) => contextRingStroke(percent, 16, 2);
+  expect(stroke(0)).toEqual({
+    lineWidth: 2,
+    dash: [circumference, circumference],
+    dashPhase: circumference,
+  });
+  expect(stroke(50).dashPhase).toBeCloseTo(circumference / 2);
+  expect(stroke(100).dashPhase).toBe(0);
+  expect(stroke(140).dashPhase).toBe(0);
+  expect(stroke(-5).dashPhase).toBe(circumference);
+});
+
+it("says what the context ring holds in desktop's words", () => {
+  expect(contextRingValue(null)).toBe("Usage pending");
+  expect(contextRingValue(6.2)).toBe("6% context used");
+  expect(contextRingValue(0)).toBe("0% context used");
 });

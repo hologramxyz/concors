@@ -42,6 +42,7 @@ test("iPhone backgrounds fill the screen while controls respect notch and home i
         menu: rect("#mobile-sidebar-toggle"),
         files: rect("#mobile-files-toggle"),
         tabs: rect(".mobile-header .mobile-picker"),
+        strip: rect(".mobile-tab-strip"),
         sidebar: rect(".mobile-sidebar"),
         search: rect('[aria-label="Search workspace"]'),
         picker: rect(".mobile-sidebar-machine button"),
@@ -68,6 +69,11 @@ test("iPhone backgrounds fill the screen while controls respect notch and home i
     expect(control.height).toBe(44);
     expect(control.y).toBe(metrics.menu.y);
   }
+  // The tab strip sits under the header's controls, 4px below them, within the side insets.
+  expect(metrics.strip.height).toBe(44);
+  expect(metrics.strip.y).toBe(metrics.menu.y + 48);
+  expect(metrics.strip.x).toBe(metrics.menu.x);
+  expect(metrics.strip.right).toBe(metrics.files.right);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await page.screenshot({ path: test.info().outputPath("iphone-safe-area-sidebar.png") });
   await ui.getByRole("button", { name: /^Account:/ }).click();
@@ -82,14 +88,19 @@ test("native header surfaces follow both panels throughout real touch drags", as
       (await snapshot(page))?.surfaces.some((item) => item.content.kind === "composer"),
     )
     .toBe(true);
+  // On plain text, away from any button: a touch on a code block keeps that block's own sideways
+  // scroll, and a touch beside a 44pt copy button is taken as a tap on it.
+  const text = await ui.getByText("Use the selector above to switch panes.").boundingBox();
+  if (!text) throw new Error("Expected plain chat text to swipe from");
+  const y = text.y + text.height / 2;
   const touch = await page.context().newCDPSession(page);
   let touching = false;
   const move = (x: number) =>
-    touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: 300 }] });
+    touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y }] });
   const start = async (x: number) => {
     await touch.send("Input.dispatchTouchEvent", {
       type: "touchStart",
-      touchPoints: [{ x, y: 300 }],
+      touchPoints: [{ x, y }],
     });
     touching = true;
   };
@@ -127,8 +138,9 @@ test("native header surfaces follow both panels throughout real touch drags", as
     await end();
     await expect.poll(async () => await button("Search workspace")).toBeUndefined();
     await expect.poll(async () => (await button("Open sidebar"))?.interactive).toBe(true);
-    // Incoming Files controls are visible before the drag commits (panel is still inert).
-    await start(350);
+    // Incoming Files controls are visible before the drag commits (panel is still inert). Left of
+    // the messages button, which sits at this height under the tab strip and keeps its own touches.
+    await start(315);
     await move(180);
     await expect.poll(async () => !!(await button("Back to chat"))).toBe(true);
     expect((await button("Back to chat"))?.interactive).toBe(false);
@@ -149,3 +161,29 @@ test("native header surfaces follow both panels throughout real touch drags", as
     await touch.detach();
   }
 });
+
+for (const native of [false, true]) {
+  test(`${native ? "native iPhone gets the header fade under its own glass" : "web and Android get a header fade and a glass messages button"}`, async ({
+    page,
+  }) => {
+    const ui = await enter(page, native);
+    const header = ui.locator(".mobile-header");
+    const fade = () => header.evaluate((el) => getComputedStyle(el, "::before").content);
+    const trigger = ui.getByRole("button", { name: "Browse your messages", exact: true });
+    await expect(trigger).toBeVisible();
+    await expect(trigger).toHaveCSS("backdrop-filter", native ? "none" : /blur\(24px\)/);
+    expect(await fade()).toBe('""');
+    // From the top of the status bar to just past the tab strip under the header's controls.
+    expect(await header.evaluate((el) => getComputedStyle(el, "::before").height)).toBe("183px");
+    if (native) return;
+    // Pages keep their content below the header, so nothing scrolls under for a fade to soften.
+    await ui.locator("#mobile-sidebar-toggle").click();
+    await ui
+      .getByRole("dialog", { name: "Workspace sidebar" })
+      .getByRole("button", { name: "Schedules" })
+      .first()
+      .click();
+    await expect(ui.getByText("Morning review")).toBeVisible();
+    expect(await fade()).toBe("none");
+  });
+}

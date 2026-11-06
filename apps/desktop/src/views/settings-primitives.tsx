@@ -1,9 +1,23 @@
-import type { ReactNode } from "react";
+import { useContext, type ReactNode } from "react";
 import { cn } from "cn";
 
+import { CompactLayoutContext } from "@/components/compact-layout";
 import { Separator } from "@/components/ui/separator";
 
 /** Layout blocks of the settings page, shared with the org-scoped sections in `src/settings/`. */
+
+/** On the phone the section picker already names these pages, so their heading is for screen readers. */
+const COMPACT_HIDDEN_TITLES = new Set([
+  "About",
+  "Agent notifications",
+  "Agent providers",
+  "Billing",
+  "Machines",
+  "MCP servers",
+  "Plugins",
+  "SSH keys",
+  "Subscriptions",
+]);
 
 export function Section({
   title,
@@ -32,21 +46,40 @@ export function SettingsSectionHeader({
   title,
   description,
   actions,
+  inlineActions = false,
 }: {
   readonly title: string;
   readonly description?: string | undefined;
   readonly actions?: ReactNode | undefined;
+  /** Keeps the actions beside the description on the phone too, instead of on a row below it. */
+  readonly inlineActions?: boolean;
 }) {
+  const compact = useContext(CompactLayoutContext);
+  const titleHidden = compact && COMPACT_HIDDEN_TITLES.has(title);
   return (
     <>
-      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start">
+      <div
+        className={cn(
+          "grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start",
+          inlineActions && "grid-cols-[minmax(0,1fr)_auto] items-center",
+        )}
+      >
         <div className="min-w-0">
-          <h2 className="text-[15px] font-semibold">{title}</h2>
-          {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
+          <h2 className={titleHidden ? "sr-only" : "text-[15px] font-semibold"}>{title}</h2>
+          {description && (
+            <p
+              className={cn(
+                "text-sm text-muted-foreground",
+                !(titleHidden && inlineActions) && "mt-1",
+              )}
+            >
+              {description}
+            </p>
+          )}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
-      <Separator className="my-4" />
+      {(!titleHidden || description || actions) && <Separator className="my-4" />}
     </>
   );
 }

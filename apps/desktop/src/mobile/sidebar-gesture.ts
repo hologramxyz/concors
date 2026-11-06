@@ -66,9 +66,10 @@ export function useSidebarGesture(
         // gesture at the left edge, including the line-number gutter.
         const edgeX = closingFiles ? event.clientX - closingFiles.getBoundingClientRect().left : -1;
         const editorEdge = edgeX >= 0 && edgeX <= 28;
+        // Sideways strips (file tabs, the header's tab strip) scroll under the finger instead.
         if (
           (!open || protectInputs) &&
-          (target.closest('[role="dialog"], [role="menu"], .mobile-file-tabs') ||
+          (target.closest('[role="dialog"], [role="menu"], .mobile-file-tabs, .mobile-tab-strip') ||
             (!editorEdge && target.closest(".cm-editor, pre, [contenteditable]")) ||
             (!closingFiles && !fileHeader && target.closest("button, a")) ||
             (!terminal && target.closest("input, textarea, select")))

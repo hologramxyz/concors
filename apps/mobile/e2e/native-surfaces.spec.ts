@@ -4,6 +4,7 @@ import type {
   MobileRendererMessage,
   NativeSurfaceEvent,
 } from "@concors/client-core";
+import { SIDEBAR_TREE_FLAG, treeIds } from "../src/demo/fixtures";
 
 type Snapshot = Extract<MobileRendererMessage, { type: "native-surfaces" }>;
 type TestWindow = Window & {
@@ -42,7 +43,7 @@ async function composer(page: Page) {
   )?.content;
   return content?.kind === "composer" ? content : null;
 }
-async function openNativeDemo(page: Page) {
+async function openNativeDemo(page: Page, query = "") {
   await page.addInitScript(() => {
     window.addEventListener("message", (event) => {
       const message = event.data?.concorsMobile;
@@ -55,35 +56,120 @@ async function openNativeDemo(page: Page) {
       }
     });
   });
-  await page.goto("/");
+  await page.goto(`/${query}`);
   await page.getByRole("button", { name: "Explore demo" }).click();
   await expect.poll(async () => !!(await composer(page))).toBe(true);
   return page.frameLocator('iframe[title="Concors workspace"]');
 }
+test("the native workspace switcher lists open workspaces and answers with the chosen one", async ({
+  page,
+}) => {
+  const ui = await openNativeDemo(page, `?${SIDEBAR_TREE_FLAG}`);
+  const menu = async () => {
+    const surface = (await snapshot(page))?.surfaces.find(
+      (item) => item.content.kind === "button" && item.content.label === "Workspace",
+    );
+    return surface?.content.kind === "button" ? surface.content : null;
+  };
+  // The pill names the workspace and carries the sheet iPhone draws in place of the web one.
+  await expect.poll(async () => (await menu())?.title).toBe("Concors");
+  const options = (await menu())?.menu?.options ?? [];
+  expect((await menu())?.menu?.title).toBe("Workspaces");
+  expect(
+    options.map(({ label, description, selected }) => ({ label, description, selected })),
+  ).toEqual([
+    { label: "Concors", description: "alex", selected: true },
+    { label: "Concors", description: "forks", selected: false },
+    { label: "Open workspace…", description: undefined, selected: false },
+  ]);
+  // The sidebar's fallback mark (no favicon in SwiftUI) and its dots: a question here, a
+  // finished chat in the fork.
+  expect(options[0]).toMatchObject({ mark: "folder", dot: "attention" });
+  expect(options[1]).toMatchObject({ mark: "folder", dot: "done" });
+  expect(options[2]).toMatchObject({ section: true });
+  // Choosing a row switches workspace; the web sheet never opens.
+  await event(page, "button", "Workspace", {
+    kind: "press",
+    control: "workspace",
+    value: treeIds.fork,
+  });
+  await expect(ui.locator('.mobile-tab-strip [data-pane-choice][aria-pressed="true"]')).toHaveText(
+    "Try the new parser",
+  );
+  await expect(ui.getByRole("dialog", { name: "Workspaces" })).toHaveCount(0);
+  await expect.poll(async () => (await menu())?.menu?.options?.[1]?.selected).toBe(true);
+  // The last row opens the sidebar's "+" sheet.
+  await event(page, "button", "Workspace", {
+    kind: "press",
+    control: "workspace",
+    value: "open-workspace",
+  });
+  await expect(ui.getByRole("dialog", { name: "Open workspace", exact: true })).toBeVisible();
+});
 test("native model pages distinguish provider navigation from a committed model choice", async ({
   page,
 }) => {
   await openNativeDemo(page);
-  const model = async () =>
-    (await composer(page))?.controls.find((control) => control.id === "model");
-  await expect
-    .poll(
-      async () =>
-        (await model())?.options?.find((option) => option.id === "__providers__")?.navigate,
-    )
-    .toBe(true);
-  await event(page, "composer", "", { kind: "press", control: "model", value: "__providers__" });
-  await expect.poll(async () => (await model())?.label).toBe("Choose an agent provider");
-  await expect
-    .poll(async () => (await model())?.options?.find((option) => option.id === "codex")?.navigate)
-    .toBe(true);
-  await event(page, "composer", "", { kind: "press", control: "model", value: "codex" });
-  await expect.poll(async () => (await model())?.label).toBe("Codex: Agent and model");
+  const control = async (id: string) =>
+    (await composer(page))?.controls.find((item) => item.id === id);
   await expect
     .poll(async () =>
-      (await model())?.options?.some((option) => option.id === "demo-codex" && !option.navigate),
+      (await control("model"))?.options?.find((option) => option.id === "model:providers"),
+    )
+    .toMatchObject({ label: "Provider", value: "Codex", navigate: true, section: true });
+  await expect.poll(async () => (await control("model:providers"))?.title).toBe("Providers");
+  await event(page, "composer", "", { kind: "press", control: "model:providers", value: "codex" });
+  await expect.poll(async () => (await control("model"))?.title).toBe("Codex");
+  await expect
+    .poll(async () =>
+      (await control("model"))?.options?.some(
+        (option) => option.id === "demo-codex" && !option.navigate,
+      ),
     )
     .toBe(true);
+});
+test("native menus word their titles and rows as desktop does", async ({ page }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await openNativeDemo(page);
+  const control = async (id: string) =>
+    (await composer(page))?.controls.find((item) => item.id === id);
+  const rows = async (id: string) =>
+    (await control(id))?.options?.map((option) =>
+      option.selected ? `✓ ${option.label}` : option.label,
+    );
+  const options = async () =>
+    (await control("options"))?.options?.map((option) =>
+      option.toggle
+        ? `${option.label}: ${option.selected ? "on" : "off"}`
+        : `${option.label}: ${option.value}`,
+    );
+  await expect.poll(() => rows("effort")).toEqual(["Default (medium)", "Low", "✓ Medium", "High"]);
+  expect((await control("effort"))?.title).toBe("Thinking effort");
+  expect((await control("mode"))?.title).toBe("Permission mode");
+  expect(await rows("mode")).toEqual(["✓ Default permissions", "Auto-review", "Full access"]);
+  expect((await control("speed"))?.title).toBe("Speed");
+  expect(await rows("speed")).toEqual(["✓ Default speed", "Fast"]);
+  // The toolbar button keeps its desktop name; only its menu is titled by the page.
+  expect((await control("model"))?.label).toBe("Agent and model");
+  expect((await control("options"))?.title).toBe("Options");
+  const initial = [
+    "Thinking effort: Medium",
+    "Permission mode: Default permissions",
+    "Speed: Default",
+    "Plan mode: off",
+  ];
+  await expect.poll(options).toEqual(initial);
+
+  await event(page, "composer", "", { kind: "press", control: "options", value: "plan" });
+  await expect.poll(options).toEqual([...initial.slice(0, 3), "Plan mode: on"]);
+  await event(page, "composer", "", { kind: "press", control: "options", value: "plan" });
+  await expect.poll(options).toEqual(initial);
+  await event(page, "composer", "", { kind: "press", control: "speed", value: "speed:fast" });
+  await expect.poll(options).toEqual([initial[0], initial[1], "Speed: Fast", initial[3]]);
+  await event(page, "composer", "", { kind: "press", control: "speed", value: "speed:" });
+  await expect.poll(options).toEqual(initial);
+  expect(errors).toEqual([]);
 });
 /** A microphone that hears silence, standing in for the one WebKit offers on iOS. */
 async function fakeMicrophone(page: Page) {
@@ -302,8 +388,8 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
       (await snapshot(page))?.surfaces.some((item) => item.content.kind === "composer"),
     )
     .toBe(true);
-  await event(page, "button", "Tabs", { kind: "press", control: "activate" });
-  await expect(ui.getByRole("dialog", { name: "Tabs", exact: true })).toBeVisible();
+  await event(page, "button", "Workspace", { kind: "press", control: "activate" });
+  await expect(ui.getByRole("dialog", { name: "Workspaces", exact: true })).toBeVisible();
   await expect.poll(async () => (await snapshot(page))?.surfaces).toEqual([]);
   // A delayed event from the covered native header cannot act through the drawer.
   const frame = page.frames().find((item) => item !== page.mainFrame());
@@ -320,7 +406,7 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
   } satisfies MobileHostMessage);
   await expect(ui.locator(".mobile-files")).toHaveAttribute("data-open", "false");
   await ui
-    .getByRole("dialog", { name: "Tabs", exact: true })
+    .getByRole("dialog", { name: "Workspaces", exact: true })
     .getByRole("button", { name: "Close", exact: true })
     .click();
   await expect

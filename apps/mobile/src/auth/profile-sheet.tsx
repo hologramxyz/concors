@@ -161,10 +161,6 @@ function ProfileForm({
         </>
       ) : (
         <>
-          <Copy muted>
-            Use the same account as the desktop app. Your workspace stays connected while you sign
-            in.
-          </Copy>
           <Field
             label="Email"
             value={email}
@@ -190,10 +186,6 @@ function ProfileForm({
           </Button>
         </>
       )}
-      <Copy muted size={13}>
-        This private preview keeps your profile session only until you close or reload it. Signing
-        out of your profile does not stop desktop sessions.
-      </Copy>
       <Button secondary disabled={busy} onPress={onClose}>
         Back to workspace
       </Button>

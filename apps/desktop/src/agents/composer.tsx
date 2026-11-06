@@ -1,4 +1,3 @@
-import { modelOptions } from "@concors/client-core";
 import { AgentDraftScopeContext, useAgentDraft, type InputDraft as Draft } from "./draft";
 import { NO_RECALL, recallStep, type PromptRecall } from "./prompt-history";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -23,6 +22,7 @@ import {
 } from "lucide-react";
 import {
   agentProviderName,
+  providerPresets,
   AgentAttachmentSchema,
   MAX_AGENT_IMAGE_BYTES,
   MAX_MESSAGE_ATTACHMENTS,
@@ -42,12 +42,17 @@ import { ContextMeter } from "./context-meter";
 import { usageView } from "./context-window";
 import { usePlanUsage } from "./use-plan-usage";
 import { AgentModelPicker } from "./model-picker";
+import { useModelMenuActions } from "./model-menu-actions";
+import { modelMenuFooter, nativeComposerControls } from "./native-composer-controls";
+import { accountName } from "./account-name";
+import { useProviderUpdate } from "./provider-update-state";
+import { openExternal } from "@/tauri/open-external";
 import { ControlTooltip } from "./control-tooltip";
 import { useClippedControls } from "./use-clipped-controls";
 import { useComposerWheel } from "./composer-wheel";
 import { FastModeToggle } from "./fast-mode-toggle";
-import { isNewChatStarting, useAgents } from "./context";
-import { switchDescription } from "./provider-switch";
+import { codexPermissionModes, effortName, hasComposerOptions } from "./composer-options";
+import { isNewChatStarting } from "./context";
 import { findAgentModel } from "@concors/protocol";
 import { useAgentModelSelection } from "./use-model-selection";
 import { useDictation } from "./dictation";
@@ -91,12 +96,6 @@ import {
 const UPDATE_FOR_MORE = "This machine needs a Concors update to attach more or larger files.";
 const UPLOAD_LIMIT = `${MAX_UPLOAD_BYTES / 1024 / 1024} MB`;
 const defaults: AgentSettings = { model: null, effort: null, mode: "default" };
-const nativeProviderIcons: Record<string, "model" | "claude" | "opencode" | "pi"> = {
-  codex: "model",
-  claude: "claude",
-  opencode: "opencode",
-  pi: "pi",
-} as const;
 export function AgentComposer({
   agent,
   connected,
@@ -128,7 +127,7 @@ export function AgentComposer({
   const native = compact && !!nativeHost;
   const { owner, expanded: webExpanded, expand } = useComposerExpansion(compact && !native);
   const [nativeExpanded, setNativeExpanded] = useState(false);
-  const [nativeHeight, setNativeHeight] = useState(56);
+  const [nativeHeight, setNativeHeight] = useState(66);
   const [editAck, setEditAck] = useState(0);
   const [recall, setRecall] = useState<PromptRecall>(NO_RECALL);
   const nativeEditSequence = useRef(0);
@@ -650,7 +649,6 @@ export function AgentComposer({
       window.removeEventListener("concors-foreground", check);
     };
   }, [compact, native, expanded]);
-  const agents = useAgents();
   const nativeModels = useAgentModelSelection(
     agent,
     (model) =>
@@ -669,6 +667,19 @@ export function AgentComposer({
   const nativeProvider = nativeModels.providers.find(
     (provider) => provider.id === nativeProviderPage,
   );
+  const nativeProviderLabel = nativeProvider
+    ? (nativeProvider.label ?? agentProviderName(nativeProvider.id))
+    : "";
+  const nativeMenu = useModelMenuActions(agent, nativeModels.providers, nativeModels.choose);
+  const nativeUpdate = useProviderUpdate(
+    nativeProvider?.id ?? agent.provider,
+    nativeProviderLabel,
+    nativeProvider?.version,
+  );
+  const nativeGuide = nativeProvider
+    ? providerPresets.find((preset) => preset.id === nativeMenu.engineOf(nativeProvider.id))
+        ?.installLink
+    : undefined;
   const effortModel = findAgentModel(nativeModels.currentModels, nativeModels.selection.value);
   const controlsDisabled = !advanced || !connected || busy || configuring;
   // Same conditions as the attach button; while they fail, the window refuses the drop.
@@ -684,6 +695,12 @@ export function AgentComposer({
   // dragenter and dragleave fire for every child the pointer crosses, so count them.
   const dragDepth = useRef(0);
   const [dropping, setDropping] = useState(false);
+  // One value for the textarea, collapsed or expanded, and the native composer.
+  const prompt = looksActive
+    ? followUps === "steer" && canSteer("steer", 0)
+      ? "Steer the current turn…"
+      : "Add a follow-up to the queue…"
+    : (placeholder ?? "Reply…");
   useNativeSurface(
     nativeField,
     {
@@ -692,11 +709,7 @@ export function AgentComposer({
       editAck,
       expanded,
       editable: connected && !busy && !uncertain && !deferred && !!agent.threadId,
-      placeholder: looksActive
-        ? followUps === "steer" && canSteer("steer", 0)
-          ? "Steer the current turn…"
-          : "Add a follow-up to the queue…"
-        : "Message your agent",
+      placeholder: prompt,
       active: looksActive,
       canSend:
         connected &&
@@ -711,161 +724,26 @@ export function AgentComposer({
       hasAttachments: !!attachments.length,
       attachEnabled: !!advanced && connected && !busy && !attaching && !uncertain,
       uploads,
-      controls: [
-        {
-          id: "model",
-          label: nativeProvider
-            ? `${nativeProvider.label ?? agentProviderName(nativeProvider.id)}: Agent and model`
-            : "Choose an agent provider",
-          icon:
-            nativeProviderIcons[
-              nativeProvider?.id === agent.provider
-                ? (agent.engine ?? agent.provider)
-                : (nativeProvider?.id ?? agent.provider)
-            ] ?? ("options" as const),
-          disabled: controlsDisabled || agent.status === "starting" || nativeModels.switching,
-          options: nativeProvider
-            ? [
-                {
-                  id: "__providers__",
-                  label: "← Back to providers",
-                  selected: false,
-                  navigate: true,
-                },
-                // Choosing it opens a chat that offers to install the CLI.
-                ...(nativeProvider.installed === false
-                  ? [
-                      {
-                        id: "",
-                        label: `Install ${nativeProvider.label ?? agentProviderName(nativeProvider.id)}`,
-                        selected: false,
-                      },
-                    ]
-                  : []),
-                ...(!nativeProvider.error || nativeProvider.models.length
-                  ? [
-                      ...(nativeProvider.id === agent.provider
-                        ? nativeModels.selection.options
-                        : modelOptions(nativeProvider.models)
-                      ).map((model) => ({
-                        id: model.id,
-                        label: model.label,
-                        selected:
-                          nativeProvider.id === agent.provider &&
-                          nativeModels.selection.value === model.id,
-                      })),
-                    ]
-                  : []),
-              ]
-            : nativeModels.providers
-                .filter((provider) => !provider.error || provider.models.length)
-                .map((provider) => ({
-                  id: provider.id,
-                  label:
-                    (provider.label ?? agentProviderName(provider.id)) +
-                    (provider.installed === false
-                      ? ": Not installed"
-                      : `: ${switchDescription(agents, agent, provider.id)}`),
-                  selected: provider.id === agent.provider,
-                  navigate: true,
-                })),
-        },
-        {
-          id: "effort",
-          label: `Thinking effort: ${settings.effort ?? "Default"}`,
-          icon: "brain" as const,
-          disabled: controlsDisabled,
-          options: [
-            {
-              id: "",
-              label: `Default (${effortModel?.defaultEffort ?? "automatic"})`,
-              selected: !settings.effort,
-            },
-            ...(effortModel?.efforts ?? []).map((effort) => ({
-              id: effort,
-              label: effort,
-              selected: settings.effort === effort,
-            })),
-          ],
-        },
-        {
-          id: "mode",
-          label: `Mode: ${(agent.engine ?? agent.provider) === "codex" ? settings.mode : (settings.nativeMode ?? agent.controls?.currentMode ?? "default")}`,
-          icon: "shield" as const,
-          disabled: controlsDisabled,
-          options:
-            (agent.engine ?? agent.provider) !== "codex"
-              ? (agent.controls?.modes ?? []).map((mode) => ({
-                  id: mode.id,
-                  label: mode.label,
-                  selected: (settings.nativeMode ?? agent.controls?.currentMode) === mode.id,
-                }))
-              : [
-                  {
-                    id: "default",
-                    label: "Default permissions: asks for approval",
-                    selected: settings.mode === "default",
-                  },
-                  {
-                    id: "auto-review",
-                    label: "Auto-review: same sandbox",
-                    selected: settings.mode === "auto-review",
-                  },
-                  {
-                    id: "full-access",
-                    label: "Full access: no approval prompts",
-                    selected: settings.mode === "full-access",
-                  },
-                ],
-        },
-        {
-          id: "options",
-          label: "Conversation options",
-          icon: "options" as const,
-          disabled: controlsDisabled,
-          options: [
-            ...(agent.supportsPlan
-              ? [
-                  {
-                    id: "plan",
-                    label: "Plan mode: read-only exploration",
-                    selected: !!settings.planMode,
-                  },
-                ]
-              : []),
-            ...((agent.engine ?? agent.provider) === "codex"
-              ? [{ id: "speed:", label: "Default speed", selected: !settings.serviceTier }]
-              : []),
-            ...(agent.controls?.features ?? []).flatMap((f) =>
-              f.options
-                ? f.options.map((o) => ({
-                    id: `feature:${JSON.stringify([f.id, o.id])}`,
-                    label: `${f.label}: ${o.label}`,
-                    selected: (settings.features?.[f.id] ?? f.value) === o.id,
-                  }))
-                : [
-                    {
-                      id: `feature:${JSON.stringify([f.id, !(settings.features?.[f.id] ?? f.value)])}`,
-                      label: `${f.label}: ${(settings.features?.[f.id] ?? f.value) ? "on" : "off"}`,
-                      selected: !!(settings.features?.[f.id] ?? f.value),
-                    },
-                  ],
-            ),
-            ...(effortModel?.serviceTiers ?? []).map((tier) => ({
-              id: `speed:${tier.id}`,
-              label: tier.label,
-              selected: settings.serviceTier === tier.id,
-            })),
-          ],
-        },
-      ].filter(
-        (control) =>
-          (agent.engine ?? agent.provider) === "codex" ||
-          control.id === "model" ||
-          (control.id === "effort" && !!effortModel?.efforts.length) ||
-          (control.id === "mode" && !!agent.controls?.modes.length) ||
-          (control.id === "options" && !!agent.controls?.features.length),
-      ),
+      controls: nativeComposerControls({
+        agent,
+        settings,
+        effortModel,
+        disabled: controlsDisabled,
+        modelDisabled: controlsDisabled || agent.status === "starting" || nativeModels.switching,
+        providers: nativeModels.providers,
+        page: nativeProvider,
+        selection: nativeModels.selection,
+        footer: nativeProvider
+          ? modelMenuFooter({
+              provider: nativeProvider,
+              version: nativeUpdate.version,
+              error: nativeUpdate.error,
+              guide: nativeGuide,
+              account: nativeMenu.accounts[nativeProvider.id],
+              accountName: accountName(nativeMenu.engineOf(nativeProvider.id), nativeProviderLabel),
+            })
+          : [],
+      }),
       dictationHelp,
       usage: usageView(agent, planUsage),
     },
@@ -914,22 +792,39 @@ export function AgentComposer({
         } else if (event.control === "context" || event.control === "context-refresh") {
           // Like the desktop popover: plan usage is read while the sheet is open, not before.
           planUsage.refresh(agent.id, event.control === "context-refresh");
+        } else if (event.control === "model-open") {
+          // Like the desktop menu: it opens on the current provider, and asks then if it's signed in.
+          setNativeProviderPage(agent.provider);
+          void nativeModels.load();
+          nativeMenu.readAccount(agent.provider);
         } else if (!controlsDisabled) {
           const value = event.value ?? "";
-          if (event.control === "model") {
-            if (value === "__providers__") {
-              setNativeProviderPage(undefined);
-              void nativeModels.load();
-            } else if (!nativeProvider) {
-              const provider = nativeModels.providers.find(
-                (entry) => entry.id === value && !entry.error,
-              );
-              if (provider) {
-                setNativeProviderPage(provider.id);
-                void nativeModels.load(provider.id);
-              }
-            } else if (!value || nativeProvider.models.some((model) => model.id === value)) {
-              void nativeModels.choose(value, nativeProvider.id);
+          if (event.control === "model:providers") {
+            // Back on the sheet's first page, this shows the provider's models; only choosing one
+            // of them switches.
+            const provider = nativeModels.providers.find(
+              (entry) => entry.id === value && !entry.error,
+            );
+            if (provider) {
+              setNativeProviderPage(provider.id);
+              void nativeModels.load(provider.id);
+              nativeMenu.readAccount(provider.id);
+            }
+          } else if (event.control === "model" || event.control === "model:older") {
+            if (value === "__update__" && nativeProvider) {
+              if (nativeUpdate.version?.updateCommand) void nativeUpdate.update();
+              else if (nativeGuide) void openExternal(nativeGuide).catch(() => undefined);
+            } else if (value === "__connect__" && nativeProvider) {
+              nativeMenu.connect({
+                id: nativeProvider.id,
+                label: nativeProviderLabel,
+                engine: nativeMenu.engineOf(nativeProvider.id),
+              });
+            } else if (
+              nativeProvider &&
+              (!value || nativeProvider.models.some((model) => model.id === value))
+            ) {
+              nativeMenu.choose(value, nativeProvider.id);
             }
           } else if (
             event.control === "effort" &&
@@ -944,7 +839,11 @@ export function AgentComposer({
             void configure({ ...settings, mode: value as AgentSettings["mode"] });
           else if (event.control === "mode" && agent.controls?.modes.some((m) => m.id === value))
             void configure({ ...settings, nativeMode: value });
-          else if (event.control === "options") {
+          else if (
+            event.control === "options" ||
+            event.control === "speed" ||
+            event.control.startsWith("feature:")
+          ) {
             if (value.startsWith("feature:")) {
               const [id, next] = JSON.parse(value.slice(8)) as [string, boolean | string];
               if (agent.controls?.features.some((f) => f.id === id))
@@ -985,6 +884,7 @@ export function AgentComposer({
       {(agent.engine ?? agent.provider) === "codex" && !!effortModel?.serviceTiers?.length && (
         <ControlPicker
           label="Speed"
+          showValue={!!compact}
           value={settings.serviceTier ?? ""}
           icon={<Zap className={`size-4 ${settings.serviceTier ? "text-amber-500" : ""}`} />}
           disabled={!connected || busy || configuring}
@@ -998,6 +898,123 @@ export function AgentComposer({
           onSelect={(serviceTier) =>
             void configure({ ...settings, serviceTier: serviceTier || null })
           }
+        />
+      )}
+    </>
+  );
+  const settingControls = (
+    <>
+      {!!effortModel?.efforts.length && (
+        <ControlPicker
+          label="Thinking effort"
+          showValue
+          value={settings.effort ?? ""}
+          icon={<Brain className="size-4" />}
+          disabled={!advanced || !connected || busy || configuring}
+          options={[
+            {
+              id: "",
+              label: `Default (${effortModel?.defaultEffort ?? "automatic"})`,
+              icon: <Brain className="size-4" />,
+            },
+            ...(effortModel?.efforts ?? []).map((effort) => ({
+              id: effort,
+              label: effortName(effort),
+              icon: <Brain className="size-4" />,
+            })),
+          ]}
+          onSelect={(effort) => void configure({ ...settings, effort: effort || null })}
+        />
+      )}
+      {!!agent.controls?.modes.length && (agent.engine ?? agent.provider) !== "codex" && (
+        <ControlPicker
+          label="Agent mode"
+          showValue
+          value={settings.nativeMode ?? agent.controls.currentMode ?? ""}
+          icon={
+            (settings.nativeMode ?? agent.controls.currentMode) === "bypassPermissions" ? (
+              <ShieldOff className="size-4 text-amber-500" />
+            ) : (
+              <Shield className="size-4" />
+            )
+          }
+          disabled={controlsDisabled}
+          options={agent.controls.modes}
+          onSelect={(nativeMode) => void configure({ ...settings, nativeMode })}
+        />
+      )}
+      {(agent.controls?.features ?? []).map((feature) =>
+        feature.id === "fast_mode" ? (
+          <FastModeToggle
+            key={feature.id}
+            on={(settings.features?.[feature.id] ?? feature.value) === true}
+            showLabel={!compact}
+            disabled={controlsDisabled}
+            onToggle={() =>
+              void configure({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  [feature.id]: (settings.features?.[feature.id] ?? feature.value) !== true,
+                },
+              })
+            }
+          />
+        ) : (
+          <ControlPicker
+            key={feature.id}
+            label={feature.label}
+            showValue
+            value={String(settings.features?.[feature.id] ?? feature.value)}
+            icon={<SlidersHorizontal className="size-4" />}
+            searchable={!!feature.options}
+            disabled={controlsDisabled}
+            options={
+              feature.options ?? [
+                { id: "true", label: "On" },
+                { id: "false", label: "Off" },
+              ]
+            }
+            onSelect={(value) =>
+              void configure({
+                ...settings,
+                features: {
+                  ...settings.features,
+                  [feature.id]: feature.options ? value : value === "true",
+                },
+              })
+            }
+          />
+        ),
+      )}
+      {(agent.engine ?? agent.provider) === "codex" && (
+        <ControlPicker
+          label="Permission mode"
+          shortcut="Shift+Tab"
+          showValue
+          value={settings.mode}
+          icon={
+            settings.mode === "auto-review" ? (
+              <ShieldCheck className="size-4" />
+            ) : settings.mode === "full-access" ? (
+              <ShieldOff className="size-4 text-amber-500" />
+            ) : (
+              <Shield className="size-4" />
+            )
+          }
+          disabled={!advanced || !connected || busy || configuring}
+          options={codexPermissionModes.map((mode) => ({
+            ...mode,
+            icon:
+              mode.id === "auto-review" ? (
+                <ShieldCheck className="size-4" />
+              ) : mode.id === "full-access" ? (
+                <ShieldOff className="size-4 text-amber-500" />
+              ) : (
+                <Shield className="size-4" />
+              ),
+          }))}
+          onSelect={(mode) => void configure({ ...settings, mode: mode as AgentSettings["mode"] })}
         />
       )}
     </>
@@ -1039,6 +1056,51 @@ export function AgentComposer({
       </ControlTooltip>
     </>
   );
+  const durableRows = agent.queue?.map((entry, i, all) => (
+    <div
+      key={entry.id}
+      className="mobile-queue-row flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-xs"
+    >
+      <span className="text-muted-foreground">Queued</span>
+      <span className="min-w-0 flex-1 truncate">
+        {entry.text || entry.attachments.map((a) => a.name).join(", ")}
+      </span>
+      {compact && <QueuePosition index={i} count={all.length} />}
+      {queueSteer && canSteer(entry.text, entry.attachments.length) && (
+        <SidebarTooltip
+          place="above"
+          content="Send it into the current turn now instead of after it"
+        >
+          <button
+            type="button"
+            className="mobile-tap-target text-primary"
+            disabled={!connected}
+            onClick={() =>
+              void queueAction({
+                kind: "queue-steer",
+                sessionId: agent.id,
+                id: entry.id,
+                turnId: agent.turnId ?? "",
+              })
+            }
+          >
+            Steer
+          </button>
+        </SidebarTooltip>
+      )}
+      <button
+        type="button"
+        aria-label="Remove queued message"
+        className="mobile-tap-target flex items-center justify-center"
+        disabled={!connected}
+        onClick={() =>
+          void queueAction({ kind: "queue-remove", sessionId: agent.id, id: entry.id })
+        }
+      >
+        <X className="size-3" />
+      </button>
+    </div>
+  ));
   return (
     <ComposerSurfaceContext value={owner}>
       <div className="space-y-2">
@@ -1050,7 +1112,10 @@ export function AgentComposer({
           </p>
         )}
         {durableQueue && !!agent.queue?.length && (
-          <div data-composer-queue className="max-h-28 space-y-2 overflow-y-auto">
+          <div
+            data-composer-queue
+            className={compact ? "space-y-2" : "max-h-28 space-y-2 overflow-y-auto"}
+          >
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>{agent.queuePaused ? "Queue paused" : "Follow-ups run on this machine"}</span>
               <button
@@ -1067,69 +1132,26 @@ export function AgentComposer({
                 {agent.queuePaused ? "Resume queue" : "Pause queue"}
               </button>
             </div>
-            {agent.queue.map((entry) => (
-              <div
-                key={entry.id}
-                className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-xs"
-              >
-                <span className="text-muted-foreground">Queued</span>
-                <span className="min-w-0 flex-1 truncate">
-                  {entry.text || entry.attachments.map((a) => a.name).join(", ")}
-                </span>
-                {queueSteer && canSteer(entry.text, entry.attachments.length) && (
-                  <SidebarTooltip
-                    place="above"
-                    content="Send it into the current turn now instead of after it"
-                  >
-                    <button
-                      type="button"
-                      className="text-primary"
-                      disabled={!connected}
-                      onClick={() =>
-                        void queueAction({
-                          kind: "queue-steer",
-                          sessionId: agent.id,
-                          id: entry.id,
-                          turnId: agent.turnId ?? "",
-                        })
-                      }
-                    >
-                      Steer
-                    </button>
-                  </SidebarTooltip>
-                )}
-                <button
-                  type="button"
-                  aria-label="Remove queued message"
-                  disabled={!connected}
-                  onClick={() =>
-                    void queueAction({ kind: "queue-remove", sessionId: agent.id, id: entry.id })
-                  }
-                >
-                  <X className="size-3" />
-                </button>
-              </div>
-            ))}
+            {/* The phone shows its rows one at a time, under the status line, in a list of their own. */}
+            {compact ? <div className="mobile-queue-list">{durableRows}</div> : durableRows}
           </div>
         )}
         {!durableQueue && !!queue.length && (
-          <div
-            data-composer-queue
-            className={compact ? "max-h-20 space-y-2 overflow-y-auto" : "space-y-2"}
-          >
+          <div data-composer-queue className={compact ? "mobile-queue-list" : "space-y-2"}>
             {queue.map((entry, i) => (
               <div
                 key={i}
-                className="flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-xs"
+                className="mobile-queue-row flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2 text-xs"
               >
                 <span className="text-muted-foreground">Queued</span>
                 <span className="min-w-0 flex-1 truncate">
                   {entry.message || entry.attachments.map((a) => a.name).join(", ")}
                 </span>
+                {compact && <QueuePosition index={i} count={queue.length} />}
                 {!active && !busy && !uncertain && (
                   <button
                     type="button"
-                    className="text-primary"
+                    className="mobile-tap-target text-primary"
                     onClick={() => void submit(entry, true)}
                   >
                     Send now
@@ -1145,7 +1167,7 @@ export function AgentComposer({
                     >
                       <button
                         type="button"
-                        className="text-primary"
+                        className="mobile-tap-target text-primary"
                         onClick={() => void submit(entry, true, true)}
                       >
                         Steer
@@ -1155,6 +1177,7 @@ export function AgentComposer({
                 <button
                   type="button"
                   aria-label="Remove queued message"
+                  className="mobile-tap-target flex items-center justify-center"
                   disabled={busy || uncertain}
                   onClick={() => setQueue((q) => q.filter((_, index) => index !== i))}
                 >
@@ -1295,24 +1318,17 @@ export function AgentComposer({
               levels={!compact}
             />
           ) : native ? (
-            <div ref={nativeField} aria-hidden="true" style={{ height: nativeHeight }} />
+            <>
+              <div ref={nativeField} aria-hidden="true" style={{ height: nativeHeight }} />
+              {nativeMenu.dialogs}
+            </>
           ) : (
             <>
               <textarea
                 ref={textarea}
                 data-agent-composer
                 aria-label={`Message ${agentProviderName(agent.provider)}`}
-                placeholder={
-                  compact && !expanded
-                    ? "Message your agent"
-                    : !looksActive && placeholder
-                      ? placeholder
-                      : looksActive
-                        ? followUps === "steer" && canSteer("steer", 0)
-                          ? "Steer the current turn…"
-                          : "Add a follow-up to the queue…"
-                        : "Reply…"
-                }
+                placeholder={prompt}
                 value={draft}
                 rows={compact && !expanded ? 1 : 2}
                 onFocus={compact ? expand : undefined}
@@ -1495,139 +1511,12 @@ export function AgentComposer({
                         })
                       }
                     />
-                    {!!effortModel?.efforts.length && (
-                      <ControlPicker
-                        label="Thinking effort"
-                        showValue={!compact}
-                        value={settings.effort ?? ""}
-                        icon={<Brain className="size-4" />}
-                        disabled={!advanced || !connected || busy || configuring}
-                        options={[
-                          {
-                            id: "",
-                            label: `Default (${effortModel?.defaultEffort ?? "automatic"})`,
-                            icon: <Brain className="size-4" />,
-                          },
-                          ...(effortModel?.efforts ?? []).map((effort) => ({
-                            id: effort,
-                            label: effort.charAt(0).toUpperCase() + effort.slice(1),
-                            icon: <Brain className="size-4" />,
-                          })),
-                        ]}
-                        onSelect={(effort) =>
-                          void configure({ ...settings, effort: effort || null })
-                        }
-                      />
-                    )}
-                    {!!agent.controls?.modes.length &&
-                      (agent.engine ?? agent.provider) !== "codex" && (
-                        <ControlPicker
-                          label="Agent mode"
-                          showValue={!compact}
-                          value={settings.nativeMode ?? agent.controls.currentMode ?? ""}
-                          icon={
-                            (settings.nativeMode ?? agent.controls.currentMode) ===
-                            "bypassPermissions" ? (
-                              <ShieldOff className="size-4 text-amber-500" />
-                            ) : (
-                              <Shield className="size-4" />
-                            )
-                          }
-                          disabled={controlsDisabled}
-                          options={agent.controls.modes}
-                          onSelect={(nativeMode) => void configure({ ...settings, nativeMode })}
-                        />
-                      )}
-                    {(agent.controls?.features ?? []).map((feature) =>
-                      feature.id === "fast_mode" ? (
-                        <FastModeToggle
-                          key={feature.id}
-                          on={(settings.features?.[feature.id] ?? feature.value) === true}
-                          showLabel={!compact}
-                          disabled={controlsDisabled}
-                          onToggle={() =>
-                            void configure({
-                              ...settings,
-                              features: {
-                                ...settings.features,
-                                [feature.id]:
-                                  (settings.features?.[feature.id] ?? feature.value) !== true,
-                              },
-                            })
-                          }
-                        />
-                      ) : (
-                        <ControlPicker
-                          key={feature.id}
-                          label={feature.label}
-                          showValue={!compact}
-                          value={String(settings.features?.[feature.id] ?? feature.value)}
-                          icon={<SlidersHorizontal className="size-4" />}
-                          searchable={!!feature.options}
-                          disabled={controlsDisabled}
-                          options={
-                            feature.options ?? [
-                              { id: "true", label: "On" },
-                              { id: "false", label: "Off" },
-                            ]
-                          }
-                          onSelect={(value) =>
-                            void configure({
-                              ...settings,
-                              features: {
-                                ...settings.features,
-                                [feature.id]: feature.options ? value : value === "true",
-                              },
-                            })
-                          }
-                        />
-                      ),
-                    )}
-                    {(agent.engine ?? agent.provider) === "codex" && (
-                      <ControlPicker
-                        label="Permission mode"
-                        shortcut="Shift+Tab"
-                        showValue={!compact}
-                        value={settings.mode}
-                        icon={
-                          settings.mode === "auto-review" ? (
-                            <ShieldCheck className="size-4" />
-                          ) : settings.mode === "full-access" ? (
-                            <ShieldOff className="size-4 text-amber-500" />
-                          ) : (
-                            <Shield className="size-4" />
-                          )
-                        }
-                        disabled={!advanced || !connected || busy || configuring}
-                        options={[
-                          {
-                            id: "default",
-                            label: "Default permissions",
-                            description: "Workspace access; asks when approval is needed.",
-                            icon: <Shield className="size-4" />,
-                          },
-                          {
-                            id: "auto-review",
-                            label: "Auto-review",
-                            description:
-                              "Same sandbox; eligible requests go to the reviewer agent.",
-                            icon: <ShieldCheck className="size-4" />,
-                          },
-                          {
-                            id: "full-access",
-                            label: "Full access",
-                            description: "File and network access without approval prompts.",
-                            icon: <ShieldOff className="size-4 text-amber-500" />,
-                          },
-                        ]}
-                        onSelect={(mode) =>
-                          void configure({ ...settings, mode: mode as AgentSettings["mode"] })
-                        }
-                      />
-                    )}
-                    {compact ? (
+                    {!compact && settingControls}
+                    {!compact ? (
+                      extraControls
+                    ) : hasComposerOptions(agent, effortModel) ? (
                       <Popover.Root>
-                        <ControlTooltip text="Plan mode and speed">
+                        <ControlTooltip text="More options">
                           <Popover.Trigger
                             type="button"
                             className="agent-control"
@@ -1645,14 +1534,14 @@ export function AgentComposer({
                             collisionPadding={12}
                             className="mobile-composer-options"
                           >
-                            <p className="mb-2 px-2 text-sm font-medium">Conversation options</p>
-                            <div className="mobile-composer-options-grid">{extraControls}</div>
+                            <div className="mobile-composer-options-grid">
+                              {settingControls}
+                              {extraControls}
+                            </div>
                           </Popover.Content>
                         </Popover.Portal>
                       </Popover.Root>
-                    ) : (
-                      extraControls
-                    )}
+                    ) : null}
                   </div>
                 </div>
                 {compact && (
@@ -1875,11 +1764,24 @@ function AttachmentChip({
           aria-label={`Remove ${file.name}`}
           disabled={disabled}
           onClick={onRemove}
-          className={`absolute -top-1.5 -left-1.5 flex size-5 items-center justify-center rounded-full border bg-background text-foreground shadow-sm hover:bg-raised-opaque focus-visible:opacity-100 disabled:opacity-50 ${compact ? "" : "opacity-0 group-hover:opacity-100"}`}
+          className={`mobile-attachment-remove absolute -top-1.5 -left-1.5 flex size-5 items-center justify-center rounded-full border bg-background text-foreground shadow-sm hover:bg-raised-opaque focus-visible:opacity-100 disabled:opacity-50 ${compact ? "" : "opacity-0 group-hover:opacity-100"}`}
         >
           <X className="size-3" />
         </button>
       </SidebarTooltip>
     </div>
+  );
+}
+
+/**
+ * Where a queued message stands, muted as desktop's pane count on a tab is: the phone shows one
+ * queued message at a time, so the others are counted rather than peeking out under it.
+ */
+function QueuePosition({ index, count }: { index: number; count: number }) {
+  if (count < 2) return null;
+  return (
+    <span className="shrink-0 text-muted-foreground tabular-nums">
+      {index + 1} of {count}
+    </span>
   );
 }

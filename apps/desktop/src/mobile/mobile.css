@@ -16,6 +16,23 @@
   --mobile-safe-left: env(safe-area-inset-left, 0px);
   --mobile-safe-right: env(safe-area-inset-right, 0px);
   --mobile-header-height: calc(68px + var(--mobile-safe-top));
+  /* The workspace header's tab strip, under its controls; nothing on pages without one. */
+  --mobile-strip-height: 0px;
+  transition: --mobile-strip-height 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* Registered so the header, its fade and the chat's top padding follow the strip as it moves. */
+@property --mobile-strip-height {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+:root:has(.mobile-header .mobile-tab-strip) {
+  --mobile-strip-height: 44px;
+}
+/* While the composer is being typed in, the keyboard has taken the room: the strip slides away
+   under the header's controls, which stay, and comes back when the keyboard closes. */
+:root:has(.mobile-header .mobile-tab-strip):has(.mobile-pane form[data-expanded="true"]) {
+  --mobile-strip-height: 0px;
 }
 :root[data-corner-style="square"] {
   --corner-radius: 0px;
@@ -51,8 +68,75 @@ body {
 [data-slot="button"] {
   min-height: 44px;
 }
-[data-slot="button"][data-size^="icon"] {
+/* A button whose label collapses to its icon on a phone is as narrow as an icon button. */
+[data-slot="button"] {
   min-width: 44px;
+}
+/* The shared size for controls desktop draws smaller. Only this stylesheet gives these classes
+   any style, so shared components can carry them without changing desktop. */
+.mobile-tap-target {
+  min-width: 44px;
+  min-height: 44px;
+}
+.mobile-row-spacer {
+  width: 44px;
+}
+/* Drawn at desktop's size and laid out as if it were, so a message's actions don't push its
+   neighbours away. The square around the icon takes the tap. */
+.mobile-copy-button {
+  --mobile-copy-overhang: calc((1.75rem - 44px) / 2);
+  position: relative;
+  width: 44px;
+  height: 44px;
+  margin: var(--mobile-copy-overhang);
+}
+/* Stops short of the next action in the row rather than covering part of it. */
+.mobile-copy-button:has(+ button) {
+  margin-inline-end: 0;
+}
+/* Drawn at desktop's size, or a phone size under 44px, with an invisible area at least 44px each
+   way around it that takes the tap. Where two rows sit closer than that, each stops halfway to the
+   other (`--mobile-hit-room-*`), so neither takes the other's taps. */
+.mobile-hit-area {
+  position: relative;
+}
+.mobile-hit-area::after {
+  content: "";
+  position: absolute;
+  inset-block: max(calc(50% - 22px), calc(0px - var(--mobile-hit-room-top, 22px)))
+    max(calc(50% - 22px), calc(0px - var(--mobile-hit-room-bottom, 22px)));
+  inset-inline: min(0px, calc(50% - 22px));
+}
+/* A sideways-scrolling row clips what overhangs it, so it makes room above and below its controls'
+   squares without moving them. 11px covers the shortest, 1.75rem at a 13px root. */
+.mobile-hit-strip {
+  padding-block: 11px;
+  margin-block: -11px;
+}
+/* The pull request page's state switch and its workspace chips sit 0.75rem apart (mt-3), so each
+   row's areas take half of that. The room counts from inside a control's border, so a chip's 1px
+   border is added; a tab has no border but the switch's padding and border below it. */
+.mobile-hit-gap-below {
+  --mobile-hit-room-bottom: calc(0.375rem + 1px);
+}
+.mobile-hit-gap-below [role="tablist"] {
+  --mobile-hit-room-bottom: calc(0.5rem + 1px);
+}
+.mobile-hit-gap-above {
+  --mobile-hit-room-top: calc(0.375rem + 1px);
+}
+/* The strip's own box takes taps too, so it starts halfway down the gap, not above it. */
+.mobile-hit-gap-above .mobile-hit-strip {
+  padding-top: 0.375rem;
+  margin-top: -0.375rem;
+}
+/* The block's rounded corners clip what overhangs, so its header makes the room instead. */
+[data-code-header] {
+  padding-block: 0;
+}
+[data-code-header] .mobile-copy-button {
+  margin-block: 0;
+  margin-inline-end: -0.75rem;
 }
 .mobile-files {
   position: absolute;
@@ -95,7 +179,7 @@ body {
   font-weight: 400;
   color: var(--muted-foreground);
 }
-.mobile-files-directory:focus-visible {
+.mobile-files-directory:focus-visible:not([data-pointer-focus]) {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
@@ -107,7 +191,8 @@ body {
   flex-shrink: 0;
 }
 .mobile-file-tabs button {
-  min-height: 40px;
+  min-width: 44px;
+  min-height: 44px;
 }
 .mobile-files-content,
 .mobile-files-tree,
@@ -191,7 +276,7 @@ body {
   gap: 2px;
   border-radius: var(--radius-3xl);
 }
-.mobile-pane-row:has([aria-pressed="true"]) {
+.mobile-pane-row:has([aria-current="page"]) {
   background: var(--accent);
 }
 .mobile-pane-choice {
@@ -199,7 +284,7 @@ body {
   display: flex;
   align-items: center;
   flex: 1;
-  min-height: 54px;
+  min-height: 44px;
   gap: 10px;
   padding: 7px 10px;
   text-align: left;
@@ -210,20 +295,9 @@ body {
   height: 20px;
   flex-shrink: 0;
 }
-.mobile-pane-choice > span:not([data-pane-status]) {
-  min-width: 0;
-  flex: 1;
+/* The name; the sidebar's status dot and spinner keep their own size. */
+.mobile-pane-choice > span:not([data-row-state], [data-row-working]) {
   font-size: 14px;
-}
-/* An agent's logo and status dot sit where the pane's icon would, at its size. */
-.mobile-pane-choice > [data-pane-status] {
-  display: flex;
-  flex-shrink: 0;
-}
-.mobile-pane-choice small {
-  display: block;
-  color: var(--muted-foreground);
-  font-size: 12px;
 }
 .mobile-pane-choice > .mobile-pane-selected {
   width: 15px;
@@ -341,7 +415,36 @@ body {
 }
 .mobile-project > button:last-child {
   opacity: 1;
-  min-width: 36px;
+}
+/* Desktop's tab rows under each workspace. Spaced as the workspace row is, so a title lines up
+   with the workspace's name above it. */
+.mobile-sidebar-tab {
+  border-radius: var(--radius-lg);
+}
+.mobile-sidebar-tab > button:first-child {
+  gap: 10px;
+  padding-left: 8px;
+  font-size: 14px;
+}
+/* Desktop's 6px status dots, and the workspace icon's, are hard to make out on a phone. The Tabs
+   sheet draws its rows' dots as the sidebar does. */
+:is(.mobile-sidebar-content, .mobile-workspace-list)
+  :is([data-row-state], [data-show-more-dot])
+  > span.rounded-full {
+  width: 8px;
+  height: 8px;
+}
+.mobile-sidebar-content [data-workspace-attention] {
+  width: 14px;
+  height: 14px;
+}
+.mobile-sidebar-content [data-workspace-attention] > span {
+  width: 9px;
+  height: 9px;
+}
+/* Every row's "…" ends at the same edge. */
+.mobile-sidebar-content .mobile-tap-target {
+  margin-right: 0;
 }
 .mobile-sidebar-footer {
   padding: 8px 12px max(8px, var(--mobile-safe-bottom)) max(12px, var(--mobile-safe-left));
@@ -399,8 +502,14 @@ body {
   border-radius: var(--radius-lg);
   text-align: left;
 }
-.mobile-account-actions button:is(:hover, :active) {
+/* Hover only where a pointer hovers: a tap leaves it stuck on whichever row opens under the finger. */
+.mobile-account-actions button:active {
   background: var(--muted);
+}
+@media (hover: hover) {
+  .mobile-account-actions button:hover {
+    background: var(--muted);
+  }
 }
 .mobile-account-actions svg {
   width: 20px;
@@ -428,7 +537,8 @@ body {
   inset: 0;
   pointer-events: none;
   border-radius: inherit;
-  border: 1px solid color-mix(in srgb, var(--foreground) 6%, transparent);
+  border: 1px solid;
+  border-color: color-mix(in srgb, var(--foreground) 6%, transparent);
   background: var(--background);
   box-shadow:
     inset 0.5px 0.5px 0 #ffffff28,
@@ -477,6 +587,107 @@ body {
   margin-bottom: calc(-1 * var(--mobile-header-height));
   pointer-events: none;
 }
+/* The controls on one row, the tab strip under them, the two 44px rows 4px apart. */
+.mobile-header {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  height: calc(var(--mobile-header-height) + var(--mobile-strip-height));
+  margin-bottom: calc(-1 * (var(--mobile-header-height) + var(--mobile-strip-height)));
+}
+.mobile-header:has(.mobile-tab-strip) {
+  padding-bottom: 8px;
+}
+.mobile-header-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+.mobile-tab-strip {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 44px;
+  min-width: 0;
+  pointer-events: auto;
+  /* A held tab opens its menu, not the system's text selection or link preview. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.mobile-tab-strip > :first-child {
+  flex: 1;
+}
+.mobile-tab-strip {
+  transition:
+    opacity 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    translate 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
+}
+:root:has(.mobile-pane form[data-expanded="true"]) .mobile-tab-strip {
+  opacity: 0;
+  translate: 0 -12px;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    translate 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s 260ms;
+}
+.mobile-tab-strip .tab-strip {
+  touch-action: pan-x;
+}
+/* Each tab's 44pt box takes its taps; neighbours sit apart, so no two areas overlap. The selected
+   fill is drawn inside it at the tasks pill's 35pt, rounded as the header's controls are in each
+   corner style. Every tab has the same padding, so a name never moves when it is selected. */
+.mobile-tab-strip-tab {
+  position: relative;
+  height: 44px;
+}
+.mobile-tab-strip-tab[data-active-tab]::before {
+  content: "";
+  position: absolute;
+  inset: 4.5px 0;
+  border-radius: var(--mobile-round-radius);
+  background: var(--raised-fill);
+  pointer-events: none;
+}
+.mobile-tab-strip-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  /* Desktop's tab: 0.375rem between its icon and name at its 16px root. */
+  gap: 6px;
+  height: 100%;
+  min-width: 0;
+  max-width: 220px;
+  /* The pull request chips' px-2.5. */
+  padding-inline: 0.625rem;
+  font-size: 14px;
+}
+.mobile-tab-strip-new {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--mobile-round-radius);
+  color: var(--muted-foreground);
+}
+.mobile-tab-strip-new svg {
+  width: 20px;
+  height: 20px;
+}
+.mobile-tab-strip-new:active {
+  background: var(--muted);
+}
+.mobile-tab-strip-new:disabled {
+  opacity: 0.4;
+}
 .mobile-files-header {
   margin-bottom: 0;
 }
@@ -484,7 +695,9 @@ body {
   position: relative;
   z-index: 30;
   pointer-events: auto;
-  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
+  /* Apart from the width and style: WebView 113 draws a color-mix() in the shorthand as text color. */
+  border: 1px solid;
+  border-color: color-mix(in srgb, var(--border) 50%, transparent);
   border-radius: var(--mobile-round-radius);
   background: var(--background);
   box-shadow:
@@ -519,17 +732,11 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mobile-picker-breadcrumb > span:last-child {
-  margin-top: 2px;
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--muted-foreground);
-}
 .mobile-header + .mobile-notice {
-  margin-top: var(--mobile-header-height);
+  margin-top: calc(var(--mobile-header-height) + var(--mobile-strip-height));
 }
 .mobile-pane:not([data-pane-profile="chat"]) {
-  padding-top: var(--mobile-header-height);
+  padding-top: calc(var(--mobile-header-height) + var(--mobile-strip-height));
 }
 .mobile-main:has(.mobile-notice) .mobile-pane {
   padding-top: 0;
@@ -561,7 +768,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.mobile-select-trigger:focus-visible {
+.mobile-select-trigger:focus-visible:not([data-pointer-focus]) {
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
@@ -652,8 +859,6 @@ body {
   color: var(--muted-foreground);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 .mobile-select-option {
   width: 100%;
@@ -668,9 +873,14 @@ body {
   outline: none;
   overflow-wrap: anywhere;
 }
-.mobile-select-option:focus-visible,
-.mobile-select-option:hover {
+.mobile-select-option:focus-visible:not([data-pointer-focus]),
+.mobile-select-option:active {
   background: var(--accent);
+}
+@media (hover: hover) {
+  .mobile-select-option:hover {
+    background: var(--accent);
+  }
 }
 .mobile-select-option[aria-selected="true"] {
   color: var(--primary);
@@ -691,8 +901,6 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  text-transform: none;
-  letter-spacing: 0;
   color: var(--foreground);
   font-size: 13px;
 }
@@ -735,6 +943,28 @@ body {
   flex-direction: column;
   max-height: min(72dvh, 640px) !important;
   gap: 16px;
+}
+/* A row's "…" menu: the sheet's own list, not the floating menu the global role rules style. */
+.mobile-row-sheet [role="menu"] {
+  max-width: none;
+  padding: 0;
+  border-radius: 0;
+}
+.mobile-row-sheet .mobile-select-sheet-list .mobile-select-option {
+  min-height: 44px;
+  padding-block: 8px;
+}
+/* A full chat menu is taller than a picker's list; it gets the drawer's height so every item shows. */
+[data-mobile-drawer].mobile-row-sheet {
+  max-height: min(calc(100dvh - var(--mobile-safe-top) - 8px), 960px) !important;
+}
+.mobile-row-sheet .mobile-select-option[data-variant="destructive"],
+.mobile-row-sheet .mobile-select-option[data-variant="destructive"] .mobile-select-icon {
+  color: var(--destructive);
+}
+.mobile-row-sheet-separator {
+  margin: 6px 0;
+  border-top: 1px solid var(--border);
 }
 [data-mobile-drawer].mobile-workspace-sheet {
   min-height: min(38dvh, 280px);
@@ -788,11 +1018,56 @@ body {
   font-size: 16px;
   max-height: 128px;
 }
-.mobile-pane form:has([data-agent-composer]) {
-  border-radius: calc(var(--corner-radius) * 3.6);
-}
 .mobile-pane form:has([data-agent-composer]) button {
   min-height: 36px;
+}
+/* Stays a small circle inside its attachment's corner, with a fingertip's square around it. */
+.mobile-pane form:has([data-agent-composer]) button.mobile-attachment-remove {
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  min-height: 20px;
+}
+/* Room for that square to leave part of an image open to tap. */
+.mobile-composer :is([data-composer-attachment], [data-composer-attachment-reading]) {
+  width: 56px;
+  height: 56px;
+}
+/* An image shows itself; a file has only its name to go by. */
+.mobile-composer [data-composer-attachment]:not(:has(img)) {
+  width: 112px;
+}
+.mobile-attachment-remove::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  translate: -50% -50%;
+}
+/* The buttons set the row's height now, so it needs no padding of its own. */
+.mobile-queue-row {
+  padding-block: 0;
+}
+/* Queued messages one at a time: the list is exactly one row tall and scrolls a whole row per
+   step, so a second message never peeks out under the first; each row counts its place instead. */
+.mobile-queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 46px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-snap-type: y mandatory;
+}
+.mobile-queue-list > .mobile-queue-row {
+  flex-shrink: 0;
+  scroll-snap-align: start;
+}
+.mobile-pane form:has([data-agent-composer]) button.mobile-tap-target {
+  min-height: 44px;
 }
 .mobile-pane .chat-markdown pre {
   max-width: 100%;
@@ -826,6 +1101,11 @@ body {
   font-size: 14px;
   color: var(--muted-foreground);
 }
+/* As wide as its longest label, so the two buttons match. */
+.mobile-empty-actions {
+  display: inline-grid;
+  gap: 12px;
+}
 .mobile-scrim {
   position: absolute;
   inset: 0;
@@ -852,6 +1132,12 @@ body {
 .mobile-notice button {
   min-height: 32px;
   color: var(--primary);
+}
+/* Desktop's undo toast, moved from under desktop's title bar to under the phone's header. */
+.mobile-undo-toast > [role="status"] {
+  top: calc(var(--mobile-header-height) + var(--mobile-strip-height) + 4px);
+  padding-block: 0;
+  padding-inline: 16px 0;
 }
 .mobile-terminal-controls {
   display: flex;
@@ -989,37 +1275,6 @@ body {
 .mobile-search-drawer [data-slot="command-shortcut"] {
   display: none;
 }
-.mobile-session-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.mobile-session-list > button {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  text-align: left;
-  padding: 12px 8px;
-  border-radius: var(--radius-lg);
-}
-.mobile-session-list > button:hover,
-.mobile-session-list > button:active {
-  background: var(--accent);
-}
-.mobile-session-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-lg);
-  background: var(--muted);
-}
-.mobile-session-icon svg {
-  width: 20px;
-  height: 20px;
-}
 .mobile-new-empty {
   display: flex;
   align-items: center;
@@ -1067,14 +1322,12 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   padding: 0;
   flex-shrink: 0;
 }
 .mobile-composer-primary > button {
-  width: 36px;
-  height: 36px;
   border-radius: var(--mobile-round-radius);
 }
 .mobile-composer-primary > button svg {
@@ -1084,19 +1337,24 @@ body {
   transition:
     border-radius 180ms ease,
     box-shadow 180ms ease;
-  border-radius: calc(var(--corner-radius) * 3.6);
+  /* Concentric with the primary button: its corner (a 44px circle at most), the 8px around it and
+     the 1px border. Square stays square, where the sum would round a box around a square button. */
+  border-radius: calc(min(var(--mobile-round-radius), 22px) + 9px);
+  padding: 8px;
   box-shadow: 0 2px 12px #00000006;
+}
+:root[data-corner-style="square"] .mobile-pane .mobile-composer {
+  border-radius: 0;
 }
 .mobile-composer[data-expanded="true"] {
   box-shadow: 0 4px 20px #0000000b;
 }
 .mobile-composer[data-expanded="false"] {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) 36px;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
   grid-template-areas: "attachments attachments attachments" "attach message action";
   align-items: center;
   column-gap: 2px;
-  padding: 6px;
 }
 .mobile-composer[data-expanded="false"] [data-composer-attachments] {
   grid-area: attachments;
@@ -1112,23 +1370,24 @@ body {
 }
 .mobile-pane .mobile-composer[data-expanded="false"] [data-agent-composer] {
   grid-area: message;
-  height: 36px !important;
-  min-height: 36px;
-  max-height: 36px;
-  padding: 6px 4px;
+  height: 44px !important;
+  min-height: 44px;
+  max-height: 44px;
+  padding: 10px 4px;
   line-height: 24px;
   overflow: hidden;
   white-space: pre;
 }
 @media (max-width: 360px) {
-  .mobile-header,
+  .mobile-header-row,
   .mobile-files-header,
   .mobile-sidebar-head {
     gap: 6px;
-    padding-inline: 8px;
   }
-  .mobile-composer-toolbar button {
-    width: 32px;
+  .mobile-header,
+  .mobile-files-header,
+  .mobile-sidebar-head {
+    padding-inline: 8px;
   }
 }
 @media (prefers-reduced-transparency: reduce), (forced-colors: active) {
@@ -1147,9 +1406,10 @@ body {
     backdrop-filter: none;
   }
 }
+/* Level with its pickers' menus, which open over its rows and come later in the page. */
 .mobile-composer-options {
-  z-index: 60;
-  width: 260px;
+  z-index: 50;
+  width: 288px;
   max-width: calc(100vw - 24px);
   padding: 12px;
   border: 1px solid var(--border);
@@ -1211,13 +1471,14 @@ body {
 }
 .mobile-composer-options-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  gap: 2px;
 }
-.mobile-composer-options-grid > button {
+/* A row each: icon and name, then the current value or switch at the far end. */
+.mobile-composer-options-grid > button.agent-control {
   display: flex;
   gap: 8px;
   width: 100%;
+  max-width: none;
   min-height: 44px;
   padding: 8px;
   justify-content: flex-start;
@@ -1226,6 +1487,11 @@ body {
 .mobile-composer-options-grid > button::after {
   content: attr(aria-label);
   text-align: left;
+  white-space: nowrap;
+}
+.mobile-composer-options-grid > button > :is(span, [data-switch-track]) {
+  order: 1;
+  margin-left: auto;
 }
 @keyframes mobile-drawer-in {
   from {
@@ -1321,6 +1587,9 @@ body {
   min-height: 44px;
 }
 @media (prefers-reduced-motion: reduce) {
+  :root,
+  .mobile-tab-strip,
+  :root:has(.mobile-pane form[data-expanded="true"]) .mobile-tab-strip,
   .mobile-workspace,
   .mobile-workspace::before,
   .mobile-main,
@@ -1353,9 +1622,6 @@ body {
   .mobile-pane [aria-label="Agent tasks"] > div {
     max-height: 80px;
   }
-  .mobile-pane [data-composer-queue] {
-    max-height: 44px;
-  }
   .mobile-pane [data-chat-footer] {
     padding-top: 4px;
     padding-bottom: 4px;
@@ -1364,15 +1630,15 @@ body {
 
 /* Keep message navigation below the floating header, with room for touch targets. */
 .mobile-pane .message-list-trigger {
-  top: var(--mobile-header-height);
+  top: calc(var(--mobile-header-height) + var(--mobile-strip-height));
   right: 16px;
   width: 44px;
   height: 44px;
   border-radius: var(--radius-3xl);
 }
 .mobile-pane .chat-timeline-shell [aria-label="Chat timeline"] {
-  padding-top: calc(var(--mobile-header-height) + 52px);
-  scroll-padding-top: calc(var(--mobile-header-height) + 52px);
+  padding-top: calc(var(--mobile-header-height) + var(--mobile-strip-height) + 52px);
+  scroll-padding-top: calc(var(--mobile-header-height) + var(--mobile-strip-height) + 52px);
 }
 .mobile-main:has(.mobile-notice) .message-list-trigger {
   top: 4px;
@@ -1380,4 +1646,61 @@ body {
 .mobile-main:has(.mobile-notice) .chat-timeline-shell [aria-label="Chat timeline"] {
   padding-top: 56px;
   scroll-padding-top: 56px;
+}
+
+/* The glass controls already blur what is behind them, but a row still reads sharply in the gaps
+   between them and behind the status bar. Pages keep their content below the header, and a notice
+   pushes the chat below it, so only an uninterrupted chat scrolls under. Stays below the messages
+   button and the controls. The chat scrolls in the page, not in a native scroll view, so iPhone
+   has no system edge effect to use and takes this fade too, under its native glass. */
+.mobile-main:has(> .mobile-pane[data-pane-profile="chat"]):not(:has(.mobile-notice))
+  > .mobile-header::before {
+  content: "";
+  position: absolute;
+  z-index: 5;
+  inset: 0 0 auto;
+  height: calc(var(--mobile-header-height) + var(--mobile-strip-height) + 12px);
+  background: linear-gradient(
+    to bottom,
+    var(--background),
+    color-mix(in srgb, var(--background) 85%, transparent) calc(100% - 24px),
+    transparent
+  );
+}
+/* The strip's tabs are not glass, so nothing may read through behind their names or in the gap
+   above them: the fade is solid from the control row's bottom edge down to the strip's, and eases
+   out below it. */
+.mobile-main:has(> .mobile-pane[data-pane-profile="chat"]):not(:has(.mobile-notice))
+  > .mobile-header:has(.mobile-tab-strip)::before {
+  background: linear-gradient(
+    to bottom,
+    var(--background),
+    color-mix(in srgb, var(--background) 85%, transparent) calc(var(--mobile-header-height) - 28px),
+    var(--background) calc(var(--mobile-header-height) - 12px),
+    var(--background) calc(100% - 20px),
+    transparent
+  );
+}
+/* Glass to match the web header's controls, so it stays on web and Android beside them.
+   Rows run the full width, so a narrower chat column would cost every message for one button. */
+.mobile-main:not(:has(.mobile-header [data-native-surface="true"])) .message-list-trigger {
+  border-color: color-mix(in srgb, var(--border) 50%, transparent);
+  box-shadow:
+    inset 0 1px 0 #ffffff38,
+    0 3px 14px #0000000b,
+    0 1px 3px #00000008;
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .mobile-main:not(:has(.mobile-header [data-native-surface="true"])) .message-list-trigger {
+    background: color-mix(in srgb, var(--background) 38%, transparent);
+    -webkit-backdrop-filter: blur(24px) saturate(1.6);
+    backdrop-filter: blur(24px) saturate(1.6);
+  }
+}
+@media (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .mobile-main:not(:has(.mobile-header [data-native-surface="true"])) .message-list-trigger {
+    background: var(--background);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }

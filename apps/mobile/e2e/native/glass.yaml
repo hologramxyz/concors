@@ -31,36 +31,53 @@ appId: xyz.hologram.concors.preview
     id: native-composer-model
     retryTapIfNoChange: true
 # The trigger has the same accessible label as the sheet title. Its label alone cannot prove
-# that XCTest opened the sheet; require an option that exists only in the presented picker.
+# that XCTest opened the sheet; require a row that exists only in the presented picker.
 - extendedWaitUntil:
-    visible: "← Back to providers"
+    visible: "Provider"
     timeout: 30000
-- assertVisible: "Codex: Agent and model"
 - tapOn:
-    text: "← Back to providers"
+    text: "Provider"
     waitToSettleTimeoutMs: 500
-- assertVisible: "Choose an agent provider"
-- tapOn:
-    text: "Codex:.*"
-    waitToSettleTimeoutMs: 500
-- assertVisible: "Codex: Agent and model"
-- tapOn:
-    text: "← Back to providers"
-    waitToSettleTimeoutMs: 500
-- assertVisible: "Choose an agent provider"
-- tapOn:
-    text: "Codex:.*"
-    waitToSettleTimeoutMs: 500
+- assertVisible: "Providers"
 - tapOn:
     text: "Codex"
+    waitToSettleTimeoutMs: 500
+# Back on the first page, whose title is the provider's name too; the model row is the second match.
+- assertVisible: "Provider"
+- tapOn:
+    text: "Codex"
+    index: 1
     waitToSettleTimeoutMs: 500
 - assertVisible: "Native Liquid Glass draft"
 - tapOn:
     waitToSettleTimeoutMs: 500
-    id: native-composer-brain
-- assertVisible: "Thinking effort.*"
+    id: native-composer-options
+- assertVisible: "Plan mode"
 - tapOn:
-    text: "Cancel"
+    text: "Thinking effort"
+    waitToSettleTimeoutMs: 500
+- assertVisible: "Default \\(medium\\)"
+- tapOn:
+    text: "Low"
+    waitToSettleTimeoutMs: 500
+- assertVisible: "Plan mode"
+- tapOn:
+    text: "Close"
+    waitToSettleTimeoutMs: 500
+- assertVisible: "Native Liquid Glass draft"
+- tapOn:
+    waitToSettleTimeoutMs: 500
+    id: native-composer-options
+- tapOn:
+    text: "Permission mode"
+    waitToSettleTimeoutMs: 500
+- assertVisible: "Default permissions"
+- tapOn:
+    text: "Default permissions"
+    waitToSettleTimeoutMs: 500
+- assertVisible: "Plan mode"
+- tapOn:
+    text: "Close"
     waitToSettleTimeoutMs: 500
 - assertVisible: "Native Liquid Glass draft"
 - tapOn:
@@ -79,7 +96,7 @@ appId: xyz.hologram.concors.preview
     waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "20%,35%"
-- assertVisible: "Tabs"
+- assertVisible: "Workspaces"
 - tapOn:
     text: "Close"
     waitToSettleTimeoutMs: 500
@@ -88,7 +105,7 @@ appId: xyz.hologram.concors.preview
     waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "20%,65%"
-- assertVisible: "Tabs"
+- assertVisible: "Workspaces"
 - tapOn:
     text: "Close"
     waitToSettleTimeoutMs: 500
@@ -96,7 +113,7 @@ appId: xyz.hologram.concors.preview
     waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "50%,5%"
-- assertVisible: "Tabs"
+- assertVisible: "Workspaces"
 - tapOn:
     text: "Close"
     waitToSettleTimeoutMs: 500
@@ -104,5 +121,5 @@ appId: xyz.hologram.concors.preview
     waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "90%,50%"
-- assertVisible: "Tabs"
-- takeScreenshot: apps/mobile/test-results/native/tabs-drawer
+- assertVisible: "Workspaces"
+- takeScreenshot: apps/mobile/test-results/native/workspace-switcher

@@ -178,7 +178,7 @@ export function PullRequestsPage({
         )}
       </div>
       {showStates && (
-        <div className="mt-5 flex flex-wrap items-center gap-2">
+        <div className="mobile-hit-gap-below mt-5 flex flex-wrap items-center gap-2">
           <div
             role="tablist"
             aria-label="Pull request state"
@@ -204,7 +204,7 @@ export function PullRequestsPage({
                     onNavigate({ ...view, state: option, pullRequest: null });
                   }}
                   className={cn(
-                    "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-ui",
+                    "mobile-hit-area flex h-7 items-center gap-1.5 rounded-md px-2.5 text-ui",
                     view.state === option
                       ? "bg-background text-foreground shadow-xs"
                       : "text-muted-foreground hover:text-foreground",
@@ -262,7 +262,7 @@ export function PullRequestsPage({
               aria-label={`Show every repository in ${filtered.name}`}
               onClick={() => filter(filtered.id)}
               className={cn(
-                "flex shrink-0 items-center gap-1.5 border border-foreground/20 bg-muted px-2.5 text-ui",
+                "mobile-hit-area flex shrink-0 items-center gap-1.5 border border-foreground/20 bg-muted px-2.5 text-ui",
                 CHIP_SIZE,
               )}
             >
@@ -580,7 +580,7 @@ function RowActions({
       <Button
         variant="outline"
         className="mt-2.5 shrink-0"
-        aria-label={`Close #${pullRequest.number}`}
+        aria-label={`Close pull request #${pullRequest.number}`}
         onClick={() => onAction("close")}
       >
         <GitPullRequestClosed />
@@ -704,8 +704,8 @@ function FilterStrip({ children }: { children: ReactNode }) {
     };
   }, []);
   return (
-    <div className="relative -mx-4 mt-3 sm:mx-0">
-      <div ref={listRef} className="tab-strip overflow-x-auto px-4 sm:px-0">
+    <div className="mobile-hit-gap-above relative -mx-4 mt-3 sm:mx-0">
+      <div ref={listRef} className="tab-strip mobile-hit-strip overflow-x-auto px-4 sm:px-0">
         <div
           role="toolbar"
           aria-label="Filter pull requests"
@@ -749,7 +749,7 @@ function FilterChip({
       aria-pressed={pressed}
       onClick={onClick}
       className={cn(
-        "flex max-w-56 shrink-0 items-center gap-1.5 border text-ui",
+        "mobile-hit-area flex max-w-56 shrink-0 items-center gap-1.5 border text-ui",
         CHIP_SIZE,
         icon ? "pr-2.5 pl-1.5" : "px-2.5",
         pressed

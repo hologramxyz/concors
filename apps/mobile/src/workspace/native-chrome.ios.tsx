@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import {
   AccessibilityInfo,
   ActionSheetIOS,
@@ -23,15 +23,17 @@ import {
   Spacer,
   Text,
   VStack,
+  ZStack,
 } from "@expo/ui/swift-ui";
 import {
   accessibilityLabel,
+  accessibilityValue,
+  Animation,
+  animation,
   background,
-  buttonBorderShape,
   buttonStyle,
   clipShape,
   contentShape,
-  controlSize,
   disabled,
   environment,
   font,
@@ -41,11 +43,14 @@ import {
   labelStyle,
   lineLimit,
   monospacedDigit,
+  opacity,
   padding,
   presentationBackground,
   presentationDragIndicator,
   progressViewStyle,
+  rotationEffect,
   shapes,
+  strokeBorder,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -64,6 +69,8 @@ import type {
   NativeUsage,
 } from "@concors/client-core";
 import {
+  contextRingStroke,
+  contextRingValue,
   currentNativeSnapshot,
   nativeSurfaceLayout,
   reconcileNativeDraft,
@@ -87,7 +94,6 @@ const symbols = {
   brain: "brain",
   shield: "shield",
   options: "slider.horizontal.3",
-  context: "circle.dotted",
   mic: "mic",
 } as const;
 const providerImages = {
@@ -155,7 +161,8 @@ export function NativeChrome({ host, snapshot, send }: NativeChromeProps) {
         return (
           <View
             key={surface.id}
-            pointerEvents={interactive ? "auto" : "none"}
+            // The clip reaches past the control for its shadow; only the control takes touches.
+            pointerEvents={interactive ? "box-none" : "none"}
             accessibilityElementsHidden={!interactive}
             style={{
               position: "absolute",
@@ -240,6 +247,79 @@ function HeaderButton({
   );
   const pill = !!content.title;
   const [shape, radius] = nativeButtonShape(corners, pill);
+  const anchor = (press: () => void) => (
+    <Button
+      testID={`native-header-${content.icon}`}
+      onPress={() => {
+        if (Date.now() < suppressPressUntil.current) return;
+        Keyboard.dismiss();
+        press();
+      }}
+      modifiers={[
+        // Styled SwiftUI buttons add their own padding around custom labels.
+        // Size the native button once, then apply real SwiftUI glass to that frame.
+        buttonStyle("plain"),
+        frame({ width, height }),
+        ...(glass
+          ? [
+              glassEffect({
+                shape,
+                cornerRadius: radius,
+                glass: { variant: "regular", interactive: true },
+              }),
+            ]
+          : [background(dark ? "#292929" : "#e8e8e3"), clipShape(shape, radius)]),
+        disabled(content.disabled),
+        accessibilityLabel(
+          [content.label, content.title, content.subtitle].filter(Boolean).join(", "),
+        ),
+      ]}
+    >
+      {pill ? (
+        <HStack
+          spacing={8}
+          modifiers={[
+            padding({ horizontal: 12 }),
+            ...(content.icon === "chevron"
+              ? [
+                  // Plain buttons hit-test their label, not the outer glass frame.
+                  frame({ width, height }),
+                  contentShape(shapes.rectangle()),
+                ]
+              : [frame({ maxWidth: Infinity })]),
+          ]}
+        >
+          <VStack
+            alignment="leading"
+            spacing={1}
+            modifiers={[frame({ maxWidth: Infinity, alignment: "leading" })]}
+          >
+            <Text modifiers={[font({ size: 13, weight: "semibold" }), lineLimit(1)]}>
+              {content.title}
+            </Text>
+            {content.subtitle ? (
+              <Text
+                modifiers={[
+                  font({ size: 11 }),
+                  foregroundStyle(dark ? "#c0c0c0" : "#646464"),
+                  lineLimit(1),
+                ]}
+              >
+                {content.subtitle}
+              </Text>
+            ) : null}
+          </VStack>
+          <Image systemName={symbols[content.icon]} size={14} />
+        </HStack>
+      ) : (
+        <Image
+          systemName={symbols[content.icon]}
+          size={20}
+          modifiers={[frame({ width: 20, height: 20 })]}
+        />
+      )}
+    </Button>
+  );
   return (
     <View
       style={styles.fill}
@@ -254,112 +334,77 @@ function HeaderButton({
         seedColor={dark ? "#eeeeee" : "#222222"}
         ignoreSafeArea="all"
       >
-        <Button
-          testID={`native-header-${content.icon}`}
-          onPress={() => {
-            if (Date.now() < suppressPressUntil.current) return;
-            Keyboard.dismiss();
-            emit({ kind: "press", control: "activate" });
-          }}
-          modifiers={[
-            // Styled SwiftUI buttons add their own padding around custom labels.
-            // Size the native button once, then apply real SwiftUI glass to that frame.
-            buttonStyle("plain"),
-            frame({ width, height }),
-            ...(glass
-              ? [
-                  glassEffect({
-                    shape,
-                    cornerRadius: radius,
-                    glass: { variant: "regular", interactive: true },
-                  }),
-                ]
-              : [background(dark ? "#292929" : "#e8e8e3"), clipShape(shape, radius)]),
-            disabled(content.disabled),
-            accessibilityLabel(
-              [content.label, content.title, content.subtitle].filter(Boolean).join(", "),
-            ),
-          ]}
-        >
-          {pill ? (
-            <HStack
-              spacing={8}
-              modifiers={[
-                padding({ horizontal: 12 }),
-                ...(content.icon === "chevron" && content.label === "Tabs"
-                  ? [
-                      // Plain buttons hit-test their label, not the outer glass frame.
-                      frame({ width, height }),
-                      contentShape(shapes.rectangle()),
-                    ]
-                  : [frame({ maxWidth: Infinity })]),
-              ]}
-            >
-              <VStack
-                alignment="leading"
-                spacing={1}
-                modifiers={[frame({ maxWidth: Infinity, alignment: "leading" })]}
-              >
-                <Text modifiers={[font({ size: 13, weight: "semibold" }), lineLimit(1)]}>
-                  {content.title}
-                </Text>
-                {content.subtitle ? (
-                  <Text
-                    modifiers={[
-                      font({ size: 11 }),
-                      foregroundStyle(dark ? "#c0c0c0" : "#646464"),
-                      lineLimit(1),
-                    ]}
-                  >
-                    {content.subtitle}
-                  </Text>
-                ) : null}
-              </VStack>
-              <Image systemName={symbols[content.icon]} size={14} />
-            </HStack>
-          ) : (
-            <Image
-              systemName={symbols[content.icon]}
-              size={20}
-              modifiers={[frame({ width: 20, height: 20 })]}
-            />
-          )}
-        </Button>
+        {content.menu ? (
+          // The workspace switcher, in the grouped sheet the composer's controls use; the WebView
+          // gets each choice as a press of the menu with the row's ID.
+          <NativeControlPicker
+            control={{
+              id: content.menu.id,
+              title: content.menu.title,
+              options: content.menu.options,
+            }}
+            pages={[]}
+            dark={dark}
+            anchor={anchor}
+            onSelect={(control, value) => emit({ kind: "press", control, value })}
+          />
+        ) : (
+          anchor(() => emit({ kind: "press", control: "activate" }))
+        )}
       </Host>
     </View>
   );
 }
 
 function controlModifiers({
-  corners,
   label,
+  blocked,
+  color,
+}: {
+  label: string;
+  blocked?: boolean;
+  color?: string | null;
+}) {
+  return [
+    buttonStyle("plain"),
+    ...(color ? [foregroundStyle(color)] : []),
+    disabled(!!blocked),
+    accessibilityLabel(label),
+  ];
+}
+
+/** Plain buttons hit-test their label, so the label is what fills the 44pt control. */
+function ControlFace({
+  corners,
   dark,
   primary,
   blocked,
-  color,
-  width,
+  children,
 }: {
   corners: CornerStyle;
-  label: string;
   dark: boolean;
   primary?: boolean;
   blocked?: boolean;
-  color?: string | null;
-  width: number;
+  children: ReactElement;
 }) {
-  return [
-    buttonStyle(primary ? "borderedProminent" : "plain"),
-    ...(primary
-      ? [foregroundStyle(dark ? "#141414" : "#ffffff")]
-      : color
-        ? [foregroundStyle(color)]
-        : []),
-    buttonBorderShape(...nativeButtonShape(corners)),
-    controlSize("regular"),
-    disabled(!!blocked),
-    accessibilityLabel(label),
-    frame({ width, height: 44 }),
-  ];
+  return (
+    <HStack
+      modifiers={[
+        frame({ width: 44, height: 44 }),
+        ...(primary
+          ? [
+              foregroundStyle(dark ? "#141414" : "#ffffff"),
+              background(dark ? "#ededed" : "#20211f"),
+              clipShape(...nativeButtonShape(corners)),
+              opacity(blocked ? 0.3 : 1),
+            ]
+          : []),
+        contentShape(shapes.rectangle()),
+      ]}
+    >
+      {children}
+    </HStack>
+  );
 }
 
 function Control({
@@ -367,93 +412,71 @@ function Control({
   icon,
   corners,
   label,
+  title,
   dark,
   primary,
   blocked,
   onPress,
   options,
+  pages,
   onSelect,
   onPresent,
-  width = 40,
 }: {
   id?: string;
   icon: NativeIcon;
   corners: CornerStyle;
   label: string;
+  title?: string | undefined;
   dark: boolean;
   primary?: boolean;
   blocked?: boolean;
+  /** For a control with options, also runs as its sheet opens. */
   onPress?(): void;
   options?: NativeControl["options"];
-  onSelect?(id: string): void;
+  /** The controls its sheet's rows can open as pages. */
+  pages?: readonly NativeControl[];
+  onSelect?(control: string, value: string): void;
   onPresent?(open: boolean): void;
-  width?: number;
 }) {
-  const modifiers = controlModifiers({ corners, label, dark, primary, blocked, width });
-  const optionButton = (press: () => void) => (
+  const modifiers = controlModifiers({ label, blocked });
+  const button = (press: (() => void) | undefined) => (
     <Button testID={`native-composer-${icon}`} onPress={press} modifiers={modifiers}>
-      {icon === "model" || icon === "claude" || icon === "opencode" ? (
-        <RNHostView matchContents>
-          <RNImage
-            source={providerImages[icon]}
-            style={{ width: 18, height: 18, tintColor: dark ? "#eee" : "#222" }}
-          />
-        </RNHostView>
-      ) : icon === "pi" ? (
-        <Text modifiers={[font({ size: 20 })]}>π</Text>
-      ) : (
-        <Image systemName={symbols[icon]} size={18} />
-      )}
+      <ControlFace corners={corners} dark={dark} primary={primary} blocked={blocked}>
+        {icon === "model" || icon === "claude" || icon === "opencode" ? (
+          <RNHostView matchContents>
+            <RNImage
+              source={providerImages[icon]}
+              style={{ width: 18, height: 18, tintColor: dark ? "#eee" : "#222" }}
+            />
+          </RNHostView>
+        ) : icon === "pi" ? (
+          <Text modifiers={[font({ size: 20 })]}>π</Text>
+        ) : (
+          <Image systemName={symbols[icon]} size={18} />
+        )}
+      </ControlFace>
     </Button>
   );
   return (
     <Host
-      style={[styles.control, { width }]}
+      style={styles.control}
       colorScheme={dark ? "dark" : "light"}
       seedColor={dark ? "#ededed" : "#20211f"}
       ignoreSafeArea="all"
     >
-      {options ? (
-        id === "model" ? (
-          <NativeControlPicker
-            label={label}
-            options={options}
-            dark={dark}
-            blocked={blocked}
-            anchor={optionButton}
-            onSelect={onSelect}
-            onPresent={onPresent}
-          />
-        ) : (
-          optionButton(() => {
-            onPresent?.(true);
-            ActionSheetIOS.showActionSheetWithOptions(
-              {
-                title: label,
-                options: [
-                  ...options.map((option) => `${option.selected ? "✓ " : ""}${option.label}`),
-                  "Cancel",
-                ],
-                cancelButtonIndex: options.length,
-                tintColor: dark ? "#ededed" : "#20211f",
-                cancelButtonTintColor: dark ? "#ededed" : "#20211f",
-                userInterfaceStyle: dark ? "dark" : "light",
-              },
-              (index) => {
-                if (options[index]) onSelect?.(options[index].id);
-                onPresent?.(false);
-              },
-            );
-          })
-        )
-      ) : (
-        <Button
-          testID={`native-composer-${icon}`}
-          label={label}
-          systemImage={symbols[icon]}
-          onPress={onPress}
-          modifiers={[...modifiers, labelStyle("iconOnly")]}
+      {id && options ? (
+        <NativeControlPicker
+          control={{ id, title: title ?? label, options }}
+          pages={pages ?? []}
+          dark={dark}
+          blocked={blocked}
+          anchor={button}
+          onOpen={onPress}
+          onSelect={onSelect}
+          onPresent={onPresent}
         />
+      ) : (
+        button(onPress)
       )}
     </Host>
   );
@@ -480,7 +503,6 @@ function Composer({
   const [focused, setFocused] = useState(false);
   const [textHeight, setTextHeight] = useState(40);
   const [picking, setPicking] = useState(false);
-  const [width, setWidth] = useState(360);
   const presenting = useRef(false);
   const alive = useRef(true);
   const latest = useRef({ content, emit });
@@ -499,7 +521,13 @@ function Composer({
     );
   }, [content.draft, content.editAck]);
   const expanded = focused;
-  const height = expanded ? Math.min(208, Math.max(112, textHeight + 64)) : 56;
+  // Send keeps an even 8pt to the right and bottom edges, as on the phone web build. Liquid Glass
+  // draws its edge 3pt inside its frame, so 8pt there takes 11pt of padding.
+  const inset = glass ? 11 : 8;
+  const toolbarHeight = 44 + inset * 2;
+  const height = expanded
+    ? Math.min(208 + inset, Math.max(112 + inset, textHeight + 64 + inset))
+    : toolbarHeight;
   const [motion] = useState(() => new Animated.Value(height));
   useEffect(() => {
     latest.current.emit({ kind: "height", height });
@@ -661,7 +689,6 @@ function Composer({
     }
   };
   const stop = content.active && !draft.trim() && !content.hasAttachments;
-  const controlWidth = Math.min(40, (width - 12) / 8);
   const glassShape = { borderRadius: cornerRadius(corners) * 3.6 };
   const sendButton = (
     <Control
@@ -669,7 +696,6 @@ function Composer({
       corners={corners}
       label={stop ? "Interrupt agent" : content.active ? "Queue message" : "Send message"}
       dark={dark}
-      width={controlWidth}
       primary
       blocked={
         stop ? !content.canStop : !content.canSend || (!draft.trim() && !content.hasAttachments)
@@ -683,21 +709,17 @@ function Composer({
       corners={corners}
       label="Attach files"
       dark={dark}
-      width={controlWidth}
       blocked={!content.attachEnabled || picking}
       onPress={() => void attach()}
     />
   );
   const surface = (
-    <View
-      style={[styles.composer, !expanded && styles.collapsed]}
-      onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
-    >
+    <View style={[styles.composer, { padding: inset }, !expanded && styles.collapsed]}>
       {!expanded && attachButton}
       <TextInput
         testID="native-agent-input"
         ref={input}
-        accessibilityLabel="Message your agent"
+        accessibilityLabel={content.placeholder}
         placeholder={content.placeholder}
         placeholderTextColor={dark ? "#a3a3a3" : "#666"}
         selectionColor={dark ? "#ededed" : "#20211f"}
@@ -710,7 +732,7 @@ function Composer({
         style={[
           styles.input,
           { color: dark ? "#f5f5f5" : "#20211f" },
-          expanded ? { height: height - 60 } : styles.collapsedInput,
+          expanded ? { height: height - toolbarHeight } : styles.collapsedInput,
         ]}
         onContentSizeChange={(event) => setTextHeight(event.nativeEvent.contentSize.height)}
         onChangeText={(text) => {
@@ -730,25 +752,32 @@ function Composer({
       {expanded ? (
         <View style={styles.toolbar}>
           {attachButton}
-          {content.controls.map((control) => (
-            <Control
-              key={control.id}
-              {...control}
-              corners={corners}
-              dark={dark}
-              width={controlWidth}
-              onPresent={onPresent}
-              blocked={control.disabled}
-              onSelect={(value) => emit({ kind: "press", control: control.id, value })}
-            />
-          ))}
+          {content.controls
+            .filter((control) => control.id === "model" || control.id === "options")
+            .map((control) => (
+              <Control
+                key={control.id}
+                {...control}
+                corners={corners}
+                dark={dark}
+                onPresent={onPresent}
+                blocked={control.disabled}
+                pages={content.controls}
+                onPress={
+                  control.id === "model"
+                    ? () => emit({ kind: "press", control: "model-open" })
+                    : undefined
+                }
+                onSelect={(from, value) => emit({ kind: "press", control: from, value })}
+              />
+            ))}
           <View style={styles.spacer} />
           {content.usage ? (
             <ContextControl
               usage={content.usage}
               corners={corners}
               dark={dark}
-              width={controlWidth}
+              reduceMotion={reduceMotion}
               emit={emit}
               onPresent={onPresent}
             />
@@ -758,7 +787,6 @@ function Composer({
             corners={corners}
             label="Start dictation"
             dark={dark}
-            width={controlWidth}
             blocked={!content.editable}
             onPress={() => {
               if (!content.dictationHelp) {
@@ -825,24 +853,22 @@ function ContextControl({
   usage,
   corners,
   dark,
-  width,
+  reduceMotion,
   emit,
   onPresent,
 }: {
   usage: NativeUsage;
   corners: CornerStyle;
   dark: boolean;
-  width: number;
+  reduceMotion: boolean;
   emit: Emit;
   onPresent(open: boolean): void;
 }) {
   const [open, setOpen] = useState(false);
   const { percent } = usage.context;
-  const label =
-    percent === null ? "Context window" : `Context window, ${Math.round(percent)}% used`;
   return (
     <Host
-      style={[styles.control, { width }]}
+      style={styles.control}
       colorScheme={dark ? "dark" : "light"}
       seedColor={dark ? "#ededed" : "#20211f"}
       ignoreSafeArea="all"
@@ -855,8 +881,6 @@ function ContextControl({
         anchor={
           <Button
             testID="native-composer-context"
-            label={label}
-            systemImage={symbols.context}
             onPress={() => {
               onPresent(true);
               setOpen(true);
@@ -864,15 +888,16 @@ function ContextControl({
             }}
             modifiers={[
               ...controlModifiers({
-                corners,
-                label,
-                dark,
+                label: "Context window",
                 color: toneColor(usage.context.tone, dark),
-                width,
               }),
-              labelStyle("iconOnly"),
+              accessibilityValue(contextRingValue(percent)),
             ]}
-          />
+          >
+            <ControlFace corners={corners} dark={dark}>
+              <ContextRing percent={percent} reduceMotion={reduceMotion} />
+            </ControlFace>
+          </Button>
         }
       >
         <UsageSheet
@@ -882,6 +907,35 @@ function ContextControl({
         />
       </BottomSheet>
     </Host>
+  );
+}
+
+/**
+ * Desktop's ring at the toolbar's icon size: a faint track, and over it an arc of what is used from
+ * 12 o'clock clockwise. The stroke takes the button's foreground, so it follows the context tone.
+ */
+function ContextRing({ percent, reduceMotion }: { percent: number | null; reduceMotion: boolean }) {
+  const layer = [frame({ width: 18, height: 18 })];
+  return (
+    <ZStack modifiers={layer}>
+      <Spacer
+        modifiers={[
+          ...layer,
+          strokeBorder({ shape: "circle", style: { lineWidth: 2.25 } }),
+          opacity(0.2),
+        ]}
+      />
+      {percent === null ? null : (
+        <Spacer
+          modifiers={[
+            ...layer,
+            strokeBorder({ shape: "circle", style: contextRingStroke(percent, 18, 2.25) }),
+            rotationEffect(-90),
+            ...(reduceMotion ? [] : [animation(Animation.easeInOut({ duration: 0.25 }), percent)]),
+          ]}
+        />
+      )}
+    </ZStack>
   );
 }
 
@@ -995,12 +1049,12 @@ function UsageBar({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  control: { width: 40, height: 44, flexShrink: 1 },
+  control: { width: 44, height: 44, flexShrink: 0 },
   composerFrame: { position: "absolute", bottom: 0, left: 0, right: 0 },
-  composer: { flex: 1, padding: 6 },
+  composer: { flex: 1 },
   collapsed: { flexDirection: "row", alignItems: "center" },
   input: { fontSize: 15, lineHeight: 21, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 6 },
-  collapsedInput: { flex: 1, height: 42, paddingHorizontal: 4, paddingTop: 9 },
+  collapsedInput: { flex: 1, height: 44, paddingHorizontal: 4, paddingTop: 10 },
   toolbar: { flexDirection: "row", alignItems: "center", height: 44 },
   spacer: { flex: 1 },
 });

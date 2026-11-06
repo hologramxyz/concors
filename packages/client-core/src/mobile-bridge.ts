@@ -85,6 +85,11 @@ export const MobilePreferencesSchema = z.object({
   corners: z.enum(["square", "subtle", "rounded"]),
   sound: z.boolean().default(false),
   shortcuts: ShortcutOverridesSchema.optional(),
+  /**
+   * Workspaces folded in the sidebar, as desktop keeps them in localStorage, which the phone's
+   * webview does not have. Preferences saved before it existed load with none folded.
+   */
+  collapsedWorkspaces: z.array(id).max(200).default([]),
 });
 export type MobilePreferences = z.infer<typeof MobilePreferencesSchema>;
 export const MobileStateSchema = z.object({

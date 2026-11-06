@@ -52,21 +52,26 @@ Phone-specific behavior:
   caches and saved selection. Unsaved files are checked first. No additional AI-sharing
   onboarding prompt is shown. This does not add team creation, invitations or membership management;
   those are not desktop features on the synced main revision either.
-- Tabs, Machine, Organization, Search, Settings, Open workspace and New Tab use the shared Radix dialog with animated
+- Workspaces, Machine, Organization, Search, Settings, Open workspace and New Tab use the shared Radix dialog with animated
   bottom-sheet presentation, focus restoration and reduced-motion support.
   Opening Search or choosing a machine leaves the sidebar visible behind it.
 - [Search](search.md) is a shared machine-scoped workspace/agent/tab finder, with exact pane
   destinations, name/path context and secondary commands. It does not search message/file contents.
-- Separate glass controls contain the sidebar toggle, sidebar Search, picker and Files button (native SwiftUI
-  glass on supported iOS builds; CSS backdrop blur in the web/Android renderer),
+- Separate glass controls contain the sidebar toggle, sidebar Search, the workspace name and the Files
+  button (native SwiftUI glass on supported iOS builds; CSS backdrop blur in the web/Android renderer),
   with matching rounded pressed states and opaque fallbacks for reduced transparency.
-  The Tabs picker shows a flat list of every pane in the project, with a name and profile per row.
-  There are no desktop tab headings, counts or indentation. Split leaves use the shared tab name
-  plus display position; the original IDs, split geometry and sessions are preserved.
-  Tab and machine selection open bottom drawers with scrollable, touch-sized options.
+  The workspace name opens a sheet of the open workspaces, drawn as the sidebar draws them, to switch
+  to one on the tab it was last on, or to open another ("Open workspace…").
+  Under the header, workspace screens have desktop's tab strip (`workspace/tab-strip.tsx`, with
+  `TabButton` labels): one 44pt tab per pane in the project, scrolling sideways with edge fades and
+  "+" for New tab pinned at its end. Split leaves use the shared tab name plus display position;
+  the original IDs, split geometry and sessions are preserved. Touches that start on the strip
+  scroll it and never open a side panel. Schedules and Pull requests keep their page title and
+  have no strip.
+  Workspace and machine selection open bottom drawers with scrollable, touch-sized options.
   The backdrop, Close button and Escape dismiss them and restore focus. Tapping the
   covered trigger dismisses via the backdrop without reopening. The settings section
-  picker remains a popover. Pane choices support arrow keys and Home/End; machine and settings
+  picker remains a popover. Workspace choices support arrow keys and Home/End; machine and settings
   choices also support typeahead. Row actions are separate buttons, not nested listbox controls.
   Navigation is device-local; explicit create/rename/profile/close edits update the shared workspace.
 - The composer collapses to a single line with attachment and primary actions.
@@ -81,12 +86,13 @@ Phone-specific behavior:
   One centered primary action shows Stop while active with an empty draft, Queue with
   follow-up content, or Send when idle. Controls fit a single row down to 320px width.
 - Desktop split/placement/arrangement/resize controls and commands are intentionally
-  absent on phones. Existing desktop split panes remain accessible in the top picker.
-- The flat Tabs drawer has one menu per row (type/profile, close, and rename for single-pane
-  desktop tabs) and a New Tab footer. Creation uses the shared new-session drawer and provider
+  absent on phones. Existing desktop split panes remain accessible in the tab strip.
+- Each strip tab has a menu sheet (pin, rename for single-pane desktop tabs, fork, type/profile,
+  close, delete), opened by a long-press, the context-menu key, or a "More actions" button a
+  screen reader reaches beside the tab. Creation uses the shared new-session drawer and provider
   logos, always creating a new single-pane desktop tab. Close always sends `pane.close`, never
   `tab.close`, so siblings survive. Closing an inactive row preserves the current selection;
-  the last pane's confirmation explains that its empty desktop tab is removed too.
+  the confirmation reads "This closes the tab on all your devices."
   No local-only names or schema migrations are introduced. Desktop split siblings cannot be
   renamed independently, so mobile does not offer a misleading rename action for those rows.
 - Files opens full-screen from the right, with a directory tree and separate open-file strip.
@@ -105,12 +111,12 @@ Phone-specific behavior:
   and foreground socket replacement. They remain memory-only and account scoped;
   a full renderer reload discards unsent input. Changing machines starts a new draft scope.
 - External keyboards use the shared command palette/shortcuts. Next/Previous tab follows
-  the flat picker's order across desktop tab boundaries. Legacy pane-focus/close shortcuts
+  the tab strip's order across desktop tab boundaries. Legacy pane-focus/close shortcuts
   remain aliases, not extra menu/settings entries. Soft Enter adds a newline; the send button submits.
 
 ## Source parity
 
-The flat Tabs follow-up is covered by `apps/mobile/e2e-direct/flat-tabs.spec.ts` using an
+The flat tabs follow-up is covered by `apps/mobile/e2e-direct/flat-tabs.spec.ts` using an
 isolated real daemon and two protocol clients (deterministic coding-provider fixture).
 It checks nested splits across desktop tabs, flat keyboard order, unchanged saved layout
 and desktop selection on navigation, live desktop rename/split/close updates, mobile

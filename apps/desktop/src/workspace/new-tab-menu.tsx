@@ -1,7 +1,7 @@
 import { useCommand } from "@/shortcuts/context";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { MenuKeyChips } from "@/shortcuts/key-chips";
-import { PaneProfileIcon } from "./profile-icon";
+import { RowMenuGroup, RowMenuSeparator } from "@/components/row-menu-sheet";
 import { paneProfiles } from "./tab-profiles";
 import { useTerminalProfiles } from "@/terminal/profiles-context";
 import { Fragment, useContext, useRef, useState, type ReactNode } from "react";
@@ -16,13 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export function NewTabMenu({
   disabled,
@@ -62,7 +56,11 @@ export function NewTabMenu({
     event.preventDefault();
     requestAnimationFrame(() => {
       if (!document.querySelector('[data-slot="dialog-content"][data-state="open"]'))
-        triggerContainer.current?.querySelector("button")?.focus({ preventScroll: true });
+        // A trigger made of several buttons (the phone's tab strip) marks the one that opens it.
+        (
+          triggerContainer.current?.querySelector<HTMLElement>("[data-new-tab-trigger]") ??
+          triggerContainer.current?.querySelector("button")
+        )?.focus({ preventScroll: true });
     });
   };
   return (
@@ -87,67 +85,65 @@ export function NewTabMenu({
             </button>
           )}
           <Dialog open={open} onOpenChange={setOpen}>
-            <DialogContent onCloseAutoFocus={restoreTriggerFocus}>
+            {/* Desktop's "+" menu as a sheet: the chat, then everything that runs in a terminal,
+                each under the label the phone's other sheets use, then resuming one. */}
+            <DialogContent
+              className="mobile-select-sheet mobile-row-sheet"
+              aria-describedby={undefined}
+              onCloseAutoFocus={restoreTriggerFocus}
+            >
               <DialogHeader>
                 <DialogTitle>New tab</DialogTitle>
-                <DialogDescription>
-                  Start a chat or terminal, synced with your desktop.
-                </DialogDescription>
               </DialogHeader>
               {createDisabled && !disabled && (
                 <p role="status" className="text-sm text-muted-foreground">
                   This project has reached its 32-tab limit.
                 </p>
               )}
-              <div className="mobile-session-list">
-                {paneProfiles(profiles.profiles).map(
-                  ({ id, profile, label, terminalProfileId }) => (
+              <div className="mobile-select-sheet-list">
+                {(["Chat", "In a terminal"] as const).map((group) => (
+                  <RowMenuGroup key={group} label={group}>
+                    {paneProfiles(profiles.profiles)
+                      .filter((item) => (item.profile === "chat") === (group === "Chat"))
+                      .map(({ id, profile, label, icon: Icon, terminalProfileId }) => (
+                        <button
+                          key={id}
+                          type="button"
+                          aria-label={label}
+                          disabled={createDisabled}
+                          className="mobile-select-option disabled:opacity-50"
+                          onClick={() => {
+                            setOpen(false);
+                            create(profile, terminalProfileId);
+                          }}
+                        >
+                          <span className="mobile-select-icon">
+                            <Icon aria-hidden="true" />
+                          </span>
+                          <span className="min-w-0 flex-1 truncate">{label}</span>
+                        </button>
+                      ))}
+                  </RowMenuGroup>
+                ))}
+                {onResume && (
+                  <>
+                    <RowMenuSeparator />
                     <button
-                      key={id}
                       type="button"
-                      aria-label={label}
+                      aria-label="Resume a chat…"
                       disabled={createDisabled}
+                      className="mobile-select-option disabled:opacity-50"
                       onClick={() => {
                         setOpen(false);
-                        create(profile, terminalProfileId);
+                        onResume();
                       }}
                     >
-                      <span className="mobile-session-icon">
-                        <PaneProfileIcon profile={profile} />
+                      <span className="mobile-select-icon">
+                        <History aria-hidden="true" />
                       </span>
-                      <span>
-                        <span className="block font-medium">{label}</span>
-                        <span className="mobile-select-description">
-                          {profile === "chat"
-                            ? "Chat with an agent, review tools and approve work"
-                            : profile === "shell"
-                              ? "Run commands on your machine"
-                              : `Open ${label} in an interactive terminal`}
-                        </span>
-                      </span>
+                      <span className="min-w-0 flex-1 truncate">Resume a chat…</span>
                     </button>
-                  ),
-                )}
-                {onResume && (
-                  <button
-                    type="button"
-                    aria-label="Resume a chat…"
-                    disabled={createDisabled}
-                    onClick={() => {
-                      setOpen(false);
-                      onResume();
-                    }}
-                  >
-                    <span className="mobile-session-icon">
-                      <History className="size-5" aria-hidden="true" />
-                    </span>
-                    <span>
-                      <span className="block font-medium">Resume a chat…</span>
-                      <span className="mobile-select-description">
-                        Reopen a chat with its name, settings and history
-                      </span>
-                    </span>
-                  </button>
+                  </>
                 )}
               </div>
             </DialogContent>

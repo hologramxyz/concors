@@ -26,6 +26,13 @@ import {
 import { AgentLoadingIcon } from "@/agents/activity";
 import { AGENT_DOT_COLOR, type AgentDot, type AgentStatus } from "@/agents/agent-status";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
+import { CompactLayoutContext } from "@/components/compact-layout";
+import {
+  RowMenuGroup,
+  RowMenuItem,
+  RowMenuSeparator,
+  RowMenuSheet,
+} from "@/components/row-menu-sheet";
 import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
 import { shortAge } from "@/lib/format-date";
 import {
@@ -42,8 +49,13 @@ import {
  * at work, open or closed (closed rows are told apart by their muted name), shows a spinner at the
  * row's other end instead, where its age would only say "now".
  */
-function RowDot({ row, status }: { row: SidebarRow; status: AgentStatus | undefined }) {
-  const state = rowState(row);
+export function RowDot({
+  state,
+  status,
+}: {
+  state: ReturnType<typeof rowState>;
+  status: AgentStatus | null | undefined;
+}) {
   const background = status?.background ?? 0;
   return (
     <span
@@ -60,6 +72,15 @@ function RowDot({ row, status }: { row: SidebarRow; status: AgentStatus | undefi
       ) : (
         (state === "attention" || state === "done") && <SidebarDot dot={state} />
       )}
+    </span>
+  );
+}
+
+/** The spinner a row shows at its end while an agent replies. */
+export function RowWorking() {
+  return (
+    <span data-row-working className="flex size-4 shrink-0 items-center justify-center">
+      <AgentLoadingIcon className="size-3.5" />
     </span>
   );
 }
@@ -112,6 +133,7 @@ export function SidebarTabRow({
   const title = row.kind === "closed" ? row.chat.title : row.title;
   const status = rowAgentStatus(row);
   const background = useContext(BackgroundTerminalsContext);
+  const phone = useContext(CompactLayoutContext);
   const terminal = row.kind === "terminal" && background ? row.terminal : undefined;
   // Mirrors the tab rename: the ref stops blur after Enter/Escape from committing a second time.
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -148,7 +170,7 @@ export function SidebarTabRow({
       onClick={onOpen}
       className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md pl-2 text-left text-ui outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
-      <RowDot row={row} status={status} />
+      <RowDot state={rowState(row)} status={status} />
       <span className={cn("min-w-0 flex-1 truncate", closed && "text-muted-foreground")}>
         {/* Only the name opens the details, so the rest of the row stays free for its "…" menu. */}
         <SidebarTooltip
@@ -168,9 +190,7 @@ export function SidebarTabRow({
         <Clock className="size-3.5 shrink-0 text-muted-foreground" aria-label="Scheduled agent" />
       )}
       {working ? (
-        <span data-row-working className="flex size-4 shrink-0 items-center justify-center">
-          <AgentLoadingIcon className="size-3.5" />
-        </span>
+        <RowWorking />
       ) : (
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
           {shortAge(row.time, now)}
@@ -193,6 +213,7 @@ export function SidebarTabRow({
         "group/row flex items-center rounded-md hover:bg-sidebar-accent/70 has-[[aria-expanded=true]]:bg-sidebar-accent/70",
         selected &&
           "bg-sidebar-accent hover:bg-sidebar-accent has-[[aria-expanded=true]]:bg-sidebar-accent",
+        phone && "mobile-sidebar-tab",
       )}
     >
       {renaming !== null ? (
@@ -224,13 +245,71 @@ export function SidebarTabRow({
       ) : (
         button
       )}
-      {actions ? (
+      {actions && phone ? (
+        // A phone opens row menus as sheets, with the same items; each runs once the sheet has gone.
+        <RowMenuSheet
+          label={`Actions for ${title}`}
+          title={title}
+          className={cn(
+            "mobile-tap-target flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground",
+            renaming !== null && "invisible",
+          )}
+          icon={<Ellipsis className="size-4" />}
+        >
+          {onPin && (
+            <RowMenuItem icon={pinned ? <PinOff /> : <Pin />} onSelect={onPin}>
+              {pinned ? "Unpin" : "Pin"}
+            </RowMenuItem>
+          )}
+          {onRename && (
+            <RowMenuItem icon={<Pencil />} onSelect={() => setRename(title)}>
+              Rename tab
+            </RowMenuItem>
+          )}
+          {onFork && (
+            <RowMenuItem icon={<GitFork />} onSelect={onFork}>
+              Fork chat
+            </RowMenuItem>
+          )}
+          {canMove && (
+            <RowMenuGroup label="Move to workspace">
+              {moveTargets.map((target) => (
+                <RowMenuItem
+                  key={target.id}
+                  icon={<ArrowRightLeft />}
+                  onSelect={() => onMove?.(target.id)}
+                >
+                  {target.name}
+                </RowMenuItem>
+              ))}
+            </RowMenuGroup>
+          )}
+          {onDelete && (
+            <>
+              <RowMenuSeparator />
+              <RowMenuItem icon={<Trash2 />} destructive onSelect={onDelete}>
+                Delete
+              </RowMenuItem>
+            </>
+          )}
+          {terminal && (
+            <>
+              <RowMenuItem icon={<RotateCcw />} onSelect={() => background?.reopen(terminal)}>
+                Reopen
+              </RowMenuItem>
+              <RowMenuItem icon={<Square />} onSelect={() => background?.stop(terminal)}>
+                Stop
+              </RowMenuItem>
+            </>
+          )}
+        </RowMenuSheet>
+      ) : actions ? (
         <DropdownMenu>
           <SidebarTooltip content="Tab options">
             <DropdownMenuTrigger
               aria-label={`Actions for ${title}`}
               className={cn(
-                "flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 hover:text-sidebar-foreground aria-expanded:opacity-100 [@media(hover:none)]:opacity-100",
+                "mobile-tap-target flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 group-focus-within/row:opacity-100 group-hover/row:opacity-100 hover:text-sidebar-foreground aria-expanded:opacity-100 [@media(hover:none)]:opacity-100",
                 // Kept mounted while renaming so closing the menu can hand focus to the input.
                 renaming !== null && "invisible",
               )}
@@ -308,7 +387,7 @@ export function SidebarTabRow({
           </DropdownMenuContent>
         </DropdownMenu>
       ) : (
-        <span aria-hidden="true" className="size-6 shrink-0" />
+        <span aria-hidden="true" className="mobile-row-spacer size-6 shrink-0" />
       )}
     </li>
   );
@@ -334,7 +413,7 @@ export function UnavailableChats({ chats, now }: { chats: readonly AgentInfo[]; 
               {chat.paneName ?? chat.tabName ?? chat.name}
             </span>
             <span className="shrink-0 text-xs tabular-nums">{shortAge(chat.updatedAt, now)}</span>
-            <span aria-hidden="true" className="size-6 shrink-0" />
+            <span aria-hidden="true" className="mobile-row-spacer size-6 shrink-0" />
           </li>
         ))}
       </ul>

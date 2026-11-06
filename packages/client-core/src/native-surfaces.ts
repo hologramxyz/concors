@@ -22,7 +22,6 @@ export const NativeIconSchema = z.enum([
   "brain",
   "shield",
   "options",
-  "context",
   "mic",
 ]);
 export type NativeIcon = z.infer<typeof NativeIconSchema>;
@@ -32,12 +31,32 @@ const option = z.object({
   id: optionValue,
   label: z.string().max(4608),
   selected: z.boolean(),
-  /** Opens another page of options without committing a choice or dismissing the picker. */
+  /**
+   * Keeps the sheet where it is: a row whose ID names another control opens that control as a page,
+   * and any other sends its choice and stays, as an update does to show its progress.
+   */
   navigate: z.boolean().optional(),
+  /** A second line under the label. */
+  description: z.string().max(500).optional(),
+  /** What the page a navigating row opens is set to, shown beside the label. */
+  value: z.string().max(4608).optional(),
+  /** Drawn as a switch that `selected` says is on; choosing it flips it. */
+  toggle: z.boolean().optional(),
+  /** Starts a new group of rows. */
+  section: z.boolean().optional(),
+  /** Closes the whole sheet even from a page, for a choice that answers with a dialog over it. */
+  closes: z.boolean().optional(),
+  disabled: z.boolean().optional(),
+  /** A workspace's mark before the label: its initial on a tile, or a folder. */
+  mark: z.union([z.literal("folder"), z.object({ initial: z.string().min(1).max(4) })]).optional(),
+  /** The sidebar's dot on that mark: a chat wants a look, or finished. */
+  dot: z.enum(["attention", "done"]).optional(),
 });
 export const NativeControlSchema = z.object({
   id: z.string().max(200),
+  /** Names the button; the title names its menu, and a menu without one has no heading. */
   label: z.string().max(500),
+  title: z.string().max(500).optional(),
   icon: NativeIconSchema,
   disabled: z.boolean(),
   options: z.array(option).max(10240).optional(),
@@ -88,6 +107,11 @@ export const NativeSurfaceContentSchema = z.discriminatedUnion("kind", [
     subtitle: z.string().max(500).optional(),
     icon: NativeIconSchema,
     disabled: z.boolean().default(false),
+    /**
+     * Opens this native sheet instead of pressing the button: a row's ID comes back as a press of
+     * the menu's ID with that value.
+     */
+    menu: NativeControlSchema.optional(),
   }),
   z.object({
     kind: z.literal("composer"),
@@ -106,7 +130,8 @@ export const NativeSurfaceContentSchema = z.discriminatedUnion("kind", [
      * limit. Without it, three files of 1 MB at most.
      */
     uploads: z.boolean().optional(),
-    controls: z.array(NativeControlSchema).max(4),
+    /** The toolbar's buttons, and the pages their sheets open: at most one per feature (64). */
+    controls: z.array(NativeControlSchema).max(72),
     /** Why the microphone cannot start dictation right now; without it, pressing "dictate" does. */
     dictationHelp: z.string().max(500).nullable().optional(),
     /** Null when the provider reports neither context nor plan usage: there is no sheet. */

@@ -29,6 +29,8 @@ export function NewWorkspaceMenu({
   closed = [],
   onReopen,
   rail = false,
+  open: shown,
+  onOpenChange,
 }: {
   disabled: boolean;
   onNew: () => void;
@@ -37,10 +39,15 @@ export function NewWorkspaceMenu({
   closed?: readonly RecentlyClosed[];
   onReopen?: (projectId: string) => void;
   rail?: boolean;
+  /** The phone's sheet, for its workspace switcher to open from elsewhere. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const recent = onReopen ? closed : [];
   const compact = useContext(CompactLayoutContext);
-  const [open, setOpen] = useState(false);
+  const [own, setOwn] = useState(false);
+  const open = shown ?? own;
+  const setOpen = onOpenChange ?? setOwn;
   const homePath = useHomePath();
   const trigger = useRef<HTMLButtonElement>(null);
   if (compact)
@@ -52,7 +59,9 @@ export function NewWorkspaceMenu({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Open workspace</DialogTitle>
-            <DialogDescription>Work with folders on the selected machine.</DialogDescription>
+            <DialogDescription className="sr-only">
+              Work with folders on the selected machine.
+            </DialogDescription>
           </DialogHeader>
           <div className="mobile-account-actions">
             <button
@@ -86,7 +95,7 @@ export function NewWorkspaceMenu({
               Clone repository…
             </button>
             {recent.length > 0 && (
-              <p className="px-1 pt-2 text-xs font-medium text-muted-foreground">Recently closed</p>
+              <div className="mobile-select-label border-t">Recently closed</div>
             )}
             {recent.map((project) => (
               <button
@@ -100,7 +109,9 @@ export function NewWorkspaceMenu({
                 <Folder />
                 {project.name}
                 {project.clashes && (
-                  <span className="truncate text-muted-foreground">{project.directory}</span>
+                  <span className="truncate text-muted-foreground">
+                    {homePath(project.directory)}
+                  </span>
                 )}
               </button>
             ))}

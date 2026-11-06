@@ -261,11 +261,19 @@ test("mobile project sidebar displays the repo favicon through the shared daemon
     const project = ui
       .getByRole("navigation", { name: "Primary" })
       .getByRole("button", { name: "Mobile favicon", exact: true });
+    // The favicon loads lazily, as it should for a long list. Earlier tests on the shared daemon
+    // leave workspaces whose tab rows now sit in the tree above this one, which pushes it below the
+    // fold, so bring it into view the way someone looking for it would.
+    await project.scrollIntoViewIfNeeded();
     await expect(project.locator('[data-project-icon="favicon"]')).toBeVisible();
     await expect(project.locator("img")).toHaveAttribute("src", /^data:image\/svg\+xml;base64,/);
+    // The row folds the workspace (its tabs open from their own rows), and its chevron says so.
+    await expect(project.locator('[data-workspace-chevron="expanded"]')).toBeVisible();
     await project.click();
-    await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
-    await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    await expect(project).toHaveAttribute("aria-expanded", "false");
+    await expect(project.locator('[data-workspace-chevron="collapsed"]')).toBeVisible();
+    await expect(project.locator('[data-project-icon="favicon"]')).toBeVisible();
+    await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
   } finally {
     await cleanup();
   }
@@ -411,9 +419,15 @@ test("terminal taps and horizontal swipes open real files and the sidebar withou
   try {
     const chat = ui.getByRole("textbox", { name: "Message Codex" });
     await chat.fill("Keep my chat draft during terminal gestures");
-    const picker = ui.getByRole("combobox", { name: "Tabs" });
-    await picker.click();
-    await ui.getByRole("button", { name: "New tab", exact: true }).click();
+    // The tab strip hides while the keyboard is up; closing it brings "+" back.
+    await ui.getByRole("log", { name: "Chat timeline" }).click({ position: { x: 200, y: 300 } });
+    await expect(ui.locator('.mobile-composer[data-expanded="true"]')).toHaveCount(0);
+    // The strip's current tab, under the header.
+    const picker = ui.locator('.mobile-tab-strip [data-pane-choice][aria-pressed="true"]');
+    await ui
+      .getByRole("group", { name: "Tabs", exact: true })
+      .getByRole("button", { name: "New tab", exact: true })
+      .click();
     await ui
       .getByRole("dialog", { name: "New tab", exact: true })
       .getByRole("button", { name: "Terminal", exact: true })
@@ -469,8 +483,9 @@ test("terminal taps and horizontal swipes open real files and the sidebar withou
     await page.keyboard.type("printf 'gesture-%s\\n' still-connected");
     await page.keyboard.press("Enter");
     await expect(terminal).toContainText("gesture-still-connected");
-    await picker.click();
-    await ui.locator(`[data-pane-choice][data-value="${tabId}:${paneId}"]`).click();
+    await ui
+      .locator(`.mobile-tab-strip [data-pane-choice][data-value="${tabId}:${paneId}"]`)
+      .click();
     await expect(chat).toHaveValue("Keep my chat draft during terminal gestures");
   } finally {
     await cleanup();

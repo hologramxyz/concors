@@ -77,22 +77,40 @@ for (const mode of ["light", "dark"] as const) {
         "border-radius",
         controlRadius,
       );
+      // The strip's selected fill is shaped as the header's controls are.
+      await expect
+        .poll(() =>
+          ui
+            .locator(".mobile-tab-strip [data-active-tab]")
+            .evaluate((el) => getComputedStyle(el, "::before").borderTopLeftRadius),
+        )
+        .toBe(controlRadius);
       await expect(input).toHaveValue("Shape changes keep this draft");
       await input.click();
       await expect(ui.locator(".mobile-composer-primary > button")).toHaveCSS(
         "border-radius",
         controlRadius,
       );
+      // The button's corner plus the 9px around it, so it sits evenly in the composer's corner.
+      await expect(ui.locator(".mobile-composer")).toHaveCSS(
+        "border-radius",
+        square ? "0px" : shape === "Rounded" ? "31px" : "15px",
+      );
       if (square) await assertSquare(ui.locator("body"));
 
-      await ui.getByRole("combobox", { name: "Tabs", exact: true }).click();
+      await ui.getByRole("button", { name: /^Workspace: / }).click();
       if (square) await assertSquare(ui.locator("body"));
-      const tabs = ui.getByRole("dialog", { name: "Tabs", exact: true });
-      await expect(tabs.getByRole("button", { name: "Close", exact: true })).toHaveCSS(
+      const workspaces = ui.getByRole("dialog", { name: "Workspaces", exact: true });
+      await expect(workspaces.getByRole("button", { name: "Close", exact: true })).toHaveCSS(
         "border-radius",
         controlRadius,
       );
-      await tabs.getByRole("button", { name: "New tab", exact: true }).click();
+      await workspaces.getByRole("button", { name: "Close", exact: true }).click();
+      await expect(workspaces).toHaveCount(0);
+      await ui
+        .getByRole("group", { name: "Tabs", exact: true })
+        .getByRole("button", { name: "New tab", exact: true })
+        .click();
       if (square) await assertSquare(ui.locator("body"));
       await ui
         .getByRole("dialog", { name: "New tab", exact: true })

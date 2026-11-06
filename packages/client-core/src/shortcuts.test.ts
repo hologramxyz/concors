@@ -14,7 +14,10 @@ it("round-trips device shortcuts through mobile preferences without losing exist
     ],
   };
   const preferences = { theme: "dark", corners: "rounded", sound: true, shortcuts };
-  expect(MobilePreferencesSchema.parse(preferences)).toEqual(preferences);
+  expect(MobilePreferencesSchema.parse(preferences)).toEqual({
+    ...preferences,
+    collapsedWorkspaces: [],
+  });
   expect(
     MobilePreferencesSchema.parse({ theme: "system", corners: "subtle" }).shortcuts,
   ).toBeUndefined();

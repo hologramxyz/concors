@@ -45,7 +45,7 @@ test("live CPU and RAM fit below the mobile machine selector and unsubscribe whe
     const usageBox = await usage.boundingBox();
     if (!pickerBox || !usageBox) throw new Error("Machine picker or usage is missing");
     expect(usageBox.y).toBeGreaterThanOrEqual(pickerBox.y + pickerBox.height);
-    expect(usageBox.height).toBeLessThanOrEqual(40);
+    expect(usageBox.height).toBe(44);
   }
   await page.screenshot({
     path: "apps/mobile/test-results/direct/mobile-sidebar-usage.png",

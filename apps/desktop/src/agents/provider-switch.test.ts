@@ -5,7 +5,6 @@ import {
   providerState,
   setAsideConversation,
   switchConfirmation,
-  switchDescription,
 } from "./provider-switch";
 
 const agent = (patch: Partial<AgentInfo>): AgentInfo =>
@@ -27,11 +26,6 @@ it("finds the conversation a pane set aside for a provider, and nothing from oth
   const agents = [codex, claude, elsewhere];
   expect(setAsideConversation(agents, claude, "codex")).toBe(codex);
   expect(setAsideConversation(agents, claude, "opencode")).toBeUndefined();
-  expect(switchDescription(agents, claude, "claude")).toBe("Current conversation");
-  expect(switchDescription(agents, claude, "codex")).toBe("Back to its conversation in this pane");
-  expect(switchDescription(agents, claude, "opencode")).toBe(
-    "Starts a new conversation in this pane",
-  );
 });
 
 it("labels a provider only by a state worth noting", () => {

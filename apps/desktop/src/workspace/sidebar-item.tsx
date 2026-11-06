@@ -37,6 +37,8 @@ export function WorkspaceSidebarItem({
   icon,
   pullRequests,
   onSelect,
+  toggles = false,
+  onNewTab,
   onToggleExpanded,
   onOpenPullRequests,
   execute,
@@ -60,6 +62,13 @@ export function WorkspaceSidebarItem({
   /** Its open list shows each dot on its own row, so the folder has no dot of its own. */
   expanded?: boolean;
   onSelect: (id: string) => void;
+  /**
+   * Choosing the row only expands or collapses it, so it says so to a screen reader and shows
+   * desktop's fold chevron at its end.
+   */
+  toggles?: boolean;
+  /** Offers New tab in the workspace's phone menu. */
+  onNewTab?: ((projectId: string) => void) | undefined;
   /** Offers a chevron over the icon on hover and keyboard focus, which only folds the workspace. */
   onToggleExpanded?: () => void;
   onOpenPullRequests?: (projectId: string, repository?: string) => void;
@@ -139,6 +148,7 @@ export function WorkspaceSidebarItem({
       onClick={() => onSelect(project.id)}
       // The workspace you are in, even while one of its tab rows carries the selection's fill.
       aria-current={(current ?? selected) ? "page" : undefined}
+      aria-expanded={toggles ? !!expanded : undefined}
       className={cn(
         "flex min-w-0 flex-1 items-center rounded-md text-ui disabled:opacity-50",
         compact ? "sidebar-rail-control font-semibold" : "h-8 gap-2 px-2",
@@ -159,6 +169,23 @@ export function WorkspaceSidebarItem({
       )}
       {!compact && parent && (
         <span className="min-w-0 shrink-[2] truncate text-muted-foreground">{parent}</span>
+      )}
+      {toggles && !compact && (
+        // Desktop's fold chevron, shown for good where touch has no hover to reveal it, at the
+        // row's end so the workspace keeps its icon. The row itself is the toggle, so this only
+        // shows which way it is folded.
+        <span
+          aria-hidden="true"
+          data-workspace-chevron={expanded ? "expanded" : "collapsed"}
+          className="ml-auto flex size-[20px] shrink-0 items-center justify-center text-muted-foreground"
+        >
+          <ChevronRight
+            className={cn(
+              "size-[16px] transition-transform duration-200 motion-reduce:transition-none",
+              expanded && "rotate-90",
+            )}
+          />
+        </span>
       )}
     </button>
   );
@@ -246,6 +273,7 @@ export function WorkspaceSidebarItem({
           execute={execute}
           renaming={renaming !== null}
           onRename={canRename ? () => setRename(project.name) : undefined}
+          onNewTab={onNewTab && (() => onNewTab(project.id))}
           onCloseAutoFocus={(event) => {
             // The menu's focus trap outlives the input's autoFocus, so hand focus over here
             // instead of returning it to the trigger.
@@ -264,7 +292,13 @@ export function WorkspaceSidebarItem({
  * finished turn, or, folded, an agent still at work, with the spinner a tab's badge has. Unfolded,
  * work in progress shows on its own row instead.
  */
-function AttentionBadge({ attention, label }: { attention: WorkspaceAttention; label: string }) {
+export function AttentionBadge({
+  attention,
+  label,
+}: {
+  attention: WorkspaceAttention;
+  label: string;
+}) {
   if (!attention.kind) return null;
   return (
     <span

@@ -28,6 +28,8 @@ appId: xyz.hologram.concors.preview
 - takeScreenshot: apps/mobile/test-results/android/files
 - tapOn: "Back to chat"
 - assertVisible: "Android draft survives navigation"
-- tapOn: "Tabs"
-- assertVisible: "New tab"
-- takeScreenshot: apps/mobile/test-results/android/tabs-drawer
+# The tab strip under the header: "+" at its end opens the New tab sheet.
+- assertVisible: "Mobile launch 1"
+- tapOn: "New tab"
+- assertVisible: "New chat"
+- takeScreenshot: apps/mobile/test-results/android/new-tab-sheet

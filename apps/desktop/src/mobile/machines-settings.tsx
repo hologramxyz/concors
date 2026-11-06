@@ -42,7 +42,7 @@ export function MachinesSettings({
     <>
       {host.direct ? (
         <div className="p-4">
-          <Section title="Machines" description="Your connected desktop and this device.">
+          <Section title="Machines">
             <p className="font-medium">{host.endpointLabel ?? "Desktop daemon"}</p>
             <p className="py-3 text-xs break-all text-muted-foreground">
               Machine ID: {host.machineId ?? "Waiting for daemon…"}
@@ -63,9 +63,6 @@ export function MachinesSettings({
                 Disconnect desktop
               </Button>
             </div>
-            <p className="pt-3 text-sm text-muted-foreground">
-              Disconnecting does not stop agents or terminals.
-            </p>
           </Section>
         </div>
       ) : host.me ? (
@@ -95,7 +92,7 @@ export function MachinesSettings({
               Add machine
             </Button>
           </div>
-          <AddMachineDrawer host={host} open={adding} onOpenChange={setAdding} />
+          <AddMachineDrawer open={adding} onOpenChange={setAdding} />
         </>
       )}
     </>

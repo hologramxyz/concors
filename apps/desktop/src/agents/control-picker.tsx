@@ -1,6 +1,7 @@
 import { Fragment, useContext, useId, useState, useRef, useEffect, type ReactNode } from "react";
 import { ControlTooltip } from "./control-tooltip";
 import { ComposerSurfaceContext } from "./composer-expansion";
+import { CompactLayoutContext } from "@/components/compact-layout";
 import { Popover } from "radix-ui";
 import { ArrowLeft, Check, ChevronRight, Search } from "lucide-react";
 
@@ -60,9 +61,14 @@ export function ControlPicker({
   /** A menu of a few options has nothing worth searching. */
   searchable?: boolean;
 }) {
+  const compact = useContext(CompactLayoutContext);
+  // A touch screen has no keyboard position to show, and the first row would read as the selection.
+  const resting = compact ? -1 : 0;
+  // On a phone the field takes a row and the keyboard takes half the screen, for a few options.
+  const searching = searchable && !(compact && !groups && options.length <= 6);
   const [open, setOpen] = useState(false),
     [query, setQuery] = useState(""),
-    [active, setActive] = useState(0),
+    [active, setActive] = useState(resting),
     [groupId, setGroupId] = useState(selectedGroupId),
     // Closing returns focus to the trigger, which would reopen its tooltip on its own; `quiet`
     // holds it back until the pointer returns or focus moves on. Every close must set it.
@@ -92,7 +98,7 @@ export function ControlPicker({
     setGroupId(next);
     if (next) onGroupChange?.(next);
     setQuery("");
-    setActive(0);
+    setActive(resting);
     if (list.current) list.current.scrollTop = 0;
     (search.current ?? list.current)?.focus();
   };
@@ -131,7 +137,7 @@ export function ControlPicker({
         if (!next) setQuiet(true);
         if (next) onOpen?.();
         setQuery("");
-        setActive(0);
+        setActive(resting);
         setGroupId(selectedGroupId);
       }}
     >
@@ -174,7 +180,7 @@ export function ControlPicker({
                   type="button"
                   aria-label="Back to providers"
                   onClick={() => navigate(undefined)}
-                  className="flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2"
+                  className="mobile-tap-target flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2"
                 >
                   <ArrowLeft className="size-4" />
                 </button>
@@ -183,7 +189,7 @@ export function ControlPicker({
               <span className="truncate font-medium">{group?.label ?? "Providers"}</span>
             </div>
           )}
-          {searchable && (
+          {searching && (
             <div className="flex items-center gap-2 border-b px-2 pt-1 pb-2 text-muted-foreground">
               <Search className="size-4" />
               <input
@@ -209,9 +215,9 @@ export function ControlPicker({
             role="listbox"
             aria-label={searchLabel}
             // Without a search box, the list itself takes focus so the arrow keys still work.
-            tabIndex={searchable ? undefined : -1}
-            aria-activedescendant={!searchable && visible[active] ? `${id}-${active}` : undefined}
-            className={`chat-scroll max-h-72 overflow-auto outline-none ${searchable ? "py-1" : ""}`}
+            tabIndex={searching ? undefined : -1}
+            aria-activedescendant={!searching && visible[active] ? `${id}-${active}` : undefined}
+            className={`chat-scroll max-h-72 overflow-auto outline-none ${searching ? "py-1" : ""}`}
           >
             {visible.map((option, index) => (
               <Fragment key={option.id}>

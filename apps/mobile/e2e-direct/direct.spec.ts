@@ -140,16 +140,16 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(ui.getByRole("log")).toContainText("Hello from Codex");
     await expect.poll(() => agents().length).toBe(1);
-    // The mobile row must retain the provider logo while desktop's working badge animates.
+    // The chat's row in the sidebar tree shows desktop's spinner while it works.
     await input.fill("hold");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
     const agentId = agents()[0]?.id;
     if (!agentId) throw new Error("Missing fixture agent");
     const agentRow = ui.locator(`button[data-agent-id="${agentId}"]`);
-    await expect(agentRow.locator('[data-provider="codex"] svg')).toBeVisible();
+    await expect(agentRow.locator('[data-provider="codex"]')).toBeVisible();
     await expect(agentRow.getByRole("img", { name: "Agent status: Working" })).toBeVisible();
-    await expect(agentRow.locator("[data-agent-status-badge] svg.animate-spin")).toBeVisible();
+    await expect(agentRow.locator("[data-row-working]")).toBeVisible();
     await agentRow.focus();
     await expect(ui.getByRole("tooltip")).toHaveCount(0);
     await page.screenshot({ path: test.info().outputPath("mobile-agent-status.png") });
@@ -219,10 +219,13 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       tabId,
       name: "Renamed from desktop",
     });
-    const picker = ui.getByRole("combobox", { name: "Tabs" });
+    // The strip's current tab, under the header.
+    const picker = ui.locator('.mobile-tab-strip [data-pane-choice][aria-pressed="true"]');
     await expect(picker).toContainText("Renamed from desktop");
-    await picker.click();
-    await ui.getByRole("button", { name: "New tab", exact: true }).click();
+    await ui
+      .getByRole("group", { name: "Tabs", exact: true })
+      .getByRole("button", { name: "New tab", exact: true })
+      .click();
     await ui
       .getByRole("dialog", { name: "New tab", exact: true })
       .getByRole("button", { name: "Terminal", exact: true })
@@ -238,8 +241,9 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     expect(project().tabs.map((tab) => tab.name)).toEqual(["Renamed from desktop", "Tab 2"]);
     await expect.poll(() => desktop.terminals.length).toBe(1);
     const terminalId = desktop.terminals[0]?.id;
-    await picker.click();
-    await ui.locator(`[data-pane-choice][data-value="${tabId}:${paneId}"]`).click();
+    await ui
+      .locator(`.mobile-tab-strip [data-pane-choice][data-value="${tabId}:${paneId}"]`)
+      .click();
     await expect(input).toBeEnabled();
     await input.fill("Unsent draft survives reconnect");
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
@@ -250,7 +254,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(account.getByRole("button", { name: /Add machine|Manage machines/ })).toHaveCount(
       0,
     );
-    await expect(account).toContainText("Sign in to your Concors account");
+    await expect(account).not.toContainText("Sign in to your Concors account");
     expect(profileRequests).toEqual([]);
     const socketsBeforeProfile = workspaceSockets.length;
     await account.getByRole("button", { name: "Sign in", exact: true }).click();
@@ -300,7 +304,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await expect(settings).toContainText(snapshot().machineId);
     await settings.getByRole("button", { name: "Add machine", exact: true }).click();
     const addMachine = ui.getByRole("dialog", { name: "Add machine", exact: true });
-    await expect(addMachine).toContainText("paired with one desktop daemon");
+    await expect(addMachine).toContainText("Add machines in the Concors desktop app.");
     await addMachine.getByRole("button", { name: "Close", exact: true }).click();
     await expect(settings.getByRole("button", { name: "Add machine", exact: true })).toBeFocused();
     await settings.getByRole("combobox", { name: "Settings section" }).click();
@@ -309,7 +313,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
     await ui.getByRole("option", { name: "Shortcuts", exact: true }).click();
     await expect(settings.getByRole("heading", { name: "Tabs", exact: true })).toBeVisible();
     await expect(settings.getByRole("heading", { name: "Panes", exact: true })).toHaveCount(0);
-    await expect(settings).toContainText("An external keyboard");
+    await expect(settings).not.toContainText("An external keyboard");
     await expect(settings.getByText("New pane beside current", { exact: true })).toHaveCount(0);
     await settings.getByRole("combobox", { name: "Settings section" }).click();
     await ui.getByRole("option", { name: "Machines", exact: true }).click();

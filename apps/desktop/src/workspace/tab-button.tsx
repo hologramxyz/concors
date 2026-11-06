@@ -13,6 +13,7 @@ import { useAgents } from "@/agents/context";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { useFocusedPane } from "./focused-panes";
 import { mainPane, tabTitle } from "./tab-title";
+import type { PaneNode } from "./tab-panes";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 
 /**
@@ -21,17 +22,30 @@ import { SidebarTooltip } from "@/components/sidebar-tooltip";
  * until a tab has been shown its main pane's: a chat by the provider it starts with, an agent CLI by
  * its brand, and a terminal by the terminal mark, so every tab carries one. It subscribes to agent
  * and terminal updates itself so a status change repaints the label, not the workspace.
+ *
+ * The phone lists each pane of a split tab as a tab of its own, so it can label one `pane` alone:
+ * that pane's icon and status, under the name the phone gives it.
  */
 export function TabButton({
   tab,
   selected,
+  pane: only,
+  label,
   ...props
-}: { tab: WorkspaceTab; selected: boolean } & ComponentProps<"button">) {
+}: {
+  tab: WorkspaceTab;
+  selected: boolean;
+  pane?: PaneNode | undefined;
+  label?: string | undefined;
+} & ComponentProps<"button">) {
   const sessions = useAgents();
   const terminals = useTerminalSessions();
-  const agents = tabAgentStatuses(tab, sessions, terminals);
+  const agents = only
+    ? [paneAgentStatus(only, sessions, terminals)].filter((status) => !!status)
+    : tabAgentStatuses(tab, sessions, terminals);
   const focusedPaneId = useFocusedPane(tab.id);
   const pane =
+    only ??
     mostUrgentPane(tab, sessions, terminals, focusedPaneId) ??
     tab.nodes.find(
       (node): node is Extract<typeof node, { kind: "pane" }> =>
@@ -39,7 +53,7 @@ export function TabButton({
     ) ??
     mainPane(tab);
   const status = pane ? paneAgentStatus(pane, sessions, terminals) : null;
-  const paneCount = tab.nodes.filter((node) => node.kind === "pane").length;
+  const paneCount = only ? 1 : tab.nodes.filter((node) => node.kind === "pane").length;
   return (
     <button
       type="button"
@@ -68,7 +82,7 @@ export function TabButton({
           <PaneMark profile={pane?.profile} />
         )}
       </span>
-      <span className="max-w-44 truncate">{tabTitle(tab, sessions, terminals)}</span>
+      <span className="max-w-44 truncate">{label ?? tabTitle(tab, sessions, terminals)}</span>
       {paneCount > 1 && (
         <span aria-hidden="true" className="shrink-0 text-xs text-muted-foreground tabular-nums">
           {paneCount}

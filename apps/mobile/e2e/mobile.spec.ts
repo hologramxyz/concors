@@ -1,46 +1,87 @@
-import { expect, test, type Page, type FrameLocator } from "@playwright/test";
-import { ids } from "../src/demo/fixtures";
-import { swipe as touchSwipe, scrollTimelineUp } from "./support/swipe";
+import { expect, test, type Page, type FrameLocator, type Locator } from "@playwright/test";
+import { ids, SIDEBAR_TREE_FLAG, TERMINAL_PROFILE_FLAG, treeIds } from "../src/demo/fixtures";
+import { hold, swipe as touchSwipe, scrollTimelineUp } from "./support/swipe";
+import { reportNonMac } from "../../../e2e/support/platform.ts";
 import { BINDINGS, isCompactCommand } from "../../desktop/src/shortcuts/bindings";
-import {
-  bindingLabel,
-  defaultKeymap,
-  mainBinding,
-  strokeLabel,
-  usableBindings,
-} from "../../desktop/src/shortcuts/keymap";
+import { defaultKeymap, mainBinding, strokeLabel } from "../../desktop/src/shortcuts/keymap";
 const workspace = (page: Page) => page.frameLocator('iframe[title="Concors workspace"]');
 const activeChat = `${ids.tab}:${ids.pane}`;
+/** A tab's row under its workspace in the sidebar, which opens the tab. */
+const tabRow = (ui: FrameLocator, title: string, workspaceName = "Concors") =>
+  ui
+    .getByRole("list", { name: `${workspaceName} tabs`, exact: true })
+    .getByRole("listitem")
+    .filter({ hasText: title })
+    .getByRole("button")
+    .first();
 const activeTerminal = `${ids.tab}:${ids.terminalPane}`;
-async function choose(ui: FrameLocator, label: string, value: string) {
-  await ui.getByRole("combobox", { name: label, exact: true }).click();
-  await ui
-    .locator(
-      `${label === "Tabs" ? "[data-pane-choice]" : '[role="option"]'}[data-value="${value}"]`,
-    )
-    .click();
+/** The phone's tab strip under the header, and one of its tabs by `tabId:paneId`. */
+const tabStrip = (ui: FrameLocator) => ui.getByRole("group", { name: "Tabs", exact: true });
+const stripTab = (ui: FrameLocator, value: string) =>
+  ui.locator(`.mobile-tab-strip [data-pane-choice][data-value="${value}"]`);
+/** The header's workspace name, which opens the workspace switcher. */
+const switcher = (ui: FrameLocator) => ui.getByRole("button", { name: /^Workspace: / });
+const currentTab = (ui: FrameLocator) =>
+  ui.locator('.mobile-tab-strip [data-pane-choice][aria-pressed="true"]');
+async function box(locator: Locator) {
+  const bounds = await locator.boundingBox();
+  if (!bounds) throw new Error("Element is not visible");
+  return bounds;
 }
-async function openPicker(ui: FrameLocator) {
-  const picker = ui.locator('[role="combobox"][aria-label="Tabs"]');
-  if ((await picker.getAttribute("aria-expanded")) !== "true") await picker.click();
+/** The strip hides while the composer is typed in; closing the keyboard brings it back. */
+async function closeKeyboard(ui: FrameLocator) {
+  const composer = ui.locator('.mobile-composer[data-expanded="true"]');
+  if (!(await composer.count())) return;
+  await ui.getByRole("log", { name: "Chat timeline" }).click({ position: { x: 200, y: 300 } });
+  await expect(composer).toHaveCount(0);
+}
+async function choose(ui: FrameLocator, label: string, value: string) {
+  if (label === "Tabs") {
+    await closeKeyboard(ui);
+    await stripTab(ui, value).click();
+    await expect(stripTab(ui, value)).toHaveAttribute("aria-pressed", "true");
+    return;
+  }
+  await ui.getByRole("combobox", { name: label, exact: true }).click();
+  await ui.locator(`[role="option"][data-value="${value}"]`).click();
 }
 async function newTab(ui: FrameLocator) {
-  await openPicker(ui);
+  await closeKeyboard(ui);
+  await tabStrip(ui).getByRole("button", { name: "New tab", exact: true }).click();
+}
+/** A tab's "…" sheet, through the button a screen reader finds beside it (long-press elsewhere). */
+async function tabActions(ui: FrameLocator, value: string) {
   await ui
-    .getByRole("dialog", { name: "Tabs", exact: true })
-    .getByRole("button", { name: "New tab", exact: true })
-    .click();
+    .locator(`.mobile-tab-strip [data-tab-id="${value}"]`)
+    .getByRole("button", { name: /^More actions for / })
+    .press("Enter");
 }
 async function workspaceActions(ui: FrameLocator) {
-  const value = await ui.locator('[role="combobox"][aria-label="Tabs"]').getAttribute("data-value");
-  await openPicker(ui);
-  const row = ui.locator(`.mobile-pane-row:has([data-pane-choice][data-value="${value}"])`);
-  await row.getByRole("button", { name: /^Actions for tab / }).click();
+  const value = await currentTab(ui).getAttribute("data-value");
+  await tabActions(ui, value ?? "");
+}
+/**
+ * The New tab sheet as desktop's "+" menu lists it: the chat, then everything that runs in a
+ * terminal, all with the terminal mark, then resuming a chat; no descriptions under the rows.
+ */
+async function expectNewTabGroups(sheet: Locator, terminals: string[]) {
+  await expect(sheet.getByRole("group", { name: "Chat" }).getByRole("button")).toHaveText([
+    "New chat",
+  ]);
+  const terminal = sheet.getByRole("group", { name: "In a terminal" });
+  await expect(terminal.getByRole("button")).toHaveText(terminals);
+  await expect(terminal.locator("button svg")).toHaveCount(terminals.length);
+  await expect(terminal.locator("button svg:not(.lucide-terminal)")).toHaveCount(0);
+  await expect(sheet.getByRole("separator")).toHaveCount(1);
+  await expect(sheet.getByRole("button", { name: "Resume a chat…", exact: true })).toBeVisible();
+  await expect(sheet).not.toContainText(/synced with your desktop|interactive terminal|Reopen a/);
+  for (const box of await sheet
+    .locator(".mobile-select-option")
+    .evaluateAll((rows) => rows.map((row) => row.getBoundingClientRect().height)))
+    expect(box).toBeGreaterThanOrEqual(44);
 }
 async function paneCount(ui: FrameLocator, count: number) {
-  await openPicker(ui);
-  await expect(ui.locator("[data-pane-choice]")).toHaveCount(count);
-  await ui.locator("[data-pane-choice]").first().press("Escape");
+  await expect(tabStrip(ui).locator("[data-pane-choice]")).toHaveCount(count);
 }
 async function closePickerSheet(ui: FrameLocator, name = "Tabs") {
   const sheet = ui.getByRole("dialog", { name, exact: true });
@@ -48,8 +89,6 @@ async function closePickerSheet(ui: FrameLocator, name = "Tabs") {
   await expect(sheet).toHaveCount(0);
 }
 /** Emulated phones keep the host's navigator.platform, so shortcut labels follow the runner. */
-const macLabels = (ui: FrameLocator) =>
-  ui.locator("body").evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform));
 async function openSettings(ui: FrameLocator) {
   await ui.getByRole("button", { name: /^Account:/ }).click();
   await ui
@@ -110,6 +149,38 @@ test("chat-first shell reuses desktop approvals, streaming and bottom composer",
   expect(metrics.bottom).toBeLessThan(metrics.height);
   expect(metrics.overflow).toBe(false);
   expect(errors).toEqual([]);
+});
+test("your message bubble stands out from the phone's light background", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "light" });
+  const ui = await enter(page);
+  const bubble = ui
+    .locator("article")
+    .filter({ hasText: "Help me get the mobile client ready to test." });
+  const contrast = await bubble.evaluate((element) => {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    if (!context) throw new Error("Canvas is unavailable");
+    const paint = (...layers: string[]) => {
+      for (const layer of layers) {
+        context.fillStyle = layer;
+        context.fillRect(0, 0, 1, 1);
+      }
+      return [...context.getImageData(0, 0, 1, 1).data].slice(0, 3);
+    };
+    const luminance = (rgb: number[]) => {
+      const [r, g, b] = rgb.map((channel) => {
+        const value = channel / 255;
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+      }) as [number, number, number];
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b + 0.05;
+    };
+    const background = getComputedStyle(document.documentElement).getPropertyValue("--background");
+    const page = luminance(paint(background));
+    const fill = luminance(paint(background, getComputedStyle(element).backgroundColor));
+    return Math.max(page, fill) / Math.min(page, fill);
+  });
+  // The shared raised fill measures 1.27 here; the muted fill it replaced measured 1.000.
+  expect(contrast).toBeGreaterThan(1.03);
 });
 test("mobile header, terminal and host share one background across palettes and modes", async ({
   page,
@@ -218,7 +289,7 @@ test("model, effort, permissions, plan and speed use the desktop controls", asyn
     ["Permission mode", "Auto-review", "auto-review"],
     ["Speed", "Fast", "fast"],
   ] as const) {
-    if (control === "Speed")
+    if (control === "Thinking effort")
       await ui.getByRole("button", { name: "More composer options" }).click();
     const button = ui.getByRole("button", { name: control, exact: true });
     await button.click();
@@ -236,6 +307,94 @@ test("model, effort, permissions, plan and speed use the desktop controls", asyn
   await ui.getByRole("textbox", { name: "Message Codex" }).fill("ask me a question");
   await ui.getByRole("button", { name: "Send message", exact: true }).click();
   await expect(ui.getByText("Which platform should I verify?")).toBeVisible();
+});
+test("composer options hold effort and permissions, with desktop wording and quiet menus", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const input = ui.locator("[data-agent-composer]");
+  await expect(input).toHaveAttribute("placeholder", "Add a follow-up to the queue…");
+  await newTab(ui);
+  await ui.getByRole("button", { name: "New chat", exact: true }).click();
+  await expect(input).toHaveAttribute("placeholder", "Ask anything…");
+  await input.click();
+  await expect(input).toHaveAttribute("placeholder", "Ask anything…");
+
+  const form = ui.locator(".mobile-composer");
+  const gaps = await form.evaluate((element) => {
+    const outer = element.getBoundingClientRect();
+    const button = element
+      .querySelector(".mobile-composer-primary button")
+      ?.getBoundingClientRect();
+    return button && [outer.right - button.right, outer.bottom - button.bottom];
+  });
+  expect(gaps?.[0]).toBeGreaterThanOrEqual(8);
+  expect(gaps?.[0]).toBeCloseTo(gaps?.[1] ?? 0, 0);
+  for (const name of ["Thinking effort", "Permission mode"]) {
+    await expect(form.getByRole("button", { name, exact: true })).toHaveCount(0);
+  }
+
+  await ui.getByRole("button", { name: "More composer options" }).click();
+  const sheet = ui.locator(".mobile-composer-options");
+  await expect(sheet.getByText("Conversation options")).toHaveCount(0);
+  for (const [name, selected] of [
+    ["Thinking effort", "Medium"],
+    ["Permission mode", "Default permissions"],
+  ] as const) {
+    await sheet.getByRole("button", { name, exact: true }).click();
+    const menu = ui.getByRole("listbox", { name, exact: true });
+    await expect(menu).toBeVisible();
+    // Few enough to read at a glance, with nothing highlighted but the current value's check.
+    await expect(ui.getByRole("combobox", { name: /^Search/ })).toHaveCount(0);
+    await expect(menu.locator(".bg-accent")).toHaveCount(0);
+    await expect(menu.locator(".lucide-check")).toHaveCount(1);
+    await expect(menu.getByRole("option", { selected: true })).toContainText(selected);
+    await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
+  }
+  await page.keyboard.press("Escape");
+  await ui.getByRole("button", { name: "Agent and model", exact: true }).click();
+  await expect(ui.getByRole("combobox", { name: "Search models" })).toBeVisible();
+});
+test("an attachment keeps its remove button inside its corner, with a fingertip's tap area", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  await ui.locator("[data-agent-composer]").click();
+  await ui.locator('input[aria-label="Upload files"]').setInputFiles({
+    name: "notes-for-the-release.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from("# Notes\n"),
+  });
+  const chip = ui.locator("[data-composer-attachment]");
+  await expect(chip.getByText("notes-for-the-release.md")).toBeVisible();
+  const metrics = await chip.evaluate((element) => {
+    const outer = element.getBoundingClientRect();
+    const remove = element.querySelector(".mobile-attachment-remove");
+    const rect = remove?.getBoundingClientRect();
+    const name = element.querySelector(".truncate");
+    if (!rect || !name) return null;
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    return {
+      inside:
+        rect.left >= outer.left &&
+        rect.top >= outer.top &&
+        rect.right <= outer.right &&
+        rect.bottom <= outer.bottom,
+      tap: [
+        [-21, -21],
+        [21, -21],
+        [-21, 21],
+        [21, 21],
+      ].every(([x = 0, y = 0]) => {
+        const hit = document.elementFromPoint(centerX + x, centerY + y);
+        return hit?.closest(".mobile-attachment-remove") === remove;
+      }),
+      nameRoom: name.clientWidth > 100,
+    };
+  });
+  expect(metrics).toEqual({ inside: true, tap: true, nameRoom: true });
 });
 test("Android composer keeps the model picker open when returning to providers", async ({
   page,
@@ -260,10 +419,7 @@ test("Android composer keeps the model picker open when returning to providers",
     await expect(providers).toBeVisible();
     // Back re-renders the menu under the tap; the composer stays open around its picker, or the
     // picker loses its anchor and jumps away from the next tap.
-    await expect(ui.getByRole("textbox", { name: "Message Codex" })).not.toHaveAttribute(
-      "placeholder",
-      "Message your agent",
-    );
+    await expect(ui.locator(".mobile-composer")).toHaveAttribute("data-expanded", "true");
     await expect(ui.getByRole("combobox", { name: "Search providers" })).toBeVisible();
     await providers.getByRole("option", { name: /^Codex\b/ }).click();
     await expect(ui.getByRole("listbox", { name: "Models", exact: true })).toBeVisible();
@@ -348,10 +504,7 @@ test("Files responds in the demo and terminal swipes keep both panels reachable"
   await expect(shell).toHaveAttribute("data-sidebar-open", "true");
   await touchSwipe(page, { x: 200, y: 240 }, { x: 30, y: 240 });
   await expect(shell).toHaveAttribute("data-sidebar-open", "false");
-  await expect(ui.getByRole("combobox", { name: "Tabs" })).toHaveAttribute(
-    "data-value",
-    activeTerminal,
-  );
+  await expect(currentTab(ui)).toHaveAttribute("data-value", activeTerminal);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   const popup = await ui
     .getByRole("button", { name: "Actions for Concors", exact: true })
@@ -360,8 +513,12 @@ test("Files responds in the demo and terminal swipes keep both panels reachable"
   const y = popup.y + popup.height / 2;
   await touchSwipe(page, { x: popup.x + popup.width / 2, y }, { x: 30, y });
   await expect(shell).toHaveAttribute("data-sidebar-open", "true");
+  // Row menus open as sheets on a tap, as the phone's other sheets do, so a swipe opens none.
+  await expect(ui.getByRole("menu")).toHaveCount(0);
+  await ui.getByRole("button", { name: "Actions for Concors", exact: true }).click();
   await expect(ui.getByRole("menu")).toBeVisible();
   await ui.getByRole("menu").press("Escape");
+  await expect(ui.getByRole("menu")).toHaveCount(0);
   await expect(shell).toHaveAttribute("data-sidebar-open", "true");
 });
 test("flat tab changes use the authoritative workspace operations", async ({ page }) => {
@@ -373,7 +530,7 @@ test("flat tab changes use the authoritative workspace operations", async ({ pag
   await ui.getByRole("menuitem", { name: "Rename tab" }).click();
   await ui.getByRole("textbox", { name: "Tab name" }).fill("Second conversation");
   await ui.getByRole("button", { name: "Save", exact: true }).click();
-  await expect(ui.getByRole("combobox", { name: "Tabs" })).toContainText("Second conversation");
+  await expect(currentTab(ui)).toContainText("Second conversation");
   await workspaceActions(ui);
   await expect(
     ui.getByRole("menuitem", { name: /Split|New pane|Arrange panes|Move tab/ }),
@@ -391,7 +548,9 @@ test("sidebar pushes the workspace and settings opens as a drawer over the same 
   const sidebar = ui.getByRole("dialog", { name: "Workspace sidebar" });
   await expect(sidebar).toBeVisible();
   await expect(sidebar.getByText("Workspaces", { exact: true })).toBeVisible();
-  await expect(sidebar.getByText("Agents", { exact: true })).toBeVisible();
+  // Chats are listed under their workspace, as on desktop, not in a section of their own.
+  await expect(sidebar.getByText("Agents", { exact: true })).toHaveCount(0);
+  await expect(tabRow(ui, "Mobile launch")).toBeVisible();
   await expect(sidebar.getByText("Previews", { exact: true })).toBeVisible();
   await expect
     .poll(() => ui.getByTestId("mobile-workspace").evaluate((el) => el.getBoundingClientRect().x))
@@ -486,7 +645,7 @@ test("folder workspaces and shared settings remain available from the sidebar", 
     .getByRole("button", { name: "Open folder", exact: true })
     .click();
   await expect(ui.getByRole("dialog", { name: "Open folder" })).toHaveCount(0);
-  await expect(ui.getByRole("combobox", { name: "Tabs" })).toContainText("Phone project");
+  await expect(switcher(ui)).toContainText("Phone project");
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await openSettings(ui);
   await choose(ui, "Settings section", "notifications");
@@ -509,11 +668,16 @@ test("new workspace completion opens its own project and closes the sidebar", as
   await ui.getByRole("button", { name: "Open workspace menu", exact: true }).click();
   await ui.getByRole("button", { name: "New workspace", exact: true }).click();
   await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
-  await expect(ui.getByRole("combobox", { name: "Tabs", exact: true })).toContainText(
-    "New workspace",
-  );
+  await expect(switcher(ui)).toContainText("New workspace");
+  // An empty workspace starts its first tab from its row's menu.
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await ui.getByRole("button", { name: /^Concors(, |$)/ }).click();
+  await ui.getByRole("button", { name: "Actions for New workspace", exact: true }).click();
+  await ui.getByRole("menuitem", { name: "New tab", exact: true }).click();
+  await ui.getByRole("button", { name: "New chat", exact: true }).click();
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+  await expect(ui.locator('[aria-label="New workspace tabs"] > li')).toHaveCount(1);
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await tabRow(ui, "Mobile launch").click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toHaveValue(
     "Keep my original draft",
   );
@@ -562,6 +726,8 @@ test("compact toolbar keeps icon controls and send on one row at phone widths", 
           top: rect.top + rect.height / 2,
           left: rect.left,
           right: rect.right,
+          width: rect.width,
+          height: rect.height,
           start: bounds.left,
           end: bounds.right,
         };
@@ -572,12 +738,12 @@ test("compact toolbar keeps icon controls and send on one row at phone widths", 
       expect(rect.left).toBeGreaterThanOrEqual(rect.start);
       expect(rect.right).toBeLessThanOrEqual(rect.end);
     }
-    for (const label of ["Agent and model", "Thinking effort", "Permission mode"]) {
-      await expect(ui.getByRole("button", { name: label, exact: true })).toHaveText("");
-    }
-    const header = ui.locator(".mobile-header");
-    await expect(header).not.toContainText("Concors");
-    const chevronInside = await ui.getByRole("combobox", { name: "Tabs" }).evaluate((picker) => {
+    for (const rect of metrics) expect(rect.width).toBe(44);
+    expect(metrics.map((rect) => rect.height)).toEqual(metrics.map(() => 44));
+    await expect(ui.getByRole("button", { name: "Agent and model", exact: true })).toHaveText("");
+    // The header names the workspace; the tab's name is on the strip under it.
+    await expect(switcher(ui)).toHaveText("Concors");
+    const chevronInside = await switcher(ui).evaluate((picker) => {
       const bounds = picker.getBoundingClientRect();
       const chevron = picker.querySelector(".mobile-select-chevron")?.getBoundingClientRect();
       if (!chevron) return false;
@@ -686,13 +852,12 @@ test("composer expands on focus, preserves portaled controls, and collapses afte
   await expect(primary).toHaveAttribute("aria-label", "Interrupt agent");
   const collapsedBounds = await form.boundingBox();
   if (!collapsedBounds) throw new Error("Collapsed composer is not visible");
-  expect(collapsedBounds.height).toBeLessThanOrEqual(60);
+  expect(collapsedBounds.height).toBeLessThanOrEqual(62);
   await input.click();
   await expect(form).toHaveAttribute("data-expanded", "true");
   for (const name of [
     "Agent and model",
-    "Thinking effort",
-    "Permission mode",
+    "More composer options",
     "Context window",
     "Start dictation",
   ]) {
@@ -705,9 +870,9 @@ test("composer expands on focus, preserves portaled controls, and collapses afte
   await input.fill("Keep this multiline\ndraft");
   await expect(primary).toHaveCount(1);
   await expect(primary).toHaveAttribute("aria-label", "Queue message");
-  await ui.getByRole("combobox", { name: "Tabs" }).tap();
+  await switcher(ui).tap();
   await expect(form).toHaveAttribute("data-expanded", "false");
-  await closePickerSheet(ui);
+  await closePickerSheet(ui, "Workspaces");
   await input.click();
   await page.setViewportSize({ width: 393, height: 420 });
   await expect(form).toHaveAttribute("data-expanded", "true");
@@ -739,13 +904,13 @@ test("composer expands on focus, preserves portaled controls, and collapses afte
   expect(centered).toBe(true);
 });
 
-test("flat tab picker opens from its text and padding and dismisses without reopening", async ({
+test("the workspace switcher opens from its text and padding and dismisses without reopening", async ({
   page,
 }) => {
   const ui = await enter(page);
-  const picker = ui.getByRole("combobox", { name: "Tabs" });
-  const list = ui.getByRole("dialog", { name: "Tabs", exact: true });
-  // Android/web use this DOM button; exercise both text lines, padding and the chevron.
+  const picker = switcher(ui);
+  const list = ui.getByRole("dialog", { name: "Workspaces", exact: true });
+  // Android/web use this DOM button; exercise its text, padding and the chevron.
   for (const [x, y] of [
     [0.2, 0.3],
     [0.2, 0.7],
@@ -755,51 +920,59 @@ test("flat tab picker opens from its text and padding and dismisses without reop
     [0.95, 0.5],
   ] as const) {
     const trigger = await picker.boundingBox();
-    if (!trigger) throw new Error("Picker trigger is not visible");
+    if (!trigger) throw new Error("Workspace switcher is not visible");
     await picker.tap({ position: { x: trigger.width * x, y: trigger.height * y } });
     await expect(list).toBeVisible();
-    await expect(ui.getByRole("dialog", { name: "Tabs", exact: true })).toHaveAttribute(
-      "data-mobile-drawer",
-      "true",
-    );
-    await expect(list.locator(".mobile-tab-card")).toHaveCount(0);
-    await expect(list.locator("[data-pane-choice]")).toHaveCount(2);
+    await expect(list).toHaveAttribute("data-mobile-drawer", "true");
+    await expect(list.locator("[data-workspace-choice]")).toHaveText(["Concors"]);
     // A second tap at the trigger's position lands on the modal scrim: close only.
     await page.touchscreen.tap(trigger.x + trigger.width / 2, trigger.y + trigger.height / 2);
     await expect(list).toHaveCount(0);
     await expect(picker).toHaveAttribute("aria-expanded", "false");
     await expect(picker).toBeFocused();
   }
-  await picker.press("ArrowDown");
-  await expect(list.locator("[data-pane-choice]").first()).toBeFocused();
-  await list.locator("[data-pane-choice]").first().press("End");
-  await expect(list.locator("[data-pane-choice]").last()).toBeFocused();
-  await list.locator("[data-pane-choice]").last().press("Enter");
-  await expect(picker).toHaveAttribute("data-value", activeTerminal);
+  await picker.press("Enter");
+  await expect(list.locator('[aria-current="page"]')).toBeFocused();
+  await list.locator('[aria-current="page"]').press("Escape");
+  await expect(list).toHaveCount(0);
+  await expect(picker).toBeFocused();
+});
+
+test("tapping a strip tab shows it, and + opens the New tab sheet", async ({ page }) => {
+  const ui = await enter(page);
+  await expect(tabStrip(ui).locator("[data-pane-choice]")).toHaveText([
+    "Mobile launch 1",
+    "Mobile launch 2",
+  ]);
+  await expect(currentTab(ui)).toHaveAttribute("data-value", activeChat);
+  await stripTab(ui, activeTerminal).tap();
+  await expect(currentTab(ui)).toHaveAttribute("data-value", activeTerminal);
   await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
+  // The selected fill marks the current tab, and only that one.
+  await expect(ui.locator(".mobile-tab-strip [data-active-tab]")).toHaveCount(1);
+  await expect(ui.locator(`.mobile-tab-strip [data-tab-id="${activeTerminal}"]`)).toHaveAttribute(
+    "data-active-tab",
+    "",
+  );
   await choose(ui, "Tabs", activeChat);
   await newTab(ui);
   const drawer = ui.getByRole("dialog", { name: "New tab", exact: true });
-  for (const name of ["Codex", "Claude Code", "OpenCode"]) {
-    await expect(
-      drawer.getByRole("button", { name, exact: true }).locator(".mobile-session-icon svg"),
-    ).toHaveCount(1);
-  }
+  await expectNewTabGroups(drawer, ["Terminal", "Claude Code", "Codex", "OpenCode"]);
   await expect(drawer.getByRole("button", { name: /Add pane/ })).toHaveCount(0);
   await drawer.getByRole("button", { name: "New chat", exact: true }).click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
-  const added = await picker.getAttribute("data-value");
+  const added = await currentTab(ui).getAttribute("data-value");
   if (!added) throw new Error("New tab was not selected");
   expect(added.startsWith(ids.tab + ":")).toBe(false);
-  await picker.click();
-  await expect(list.locator(".mobile-tab-card")).toHaveCount(0);
-  await expect(list.locator("[data-pane-choice]")).toHaveCount(3);
-  await expect(list.locator(".mobile-pane-choice")).toContainText([
+  await expect(tabStrip(ui).locator("[data-pane-choice]")).toHaveText([
     "Mobile launch 1",
     "Mobile launch 2",
     "Tab 2",
   ]);
-  await closePickerSheet(ui);
+  // Closing the sheet hands focus back to "+", not to the first tab.
+  await newTab(ui);
+  await closePickerSheet(ui, "New tab");
+  await expect(tabStrip(ui).getByRole("button", { name: "New tab", exact: true })).toBeFocused();
   await workspaceActions(ui);
   await ui.getByRole("menuitem", { name: "Close tab…", exact: true }).click();
   await ui.getByRole("button", { name: "Close tab", exact: true }).click();
@@ -811,7 +984,7 @@ test("flat tab actions configure and close inactive leaves without changing the 
 }) => {
   test.setTimeout(90_000);
   const ui = await enter(page);
-  const picker = ui.getByRole("combobox", { name: "Tabs", includeHidden: true });
+  const picker = currentTab(ui);
   await expect(
     ui.locator(".mobile-header").getByRole("button", { name: "Project files" }),
   ).toBeEnabled();
@@ -824,21 +997,19 @@ test("flat tab actions configure and close inactive leaves without changing the 
   await expect(picker).not.toHaveAttribute("data-value", activeChat);
   const selected = await picker.getAttribute("data-value");
   if (!selected) throw new Error("New tab was not selected");
-  await picker.click();
-  const drawer = ui.getByRole("dialog", { name: "Tabs", exact: true });
-  const inactive = drawer.locator(`.mobile-pane-row:has([data-value="${activeTerminal}"])`);
-  await inactive
-    .getByRole("button", { name: "Actions for tab Mobile launch 2", exact: true })
-    .click();
+  await tabActions(ui, activeTerminal);
+  await expect(ui.getByRole("dialog", { name: "Mobile launch 2", exact: true })).toBeVisible();
   await expect(ui.getByRole("menuitem", { name: "Rename tab", exact: true })).toHaveCount(0);
   await expect(ui.getByRole("menuitem", { name: /Add pane|Move tab|Split/ })).toHaveCount(0);
   await ui.getByRole("menuitemradio", { name: "OpenCode", exact: true }).click();
-  await expect(inactive.locator("[data-pane-choice]")).toContainText("OpenCode");
   await expect(picker).toHaveAttribute("data-value", selected);
   await page.screenshot({ path: test.info().outputPath("mobile-flat-tabs.png") });
-  await inactive
-    .getByRole("button", { name: "Actions for tab Mobile launch 2", exact: true })
-    .click();
+  // The tab shows its name only, so its new type shows as the menu's choice.
+  await tabActions(ui, activeTerminal);
+  await expect(ui.getByRole("menuitemradio", { name: "OpenCode", exact: true })).toHaveAttribute(
+    "aria-checked",
+    "true",
+  );
   await ui.getByRole("menuitem", { name: "Close tab…", exact: true }).click();
   await ui.getByRole("button", { name: "Close tab", exact: true }).click();
   await expect(picker).toHaveAttribute("data-value", selected);
@@ -855,6 +1026,64 @@ test("flat tab actions configure and close inactive leaves without changing the 
   await paneCount(ui, 2);
 });
 
+test("tab menus pin, fork and delete chats with desktop's actions, and undo a delete", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const ui = await enter(page);
+  const picker = currentTab(ui);
+  const menuItems = () => ui.locator('[role="menu"]').getByRole("menuitem").allTextContents();
+  // The demo's first chat waits on an approval, and a busy chat cannot fork, so use a new one.
+  await newTab(ui);
+  await ui.getByRole("button", { name: "New chat", exact: true }).click();
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+  const chat = await picker.getAttribute("data-value");
+  if (!chat) throw new Error("New chat was not selected");
+
+  // A terminal has no chat to pin, fork or delete.
+  await tabActions(ui, activeTerminal);
+  expect(await menuItems()).toEqual(["Close tab…"]);
+  await ui.locator('[role="menu"]').press("Escape");
+
+  await tabActions(ui, chat);
+  expect(await menuItems()).toEqual(["Pin", "Rename tab", "Fork chat", "Close tab…", "Delete…"]);
+  await ui.getByRole("menuitem", { name: "Pin", exact: true }).click();
+  await tabActions(ui, chat);
+  await expect(ui.getByRole("menuitem", { name: "Unpin", exact: true })).toBeVisible();
+
+  // The fork opens in a tab of its own and is shown.
+  await ui.getByRole("menuitem", { name: "Fork chat", exact: true }).click();
+  await expect(ui.getByRole("menu")).toHaveCount(0);
+  await expect(picker).not.toHaveAttribute("data-value", chat);
+  const fork = await picker.getAttribute("data-value");
+  await paneCount(ui, 4);
+
+  await workspaceActions(ui);
+  await ui.getByRole("menuitem", { name: "Delete…", exact: true }).click();
+  const confirm = ui.getByRole("dialog", { name: /^Delete “/ });
+  await expect(confirm).toContainText("You’ll have a few seconds to undo.");
+  // The menu sheet closes before the confirm opens, so it shows alone.
+  await expect(ui.getByRole("dialog")).toHaveCount(1);
+  await confirm.getByRole("button", { name: "Delete", exact: true }).click();
+  const toast = ui.getByRole("status").filter({ hasText: "Chat deleted" });
+  await expect(toast).toBeVisible();
+  await expect(picker).not.toHaveAttribute("data-value", fork ?? "");
+  await paneCount(ui, 3);
+  // Undo brings the tab back and, as it was shown, shows it again.
+  await toast.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(toast).toHaveCount(0);
+  await paneCount(ui, 4);
+  await expect(picker).not.toHaveAttribute("data-value", chat);
+
+  // The sidebar's tab rows open desktop's sidebar menu as a sheet: no tab type or close, which
+  // are the tab's own.
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await ui
+    .getByRole("dialog", { name: "Workspace sidebar" })
+    .getByRole("button", { name: /^Actions for .*\(fork\)$/ })
+    .click();
+  expect(await menuItems()).toEqual(["Pin", "Rename tab", "Fork chat", "Delete"]);
+});
 test("glass controls retain their shape and composer height animates with reduced-motion support", async ({
   page,
 }) => {
@@ -891,11 +1120,11 @@ test("glass controls retain their shape and composer height animates with reduce
     return utility && action ? action.left - utility.right : null;
   });
   expect(alignment).toBe(0);
-  const header = ui.locator(".mobile-header");
-  await expect(header.getByRole("button")).toHaveCount(2);
+  const header = ui.locator(".mobile-header-row");
+  await expect(header.getByRole("button")).toHaveCount(3);
   await expect(header.locator(".mobile-glass")).toHaveCount(3);
   await expect(header.getByRole("button", { name: "New tab", exact: true })).toHaveCount(0);
-  const picker = ui.getByRole("combobox", { name: "Tabs" });
+  const picker = switcher(ui);
   const normal = await picker.evaluate((el) => ({
     radius: getComputedStyle(el).borderRadius,
     background: getComputedStyle(el).backgroundColor,
@@ -904,18 +1133,18 @@ test("glass controls retain their shape and composer height animates with reduce
   expect(normal.background).toMatch(/(?:\/|,)\s*0\.38\)/);
   expect(normal.blur).toContain("blur(24px)");
   await picker.tap();
-  const coveredPicker = ui.locator('.mobile-header [role="combobox"]');
+  const coveredPicker = ui.locator(".mobile-header .mobile-picker");
   await expect(coveredPicker).toHaveCSS("border-radius", normal.radius);
   await expect(coveredPicker).toHaveCSS("background-color", normal.background);
   await expect(ui.locator(".mobile-picker-help")).toHaveCount(0);
-  const list = ui.getByRole("dialog", { name: "Tabs", exact: true });
+  const list = ui.getByRole("dialog", { name: "Workspaces", exact: true });
   expect(
     await list
-      .locator("[data-pane-choice]")
+      .locator("[data-workspace-choice]")
       .first()
       .evaluate((el) => getComputedStyle(el, "::before").content),
   ).toBe("none");
-  await closePickerSheet(ui);
+  await closePickerSheet(ui, "Workspaces");
   await expect(form).toHaveAttribute("data-expanded", "false");
   await form.evaluate(async (el) =>
     Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined))),
@@ -1054,7 +1283,9 @@ test("sidebar has no logo or duplicate menu, with glass search behind the rounde
 
 test("mobile Shortcuts settings preserve supported commands and all entry points", async ({
   page,
+  context,
 }) => {
+  await reportNonMac(context);
   const ui = await enter(page);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await openSettings(ui);
@@ -1068,25 +1299,31 @@ test("mobile Shortcuts settings preserve supported commands and all entry points
     "Agent chat",
     "Tabs",
   ]);
-  await expect(settings).toContainText("An external keyboard");
-  await expect(settings).toContainText("Move through the flat Tabs list.");
-  const mac = await macLabels(ui);
+  // The same rows and wording as desktop, without phone-only notes.
+  await expect(settings).not.toContainText("An external keyboard");
+  await expect(settings).not.toContainText("Escape cancels a sequence");
+  await expect(settings).toContainText("Switch between tabs and organize your workspace.");
+  await expect(settings.getByRole("textbox", { name: "Filter shortcuts" })).toHaveAttribute(
+    "placeholder",
+    "Search shortcuts",
+  );
   const bindings = BINDINGS.filter((binding) => isCompactCommand(binding.id));
   await expect(settings.locator("dt")).toHaveCount(bindings.length);
   for (const binding of bindings) {
     const row = settings.locator("dt").filter({ hasText: binding.label }).locator("..");
-    // The main shortcut as a chip per press; any others follow in words.
-    const keymap = defaultKeymap(mac)[binding.id];
-    const main = mainBinding(keymap, false);
+    // The main shortcut as a chip per press, as desktop draws it.
+    const main = mainBinding(defaultKeymap(false)[binding.id], false);
     if (!main) throw new Error(`${binding.id} has no shortcut`);
-    // A Mac draws its modifiers as icons, so only the plain labels can be compared as text.
-    await expect(row.locator("kbd")).toHaveCount(main.keys.length);
-    if (!mac)
-      await expect(row.locator("kbd")).toHaveText(main.keys.map((stroke) => strokeLabel(stroke)));
-    if (!mac)
-      for (const other of usableBindings(keymap, false).filter((entry) => entry !== main))
-        await expect(row).toContainText(bindingLabel(other, mac));
+    await expect(row.locator("kbd")).toHaveText(main.keys.map((stroke) => strokeLabel(stroke)));
   }
+  await expect(
+    settings.locator("dt").filter({ hasText: "Search workspaces and tabs" }).locator(".."),
+  ).toContainText("outside terminals");
+  for (const button of [
+    settings.getByRole("button", { name: "Restore all defaults", exact: true }),
+    settings.getByRole("button", { name: "Edit New tab shortcuts", exact: true }),
+  ])
+    expect((await box(button)).height).toBeGreaterThanOrEqual(44);
   await expect(settings.getByText("New pane beside current", { exact: true })).toHaveCount(0);
   expect(await settings.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
     true,
@@ -1145,7 +1382,7 @@ test("compact account footer and machine management live in settings", async ({ 
   const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
   // Desktop's Machines page, without buying, cancelling, prices or payment warnings.
   const machines = settings.getByRole("region", { name: "Machines", exact: true });
-  await expect(machines).toContainText("Add or cancel machines in the Concors desktop app.");
+  await expect(machines).toContainText("Your development machines.");
   await expect(machines.getByText("Development", { exact: true })).toBeVisible();
   await expect(machines.getByRole("button", { name: /^(Connect|Open)$/ })).toBeVisible();
   await expect(
@@ -1169,6 +1406,27 @@ test("compact account footer and machine management live in settings", async ({ 
   await expect(settings.getByRole("region", { name: "Machines", exact: true })).toBeVisible();
 });
 
+test("focus that follows a tap shows no ring until a key is pressed", async ({ page }) => {
+  const ui = await enter(page);
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await ui.getByRole("button", { name: /^Account:/ }).click();
+  await ui
+    .getByRole("dialog", { name: "Account", exact: true })
+    .getByRole("button", { name: "Settings", exact: true })
+    .click();
+  const picker = ui
+    .getByRole("dialog", { name: "Settings", exact: true })
+    .getByRole("combobox", { name: "Settings section" });
+  await expect(picker).toBeFocused();
+  await expect(picker).toHaveAttribute("data-pointer-focus", "");
+  await expect(picker).toHaveCSS("outline-style", "none");
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(picker).toBeFocused();
+  await expect(picker).not.toHaveAttribute("data-pointer-focus", "");
+  await expect(picker).toHaveCSS("outline-style", "solid");
+});
+
 test("machine sheet preserves the sidebar, selected status, and focus", async ({ page }) => {
   const ui = await enter(page);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
@@ -1177,9 +1435,10 @@ test("machine sheet preserves the sidebar, selected status, and focus", async ({
   const sheet = ui.getByRole("dialog", { name: "Machine", exact: true });
   await expect(sheet).toHaveAttribute("data-mobile-drawer", "true");
   await expect(sheet).toHaveCSS("animation-name", "mobile-drawer-in");
-  const selected = sheet.getByRole("option", { name: /Development/ });
+  // The status is only spoken: a check mark on this row, a dot on the others.
+  const selected = sheet.getByRole("option", { name: "Development Connected", exact: true });
   await expect(selected).toHaveAttribute("aria-selected", "true");
-  await expect(selected).toContainText("Connected");
+  await expect(selected).not.toContainText("Connected");
   await selected.click();
   await expect(sheet).toHaveCount(0);
   await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
@@ -1199,20 +1458,26 @@ test("sidebar, chat and files share header spacing at narrow phone widths", asyn
   await page.emulateMedia({ reducedMotion: "reduce" });
   for (const width of [320, 360, 390]) {
     await page.setViewportSize({ width, height: 844 });
+    // The chat header's controls are on its first row, with the tab strip under them; that row
+    // spaces them as the other two headers do.
     const geometry = async (selector: string) =>
       ui.locator(selector).evaluate((el) => {
+        const row = el.querySelector(".mobile-header-row");
         const style = getComputedStyle(el);
-        const box = el.getBoundingClientRect();
-        const controls = [...el.querySelectorAll<HTMLButtonElement>("button")];
+        const outer = el.getBoundingClientRect();
+        // The chat header measured to 12px under its control row, as the others end.
+        const bottom = row ? row.getBoundingClientRect().bottom + 12 : outer.bottom;
+        const box = { top: outer.top, left: outer.left, right: outer.right, bottom };
+        const controls = [...(row ?? el).querySelectorAll<HTMLButtonElement>("button")];
         const firstControl = controls[0];
         const lastControl = controls.at(-1);
         if (!firstControl || !lastControl) throw new Error("Missing glass header controls");
         const first = firstControl.getBoundingClientRect();
         const last = lastControl.getBoundingClientRect();
         return {
-          padding: style.padding,
-          gap: style.gap,
-          height: box.height,
+          padding: `${style.paddingTop} ${style.paddingRight}`,
+          gap: getComputedStyle(row ?? el).gap,
+          height: box.bottom - box.top,
           top: first.top - box.top,
           bottom: box.bottom - first.bottom,
           left: first.left - box.left,
@@ -1221,7 +1486,7 @@ test("sidebar, chat and files share header spacing at narrow phone widths", asyn
       });
     const main = await geometry(".mobile-header");
     expect(main).toEqual({
-      padding: width <= 360 ? "12px 8px" : "12px",
+      padding: width <= 360 ? "12px 8px" : "12px 12px",
       gap: width <= 360 ? "6px" : "10px",
       height: 68,
       top: 12,
@@ -1262,8 +1527,10 @@ test("sidebar, chat and files share header spacing at narrow phone widths", asyn
 
 test("custom shortcuts persist through the mobile preference bridge and renderer reload", async ({
   page,
+  context,
 }) => {
   test.setTimeout(90_000);
+  await reportNonMac(context);
   let ui = await enter(page);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await openSettings(ui);
@@ -1287,9 +1554,13 @@ test("custom shortcuts persist through the mobile preference bridge and renderer
   await editor.getByRole("button", { name: "Save shortcuts" }).click();
   await expect(editor).toHaveCount(0);
   const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
-  await expect(settings).toContainText(
-    strokeLabel({ key: "s", modifiers: ["Control", "Alt"] }, await macLabels(ui)),
-  );
+  await expect(
+    settings
+      .locator("dt")
+      .filter({ hasText: "Search workspaces and tabs" })
+      .locator("..")
+      .locator("kbd"),
+  ).toHaveText(["Ctrl+Alt+S"]);
   await settings.getByRole("button", { name: "Close", exact: true }).click();
   await ui.getByRole("textbox", { name: "Message Codex" }).press("Control+Alt+s");
   await expect(ui.getByRole("dialog", { name: "Search", exact: true })).toBeVisible();
@@ -1338,19 +1609,251 @@ test("an image on the phone's clipboard can be pasted into the composer", async 
   await paste.click();
   await expect(ui.getByLabel("Remove Pasted image.png")).toBeVisible();
 });
-test("the Tabs sheet shows each agent's status, as desktop's tab strip does", async ({ page }) => {
+test("the tab strip draws each tab as desktop's tab bar does", async ({ page }) => {
   const ui = await enter(page);
-  await ui.getByRole("combobox", { name: "Tabs", exact: true }).click();
-  const sheet = ui.getByRole("dialog", { name: "Tabs", exact: true });
-  const chat = sheet.locator(`[data-pane-choice][data-value="${activeChat}"]`);
-  // The agent's logo and status dot replace the plain chat icon; the name stays the tab's.
-  await expect(chat.locator("[data-pane-status]")).toBeVisible();
-  await expect(chat.locator("[data-agent-status-badge]")).toBeVisible();
+  // The header names the workspace; the strip under it names the tab.
+  await expect(switcher(ui)).toHaveText("Concors");
+  await expect(currentTab(ui)).toHaveText("Mobile launch 1");
+  const chat = stripTab(ui, activeChat);
+  // Desktop's status icon while the chat waits on an answer: the logo with its attention badge.
+  await expect(chat.locator("[data-agent-status-badge] .bg-destructive")).toBeVisible();
   await expect(chat).toHaveAttribute("aria-description", /^Codex: /);
-  // A terminal with no agent in it keeps its terminal icon.
-  const terminal = sheet.locator(`[data-pane-choice][data-value="${activeTerminal}"]`);
-  await expect(terminal.locator("[data-pane-status]")).toHaveCount(0);
+  // A terminal at a prompt has nothing to show, so it carries the terminal mark.
+  const terminal = stripTab(ui, activeTerminal);
+  await expect(terminal.locator("[data-agent-status-badge]")).toHaveCount(0);
+  await expect(terminal.locator("svg.lucide-terminal")).toBeVisible();
+  await expect(terminal).toHaveText("Mobile launch 2");
+  // Each tab takes taps across 44pt, with the selected fill drawn inside at the tasks pill's 35pt,
+  // and every tab padded alike so a name stays put as the selection moves.
+  for (const tab of [chat, terminal])
+    expect((await tab.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  const fill = await ui.locator(".mobile-tab-strip [data-active-tab]").evaluate((el) => {
+    const style = getComputedStyle(el, "::before");
+    return el.getBoundingClientRect().height - parseFloat(style.top) - parseFloat(style.bottom);
+  });
+  expect(fill).toBe(35);
+  const pill = await ui.locator('[aria-label="Agent tasks"]').boundingBox();
+  if (pill) expect(Math.round(pill.height)).toBe(fill);
+  const padding = (tab: Locator) => tab.evaluate((el) => getComputedStyle(el).paddingInline);
+  expect(await padding(chat)).toBe(await padding(terminal));
+  // Neighbouring tabs' tap areas never overlap.
+  const [first, second] = await Promise.all([
+    box(ui.locator(`.mobile-tab-strip [data-tab-id="${activeChat}"]`)),
+    box(ui.locator(`.mobile-tab-strip [data-tab-id="${activeTerminal}"]`)),
+  ]);
+  expect(first.x + first.width).toBeLessThanOrEqual(second.x);
+  const [row, strip] = await Promise.all([
+    box(ui.locator(".mobile-header-row")),
+    box(tabStrip(ui)),
+  ]);
+  expect(strip.y - (row.y + row.height)).toBeLessThanOrEqual(8);
   await page.screenshot({ path: "apps/mobile/test-results/mobile-tabs-status.png" });
+});
+test("the tab strip marks replies in progress, finishes and failures as desktop does", async ({
+  page,
+}) => {
+  await page.goto(`/?${SIDEBAR_TREE_FLAG}`);
+  await page.getByRole("button", { name: "Explore demo" }).click();
+  const ui = workspace(page);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+  const tab = (name: string) => tabStrip(ui).locator("[data-pane-choice]", { hasText: name });
+  // Open tabs only, in the tab bar's order: closed chats and background terminals stay in the
+  // sidebar.
+  await expect(tabStrip(ui).locator("[data-pane-choice]")).toHaveText([
+    "Mobile launch 1",
+    "Mobile launch 2",
+    "Release notes",
+    "Fix sign-in",
+    "Flaky upload test",
+    "Roadmap",
+  ]);
+  // Replying: the badge holds a spinner rather than a dot.
+  await expect(tab("Release notes").locator("[data-agent-status-badge]")).toBeVisible();
+  await expect(tab("Release notes").locator("[data-agent-status-badge] .rounded-full")).toHaveCount(
+    0,
+  );
+  await expect(tab("Fix sign-in").locator("[data-agent-status-badge] .bg-primary")).toBeVisible();
+  await expect(
+    tab("Flaky upload test").locator("[data-agent-status-badge] .bg-destructive"),
+  ).toBeVisible();
+  await expect(tab("Roadmap").locator("[data-agent-status-badge]")).toHaveCount(0);
+});
+test("the tab strip scrolls sideways with fades and keeps the current tab in view", async ({
+  page,
+}) => {
+  await page.goto(`/?${SIDEBAR_TREE_FLAG}`);
+  await page.getByRole("button", { name: "Explore demo" }).click();
+  const ui = workspace(page);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+  const list = ui.locator(".mobile-tab-strip .tab-strip");
+  const fade = (edge: string) => ui.locator(`.mobile-tab-strip [data-tab-fade="${edge}"]`);
+  await expect(fade("start")).toHaveAttribute("data-visible", "false");
+  await expect(fade("end")).toHaveAttribute("data-visible", "true");
+  // "+" stays put outside the scrolling part.
+  const plus = tabStrip(ui).getByRole("button", { name: "New tab", exact: true });
+  const before = await plus.boundingBox();
+  // A finger on the strip scrolls it, and opens neither side panel.
+  const bounds = await box(list);
+  const y = bounds.y + bounds.height / 2;
+  const [left, right] = [bounds.x + 20, bounds.x + bounds.width - 20];
+  await touchSwipe(page, { x: right, y }, { x: left, y });
+  await expect.poll(() => list.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
+  await expect(fade("start")).toHaveAttribute("data-visible", "true");
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-files-open", "false");
+  await touchSwipe(page, { x: left, y }, { x: right, y });
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
+  expect(await plus.boundingBox()).toEqual(before);
+  // Choosing the last tab brings it into view, clear of the end fade.
+  await tabStrip(ui).locator("[data-pane-choice]", { hasText: "Roadmap" }).click();
+  await expect(currentTab(ui)).toHaveText("Roadmap");
+  await expect
+    .poll(async () => {
+      const [tab, strip] = await Promise.all([box(currentTab(ui)), box(list)]);
+      return tab.x + tab.width <= strip.x + strip.width + 1;
+    })
+    .toBe(true);
+  // Panel swipes still work from the content area.
+  await touchSwipe(page, { x: 30, y: 400 }, { x: 320, y: 400 });
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
+});
+test("holding a strip tab opens its menu sheet, which a screen reader reaches too", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const menuItems = () => ui.locator('[role="menu"]').getByRole("menuitem").allTextContents();
+  const terminal = stripTab(ui, activeTerminal);
+  const held = await box(terminal);
+  await hold(page, { x: held.x + held.width / 2, y: held.y + held.height / 2 });
+  const sheet = ui.getByRole("dialog", { name: "Mobile launch 2", exact: true });
+  await expect(sheet).toBeVisible();
+  // The row menu the Tabs sheet had: a terminal has no chat to pin, fork or delete.
+  expect(await menuItems()).toEqual(["Close tab…"]);
+  await expect(sheet.getByRole("group", { name: "Tab type" })).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("mobile-tab-long-press.png") });
+  // Holding is not a tap: the shown tab stays the chat.
+  await expect(currentTab(ui)).toHaveAttribute("data-value", activeChat);
+  await ui.locator('[role="menu"]').press("Escape");
+  await expect(sheet).toHaveCount(0);
+  await expect(terminal).toBeFocused();
+  // The same sheet without a long-press, from "More actions" beside the tab.
+  const more = ui
+    .locator(`.mobile-tab-strip [data-tab-id="${activeChat}"]`)
+    .getByRole("button", { name: "More actions for Mobile launch 1", exact: true });
+  await expect(more).toHaveAttribute("aria-haspopup", "dialog");
+  await more.press("Enter");
+  await expect(ui.getByRole("dialog", { name: "Mobile launch 1", exact: true })).toBeVisible();
+  await ui.locator('[role="menu"]').press("Escape");
+  // And from the keyboard's context-menu key on the tab itself.
+  await stripTab(ui, activeChat).press("Shift+F10");
+  await expect(ui.getByRole("dialog", { name: "Mobile launch 1", exact: true })).toBeVisible();
+});
+test("the workspace switcher lists open workspaces and returns to each one's last tab", async ({
+  page,
+}) => {
+  await page.goto(`/?${SIDEBAR_TREE_FLAG}`);
+  await page.getByRole("button", { name: "Explore demo" }).click();
+  const ui = workspace(page);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+  await choose(ui, "Tabs", activeTerminal);
+  await switcher(ui).click();
+  const sheet = ui.getByRole("dialog", { name: "Workspaces", exact: true });
+  const rows = sheet.locator("[data-workspace-choice]");
+  // Two workspaces share a name, so each shows its parent folder, as the sidebar does.
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(1)).toContainText("forks");
+  await expect(rows.first().locator(".mobile-pane-selected")).toBeVisible();
+  await expect(rows.first()).toHaveAttribute("aria-current", "page");
+  // The other workspace's chat finished, so its icon carries the sidebar's dot.
+  await expect(rows.nth(1).locator('[data-workspace-attention="done"]')).toBeVisible();
+  await expect(rows.first().locator("[data-project-icon]")).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("mobile-workspace-switcher.png") });
+  await rows.nth(1).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(currentTab(ui)).toHaveText("Try the new parser");
+  // Back again, on the tab it was last on.
+  await switcher(ui).click();
+  await rows.first().click();
+  await expect(currentTab(ui)).toHaveAttribute("data-value", activeTerminal);
+  // "Open workspace…" closes this sheet and opens the sidebar's "+" sheet on its own.
+  await switcher(ui).click();
+  await sheet.getByRole("button", { name: "Open workspace…", exact: true }).click();
+  const open = ui.getByRole("dialog", { name: "Open workspace", exact: true });
+  await expect(open).toBeVisible();
+  await expect(open.getByRole("button", { name: "Open folder…", exact: true })).toBeVisible();
+  await expect(ui.getByRole("dialog")).toHaveCount(1);
+});
+test("schedules and pull requests keep their page title in the header, with no tab strip", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  await ui.locator("#mobile-sidebar-toggle").click();
+  await ui
+    .getByRole("dialog", { name: "Workspace sidebar" })
+    .getByRole("button", { name: /^Schedules(,|$)/ })
+    .first()
+    .click();
+  await expect(ui.getByRole("heading", { level: 1, name: "Schedules", exact: true })).toBeVisible();
+  await expect(ui.locator(".mobile-tab-strip")).toHaveCount(0);
+  await expect(switcher(ui)).toHaveCount(0);
+});
+test("the tab strip slides away while typing and returns when the keyboard closes", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const strip = ui.locator(".mobile-tab-strip");
+  const stripHeight = () =>
+    ui
+      .locator("html")
+      .evaluate((el) => getComputedStyle(el).getPropertyValue("--mobile-strip-height").trim());
+  const fade = () =>
+    ui.locator(".mobile-header").evaluate((el) => getComputedStyle(el, "::before").height);
+  await expect(strip).toBeVisible();
+  await expect.poll(stripHeight).toBe("44px");
+  const open = await fade();
+  // Focusing the composer stands for the keyboard opening.
+  await ui.getByRole("textbox", { name: "Message Codex" }).click();
+  await expect(ui.locator(".mobile-composer")).toHaveAttribute("data-expanded", "true");
+  await expect(strip).toBeHidden();
+  await expect.poll(stripHeight).toBe("0px");
+  // The header's controls stay, and its fade shrinks by the strip's height.
+  for (const name of ["Open sidebar", "Project files"])
+    await expect(ui.getByRole("button", { name, exact: true })).toBeVisible();
+  await expect(ui.getByRole("button", { name: /^Workspace: / })).toBeVisible();
+  await expect.poll(fade).toBe(`${parseFloat(open) - 44}px`);
+  await page.screenshot({ path: test.info().outputPath("mobile-typing-strip-hidden.png") });
+  // The keyboard closing brings it back.
+  await ui.getByRole("log", { name: "Chat timeline" }).click({ position: { x: 200, y: 300 } });
+  await expect(ui.locator(".mobile-composer")).toHaveAttribute("data-expanded", "false");
+  await expect(strip).toBeVisible();
+  await expect.poll(stripHeight).toBe("44px");
+  await expect.poll(fade).toBe(open);
+});
+test("queued messages show one at a time with their place, never a row peeking out", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const input = ui.getByRole("textbox", { name: "Message Codex" });
+  const list = ui.locator(".mobile-queue-list");
+  const rows = list.locator(".mobile-queue-row");
+  for (const count of [1, 2, 3]) {
+    await input.fill(`Queued follow-up ${count}`);
+    await ui.getByRole("button", { name: "Queue message", exact: true }).click();
+    await expect(rows).toHaveCount(count);
+    // Exactly one whole row shows: the list is as tall as a row.
+    const [shown, row] = await Promise.all([box(list), box(rows.first())]);
+    expect(Math.round(shown.height)).toBe(Math.round(row.height));
+    if (count === 1) await expect(rows.first()).not.toContainText(/of \d/);
+    else await expect(rows.first()).toContainText(`1 of ${count}`);
+  }
+  // Scrolling the list moves one whole row: the next message, never part of one.
+  await list.evaluate((el) => el.scrollBy({ top: 30, behavior: "instant" }));
+  await expect
+    .poll(async () => {
+      const [shown, next] = await Promise.all([box(list), box(rows.nth(1))]);
+      return Math.round(next.y - shown.y);
+    })
+    .toBe(0);
+  await expect(rows.nth(1)).toContainText("2 of 3");
 });
 test("pages opened from a chat start below the header, and the chat scrolls under it again", async ({
   page,
@@ -1359,7 +1862,6 @@ test("pages opened from a chat start below the header, and the chat scrolls unde
   const header = ui.locator(".mobile-header");
   const openFromSidebar = async (name: string) => {
     await ui.locator("#mobile-sidebar-toggle").click();
-    // A workspace's row also says when one of its chats needs attention.
     await ui
       .getByRole("dialog", { name: "Workspace sidebar" })
       .getByRole("button", { name: new RegExp(`^${name}(,|$)`) })
@@ -1383,7 +1885,8 @@ test("pages opened from a chat start below the header, and the chat scrolls unde
       })
       .toBeGreaterThanOrEqual(0);
   }
-  await openFromSidebar("Concors");
+  await ui.locator("#mobile-sidebar-toggle").click();
+  await tabRow(ui, "Mobile launch").click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
   await expect(ui.locator(".mobile-pane")).toHaveCSS("padding-top", "0px");
 });
@@ -1418,7 +1921,7 @@ test("the demo's Pull requests and Schedules pages show sample work, read-only f
 });
 test("the app reopens the tab last opened on this machine", async ({ page }) => {
   let ui = await enter(page);
-  const tabs = ui.getByRole("combobox", { name: "Tabs", exact: true });
+  const tabs = currentTab(ui);
   await expect(tabs).toHaveAttribute("data-value", activeChat);
   await choose(ui, "Tabs", activeTerminal);
   await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
@@ -1431,4 +1934,136 @@ test("the app reopens the tab last opened on this machine", async ({ page }) => 
   await choose(ui, "Tabs", activeChat);
   await enter(page);
   await expect(tabs).toHaveAttribute("data-value", activeChat);
+});
+test("the sidebar lists each workspace's tabs under it, as desktop does", async ({ page }) => {
+  const enterTree = async () => {
+    await page.goto(`/?${SIDEBAR_TREE_FLAG}`);
+    await page.getByRole("button", { name: "Explore demo" }).click();
+    const ui = workspace(page);
+    await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+    await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+    return ui;
+  };
+  let ui = await enterTree();
+  const sidebar = ui.getByRole("dialog", { name: "Workspace sidebar" });
+  const row = (id: string) => sidebar.locator(`[data-sidebar-row$="${id}"]`);
+  const state = (id: string) => row(id).locator("[data-row-state]");
+  // Two workspaces with one name are told apart by their parent folders.
+  const workspaces = sidebar.locator("[data-workspace-id]");
+  await expect(workspaces).toHaveCount(2);
+  await expect(workspaces.nth(0)).toContainText(/Concors\s*alex/);
+  await expect(workspaces.nth(1)).toContainText(/Concors\s*forks/);
+  // Pins first, then open tabs in the tab bar's order, then what closed, newest first.
+  const first = sidebar.getByRole("list", { name: "Concors tabs" }).first();
+  await expect(first.getByRole("listitem")).toHaveText([
+    /^Roadmap/,
+    /^Mobile launch/,
+    /Release notes/,
+    /^Fix sign-in/,
+    /^Flaky upload test/,
+    /^pnpm dev/,
+    /^Old onboarding copy/,
+  ]);
+  await expect(row(treeIds.pinnedTab).getByLabel("Pinned")).toBeVisible();
+  await expect(row(treeIds.closed).locator("[data-agent-closed]")).toBeVisible();
+  // Each status as desktop shows it: a spinner while replying, red for a question or a failure,
+  // the accent once finished, grey for a terminal running with its tab closed.
+  await expect(state(treeIds.workingTab)).toHaveAttribute("data-row-state", "working");
+  await expect(state(ids.tab)).toHaveAttribute("data-row-state", "attention");
+  await expect(state(treeIds.failedTab)).toHaveAttribute("data-row-state", "attention");
+  await expect(state(treeIds.doneTab)).toHaveAttribute("data-row-state", "done");
+  await expect(state(treeIds.background)).toHaveAttribute("data-row-state", "running");
+  // Rows and their menus are 44pt targets.
+  for (const target of [
+    workspaces.nth(0),
+    row(treeIds.doneTab).locator("> button").first(),
+    row(treeIds.doneTab).getByRole("button", { name: "Actions for Fix sign-in" }),
+  ])
+    expect((await target.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+
+  // Tapping a workspace folds it alone, keeps the sidebar open, and moves its dot to the folder.
+  const fork = workspaces.nth(1);
+  await expect(fork).toHaveAttribute("aria-expanded", "true");
+  await expect(sidebar.locator("[data-workspace-attention]")).toHaveCount(0);
+  await fork.click();
+  await expect(fork).toHaveAttribute("aria-expanded", "false");
+  await expect(workspaces.nth(0)).toHaveAttribute("aria-expanded", "true");
+  await expect(row(treeIds.forkTab)).toBeHidden();
+  await expect(sidebar.locator('[data-workspace-attention="done"]')).toBeVisible();
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "true");
+  // Folded stays folded, as desktop remembers it.
+  ui = await enterTree();
+  await expect(fork).toHaveAttribute("aria-expanded", "false");
+  await fork.click();
+  await expect(row(treeIds.forkTab)).toBeVisible();
+
+  // Tapping a tab opens it, in its own workspace, and closes the sidebar.
+  await row(treeIds.forkTab).locator("> button").first().click();
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
+  await expect(currentTab(ui)).toContainText("Try the new parser");
+  // A closed chat opens again from its row.
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await row(treeIds.closed).locator("> button").first().click();
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
+  await expect(ui.getByRole("log", { name: "Chat timeline" })).toContainText(
+    "Old onboarding copy: can you take this on?",
+  );
+});
+test("workspace rows show their fold chevron, and their menu starts a tab there", async ({
+  page,
+}) => {
+  await page.goto(`/?${SIDEBAR_TREE_FLAG}`);
+  await page.getByRole("button", { name: "Explore demo" }).click();
+  const ui = workspace(page);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  const sidebar = ui.getByRole("dialog", { name: "Workspace sidebar" });
+  const rows = sidebar.locator("li:has(> button[data-workspace-id])");
+  const fork = rows.nth(1);
+  const chevron = fork.locator("[data-workspace-chevron]");
+  // Desktop's hover chevron, always shown at the row's end: down while open, right once folded.
+  // The workspace keeps its icon, which carries the folded workspace's dot.
+  await expect(sidebar.locator('[data-workspace-chevron="expanded"]')).toHaveCount(2);
+  await expect(fork.locator("[data-project-icon]")).toBeVisible();
+  const [icon, mark] = await Promise.all([
+    fork.locator("[data-project-icon]").boundingBox(),
+    chevron.boundingBox(),
+  ]);
+  expect(mark && icon && mark.x > icon.x + 100).toBe(true);
+  await fork.locator("[data-workspace-id]").click();
+  await expect(chevron).toHaveAttribute("data-workspace-chevron", "collapsed");
+  await expect(fork.locator('[data-workspace-attention="done"]')).toBeVisible();
+  await fork.locator("[data-workspace-id]").click();
+  await expect(chevron).toHaveAttribute("data-workspace-chevron", "expanded");
+  await expect(fork.locator("[data-workspace-attention]")).toHaveCount(0);
+
+  // "New tab" leads the workspace's menu and opens the New tab sheet in that workspace.
+  await fork.getByRole("button", { name: "Actions for Concors", exact: true }).click();
+  const menu = ui.getByRole("menu", { name: "Concors" });
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    "New tab",
+    "Rename workspace",
+    "Close workspace…",
+  ]);
+  await menu.getByRole("menuitem", { name: "New tab" }).click();
+  await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
+  await ui.getByRole("button", { name: "New chat", exact: true }).click();
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  await expect(
+    sidebar.getByRole("list", { name: "Concors tabs" }).nth(1).getByRole("listitem"),
+  ).toHaveCount(2);
+});
+test("the New tab sheet lists a saved terminal profile after the built-in ones", async ({
+  page,
+}) => {
+  await page.goto(`/?${TERMINAL_PROFILE_FLAG}`);
+  await page.getByRole("button", { name: "Explore demo" }).click();
+  const ui = workspace(page);
+  await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
+  await newTab(ui);
+  const sheet = ui.getByRole("dialog", { name: "New tab", exact: true });
+  await expectNewTabGroups(sheet, ["Terminal", "Claude Code", "Codex", "OpenCode", "Dev server"]);
+  await sheet.getByRole("button", { name: "Dev server", exact: true }).click();
+  await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
 });

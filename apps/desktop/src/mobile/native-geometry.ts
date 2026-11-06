@@ -35,3 +35,13 @@ export function clipNativeSurface(
     ? { x: left, y: top, width: right - left, height: bottom - top }
     : null;
 }
+
+/**
+ * The composer is pinned to the viewport's bottom. While the keyboard moves, the viewport can change
+ * a frame ahead of layout and put it below the screen for that frame; taking that for scrolled away
+ * would unmount the native composer, and its focus and open sheet with it.
+ */
+export function pinComposerToViewport(rect: SurfaceRect, viewportHeight: number): SurfaceRect {
+  const { x, y, width, height } = rect;
+  return { x, y: Math.min(y, viewportHeight - height), width, height };
+}
