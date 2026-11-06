@@ -33,7 +33,8 @@ jobs:
       EXPO_PUBLIC_DEMO: "true"
       EXPO_NO_TELEMETRY: "1"
       CI: "1"
-      MAESTRO_DRIVER_STARTUP_TIMEOUT: "180000"
+      # The clean Intel runner started XCTest after 3m34s; allow its measured cold start.
+      MAESTRO_DRIVER_STARTUP_TIMEOUT: "300000"
     steps:
       - uses: actions/checkout@v4
         with:
