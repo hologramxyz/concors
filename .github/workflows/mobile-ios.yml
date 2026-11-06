@@ -130,12 +130,10 @@ jobs:
       - name: Install simulator app
         run: |
           MOBILE_APP=$(find "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' -print -quit)
-          # Xcode's actual ad-hoc signature can be empty even when its simulator section has
-          # FAKETEAMID entitlements. Give SecureStore a consistent identity without Apple credentials.
-          python3 -c 'import plistlib,sys; plistlib.dump({"application-identifier":"FAKETEAMID.xyz.hologram.concors.preview","keychain-access-groups":["FAKETEAMID.xyz.hologram.concors.preview"]},open(sys.argv[1],"wb"))' "$RUNNER_TEMP/simulator-entitlements.plist"
-          codesign --force --sign - --entitlements "$RUNNER_TEMP/simulator-entitlements.plist" "$MOBILE_APP"
-          codesign -d --entitlements :- "$MOBILE_APP" > "$RUNNER_TEMP/mobile-entitlements.plist"
-          /usr/libexec/PlistBuddy -c 'Print :application-identifier' "$RUNNER_TEMP/mobile-entitlements.plist"
+          # Simulator identity is carried by Xcode's simulated-entitlements section. Preserve
+          # the original signature; fake restricted entitlements in a new signature prevent launch.
+          codesign --verify "$MOBILE_APP"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$MOBILE_APP/Info.plist"
           xcrun simctl install '${{ steps.simulator.outputs.id }}' "$MOBILE_APP"
           xcrun simctl launch '${{ steps.simulator.outputs.id }}' xyz.hologram.concors.preview
           python3 .github/scripts/reuse-ios-simulator.py "$MOBILE_APP" --arch "$(uname -m)" --record
@@ -152,6 +150,13 @@ jobs:
       - name: Capture iPhone store screenshots with fictional workspace content
         timeout-minutes: 2
         run: maestro --device "${{ steps.simulator.outputs.id }}" test --test-output-dir apps/mobile/test-results/native apps/mobile/e2e/native/store-screenshots.yaml
+      - name: Retain native launch diagnostics
+        if: failure()
+        timeout-minutes: 1
+        run: |
+          mkdir -p apps/mobile/test-results/native
+          xcrun simctl io '${{ steps.simulator.outputs.id }}' screenshot apps/mobile/test-results/native/failure-screen.png || true
+          xcrun simctl spawn '${{ steps.simulator.outputs.id }}' log show --last 5m --style compact --predicate 'process == "ConcorsPreview" OR process == "amfid" OR eventMessage CONTAINS[c] "xyz.hologram.concors.preview"' > apps/mobile/test-results/native/launch-diagnostics.log 2>&1 || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
