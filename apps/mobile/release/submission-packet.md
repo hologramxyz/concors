@@ -26,7 +26,7 @@ The previous audits and implementation history are in [the November 4–5 audit]
 | Apple provider      | Primary App ID enabled, Services ID `xyz.hologram.concors.auth` and dedicated signing key created; callback `https://auth.privy.io/api/v1/oauth/callback`. Backend signing material stored in production server credentials. Privy configuration and actual user acceptance remain incomplete; production advertises `apple:false`.                                                                           |
 | Durable revocation  | [API PR 23](https://github.com/hologramxyz/concors-server/pull/23) merged/deployed: fresh five-minute Apple client proofs avoid a manual six-month JWT expiry breaking deletion. Signing material is not included here.                                                                                                                                                                                       |
 | Native artifact     | [Build 12](https://expo.dev/accounts/guitong35/projects/concors/builds/e633163f-9dc7-40e9-b57e-3ee8d4a15504), **0.1.0 (12)** from main `89efcccb5412af7cd1b18a9fce904e11d3a2bf3d`, is VALID / IN_BETA_TESTING, in Internal beta and attached to draft 0.1.0. [Signed inspection](ios-build-12.json) verifies all nine categories/purposes and preserved SDK reasons.                                          |
-| Native screenshots  | CI capture uses real iPhone simulator UI and fictional workspace content. Asset upload and visual acceptance remain pending; browser captures are not iPhone screenshots.                                                                                                                                                                                                                                     |
+| Native screenshots  | One visually inspected **1320 × 2868** native iPhone capture is processed and active in the draft's 6.9-inch set. Additional views and the full native interaction run remain pending. See [capture evidence](ios-native-evidence.md); simulator images do not establish physical-device acceptance.                                                                                                          |
 
 ## Remaining release blockers
 
@@ -45,7 +45,7 @@ The previous audits and implementation history are in [the November 4–5 audit]
    The current 13+ App Store override and website copy must be aligned with the resolved decision.
 4. **Content rights.** Apple's content-rights declaration is unset. Confirm the necessary rights
    for displayed assets/content and users' authorized repository/workspace access before attesting.
-5. **Screenshots and real device acceptance.** Upload visually checked, native 6.9-inch captures.
+5. **Screenshots and real device acceptance.** Finish the native screenshot set and interaction checks.
    Complete install/upgrade, permissions, keyboard, reconnect, accessibility, AI decline/withdrawal,
    support reporting and deletion on a physical iPhone. Native simulator/browser checks alone do not
    establish this acceptance. Confirm support/report triage is operated.
