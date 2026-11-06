@@ -145,6 +145,70 @@ test("a folder of repositories shows a child favicon, its pull request count and
   }
 });
 
+test("on a phone the pull request filters stay in reach", async ({ page }) => {
+  test.setTimeout(90000);
+  const root = await mkdtemp(join(tmpdir(), "concors-pull-request-filters-"));
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    // Enough workspaces that their chips overflow a phone's width.
+    for (const name of ["Hackathon", "Avastudio", "Marketing site", "Infrastructure"]) {
+      repository(join(root, name), `https://github.com/hologram/${name.replace(" ", "-")}.git`);
+      await seedProject(page, name, join(root, name));
+    }
+    await page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("button", { name: "Pull requests", exact: true })
+      .click();
+    // The page alone, full width, as the phone app shows it.
+    await page.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
+    await page.setViewportSize({ width: 390, height: 844 });
+    const filters = page.getByRole("toolbar", { name: "Filter pull requests" });
+    await expect(filters.getByRole("button", { name: /^Infrastructure/ })).toBeAttached();
+
+    // "Opened by you" leaves the scrolling chips for the state switch's row, fully on screen.
+    const mine = page.getByRole("button", { name: "Yours", exact: true });
+    const tabs = page.getByRole("tablist", { name: "Pull request state" });
+    // Same line, same height as the switch; polled, as the page widens while the sidebar slides.
+    const beside = async () => {
+      const [switchBox, chipBox] = [await tabs.boundingBox(), await mine.boundingBox()];
+      return (
+        !!switchBox &&
+        !!chipBox &&
+        Math.abs(chipBox.y - switchBox.y) < 1 &&
+        Math.abs(chipBox.height - switchBox.height) < 1
+      );
+    };
+    await expect(page.getByRole("button", { name: "Opened by you" })).toHaveCount(0);
+    await expect.poll(beside).toBe(true);
+    await expect(mine).toBeInViewport({ ratio: 1 });
+    // Merged shows its own count too, and the chip still fits beside the switch.
+    await page.getByRole("tab", { name: /^Merged/ }).click();
+    await expect(page.getByRole("tab", { name: /^Merged/ })).toContainText(/\d/);
+    await expect.poll(beside).toBe(true);
+    await mine.click();
+    await expect(mine).toHaveAttribute("aria-pressed", "true");
+
+    // The chips past the edge are marked by a fade, which follows the scroll to the far end.
+    const strip = filters.locator("xpath=../..");
+    const fade = (edge: "first" | "last") => strip.locator("> [aria-hidden]")[edge]();
+    await expect(fade("last")).toHaveAttribute("data-visible", "true");
+    await expect(fade("first")).toHaveAttribute("data-visible", "false");
+    await page.screenshot({ path: test.info().outputPath("phone-pull-request-filters.png") });
+    await filters.locator("xpath=..").evaluate((list) => (list.scrollLeft = list.scrollWidth));
+    await expect(fade("first")).toHaveAttribute("data-visible", "true");
+    await expect(fade("last")).toHaveAttribute("data-visible", "false");
+
+    // Wide enough to wrap, the chips never overflow and "Opened by you" ends their row again.
+    await page.setViewportSize({ width: 1360, height: 850 });
+    await expect(filters.getByRole("button", { name: "Opened by you" })).toBeVisible();
+    await expect(mine).toBeHidden();
+    await expect(fade("last")).toHaveAttribute("data-visible", "false");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("pull requests are read, commented on, merged and closed without leaving Concors", async ({
   page,
 }) => {
