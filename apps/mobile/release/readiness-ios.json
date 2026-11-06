@@ -108,7 +108,7 @@
         "Nine linked privacy categories are published. All 175 territories are selected.",
         "Working reviewer account/machine, content-rights attestation, minimum-age resolution, final screenshot review and physical-device acceptance remain required.",
         "ios-native-evidence.md",
-        "One inspected native 6.9-inch workspace capture is processed and active in Apple. Agent/files captures with demo guidance or empty states were rejected; a complete native interaction run has not passed."
+        "One inspected native 6.9-inch workspace capture is processed and active in Apple. Agent/files captures with demo guidance or empty states were rejected. The native simulator control/draft flow passed in run 42173390095 (63 commands); production and physical-device acceptance remain required."
       ]
     },
     {
