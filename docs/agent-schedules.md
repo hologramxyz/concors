@@ -12,6 +12,16 @@ or a new dedicated session. For a new session, select an installed provider and 
 provider configuration and models discovered in existing sessions; a model ID can also be
 entered directly. Provider authentication remains in Settings → Providers.
 
+Attach files, such as a PDF résumé or a brief, to send them with every run, as if attached
+to its message: up to 10, each up to 50 MB, uploaded like a chat's attachments. The machine
+keeps them under `attachments/schedules/<schedule id>/` beside the workspace database until
+they are removed from the schedule or it is deleted. Each run gets its own copy in its chat,
+so an agent that edits what it was sent does not change what later runs get, and a past
+run's files stay with its conversation. An image goes to the agent as an image; any other
+file as its path on the machine, which the agent reads with its own tools. A machine shows
+Attach files only once its daemon supports it (`schedule-files`). Schedules an agent creates
+carry no files, and an agent's edits leave the files as they are.
+
 Choose an interval (at least 15 minutes), a daily time, or weekdays plus a time. Daily and
 weekly schedules use an IANA time zone. A repeated clock time at the end of daylight saving
 runs once; a nonexistent spring-forward time is skipped. Upcoming-run timestamps in the UI
@@ -64,6 +74,7 @@ Tokens are not stored in schedule definitions, returned to clients, or written i
 ## Verification
 
 Daemon tests exercise recurrence and DST, persistence/restart recovery, prompt delivery,
+attached files (kept, copied per run, edited, removed),
 model selection, approvals, busy-session skips, action retries, saved-session opening, and
 agent API scoping. Desktop and mobile browser tests exercise schedule creation, execution,
 conversation navigation and controls through real test daemons with deterministic providers.

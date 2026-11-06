@@ -47,6 +47,15 @@ test("mobile manages schedules through the native relay without horizontal overf
     await ui.getByRole("menuitemradio", { name: "Codex", exact: true }).click();
     await form.getByLabel("Model", { exact: true }).fill("fixture");
     await form.getByLabel("Prompt", { exact: true }).fill("Review the project");
+    // Files upload through the app's relay to the machine, which keeps them with the schedule.
+    await form.getByLabel("Choose files to attach").setInputFiles({
+      name: "brief.pdf",
+      mimeType: "application/pdf",
+      buffer: Buffer.from("project brief"),
+    });
+    await expect(form.getByRole("list", { name: "Files" }).getByRole("listitem")).toHaveText([
+      "brief.pdf13 B",
+    ]);
     await expect(form.getByRole("button", { name: "Create schedule", exact: true })).toBeEnabled();
     for (const width of [320, 390, 430]) {
       await page.setViewportSize({ width, height: 844 });
@@ -56,6 +65,7 @@ test("mobile manages schedules through the native relay without horizontal overf
     await page.screenshot({ path: test.info().outputPath("schedule-form-page-mobile.png") });
     await form.getByRole("button", { name: "Create schedule", exact: true }).click();
     await expect.poll(() => desktop.schedules?.[0]?.name).toBe("Mobile review");
+    expect(desktop.schedules?.[0]?.files).toMatchObject([{ name: "brief.pdf", size: 13 }]);
     await expect(form).toHaveCount(0);
     await ui.getByRole("button", { name: "Run Mobile review now", exact: true }).click();
     await expect(ui.getByRole("article").getByRole("status")).toHaveText("Done");

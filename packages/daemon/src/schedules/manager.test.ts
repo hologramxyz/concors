@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import type {
+  AgentUpload,
   ScheduleDefinition,
   ScheduleOperation,
   ScheduleRequest,
@@ -252,6 +254,143 @@ it("reports missing folders and provider errors instead of silently dropping a r
   f.request({ kind: "run", id: schedule.id });
   await expect.poll(() => f.manager.list()[0]?.runs[0]?.status).toBe("failed");
   expect(f.manager.list()[0]?.runs[0]?.message).toBe("Provider needs sign-in");
+});
+
+/** A finished upload in staging, as a client leaves it before the schedule that uses it saves. */
+async function staged(root: string, name: string, text: string): Promise<AgentUpload> {
+  const uploadId = randomUUID();
+  await mkdir(join(root, "uploads", uploadId), { recursive: true });
+  await writeFile(join(root, "uploads", uploadId, name), text);
+  return { uploadId, name, mime: "application/pdf", size: text.length };
+}
+
+it("keeps a schedule's files and sends every run its own copy of them", async () => {
+  const f = await setup();
+  const root = f.workspace.attachmentsDirectory;
+  const resume = await staged(root, "resume.pdf", "my resume");
+  const schedule = f.create({ files: [resume] });
+  expect(schedule.files).toEqual([resume]);
+  const kept = join(root, "schedules", schedule.id, resume.uploadId, "resume.pdf");
+  expect(await readFile(kept, "utf8")).toBe("my resume");
+  // Claimed out of staging, so the sweep of unsent uploads cannot take it.
+  expect(existsSync(join(root, "uploads", resume.uploadId))).toBe(false);
+
+  const sent = async (runs: number) => {
+    // No client is connected to report the agent's state, so a tick settles each run.
+    await expect
+      .poll(() => {
+        f.manager.tick();
+        return f.manager.list()[0]?.runs.filter((r) => r.status === "done").length;
+      })
+      .toBe(runs);
+    const starts = f.providers.flatMap((p) => p.requests.filter((r) => r.method === "turn/start"));
+    return JSON.stringify(starts[runs - 1]?.params);
+  };
+  f.request({ kind: "run", id: schedule.id });
+  const first = await sent(1);
+  const sessionId = f.workspace.agents()[0]!.id;
+  // The agent is told where its copy is, inside the chat, never the schedule's own file.
+  expect(first).toContain('The user attached \\"resume.pdf\\"');
+  // Paths as they appear inside the JSON, where Windows' backslashes are escaped.
+  const inJson = (path: string) => JSON.stringify(path).slice(1, -1);
+  expect(first).toContain(inJson(join(root, sessionId)));
+  expect(first).not.toContain(inJson(join(root, "schedules")));
+  // The run's message shows the file, as a chat message with an attachment would.
+  const runId = f.manager.list()[0]!.runs[0]!.id;
+  expect(f.workspace.agentItem(sessionId, `prompt:${runId}`)).toMatchObject({
+    attachments: [{ name: "resume.pdf" }],
+  });
+
+  f.request({ kind: "run", id: schedule.id });
+  await sent(2);
+  const copies = (await readdir(join(root, sessionId))).filter((name) => name !== resume.uploadId);
+  expect(copies).toHaveLength(2);
+  expect(await readFile(kept, "utf8")).toBe("my resume");
+});
+
+it("edits keep, add and remove a schedule's files, and deleting it removes them", async () => {
+  const f = await setup();
+  const root = f.workspace.attachmentsDirectory;
+  const resume = await staged(root, "resume.pdf", "my resume");
+  const schedule = f.create({ files: [resume] });
+  const directory = join(root, "schedules", schedule.id);
+  const update = (
+    patch: Partial<ScheduleDefinition>,
+    source: "user" | "agent" = "user",
+    current = f.manager.list()[0]!,
+  ) => {
+    const { name, projectId, prompt, target, cadence, enabled, files } = current;
+    return f.manager.request(
+      {
+        type: "schedule.request",
+        requestId: randomUUID(),
+        operation: {
+          kind: "update",
+          id: current.id,
+          expectedRevision: current.revision,
+          schedule: { name, projectId, prompt, target, cadence, enabled, files, ...patch },
+        },
+      },
+      source,
+    );
+  };
+
+  // A client that predates files leaves them out, and that keeps them.
+  expect(update({ files: undefined, prompt: "Find internships" }).outcome.status).toBe("ok");
+  expect(f.manager.list()[0]?.files).toEqual([resume]);
+  // An agent's change cannot attach or remove files; it cannot upload them.
+  expect(update({ files: [] }, "agent").outcome.status).toBe("ok");
+  expect(f.manager.list()[0]?.files).toEqual([resume]);
+
+  const letter = await staged(root, "letter.pdf", "cover letter");
+  expect(update({ files: [letter] }).outcome.status).toBe("ok");
+  expect(f.manager.list()[0]?.files).toEqual([letter]);
+  expect(await readdir(directory)).toEqual([letter.uploadId]);
+
+  // A file that is gone fails the whole change, which saves nothing and moves nothing.
+  const fresh = await staged(root, "notes.pdf", "notes");
+  const gone: AgentUpload = { ...letter, uploadId: randomUUID(), name: "gone.pdf" };
+  const failed = update({ files: [letter, fresh, gone] });
+  expect(failed.outcome).toMatchObject({
+    status: "error",
+    message: "gone.pdf is no longer on this machine. Attach it again.",
+  });
+  expect(f.manager.list()[0]?.files).toEqual([letter]);
+  expect(existsSync(join(root, "uploads", fresh.uploadId))).toBe(true);
+
+  const current = f.manager.list()[0]!;
+  expect(
+    f.request({ kind: "delete", id: current.id, expectedRevision: current.revision }).outcome
+      .status,
+  ).toBe("ok");
+  expect(existsSync(directory)).toBe(false);
+});
+
+it("an agent's new schedule carries no files and a missing file fails a run by name", async () => {
+  const f = await setup();
+  const root = f.workspace.attachmentsDirectory;
+  const resume = await staged(root, "resume.pdf", "my resume");
+  const created = f.manager.request(
+    {
+      type: "schedule.request",
+      requestId: randomUUID(),
+      operation: { kind: "create", schedule: { ...f.definition, files: [resume] } },
+    },
+    "agent",
+  );
+  expect(created.outcome.status).toBe("ok");
+  expect(f.manager.list()[0]?.files).toEqual([]);
+  expect(existsSync(join(root, "uploads", resume.uploadId))).toBe(true);
+
+  const schedule = f.create({ files: [resume] });
+  await rm(join(root, "schedules", schedule.id), { recursive: true });
+  f.request({ kind: "run", id: schedule.id });
+  await expect
+    .poll(() => f.manager.list().find((s) => s.id === schedule.id)?.runs[0])
+    .toMatchObject({
+      status: "failed",
+      message: "resume.pdf is no longer attached to this schedule.",
+    });
 });
 
 it("agent scheduling tools share the registry, remain scoped, and reject browser requests", async () => {
