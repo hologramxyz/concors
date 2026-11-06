@@ -6,7 +6,18 @@ import { useSyncExternalStore } from "react";
  */
 export const COLLAPSED_WORKSPACES_KEY = "concors.collapsed-workspaces";
 // Closed workspaces keep their IDs, so old entries are harmless until there are too many.
-const LIMIT = 200;
+export const COLLAPSED_WORKSPACES_LIMIT = 200;
+
+/**
+ * Where a host keeps the list instead of this window's localStorage: the phone, whose webview has
+ * none, keeps it with its other preferences. `read` must return what `write` last wrote at once,
+ * as the sidebar reads it back straight away. Desktop sets none.
+ */
+export interface CollapsedWorkspacesStorage {
+  read(): readonly string[];
+  write(ids: readonly string[]): void;
+}
+let storage: CollapsedWorkspacesStorage | null = null;
 
 const listeners = new Set<() => void>();
 // Without storage, the state lasts until the app reloads.
@@ -17,11 +28,13 @@ let snapshot: ReadonlySet<string> = new Set();
 
 function read(): ReadonlySet<string> {
   let next: string | null;
-  try {
-    next = window.localStorage.getItem(COLLAPSED_WORKSPACES_KEY);
-  } catch {
-    next = fallback;
-  }
+  if (storage) next = JSON.stringify(storage.read());
+  else
+    try {
+      next = window.localStorage.getItem(COLLAPSED_WORKSPACES_KEY);
+    } catch {
+      next = fallback;
+    }
   if (next === raw) return snapshot;
   raw = next;
   try {
@@ -56,12 +69,22 @@ export function setWorkspaceExpanded(id: string, expanded: boolean) {
   if (current.has(id) !== expanded) return;
   const next = [...current].filter((item) => item !== id);
   if (!expanded) next.push(id);
-  const value = JSON.stringify(next.slice(-LIMIT));
-  fallback = value;
-  try {
-    window.localStorage.setItem(COLLAPSED_WORKSPACES_KEY, value);
-  } catch {
-    /* Kept in memory instead; see `fallback`. */
+  const kept = next.slice(-COLLAPSED_WORKSPACES_LIMIT);
+  if (storage) storage.write(kept);
+  else {
+    const value = JSON.stringify(kept);
+    fallback = value;
+    try {
+      window.localStorage.setItem(COLLAPSED_WORKSPACES_KEY, value);
+    } catch {
+      /* Kept in memory instead; see `fallback`. */
+    }
   }
+  for (const listener of listeners) listener();
+}
+
+/** Keeps the list in `next` from now on, or in localStorage again for null. */
+export function setCollapsedWorkspacesStorage(next: CollapsedWorkspacesStorage | null) {
+  storage = next;
   for (const listener of listeners) listener();
 }

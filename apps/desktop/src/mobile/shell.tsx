@@ -65,6 +65,7 @@ import { MobileOrganizationPicker } from "./organization-picker";
 import type { SettingsPage } from "@/settings/navigation";
 import { NativeSurfaces } from "./native-surfaces";
 import { NativeHeaderButton } from "./native-header-button";
+import { useHostCollapsedWorkspaces } from "./collapsed-workspaces";
 import { ResourceStatus } from "@/host/resource-status";
 import { ResourcesView } from "@/host/resources-view";
 import { PreviewsSidebar } from "@/host/previews-sidebar";
@@ -82,6 +83,7 @@ const subscribeState = (listener: () => void) =>
   });
 export function MobileApp() {
   const host = useSyncExternalStore(subscribeState, getHostState);
+  useHostCollapsedWorkspaces(host?.preferences.collapsedWorkspaces ?? []);
   useLayoutEffect(() => {
     const style = document.documentElement.style;
     for (const edge of ["top", "bottom", "left", "right"] as const) {

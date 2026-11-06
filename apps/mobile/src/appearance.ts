@@ -5,6 +5,7 @@ export const DEFAULT_APPEARANCE: MobilePreferences = {
   theme: "system",
   corners: "rounded",
   sound: false,
+  collapsedWorkspaces: [],
 };
 export type CornerStyle = MobilePreferences["corners"];
 

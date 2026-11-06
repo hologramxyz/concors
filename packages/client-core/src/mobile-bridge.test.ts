@@ -125,3 +125,30 @@ describe("mobile host boundary", () => {
       expect(MobileApiCallSchema.safeParse(call).success, JSON.stringify(call)).toBe(false);
   });
 });
+
+describe("folded workspaces in mobile preferences", () => {
+  it("loads preferences saved before they were kept, with none folded", () => {
+    const saved = { theme: "dark", corners: "subtle", sound: true };
+    expect(MobilePreferencesSchema.parse(saved)).toEqual({ ...saved, collapsedWorkspaces: [] });
+    // A preference action from a renderer that predates them is still accepted.
+    expect(MobileActionSchema.safeParse({ kind: "preferences", preferences: saved }).success).toBe(
+      true,
+    );
+  });
+
+  it("keeps the folded workspaces with the other choices", () => {
+    const preferences = {
+      theme: "system",
+      corners: "rounded",
+      sound: false,
+      collapsedWorkspaces: ["33333333-3333-4333-8333-333333333333"],
+    };
+    expect(MobilePreferencesSchema.parse(preferences)).toEqual(preferences);
+    expect(
+      MobilePreferencesSchema.safeParse({
+        ...preferences,
+        collapsedWorkspaces: Array.from({ length: 201 }, (_, index) => `workspace-${index}`),
+      }).success,
+    ).toBe(false);
+  });
+});
