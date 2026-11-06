@@ -171,6 +171,9 @@ export function createAISharingPermission(
         },
       ];
     }
+    // Keep large registries usable without presenting an unreadable machine-wide alert.
+    if (providers.length > 12 && target.provider)
+      providers = providers.filter((provider) => provider.id === target.provider);
     if (!providers.length || providers.length > 12)
       throw new Error("Choose a configured provider before continuing");
     providers.sort((a, b) => a.id.localeCompare(b.id));

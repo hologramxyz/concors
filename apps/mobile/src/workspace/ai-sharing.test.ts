@@ -137,6 +137,18 @@ describe("AI sharing permission at the native protocol boundary", () => {
     expect(ask.mock.calls[0]![0]).toContain("Anthropic");
     expect(ask.mock.calls[0]![0]).toContain("OpenAI");
   });
+  it("keeps an individual provider usable when the machine has more than twelve configured services", async () => {
+    const { permission, ask, context, provider } = setup();
+    const others = Array.from({ length: 12 }, (_, i) => ({ ...provider, id: `other-${i}` }));
+    context.requestProvider.mockResolvedValue({
+      type: "provider.result",
+      requestId: id,
+      outcome: { status: "ok", revision: 1, providers: [provider, ...others] },
+    });
+    expect(await permission.beforeSend(send)).toBeNull();
+    expect(ask).toHaveBeenCalledOnce();
+    expect(ask.mock.calls[0]![0]).toContain("Work Codex");
+  });
   it("remembers approval after reconnect and after loading the device record again", async () => {
     const { context, ask } = setup();
     let saved: string | null = null;
