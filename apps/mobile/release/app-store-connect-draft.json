@@ -5,7 +5,7 @@
   "locale": "en-US",
   "primaryCategory": "DEVELOPER_TOOLS",
   "status": "draft-populated-not-ready-not-submitted",
-  "checkedAt": "2026-11-06T02:47:24.354Z",
+  "checkedAt": "2026-11-06T06:13:57.946Z",
   "versionString": "0.1.0",
   "versionId": "2d5df58b-5d90-457e-85b9-61f93041ea07",
   "name": "Concors: Coding Workspace",
@@ -24,7 +24,7 @@
   },
   "ageRatingCompleted": false,
   "privacyLabelsVerified": true,
-  "screenshotsUploaded": false,
+  "screenshotsUploaded": true,
   "buildAttached": true,
   "currentTestFlightBuild": {
     "version": "0.1.0",
@@ -75,5 +75,13 @@
   "ageRatingQuestionnaireSaved": true,
   "ageRatingOverride": "THIRTEEN_PLUS",
   "ageRatingDecision": "Owner requested 13+; unresolved conflict with Privy under-16 restriction",
-  "contentRightsDeclaration": null
+  "contentRightsDeclaration": null,
+  "screenshotEvidence": {
+    "record": "ios-native-evidence.md",
+    "checkedAt": "2026-11-06T06:02:45.529Z",
+    "processedImageCount": 1,
+    "display": "6.9-inch",
+    "nativeAcceptanceComplete": false,
+    "status": "One inspected native workspace image is processed and active. New agent/files captures were rejected for store use; further captures need suitable workspace content."
+  }
 }
