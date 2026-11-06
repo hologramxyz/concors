@@ -4,6 +4,43 @@ Reviewed on **2026-11-04 UTC** against the current [Apple App Review Guidelines]
 
 The owner confirmed **Concors: Coding Workspace**, reported no prior rejection, and confirmed a **free launch**, with machines added from the desktop app. The app is [`6817622624`](https://appstoreconnect.apple.com/apps/6817622624), bundle `xyz.hologram.concors`, Apple team `9WN4P724M2`. The current build is in internal TestFlight. This review did not submit a public version or certify readiness.
 
+## Current iPhone status — November 6, 2026
+
+**Not ready for public App Review.** The signed **0.1.0 (11)** from main
+`8f02642056f9da0d3b313b77d58784f2a7252dd8` is **VALID / IN_BETA_TESTING**, belongs to
+**Internal beta**, and is attached to the matching iOS **0.1.0** App Store draft.
+The original November 4 audit and November 5 remediation record below are historical findings.
+Use the current export and iPhone evidence for the latest state.
+
+| Area                            | Verified state / remaining work                                                                                                                                                                                                                                                                     |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Upload credentials              | Dedicated Concors key assigned; exposed prior key revoked. See the credential section below.                                                                                                                                                                                                        |
+| Latest native artifact          | [Signed build 11](https://expo.dev/accounts/guitong35/projects/concors/builds/c6dee6f9-7e1c-4cb7-b9b5-05c414bad92d); identity, source, permissions, actual code-signing entitlements and privacy manifest recorded in [ios-build-11.json](ios-build-11.json).                                       |
+| Native privacy correction       | [PR 163](https://github.com/hologramxyz/concors/pull/163) merged after all 19 checks passed. The actual IPA contains seven collected data types and retains the three SDK required-reason API entries.                                                                                              |
+| Apple listing                   | Name retained; free-launch description, live support/privacy URLs and version alignment written and read back. Build 11 attached.                                                                                                                                                                   |
+| Pricing / availability          | USA base price is zero; all 174 automatic prices are zero. No availability record is configured; launch countries still need selection.                                                                                                                                                             |
+| App Privacy                     | Seven source-backed linked/functionality disclosures saved and read back as an unpublished draft. Confirm production/provider facts before publication; see [privacy-disclosures.md](privacy-disclosures.md).                                                                                       |
+| Apple / Privy login             | Implementation is merged, but both production Apple credentials are absent and Privy Apple login is disabled. The encrypted-secret key exists. Apple developer-portal access is blocked by the updated license agreement.                                                                           |
+| Reviewer access                 | No working review-account/contact fields are entered. Use a separate account, available machine and bounded provider access. Privy supports [review test accounts](https://docs.privy.io/recipes/using-test-accounts); its exact generated credentials must be configured privately, never guessed. |
+| Native acceptance / screenshots | Browser checks pass. Simulator compilation has not yet yielded successful native acceptance or store screenshots. Real signed-phone acceptance is still required.                                                                                                                                   |
+| iPhone release evidence         | [readiness-ios.json](readiness-ios.json) keeps every Apple gate while excluding Play production access. `release:check --platform=ios --json` remains blocked by real iOS gaps; the combined checker retains Android requirements.                                                                  |
+
+Apple's developer portal explicitly requires **Account Holder Tong Pow** to accept the latest
+Program License Agreement. No agreement was accepted on the owner's behalf. After acceptance,
+finish the primary App ID, Services ID, Privy credentials/callback, private-email relay and backend
+configuration, then verify first/returning Apple login, Hide My Email, cancellation and revocation
+on the signed iPhone build. These Apple sign-in credentials are distinct from the upload API key.
+
+The current owner-only facts remain legal copyright/controller identity, launch countries,
+minimum audience age, privacy/provider/retention facts, App Review contact name/phone and
+reviewer machine/provider arrangements. Do not replace those with invented values. Apple rejected
+a review-notes update because required account/contact fields are empty; the added review steps
+remain prepared in the export. No public review or external beta review has been submitted.
+
+Local validation after the release-check changes: formatting, lint, workspace typechecks and
+**1,684 tests passed**, two skipped. The opt-in native jobs and PR checks must be recorded at their
+actual completion; a compiled IPA or browser suite does not establish a successful native UI run.
+
 ## Remediation prepared on 2026-11-05
 
 The audit below records the original production/TestFlight findings. The remediation branch starts
