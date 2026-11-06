@@ -238,3 +238,58 @@ test("Escape stops only the focused running agent, including from its header or 
     await dispose();
   }
 });
+
+test("Up and Down bring back the prompts sent in the chat without losing what was typed", async ({
+  page,
+}) => {
+  const { composer, dispose } = await workspace(page);
+  try {
+    // With nothing sent yet, the keys leave the empty box alone.
+    await composer.press("ArrowUp");
+    await expect(composer).toHaveValue("");
+    for (const prompt of ["first prompt", "second\nprompt"]) {
+      await composer.fill(prompt);
+      await composer.press("Enter");
+      await expect(composer).toHaveValue("");
+      await expect(page.getByRole("log")).toContainText(prompt.split("\n")[0] ?? prompt);
+      // Each turn ends before the next prompt, so neither waits in the queue.
+      await expect(page.getByRole("log").getByText("Working…")).toHaveCount(0);
+    }
+
+    await composer.press("ArrowUp");
+    await expect(composer).toHaveValue("second\nprompt");
+    // A recalled prompt of two lines: Up first climbs to its first line, then goes further back.
+    await composer.press("ArrowUp");
+    await expect(composer).toHaveValue("second\nprompt");
+    await composer.press("ArrowUp");
+    await expect(composer).toHaveValue("first prompt");
+    await composer.press("ArrowUp");
+    await expect(composer).toHaveValue("first prompt");
+    await composer.press("ArrowDown");
+    await expect(composer).toHaveValue("second\nprompt");
+    await composer.press("ArrowDown");
+    await expect(composer).toHaveValue("");
+
+    // Half a message stays: the first Up only moves the caret to its start, and Down restores it.
+    await composer.fill("half typed");
+    await composer.press("ArrowUp");
+    await expect(composer).toHaveValue("half typed");
+    await composer.press("ArrowUp");
+    await expect(composer).toHaveValue("second\nprompt");
+    await composer.press("ArrowDown");
+    await expect(composer).toHaveValue("half typed");
+
+    // A recalled prompt can be edited and sent like any other.
+    await composer.fill("");
+    await composer.press("ArrowUp");
+    await composer.press("ArrowUp");
+    await composer.press("ArrowUp");
+    await expect(composer).toHaveValue("first prompt");
+    await composer.press("End");
+    await composer.pressSequentially(" again");
+    await composer.press("Enter");
+    await expect(page.getByRole("log")).toContainText("first prompt again");
+  } finally {
+    await dispose();
+  }
+});
