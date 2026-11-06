@@ -7,10 +7,10 @@ certify a custom AI provider's practices.
 
 Apple requires the app's own collection to be described in its
 [privacy manifest](https://developer.apple.com/documentation/technotes/tn3184-adding-data-collection-details-to-your-privacy-manifest).
-The signed build 10 manifest had no collected data types; it declared the SDK required-reason APIs
-and no tracking. Build 11 contains the seven app-owned collection types. The next binary also declares the browser
-identifier and interactions used by Privy sign-in analytics. Preserve the SDK required-reason entries.
-App Store privacy labels are a separate declaration.
+[Signed build 12](ios-build-12.json) contains all nine collected data types below, including the
+browser identifier and interactions used by Privy sign-in analytics. It preserves the SDK
+required-reason entries and declares no tracking. The separate App Store privacy labels are
+published with these nine categories and their functionality/analytics purposes.
 
 | Apple data type       | Why it is collected                                                                                        | Source evidence                                                               |
 | --------------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
