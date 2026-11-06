@@ -13,6 +13,12 @@ import type { AgentManager } from "../agents/manager.ts";
 import type { ProviderRegistry } from "../agents/providers/registry.ts";
 import type { ScheduleStore } from "./store.ts";
 import { nextRun } from "./cadence.ts";
+import {
+  claimScheduleFiles,
+  discardStaged,
+  pruneScheduleFiles,
+  stageScheduleFiles,
+} from "./files.ts";
 
 const active = (run?: ScheduleRun) => run?.status === "running" || run?.status === "needs_input";
 const busy = (agent: AgentInfo) =>
@@ -67,6 +73,7 @@ export class ScheduleManager {
         }
       if (interrupted) this.save(schedule);
     }
+    pruneScheduleFiles(workspace.attachmentsDirectory, store.list());
   }
   private now() {
     return this.clock().toISOString();
@@ -121,9 +128,14 @@ export class ScheduleManager {
           if (schedules.length >= 64) throw new Error("Schedule limit reached (64)");
           this.validate(op.schedule);
           const now = this.now();
+          const id = randomUUID();
+          // An agent cannot upload, so only the person using Concors attaches files.
+          const files = source === "agent" ? [] : (op.schedule.files ?? []);
+          claimScheduleFiles(this.workspace.attachmentsDirectory, id, files);
           this.store.save({
             ...op.schedule,
-            id: randomUUID(),
+            files,
+            id,
             revision: 0,
             source,
             createdAt: now,
@@ -156,9 +168,13 @@ export class ScheduleManager {
                 throw new Error("Stop the agent before changing its schedule target");
               const cadenceChanged =
                 JSON.stringify(schedule.cadence) !== JSON.stringify(op.schedule.cadence);
+              const files =
+                (source === "agent" ? undefined : op.schedule.files) ?? schedule.files ?? [];
+              claimScheduleFiles(this.workspace.attachmentsDirectory, schedule.id, files);
               this.save({
                 ...schedule,
                 ...op.schedule,
+                files,
                 sessionId: targetChanged
                   ? op.schedule.target.kind === "session"
                     ? op.schedule.target.sessionId
@@ -182,6 +198,9 @@ export class ScheduleManager {
         return result;
       });
       this.publish();
+      // Only once the change is saved: a failed one must not lose files the schedule still has.
+      if (request.operation.kind !== "list" && request.operation.kind !== "run")
+        pruneScheduleFiles(this.workspace.attachmentsDirectory, this.list());
       if (dispatch) this.dispatch(dispatch.schedule, dispatch.run);
       return result;
     } catch (error) {
@@ -381,15 +400,35 @@ export class ScheduleManager {
         });
         return;
       }
-      const result = await this.agents.request(
-        {
-          type: "agent.request",
-          requestId: run.id,
-          operation: { kind: "send", sessionId, text: schedule.prompt },
-        },
-        "schedule",
-      );
-      if (result.outcome.status === "error") throw new Error(result.outcome.message);
+      const root = this.workspace.attachmentsDirectory;
+      const uploads = schedule.files?.length
+        ? await stageScheduleFiles(root, schedule.id, schedule.files)
+        : [];
+      const result = await this.agents
+        .request(
+          {
+            type: "agent.request",
+            requestId: run.id,
+            operation: {
+              kind: "send",
+              sessionId,
+              text: schedule.prompt,
+              ...(uploads.length ? { uploads } : {}),
+            },
+          },
+          "schedule",
+        )
+        .catch((error: unknown) => ({
+          outcome: {
+            status: "error" as const,
+            message: error instanceof Error ? error.message : "Could not start agent",
+          },
+        }));
+      if (result.outcome.status === "error") {
+        // Copies the chat never claimed; ones it did claim are its own now.
+        await discardStaged(root, uploads);
+        throw new Error(result.outcome.message);
+      }
       this.patchRun(
         schedule.id,
         run.id,

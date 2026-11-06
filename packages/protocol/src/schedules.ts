@@ -1,7 +1,15 @@
 import { z } from "zod";
 import { AgentProviderIdSchema, AgentModelIdSchema } from "./agents.ts";
+import { AgentUploadSchema } from "./uploads.ts";
 
 export const SCHEDULES_CAPABILITY = "agent-schedules-v1";
+/**
+ * The daemon keeps files attached to a schedule and sends them with every run. Older daemons drop
+ * a definition's `files` without a word, so clients offer attaching only where this is advertised.
+ */
+export const SCHEDULE_FILES_CAPABILITY = "schedule-files";
+/** Files one schedule may carry; each is an upload, so at most `MAX_UPLOAD_BYTES`. */
+export const MAX_SCHEDULE_FILES = 10;
 const Timezone = z
   .string()
   .min(1)
@@ -46,6 +54,12 @@ export const ScheduleDefinitionSchema = z.object({
   target: ScheduleTargetSchema,
   cadence: ScheduleCadenceSchema,
   enabled: z.boolean(),
+  /**
+   * Files sent with every run, as if attached to its message. Uploaded first like a chat's
+   * attachments; the daemon then keeps them with the schedule. Left out, an update keeps the
+   * schedule's files as they are, so a client that predates them cannot remove them by editing.
+   */
+  files: z.array(AgentUploadSchema).max(MAX_SCHEDULE_FILES).optional(),
 });
 export type ScheduleDefinition = z.infer<typeof ScheduleDefinitionSchema>;
 export const ScheduleRunSchema = z.object({
