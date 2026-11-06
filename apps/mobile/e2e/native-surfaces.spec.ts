@@ -4,6 +4,7 @@ import type {
   MobileRendererMessage,
   NativeSurfaceEvent,
 } from "@concors/client-core";
+import { SIDEBAR_TREE_FLAG, treeIds } from "../src/demo/fixtures";
 
 type Snapshot = Extract<MobileRendererMessage, { type: "native-surfaces" }>;
 type TestWindow = Window & {
@@ -42,7 +43,7 @@ async function composer(page: Page) {
   )?.content;
   return content?.kind === "composer" ? content : null;
 }
-async function openNativeDemo(page: Page) {
+async function openNativeDemo(page: Page, query = "") {
   await page.addInitScript(() => {
     window.addEventListener("message", (event) => {
       const message = event.data?.concorsMobile;
@@ -55,11 +56,56 @@ async function openNativeDemo(page: Page) {
       }
     });
   });
-  await page.goto("/");
+  await page.goto(`/${query}`);
   await page.getByRole("button", { name: "Explore demo" }).click();
   await expect.poll(async () => !!(await composer(page))).toBe(true);
   return page.frameLocator('iframe[title="Concors workspace"]');
 }
+test("the native workspace switcher lists open workspaces and answers with the chosen one", async ({
+  page,
+}) => {
+  const ui = await openNativeDemo(page, `?${SIDEBAR_TREE_FLAG}`);
+  const menu = async () => {
+    const surface = (await snapshot(page))?.surfaces.find(
+      (item) => item.content.kind === "button" && item.content.label === "Workspace",
+    );
+    return surface?.content.kind === "button" ? surface.content : null;
+  };
+  // The pill names the workspace and carries the sheet iPhone draws in place of the web one.
+  await expect.poll(async () => (await menu())?.title).toBe("Concors");
+  const options = (await menu())?.menu?.options ?? [];
+  expect((await menu())?.menu?.title).toBe("Workspaces");
+  expect(
+    options.map(({ label, description, selected }) => ({ label, description, selected })),
+  ).toEqual([
+    { label: "Concors", description: "alex", selected: true },
+    { label: "Concors", description: "forks", selected: false },
+    { label: "Open workspace…", description: undefined, selected: false },
+  ]);
+  // The sidebar's fallback mark (no favicon in SwiftUI) and its dots: a question here, a
+  // finished chat in the fork.
+  expect(options[0]).toMatchObject({ mark: "folder", dot: "attention" });
+  expect(options[1]).toMatchObject({ mark: "folder", dot: "done" });
+  expect(options[2]).toMatchObject({ section: true });
+  // Choosing a row switches workspace; the web sheet never opens.
+  await event(page, "button", "Workspace", {
+    kind: "press",
+    control: "workspace",
+    value: treeIds.fork,
+  });
+  await expect(ui.locator('.mobile-tab-strip [data-pane-choice][aria-pressed="true"]')).toHaveText(
+    "Try the new parser",
+  );
+  await expect(ui.getByRole("dialog", { name: "Workspaces" })).toHaveCount(0);
+  await expect.poll(async () => (await menu())?.menu?.options?.[1]?.selected).toBe(true);
+  // The last row opens the sidebar's "+" sheet.
+  await event(page, "button", "Workspace", {
+    kind: "press",
+    control: "workspace",
+    value: "open-workspace",
+  });
+  await expect(ui.getByRole("dialog", { name: "Open workspace", exact: true })).toBeVisible();
+});
 test("native model pages distinguish provider navigation from a committed model choice", async ({
   page,
 }) => {

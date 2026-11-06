@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import {
   BottomSheet,
   Button,
+  Circle,
   HStack,
   Image,
   List,
@@ -15,13 +16,16 @@ import {
   Toolbar,
   ToolbarItem,
   VStack,
+  ZStack,
 } from "@expo/ui/swift-ui";
 import {
   accessibilityLabel,
   accessibilityValue,
   background,
+  clipShape,
   disabled,
   font,
+  frame,
   foregroundStyle,
   labelStyle,
   layoutPriority,
@@ -42,6 +46,52 @@ import type { NativeControl } from "@concors/client-core";
 
 type Option = NonNullable<NativeControl["options"]>[number];
 type Page = Pick<NativeControl, "id" | "title" | "options"> & { disabled?: boolean };
+
+/** The sidebar's dot colors: destructive for a question or failure, primary for a finish. */
+const DOT = { attention: "#e5484d", done: { light: "#20211f", dark: "#ededed" } } as const;
+
+/**
+ * A workspace's mark as the sidebar draws it without a favicon: its initial on a tile, or a folder;
+ * a dot on its corner when a chat in it wants a look.
+ */
+function RowMark({ option, dark }: { option: Option; dark: boolean }) {
+  if (!option.mark) return null;
+  const muted = dark ? "#a3a3a3" : "#646464";
+  const dot = option.dot === "attention" ? DOT.attention : dark ? DOT.done.dark : DOT.done.light;
+  return (
+    <ZStack alignment="bottomTrailing" modifiers={[frame({ width: 24, height: 24 })]}>
+      {option.mark === "folder" ? (
+        <Image
+          systemName="folder"
+          size={17}
+          color={muted}
+          modifiers={[frame({ width: 24, height: 24 })]}
+        />
+      ) : (
+        <Text
+          modifiers={[
+            font({ size: 12, weight: "semibold" }),
+            frame({ width: 22, height: 22 }),
+            background(dark ? "#3a3a3a" : "#dcdbd5"),
+            clipShape("roundedRectangle", 5),
+          ]}
+        >
+          {option.mark.initial}
+        </Text>
+      )}
+      {option.dot ? (
+        <Circle
+          modifiers={[
+            foregroundStyle(dot),
+            frame({ width: 9, height: 9 }),
+            background(dark ? "#292929" : "#e8e8e3"),
+            clipShape("circle"),
+          ]}
+        />
+      ) : null}
+    </ZStack>
+  );
+}
 
 /** Rows in the groups a list draws them in; each `section` row starts the next. */
 function sections(options: readonly Option[]) {
@@ -235,6 +285,7 @@ function SheetPage({
               >
                 {/* In a list the default button style takes the whole row, and would tint this. */}
                 <HStack spacing={12} modifiers={[foregroundStyle(text)]}>
+                  <RowMark option={option} dark={dark} />
                   <VStack alignment="leading" spacing={2}>
                     <Text>{option.label}</Text>
                     {option.description ? (

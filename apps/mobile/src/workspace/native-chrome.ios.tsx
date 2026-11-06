@@ -247,6 +247,79 @@ function HeaderButton({
   );
   const pill = !!content.title;
   const [shape, radius] = nativeButtonShape(corners, pill);
+  const anchor = (press: () => void) => (
+    <Button
+      testID={`native-header-${content.icon}`}
+      onPress={() => {
+        if (Date.now() < suppressPressUntil.current) return;
+        Keyboard.dismiss();
+        press();
+      }}
+      modifiers={[
+        // Styled SwiftUI buttons add their own padding around custom labels.
+        // Size the native button once, then apply real SwiftUI glass to that frame.
+        buttonStyle("plain"),
+        frame({ width, height }),
+        ...(glass
+          ? [
+              glassEffect({
+                shape,
+                cornerRadius: radius,
+                glass: { variant: "regular", interactive: true },
+              }),
+            ]
+          : [background(dark ? "#292929" : "#e8e8e3"), clipShape(shape, radius)]),
+        disabled(content.disabled),
+        accessibilityLabel(
+          [content.label, content.title, content.subtitle].filter(Boolean).join(", "),
+        ),
+      ]}
+    >
+      {pill ? (
+        <HStack
+          spacing={8}
+          modifiers={[
+            padding({ horizontal: 12 }),
+            ...(content.icon === "chevron"
+              ? [
+                  // Plain buttons hit-test their label, not the outer glass frame.
+                  frame({ width, height }),
+                  contentShape(shapes.rectangle()),
+                ]
+              : [frame({ maxWidth: Infinity })]),
+          ]}
+        >
+          <VStack
+            alignment="leading"
+            spacing={1}
+            modifiers={[frame({ maxWidth: Infinity, alignment: "leading" })]}
+          >
+            <Text modifiers={[font({ size: 13, weight: "semibold" }), lineLimit(1)]}>
+              {content.title}
+            </Text>
+            {content.subtitle ? (
+              <Text
+                modifiers={[
+                  font({ size: 11 }),
+                  foregroundStyle(dark ? "#c0c0c0" : "#646464"),
+                  lineLimit(1),
+                ]}
+              >
+                {content.subtitle}
+              </Text>
+            ) : null}
+          </VStack>
+          <Image systemName={symbols[content.icon]} size={14} />
+        </HStack>
+      ) : (
+        <Image
+          systemName={symbols[content.icon]}
+          size={20}
+          modifiers={[frame({ width: 20, height: 20 })]}
+        />
+      )}
+    </Button>
+  );
   return (
     <View
       style={styles.fill}
@@ -261,77 +334,23 @@ function HeaderButton({
         seedColor={dark ? "#eeeeee" : "#222222"}
         ignoreSafeArea="all"
       >
-        <Button
-          testID={`native-header-${content.icon}`}
-          onPress={() => {
-            if (Date.now() < suppressPressUntil.current) return;
-            Keyboard.dismiss();
-            emit({ kind: "press", control: "activate" });
-          }}
-          modifiers={[
-            // Styled SwiftUI buttons add their own padding around custom labels.
-            // Size the native button once, then apply real SwiftUI glass to that frame.
-            buttonStyle("plain"),
-            frame({ width, height }),
-            ...(glass
-              ? [
-                  glassEffect({
-                    shape,
-                    cornerRadius: radius,
-                    glass: { variant: "regular", interactive: true },
-                  }),
-                ]
-              : [background(dark ? "#292929" : "#e8e8e3"), clipShape(shape, radius)]),
-            disabled(content.disabled),
-            accessibilityLabel(
-              [content.label, content.title, content.subtitle].filter(Boolean).join(", "),
-            ),
-          ]}
-        >
-          {pill ? (
-            <HStack
-              spacing={8}
-              modifiers={[
-                padding({ horizontal: 12 }),
-                ...(content.icon === "chevron"
-                  ? [
-                      // Plain buttons hit-test their label, not the outer glass frame.
-                      frame({ width, height }),
-                      contentShape(shapes.rectangle()),
-                    ]
-                  : [frame({ maxWidth: Infinity })]),
-              ]}
-            >
-              <VStack
-                alignment="leading"
-                spacing={1}
-                modifiers={[frame({ maxWidth: Infinity, alignment: "leading" })]}
-              >
-                <Text modifiers={[font({ size: 13, weight: "semibold" }), lineLimit(1)]}>
-                  {content.title}
-                </Text>
-                {content.subtitle ? (
-                  <Text
-                    modifiers={[
-                      font({ size: 11 }),
-                      foregroundStyle(dark ? "#c0c0c0" : "#646464"),
-                      lineLimit(1),
-                    ]}
-                  >
-                    {content.subtitle}
-                  </Text>
-                ) : null}
-              </VStack>
-              <Image systemName={symbols[content.icon]} size={14} />
-            </HStack>
-          ) : (
-            <Image
-              systemName={symbols[content.icon]}
-              size={20}
-              modifiers={[frame({ width: 20, height: 20 })]}
-            />
-          )}
-        </Button>
+        {content.menu ? (
+          // The workspace switcher, in the grouped sheet the composer's controls use; the WebView
+          // gets each choice as a press of the menu with the row's ID.
+          <NativeControlPicker
+            control={{
+              id: content.menu.id,
+              title: content.menu.title,
+              options: content.menu.options,
+            }}
+            pages={[]}
+            dark={dark}
+            anchor={anchor}
+            onSelect={(control, value) => emit({ kind: "press", control, value })}
+          />
+        ) : (
+          anchor(() => emit({ kind: "press", control: "activate" }))
+        )}
       </Host>
     </View>
   );

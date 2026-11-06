@@ -47,6 +47,10 @@ const option = z.object({
   /** Closes the whole sheet even from a page, for a choice that answers with a dialog over it. */
   closes: z.boolean().optional(),
   disabled: z.boolean().optional(),
+  /** A workspace's mark before the label: its initial on a tile, or a folder. */
+  mark: z.union([z.literal("folder"), z.object({ initial: z.string().min(1).max(4) })]).optional(),
+  /** The sidebar's dot on that mark: a chat wants a look, or finished. */
+  dot: z.enum(["attention", "done"]).optional(),
 });
 export const NativeControlSchema = z.object({
   id: z.string().max(200),
@@ -103,6 +107,11 @@ export const NativeSurfaceContentSchema = z.discriminatedUnion("kind", [
     subtitle: z.string().max(500).optional(),
     icon: NativeIconSchema,
     disabled: z.boolean().default(false),
+    /**
+     * Opens this native sheet instead of pressing the button: a row's ID comes back as a press of
+     * the menu's ID with that value.
+     */
+    menu: NativeControlSchema.optional(),
   }),
   z.object({
     kind: z.literal("composer"),

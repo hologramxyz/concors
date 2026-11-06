@@ -17,6 +17,10 @@ import { AttentionBadge } from "@/workspace/sidebar-item";
 import { clashingWorkspaceParents } from "@/workspace/workspace-parents";
 import { projectIconKey } from "@/workspace/project-icons";
 import { useProjectIcons } from "@/workspace/use-project-icons";
+import { projectInitial } from "@/workspace/project-initial";
+
+/** The native sheet's last row, which no workspace ID (a UUID) can equal. */
+const OPEN_WORKSPACE = "open-workspace";
 
 /**
  * The header's workspace name, which switches workspaces: a sheet of the open ones as the sidebar
@@ -47,17 +51,65 @@ export function WorkspaceSwitcher({
   const parents = clashingWorkspaceParents(workspace.projects);
   const chats = useAgents();
   const terminals = useTerminalSessions();
-  const native = useNativeSurface(
-    trigger,
-    { kind: "button", icon: "chevron", label: "Workspace", title: project.name, disabled: false },
-    (event) => {
-      if (event.kind === "press" && event.control === "activate") setOpen((value) => !value);
-    },
-  );
   const choose = (projectId: string) => {
     setOpen(false);
     if (projectId !== project.id) onSelectProject(projectId);
   };
+  const rows = workspace.projects.map((item) => {
+    const summed = workspaceAttention(item, chats, terminals);
+    const attention = summed.kind === "working" ? { ...summed, kind: null } : summed;
+    return {
+      project: item,
+      attention,
+      attentionLabel: attention.kind ? workspaceAttentionLabel(attention) : "",
+      icon: icons.get(projectIconKey(workspace.epoch, item)),
+      parent: parents.get(item.id),
+    };
+  });
+  // iPhone draws the button and its sheet natively: SwiftUI shows no favicon from a data URL, so
+  // a row carries the mark the sidebar falls back to, its initial or a folder.
+  const native = useNativeSurface(
+    trigger,
+    {
+      kind: "button",
+      icon: "chevron",
+      label: "Workspace",
+      title: project.name,
+      disabled: false,
+      menu: {
+        id: "workspace",
+        label: "Workspace",
+        title: "Workspaces",
+        icon: "chevron",
+        disabled: false,
+        options: [
+          ...rows.map(({ project: item, attention, icon, parent }) => ({
+            id: item.id,
+            label: item.name,
+            selected: item.id === project.id,
+            ...(parent ? { description: parent } : {}),
+            mark: icon?.isGit ? { initial: projectInitial(item.name) } : ("folder" as const),
+            ...(attention.kind
+              ? { dot: attention.kind === "done" ? ("done" as const) : ("attention" as const) }
+              : {}),
+          })),
+          {
+            id: OPEN_WORKSPACE,
+            label: "Open workspace…",
+            selected: false,
+            section: true,
+            disabled: !canOpenWorkspace,
+          },
+        ],
+      },
+    },
+    (event) => {
+      if (event.kind !== "press") return;
+      if (event.control === "activate") setOpen((value) => !value);
+      else if (event.control === "workspace" && event.value === OPEN_WORKSPACE) onOpenWorkspace();
+      else if (event.control === "workspace" && event.value) choose(event.value);
+    },
+  );
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -130,13 +182,8 @@ export function WorkspaceSwitcher({
             }
           }}
         >
-          {workspace.projects.map((item) => {
+          {rows.map(({ project: item, attention, attentionLabel, icon, parent }) => {
             const current = item.id === project.id;
-            const summed = workspaceAttention(item, chats, terminals);
-            const attention = summed.kind === "working" ? { ...summed, kind: null } : summed;
-            const attentionLabel = attention.kind ? workspaceAttentionLabel(attention) : "";
-            const icon = icons.get(projectIconKey(workspace.epoch, item));
-            const parent = parents.get(item.id);
             return (
               <div key={item.id} className="mobile-pane-row">
                 <button
