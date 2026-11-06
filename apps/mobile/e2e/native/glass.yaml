@@ -1,31 +1,23 @@
 appId: xyz.hologram.concors.preview
-env:
-  FRESH_SIMULATOR: "false"
 ---
-# CI just installed and launched the app on a new simulator. Preserve that cold start
-# instead of clearing/relaunching it through XCTest; local reruns still reset state.
-- runFlow:
-    when:
-      true: ${FRESH_SIMULATOR == 'true'}
-    commands:
-      - launchApp:
-          stopApp: false
-- runFlow:
-    when:
-      true: ${FRESH_SIMULATOR != 'true'}
-    commands:
-      - launchApp:
-          clearState: true
-- tapOn: "Explore demo"
+# XCTest owns the launch so its first tap reaches the active app window.
+- launchApp:
+    clearState: true
+- tapOn:
+    text: "Explore demo"
+    retryTapIfNoChange: true
 - extendedWaitUntil:
     visible:
       id: native-agent-input
-    timeout: 45000
+    timeout: 90000
 - assertVisible:
     id: native-header-menu
 - assertVisible:
     id: native-header-files
+# Retain the store views even if a later control regression fails this same session.
+- runFlow: store-screenshots.yaml
 - tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-agent-input
 - inputText: "Native Liquid Glass draft"
 - assertVisible:
@@ -37,48 +29,79 @@ env:
 - takeScreenshot: apps/mobile/test-results/native/composer-expanded
 - tapOn:
     id: native-composer-model
-- assertVisible: "Codex · Agent and model"
-- tapOn: "← Back to providers"
+    retryTapIfNoChange: true
+# The trigger has the same accessible label as the sheet title. Its label alone cannot prove
+# that XCTest opened the sheet; require an option that exists only in the presented picker.
+- extendedWaitUntil:
+    visible: "← Back to providers"
+    timeout: 30000
+- assertVisible: "Codex: Agent and model"
+- tapOn:
+    text: "← Back to providers"
+    waitToSettleTimeoutMs: 500
 - assertVisible: "Choose an agent provider"
-- tapOn: "Codex ·.*"
-- assertVisible: "Codex · Agent and model"
-- tapOn: "← Back to providers"
+- tapOn:
+    text: "Codex:.*"
+    waitToSettleTimeoutMs: 500
+- assertVisible: "Codex: Agent and model"
+- tapOn:
+    text: "← Back to providers"
+    waitToSettleTimeoutMs: 500
 - assertVisible: "Choose an agent provider"
-- tapOn: "Codex ·.*"
-- tapOn: "Codex"
+- tapOn:
+    text: "Codex:.*"
+    waitToSettleTimeoutMs: 500
+- tapOn:
+    text: "Codex"
+    waitToSettleTimeoutMs: 500
 - assertVisible: "Native Liquid Glass draft"
 - tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-composer-brain
 - assertVisible: "Thinking effort.*"
-- tapOn: "Cancel"
+- tapOn:
+    text: "Cancel"
+    waitToSettleTimeoutMs: 500
 - assertVisible: "Native Liquid Glass draft"
 - tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-header-files
 - assertVisible:
     id: native-header-back
 - takeScreenshot: apps/mobile/test-results/native/files-header
 - tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-header-back
 - assertVisible: "Native Liquid Glass draft"
 # Hit testing belongs to the native SwiftUI label, so cover it on-device rather than in a mock.
 # The title/subtitle area and empty vertical padding must open the same drawer as the chevron.
 - tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "20%,35%"
 - assertVisible: "Tabs"
-- tapOn: "Close"
+- tapOn:
+    text: "Close"
+    waitToSettleTimeoutMs: 500
 - assertVisible: "Native Liquid Glass draft"
 - tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "20%,65%"
 - assertVisible: "Tabs"
-- tapOn: "Close"
 - tapOn:
+    text: "Close"
+    waitToSettleTimeoutMs: 500
+- tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "50%,5%"
 - assertVisible: "Tabs"
-- tapOn: "Close"
 - tapOn:
+    text: "Close"
+    waitToSettleTimeoutMs: 500
+- tapOn:
+    waitToSettleTimeoutMs: 500
     id: native-header-chevron
     point: "90%,50%"
 - assertVisible: "Tabs"

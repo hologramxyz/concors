@@ -3,6 +3,15 @@ name: Mobile iOS native
 on:
   # Native compilation and simulator tests are opt-in, outside the PR time budget.
   workflow_dispatch:
+    inputs:
+      simulator_artifact:
+        description: Optional universal Expo simulator artifact URL; skip native compilation
+        type: string
+        default: ""
+      reuse_matching_cached_app:
+        description: Reuse a cached simulator app only after verifying unchanged runtime sources
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -14,25 +23,58 @@ concurrency:
 jobs:
   simulator:
     name: Native iOS glass and composer
-    # The standard Intel runner has 14 GB RAM for CoreSimulator + XCTest (ARM has 7 GB).
-    runs-on: macos-26-intel
-    timeout-minutes: 25
+    # Exercise Expo's prebuilt app on Apple Silicon; reserve Intel's memory for local compilation.
+    runs-on: ${{ inputs.simulator_artifact != '' && 'macos-26' || 'macos-26-intel' }}
+    timeout-minutes: 50
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       APP_VARIANT: preview
       EXPO_PUBLIC_DEMO: "true"
       EXPO_NO_TELEMETRY: "1"
       CI: "1"
+      MAESTRO_CLI_NO_ANALYTICS: "1"
+      # The clean Intel runner started XCTest after 3m34s; allow its measured cold start.
+      MAESTRO_DRIVER_STARTUP_TIMEOUT: "300000"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Start the clean runner's iPhone before compilation
+        id: simulator
+        timeout-minutes: 5
+        run: |
+          MOBILE_SIMULATOR_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"].get("com.apple.CoreSimulator.SimRuntime.iOS-26-5",[]); print(next((d["udid"] for d in devices if d["name"]=="iPhone 17 Pro Max"),""))')
+          if [ -z "$MOBILE_SIMULATOR_ID" ]; then
+            MOBILE_SIMULATOR_ID=$(xcrun simctl create "Concors Glass CI" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max com.apple.CoreSimulator.SimRuntime.iOS-26-5)
+          fi
+          echo "id=$MOBILE_SIMULATOR_ID" >> "$GITHUB_OUTPUT"
+          MOBILE_SIMULATOR_STATE=$(xcrun simctl list devices --json | python3 -c 'import json,sys; target=sys.argv[1]; print(next(d["state"] for ds in json.load(sys.stdin)["devices"].values() for d in ds if d["udid"]==target))' "$MOBILE_SIMULATOR_ID")
+          if [ "$MOBILE_SIMULATOR_STATE" != Booted ]; then
+            xcrun simctl boot "$MOBILE_SIMULATOR_ID"
+          fi
+          open "$DEVELOPER_DIR/Applications/Simulator.app" --args -CurrentDeviceUDID "$MOBILE_SIMULATOR_ID"
+      - name: Download optional Expo simulator artifact
+        if: inputs.simulator_artifact != ''
+        env:
+          SIMULATOR_ARTIFACT_URL: ${{ inputs.simulator_artifact }}
+        run: |
+          python3 -c 'import os,urllib.parse; u=urllib.parse.urlparse(os.environ["SIMULATOR_ARTIFACT_URL"]); assert u.scheme=="https" and (u.hostname=="expo.dev" or u.hostname.endswith(".eascdn.net")) and not u.username and not u.password'
+          curl --fail --location --retry 3 "$SIMULATOR_ARTIFACT_URL" --output "$RUNNER_TEMP/simulator-app.tar.gz"
+          mkdir -p "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI/Build/Products/Release-iphonesimulator"
+          python3 -c 'import sys,tarfile; tarfile.open(sys.argv[1]).extractall(sys.argv[2],filter="data")' "$RUNNER_TEMP/simulator-app.tar.gz" "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI/Build/Products/Release-iphonesimulator"
       - uses: pnpm/action-setup@v4
+        if: inputs.simulator_artifact == ''
       - uses: actions/setup-node@v4
+        if: inputs.simulator_artifact == ''
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+        if: inputs.simulator_artifact == ''
       - run: pnpm --filter @concors/mobile assets
+        if: inputs.simulator_artifact == ''
       - uses: actions/cache/restore@v4
+        if: inputs.simulator_artifact == ''
         id: native-cache
         with:
           path: |
@@ -42,16 +84,30 @@ jobs:
             ~/Library/Caches/CocoaPods
             ~/Library/Developer/Xcode/DerivedData/ConcorsCI
           key: ios-native-v1-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/app.config.ts', '.github/workflows/mobile-ios.yml') }}-${{ github.sha }}
-          restore-keys: ios-native-v1-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/app.config.ts', '.github/workflows/mobile-ios.yml') }}-
+          restore-keys: |
+            ios-native-v1-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'apps/mobile/app.config.ts', '.github/workflows/mobile-ios.yml') }}-
+            ios-native-v1-${{ runner.arch }}-
+      - name: Check simulator cache validation rules
+        run: python3 -m unittest discover -s .github/scripts -p 'test_*.py'
+      - name: Validate optional cached simulator app
+        id: cached-app
+        if: inputs.simulator_artifact == '' && inputs.reuse_matching_cached_app
+        run: |
+          MOBILE_APP=$(find "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' -print -quit 2>/dev/null || true)
+          python3 .github/scripts/reuse-ios-simulator.py "${MOBILE_APP:-/nonexistent}" --github-output "$GITHUB_OUTPUT"
       - name: Generate native iOS project
+        if: inputs.simulator_artifact == '' && steps.cached-app.outputs.reuse != 'true'
         working-directory: apps/mobile
         run: pnpm exec expo prebuild --platform ios --no-install
       - name: Install native dependencies
+        if: inputs.simulator_artifact == '' && steps.cached-app.outputs.reuse != 'true'
         timeout-minutes: 4
         working-directory: apps/mobile/ios
         run: pod install
       - name: Build one simulator architecture
-        timeout-minutes: 15
+        if: inputs.simulator_artifact == '' && steps.cached-app.outputs.reuse != 'true'
+        # A cold Intel simulator build exceeded 15 minutes before UI tests could start.
+        timeout-minutes: 30
         working-directory: apps/mobile/ios
         run: |
           set -o pipefail
@@ -67,8 +123,74 @@ jobs:
             COMPILER_INDEX_STORE_ENABLE=NO GCC_OPTIMIZATION_LEVEL=0 \
             SWIFT_OPTIMIZATION_LEVEL=-Onone GCC_GENERATE_DEBUGGING_SYMBOLS=NO \
             build > ../test-results/native/xcodebuild.log 2>&1 || { tail -100 ../test-results/native/xcodebuild.log; exit 1; }
+      - name: Wait for the iPhone simulator
+        timeout-minutes: 10
+        run: |
+          mkdir -p apps/mobile/test-results/native
+          xcrun simctl bootstatus '${{ steps.simulator.outputs.id }}' -b > apps/mobile/test-results/native/simulator-boot.log 2>&1 || { cat apps/mobile/test-results/native/simulator-boot.log; exit 1; }
+          xcrun simctl status_bar '${{ steps.simulator.outputs.id }}' override --time '9:41' \
+            --dataNetwork wifi --wifiMode active --wifiBars 3 --batteryState charged --batteryLevel 100
+      - name: Install simulator app
+        run: |
+          MOBILE_APP=$(find "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' -print -quit)
+          # Simulator identity is carried by Xcode's simulated-entitlements section. Preserve
+          # the original signature; fake restricted entitlements in a new signature prevent launch.
+          codesign --verify "$MOBILE_APP"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$MOBILE_APP/Info.plist"
+          xcrun simctl install '${{ steps.simulator.outputs.id }}' "$MOBILE_APP"
+          xcrun simctl launch '${{ steps.simulator.outputs.id }}' xyz.hologram.concors.preview
+          python3 .github/scripts/reuse-ios-simulator.py "$MOBILE_APP" --arch "$(uname -m)" --record
+      - name: Record the app before starting XCTest
+        timeout-minutes: 2
+        run: |
+          vm_stat > apps/mobile/test-results/native/memory-before-xctest.log
+          ps -Ao pid,comm,rss -r | head -25 >> apps/mobile/test-results/native/memory-before-xctest.log || true
+          xcrun simctl io '${{ steps.simulator.outputs.id }}' screenshot apps/mobile/test-results/native/before-xctest.png
+      - name: Install pinned native UI test runner
+        timeout-minutes: 2
+        run: |
+          curl --fail --location --retry 3 https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.10.0/maestro.zip --output "$RUNNER_TEMP/maestro.zip"
+          echo '29b675e10cc12080e445e9bfb2e2b4e4dfb9c0f2e30d5884120d258b5e1cd991  maestro.zip' | (cd "$RUNNER_TEMP" && shasum -a 256 --check)
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro-cli"
+          echo "$RUNNER_TEMP/maestro-cli/maestro/bin" >> "$GITHUB_PATH"
+      # Keep captures in the same XCTest session instead of paying the cold driver startup twice.
+      - name: Exercise native controls and capture store screenshots
+        timeout-minutes: 20
+        run: maestro --device "${{ steps.simulator.outputs.id }}" test --test-output-dir apps/mobile/test-results/native apps/mobile/e2e/native/glass.yaml
+      - name: Retain native launch diagnostics
+        if: failure()
+        timeout-minutes: 1
+        run: |
+          mkdir -p apps/mobile/test-results/native
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+          destination = Path('apps/mobile/test-results/native')
+          commands = {
+              'screenshot-diagnostics.log': ['xcrun', 'simctl', 'io', '${{ steps.simulator.outputs.id }}', 'screenshot', str(destination / 'failure-screen.png')],
+              'launch-diagnostics.log': ['xcrun', 'simctl', 'spawn', '${{ steps.simulator.outputs.id }}', 'log', 'show', '--last', '5m', '--style', 'compact', '--predicate', 'process == "ConcorsPreview" OR process == "amfid" OR eventMessage CONTAINS[c] "xyz.hologram.concors.preview"'],
+          }
+          for name, command in commands.items():
+              with (destination / name).open('w') as output:
+                  try:
+                      subprocess.run(command, stdout=output, stderr=subprocess.STDOUT, timeout=20, check=False)
+                  except subprocess.TimeoutExpired:
+                      output.write('\nSimulator diagnostic exceeded 20 seconds.\n')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        timeout-minutes: 3
+        with:
+          name: mobile-ios-native-evidence
+          include-hidden-files: true
+          path: |
+            apps/mobile/test-results/native/
+            apps/mobile/.expo/xcodebuild.log
+            ~/.maestro/tests/
+            ~/.maestro/maestro.log
+      # Preserve diagnostics before a large native cache upload can consume the job budget.
       - uses: actions/cache/save@v4
-        if: ${{ !cancelled() && steps.native-cache.outputs.cache-matched-key != steps.native-cache.outputs.cache-primary-key }}
+        if: ${{ !cancelled() && inputs.simulator_artifact == '' && steps.native-cache.outputs.cache-matched-key != steps.native-cache.outputs.cache-primary-key }}
         with:
           path: |
             apps/mobile/ios/Pods
@@ -77,36 +199,3 @@ jobs:
             ~/Library/Caches/CocoaPods
             ~/Library/Developer/Xcode/DerivedData/ConcorsCI
           key: ${{ steps.native-cache.outputs.cache-primary-key }}
-      - name: Create isolated iOS 26 simulator
-        timeout-minutes: 4
-        id: simulator
-        run: |
-          MOBILE_SIMULATOR_ID=$(xcrun simctl create "Concors Glass CI" com.apple.CoreSimulator.SimDeviceType.iPhone-17 com.apple.CoreSimulator.SimRuntime.iOS-26-5)
-          echo "id=$MOBILE_SIMULATOR_ID" >> "$GITHUB_OUTPUT"
-          xcrun simctl boot "$MOBILE_SIMULATOR_ID"
-          xcrun simctl bootstatus "$MOBILE_SIMULATOR_ID" -b
-      - name: Install simulator app
-        run: |
-          MOBILE_APP=$(find "$HOME/Library/Developer/Xcode/DerivedData/ConcorsCI/Build/Products/Release-iphonesimulator" -maxdepth 1 -name '*.app' -print -quit)
-          # Simulator ad-hoc signing needs no Apple account, but SecureStore needs its app identity.
-          codesign -d --entitlements :- "$MOBILE_APP" > "$RUNNER_TEMP/mobile-entitlements.plist"
-          /usr/libexec/PlistBuddy -c 'Print :application-identifier' "$RUNNER_TEMP/mobile-entitlements.plist"
-          xcrun simctl install '${{ steps.simulator.outputs.id }}' "$MOBILE_APP"
-          xcrun simctl launch '${{ steps.simulator.outputs.id }}' xyz.hologram.concors.preview
-      - name: Install pinned native UI test runner
-        timeout-minutes: 2
-        run: |
-          curl --fail --location --retry 3 https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.10.0/maestro.zip --output "$RUNNER_TEMP/maestro.zip"
-          echo '29b675e10cc12080e445e9bfb2e2b4e4dfb9c0f2e30d5884120d258b5e1cd991  maestro.zip' | (cd "$RUNNER_TEMP" && shasum -a 256 --check)
-          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$RUNNER_TEMP/maestro-cli"
-          echo "$RUNNER_TEMP/maestro-cli/maestro/bin" >> "$GITHUB_PATH"
-      - name: Exercise real SwiftUI controls and native text input
-        timeout-minutes: 5
-        run: maestro --device "${{ steps.simulator.outputs.id }}" test -e FRESH_SIMULATOR=true --test-output-dir apps/mobile/test-results/native apps/mobile/e2e/native/glass.yaml
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: mobile-ios-native-evidence
-          path: |
-            apps/mobile/test-results/native/
-            apps/mobile/.expo/xcodebuild.log
