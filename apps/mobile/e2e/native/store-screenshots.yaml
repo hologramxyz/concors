@@ -1,0 +1,14 @@
+appId: xyz.hologram.concors.preview
+---
+# Continue glass.yaml's final Tabs drawer. These are real simulator captures of the shared
+# workspace UI with fictional fixture data; inspect the output before uploading store assets.
+- assertVisible: "Tabs"
+- takeScreenshot: apps/mobile/test-results/native/store-workspaces
+- tapOn: "Close"
+- tapOn:
+    id: native-agent-input
+- eraseText: 100
+- inputText: "Review the changes and run the tests."
+- assertVisible:
+    id: native-composer-model
+- takeScreenshot: apps/mobile/test-results/native/store-agent
