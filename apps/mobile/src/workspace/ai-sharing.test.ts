@@ -216,6 +216,38 @@ describe("AI sharing permission at the native protocol boundary", () => {
     expect(await next.beforeSend(send)).toBeNull();
     expect(ask).toHaveBeenCalledTimes(2);
   });
+  it("writes withdrawal after an approval that is still being saved", async () => {
+    const { context, ask } = setup();
+    let finishSave!: () => void;
+    let saved: string | null = null;
+    const write = vi.fn(async (value: string) => {
+      if (!saved)
+        await new Promise<void>((resolve) => {
+          finishSave = resolve;
+        });
+      saved = value;
+    });
+    const store = createAISharingStore({ read: async () => saved, write });
+    const permission = createAISharingPermission(context, ask, undefined, store);
+    const request = permission.beforeSend(send);
+    await vi.waitFor(() => expect(write).toHaveBeenCalledOnce());
+    const withdrawal = permission.withdraw();
+    finishSave();
+    await withdrawal;
+    expect(await request).toMatchObject({ outcome: { status: "error" } });
+    expect(JSON.parse(saved!)).toEqual({ blocked: true, grant: null });
+    const next = createAISharingPermission(
+      context,
+      ask,
+      undefined,
+      createAISharingStore({
+        read: async () => saved,
+        write,
+      }),
+    );
+    expect(await next.beforeSend(send)).toMatchObject({ outcome: { status: "error" } });
+    expect(ask).toHaveBeenCalledOnce();
+  });
   it("asks again after the persisted configuration changes", async () => {
     const { context, ask, provider } = setup();
     let saved: string | null = null;

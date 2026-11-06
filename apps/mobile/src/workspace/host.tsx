@@ -386,8 +386,15 @@ function SignedInWorkspace() {
         router.push("/account/delete");
         return;
       case "ai-sharing":
-        if (action.action === "withdraw") await aiPermission.current?.withdraw();
-        else await aiPermission.current?.review();
+        if (aiPermission.current) {
+          if (action.action === "withdraw") await aiPermission.current.withdraw();
+          else await aiPermission.current.review();
+        } else {
+          // Settings can remain open while the transport is reconnecting.
+          const blocked = action.action === "withdraw";
+          setAISharingGrant({ connectionId, status: blocked ? "blocked" : "ask" });
+          await sharingStore.write({ blocked, grant: null });
+        }
         return;
       case "report-content":
         router.push({ pathname: "/support/report", params: machineId ? { machineId } : {} });
