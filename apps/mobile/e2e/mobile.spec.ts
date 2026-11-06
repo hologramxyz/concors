@@ -1,14 +1,9 @@
 import { expect, test, type Page, type FrameLocator, type Locator } from "@playwright/test";
 import { ids, SIDEBAR_TREE_FLAG, TERMINAL_PROFILE_FLAG, treeIds } from "../src/demo/fixtures";
 import { hold, swipe as touchSwipe, scrollTimelineUp } from "./support/swipe";
+import { reportNonMac } from "../../../e2e/support/platform.ts";
 import { BINDINGS, isCompactCommand } from "../../desktop/src/shortcuts/bindings";
-import {
-  bindingLabel,
-  defaultKeymap,
-  mainBinding,
-  strokeLabel,
-  usableBindings,
-} from "../../desktop/src/shortcuts/keymap";
+import { defaultKeymap, mainBinding, strokeLabel } from "../../desktop/src/shortcuts/keymap";
 const workspace = (page: Page) => page.frameLocator('iframe[title="Concors workspace"]');
 const activeChat = `${ids.tab}:${ids.pane}`;
 /** A tab's row under its workspace in the sidebar, which opens the tab. */
@@ -94,8 +89,6 @@ async function closePickerSheet(ui: FrameLocator, name = "Tabs") {
   await expect(sheet).toHaveCount(0);
 }
 /** Emulated phones keep the host's navigator.platform, so shortcut labels follow the runner. */
-const macLabels = (ui: FrameLocator) =>
-  ui.locator("body").evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform));
 async function openSettings(ui: FrameLocator) {
   await ui.getByRole("button", { name: /^Account:/ }).click();
   await ui
@@ -1290,7 +1283,9 @@ test("sidebar has no logo or duplicate menu, with glass search behind the rounde
 
 test("mobile Shortcuts settings preserve supported commands and all entry points", async ({
   page,
+  context,
 }) => {
+  await reportNonMac(context);
   const ui = await enter(page);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await openSettings(ui);
@@ -1304,25 +1299,31 @@ test("mobile Shortcuts settings preserve supported commands and all entry points
     "Agent chat",
     "Tabs",
   ]);
-  await expect(settings).toContainText("An external keyboard");
-  await expect(settings).toContainText("Move through the tabs in the strip under the header.");
-  const mac = await macLabels(ui);
+  // The same rows and wording as desktop, without phone-only notes.
+  await expect(settings).not.toContainText("An external keyboard");
+  await expect(settings).not.toContainText("Escape cancels a sequence");
+  await expect(settings).toContainText("Switch between tabs and organize your workspace.");
+  await expect(settings.getByRole("textbox", { name: "Filter shortcuts" })).toHaveAttribute(
+    "placeholder",
+    "Search shortcuts",
+  );
   const bindings = BINDINGS.filter((binding) => isCompactCommand(binding.id));
   await expect(settings.locator("dt")).toHaveCount(bindings.length);
   for (const binding of bindings) {
     const row = settings.locator("dt").filter({ hasText: binding.label }).locator("..");
-    // The main shortcut as a chip per press; any others follow in words.
-    const keymap = defaultKeymap(mac)[binding.id];
-    const main = mainBinding(keymap, false);
+    // The main shortcut as a chip per press, as desktop draws it.
+    const main = mainBinding(defaultKeymap(false)[binding.id], false);
     if (!main) throw new Error(`${binding.id} has no shortcut`);
-    // A Mac draws its modifiers as icons, so only the plain labels can be compared as text.
-    await expect(row.locator("kbd")).toHaveCount(main.keys.length);
-    if (!mac)
-      await expect(row.locator("kbd")).toHaveText(main.keys.map((stroke) => strokeLabel(stroke)));
-    if (!mac)
-      for (const other of usableBindings(keymap, false).filter((entry) => entry !== main))
-        await expect(row).toContainText(bindingLabel(other, mac));
+    await expect(row.locator("kbd")).toHaveText(main.keys.map((stroke) => strokeLabel(stroke)));
   }
+  await expect(
+    settings.locator("dt").filter({ hasText: "Search workspaces and tabs" }).locator(".."),
+  ).toContainText("outside terminals");
+  for (const button of [
+    settings.getByRole("button", { name: "Restore all defaults", exact: true }),
+    settings.getByRole("button", { name: "Edit New tab shortcuts", exact: true }),
+  ])
+    expect((await box(button)).height).toBeGreaterThanOrEqual(44);
   await expect(settings.getByText("New pane beside current", { exact: true })).toHaveCount(0);
   expect(await settings.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
     true,
@@ -1526,8 +1527,10 @@ test("sidebar, chat and files share header spacing at narrow phone widths", asyn
 
 test("custom shortcuts persist through the mobile preference bridge and renderer reload", async ({
   page,
+  context,
 }) => {
   test.setTimeout(90_000);
+  await reportNonMac(context);
   let ui = await enter(page);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await openSettings(ui);
@@ -1551,9 +1554,13 @@ test("custom shortcuts persist through the mobile preference bridge and renderer
   await editor.getByRole("button", { name: "Save shortcuts" }).click();
   await expect(editor).toHaveCount(0);
   const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
-  await expect(settings).toContainText(
-    strokeLabel({ key: "s", modifiers: ["Control", "Alt"] }, await macLabels(ui)),
-  );
+  await expect(
+    settings
+      .locator("dt")
+      .filter({ hasText: "Search workspaces and tabs" })
+      .locator("..")
+      .locator("kbd"),
+  ).toHaveText(["Ctrl+Alt+S"]);
   await settings.getByRole("button", { name: "Close", exact: true }).click();
   await ui.getByRole("textbox", { name: "Message Codex" }).press("Control+Alt+s");
   await expect(ui.getByRole("dialog", { name: "Search", exact: true })).toBeVisible();

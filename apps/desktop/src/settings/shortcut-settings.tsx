@@ -27,7 +27,6 @@ import { isTauri } from "@/tauri";
 const GROUPS: readonly {
   title: string;
   description?: string;
-  compactDescription?: string;
   commands: readonly CommandId[];
 }[] = [
   {
@@ -42,8 +41,6 @@ const GROUPS: readonly {
   {
     title: "Tabs",
     description: "Switch between tabs and organize your workspace.",
-    compactDescription:
-      "Move through the tabs in the strip under the header. Closing a tab closes only that view, not its desktop siblings.",
     commands: [
       "new-tab",
       "resume-chat",
@@ -178,7 +175,8 @@ export function ShortcutSettings() {
             <Input
               className="min-w-0 flex-1 basis-56"
               aria-label="Filter shortcuts"
-              placeholder="Find a command or shortcut…"
+              // The desktop wording is cut off at a phone's width.
+              placeholder={compact ? "Search shortcuts" : "Find a command or shortcut…"}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
@@ -201,11 +199,11 @@ export function ShortcutSettings() {
               {busy ? "Restoring…" : "Restore all defaults"}
             </Button>
           </div>
-          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-            {compact && "An external keyboard can use these commands on mobile. "}
-            Escape cancels a sequence. Closing a {compact ? "tab" : "pane or tab"} leaves its
-            sessions running.
-          </p>
+          {!compact && (
+            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+              Escape cancels a sequence. Closing a pane or tab leaves its sessions running.
+            </p>
+          )}
           {error && (
             <p role="alert" className="mt-3 text-sm text-destructive">
               {error}
@@ -224,13 +222,7 @@ export function ShortcutSettings() {
       {GROUPS.filter((group) =>
         group.commands.some((id) => matches(id) && (!compact || isCompactCommand(id))),
       ).map((group) => (
-        <Section
-          key={group.title}
-          title={group.title}
-          description={
-            compact ? (group.compactDescription ?? group.description) : group.description
-          }
-        >
+        <Section key={group.title} title={group.title} description={group.description}>
           <SettingsCard>
             <dl className="divide-y">
               {BINDINGS.filter(
