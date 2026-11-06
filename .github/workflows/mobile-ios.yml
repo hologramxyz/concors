@@ -49,6 +49,7 @@ jobs:
           if [ "$MOBILE_SIMULATOR_STATE" != Booted ]; then
             xcrun simctl boot "$MOBILE_SIMULATOR_ID"
           fi
+          open -a Simulator --args -CurrentDeviceUDID "$MOBILE_SIMULATOR_ID"
       - name: Download optional Expo simulator artifact
         if: inputs.simulator_artifact != ''
         env:
@@ -120,7 +121,7 @@ jobs:
             SWIFT_OPTIMIZATION_LEVEL=-Onone GCC_GENERATE_DEBUGGING_SYMBOLS=NO \
             build > ../test-results/native/xcodebuild.log 2>&1 || { tail -100 ../test-results/native/xcodebuild.log; exit 1; }
       - name: Wait for the iPhone simulator
-        timeout-minutes: 4
+        timeout-minutes: 10
         run: |
           mkdir -p apps/mobile/test-results/native
           xcrun simctl bootstatus '${{ steps.simulator.outputs.id }}' -b > apps/mobile/test-results/native/simulator-boot.log 2>&1 || { cat apps/mobile/test-results/native/simulator-boot.log; exit 1; }
