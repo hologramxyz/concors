@@ -291,8 +291,10 @@ it("keeps a schedule's files and sends every run its own copy of them", async ()
   const sessionId = f.workspace.agents()[0]!.id;
   // The agent is told where its copy is, inside the chat, never the schedule's own file.
   expect(first).toContain('The user attached \\"resume.pdf\\"');
-  expect(first).toContain(join(root, sessionId));
-  expect(first).not.toContain(join(root, "schedules"));
+  // Paths as they appear inside the JSON, where Windows' backslashes are escaped.
+  const inJson = (path: string) => JSON.stringify(path).slice(1, -1);
+  expect(first).toContain(inJson(join(root, sessionId)));
+  expect(first).not.toContain(inJson(join(root, "schedules")));
   // The run's message shows the file, as a chat message with an attachment would.
   const runId = f.manager.list()[0]!.runs[0]!.id;
   expect(f.workspace.agentItem(sessionId, `prompt:${runId}`)).toMatchObject({
