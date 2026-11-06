@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { candidateFailures, releaseFailures, requiredGates } from "./release-requirements.mjs";
+import {
+  candidateFailures,
+  iosRequiredGates,
+  releaseFailures,
+  requiredGates,
+} from "./release-requirements.mjs";
 
 const environment = {
   APP_VARIANT: "production",
@@ -21,6 +26,32 @@ const complete = () => ({
   })),
 });
 describe("evidence-backed release checks", () => {
+  it("separates iOS signoff from Play access while preserving every Apple gate", () => {
+    const ios = {
+      ...complete(),
+      platform: "ios",
+      gates: complete().gates.filter((gate) => gate.id !== "play-production-access"),
+    };
+    expect(releaseFailures(ios, environment, "0.1.0", "ios")).toEqual([]);
+    for (const id of iosRequiredGates) {
+      const unchecked = {
+        ...ios,
+        gates: ios.gates.map((gate) => (gate.id === id ? { ...gate, status: "pending" } : gate)),
+      };
+      expect(releaseFailures(unchecked, environment, "0.1.0", "ios")).toContainEqual(
+        expect.stringContaining(`${id} [owner needed]: pending`),
+      );
+    }
+    expect(releaseFailures(ios, environment, "0.1.0")).toContain(
+      "iOS evidence cannot approve a combined mobile release",
+    );
+    expect(releaseFailures(complete(), environment, "0.1.0", "ios")).toContain(
+      "Use iOS-specific release evidence for an iOS submission",
+    );
+    expect(releaseFailures(ios, environment, "0.1.0", "typo")).toContain(
+      "Unknown release platform",
+    );
+  });
   it("requires every known gate and does not accept an empty or old boolean checklist", () => {
     expect(releaseFailures(complete(), environment)).toEqual([]);
     for (const value of [null, {}, [], { old: true }, { schemaVersion: 1, gates: [] }])

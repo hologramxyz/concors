@@ -183,7 +183,16 @@ real screenshots/privacy report as evidence. Rebuilding later requires revalidat
 
 ### Full submission gate
 
-Update `apps/mobile/release/readiness.json` only after verifying each item. Every required
+For iPhone submission, update `apps/mobile/release/readiness-ios.json` and run
+`pnpm --filter @concors/mobile release:check --platform=ios --json` with the production
+environment below. EAS builds with `EAS_BUILD_PLATFORM=ios` select this evidence automatically,
+including the pre-install production guard. This keeps every Apple gate and excludes only Play
+production access. The document has iPhone-specific titles and evidence; Android device/SDK
+claims must not be marked verified to release the iPhone app. The iOS check still fails while
+Apple login, owner facts, review access and device acceptance are incomplete.
+
+The default combined-mobile check uses `apps/mobile/release/readiness.json`, retains the Play
+requirements and rejects iOS-only evidence. Update the appropriate document only after verifying each item. Every required
 gate needs `status: "verified"`, a named `verifiedBy`, ISO `verifiedAt` and nonempty
 `evidence`; choose the approved `releaseModel` as well. It **fails intentionally today**.
 EAS pre-install and standard asset/native/export scripts enforce the checklist whenever
@@ -206,13 +215,17 @@ pnpm dlx eas-cli@latest submit --platform android --profile production
 TestFlight/Play internal upload is not public publication. Finish testing, metadata and
 review submission in each console; allow time for review and fixes.
 
-## Current infrastructure blocker (2026-09-10)
+## Historical infrastructure blocker (2026-09-10)
+
+GitHub runners started successfully again on November 6, 2026, including the opt-in native iOS
+workflow. The account-billing block below describes the September runs, not the current account
+state. Check the actual native run results before claiming device or simulator acceptance.
 
 GitHub's latest native jobs did not start: the check annotation reports failed account
 payments or an exhausted spending limit. There are no compiler/test logs for those runs.
-The retained mobile CI changes keep native workflows manual-only and automatic jobs
-bounded to seven minutes. Do not dispatch more native runs until the repository owner
-resolves **Billing & plans**. Then manually run `mobile-ios.yml` and `mobile-android.yml`
+The retained mobile CI changes kept native workflows manual-only and automatic jobs
+bounded to seven minutes. Those runs required the repository owner to resolve **Billing & plans**
+before dispatching `mobile-ios.yml` and `mobile-android.yml`
 on the reviewed PR commit; these generate preview-identity engineering artifacts, not
 store candidates. Local web/Hermes exports and browser tests cannot replace native CI
 or signed physical-device evidence.
