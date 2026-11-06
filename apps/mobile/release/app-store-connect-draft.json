@@ -22,7 +22,7 @@
     "configured": true,
     "source": "Existing Concors beta review contact; private values remain only in Apple"
   },
-  "ageRatingCompleted": false,
+  "ageRatingCompleted": true,
   "privacyLabelsVerified": true,
   "screenshotsUploaded": true,
   "buildAttached": true,
@@ -43,7 +43,7 @@
     "launchCountries": "All 175 App Store territories selected, including future territories; actual regional eligibility remains subject to Apple",
     "supportAndPrivacyEmail": "gm@hologram.xyz",
     "legalOperator": "Rolling Inc.",
-    "minimumAgeRequested": 13
+    "minimumAgeRequested": 16
   },
   "privacyDisclosureDraft": {
     "status": "published",
@@ -64,18 +64,16 @@
     "tracking": false
   },
   "remainingOwnerFields": [
-    "Resolve requested 13+ minimum against Privy policy requiring users to be at least 16",
     "Complete prepared Apple provider configuration in Privy and enable test accounts",
     "Working dedicated reviewer account, available isolated machine and scoped AI-provider access",
-    "Confirm necessary content rights before Apple declaration",
     "Physical iPhone acceptance and operating support/report triage"
   ],
   "note": "Free-app agreement is active/current. Apple App ID, Services ID and dedicated sign-in key are prepared; backend signing-key support is deployed. Apple login remains disabled pending Privy setup. Build 12 is VALID / IN_BETA_TESTING, in the Internal beta group and attached to draft 0.1.0. Public App Review has not been submitted.",
   "copyright": "2026 Rolling Inc.",
   "ageRatingQuestionnaireSaved": true,
-  "ageRatingOverride": "THIRTEEN_PLUS",
-  "ageRatingDecision": "Owner requested 13+; unresolved conflict with Privy under-16 restriction",
-  "contentRightsDeclaration": null,
+  "ageRatingOverride": "SIXTEEN_PLUS",
+  "ageRatingDecision": "Owner approved 16+ for launch, matching Privy\u2019s current minimum",
+  "contentRightsDeclaration": "USES_THIRD_PARTY_CONTENT",
   "screenshotEvidence": {
     "record": "ios-native-evidence.md",
     "checkedAt": "2026-11-06T06:02:45.529Z",
@@ -83,5 +81,9 @@
     "display": "6.9-inch",
     "nativeAcceptanceComplete": false,
     "status": "One inspected native workspace image is processed and active. New agent/files captures were rejected for store use; further captures need suitable workspace content."
-  }
+  },
+  "ageRatingVerifiedAt": "2026-11-06T06:45:16.551Z",
+  "contentRightsOwnerConfirmed": true,
+  "contentRightsVerifiedAt": "2026-11-06T06:45:16.551Z",
+  "launchPolicyEvidence": "launch-policy.json"
 }
