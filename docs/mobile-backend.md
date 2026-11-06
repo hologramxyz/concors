@@ -108,7 +108,8 @@ wiped. Shared teams and colleagues' machines remain. Cleanup revokes Apple OAuth
 identities before final DB deletion. Reports are rate limited, removed with the account or purged
 30 days after resolution. The server README documents operator triage and delayed-job monitoring.
 
-Push remains unavailable and must not be claimed in the first release.
+Push is built but off until the control plane sets `PUSH_NOTIFICATIONS=true` (see Push below);
+until then `pushNotifications` stays `false` and the app keeps its switch disabled.
 
 ### Push
 
@@ -117,6 +118,16 @@ the authenticated session, never a client user ID. Registration is idempotent; a
 switches atomically reassign/revoke ownership. Unregister is idempotent and rejects
 cross-user deletion. Session/account revocation removes registrations even if an offline
 phone cannot unregister. Registration/cleanup are serialized on the client.
+
+How it works now: a cloud or connected machine's gateway follows its session host's chats
+(`packages/daemon/src/managed/attention.ts`) and, when one goes from working to done, needs
+input or failed, posts `{ eventId, kind, projectId, sessionId, userId? }` to
+`POST /api/v1/agent/attention` with its machine credential, retrying three times with the same
+`eventId`. `userId` is whoever last sent, steered or queued a prompt in that chat through this
+gateway; without one (a schedule, or a prompt from before the gateway restarted) the control
+plane notifies the machine's creator. The control plane sends through Expo; see
+concors-server `docs/push-notifications.md`. The desktop app's own local daemon has no machine
+credential and reports nothing.
 
 Relay authoritative completion/input events via Expo Push/APNs/FCM, not background
 WebSockets. Maintain event IDs, bounded retries/deduplication, receipt processing,
