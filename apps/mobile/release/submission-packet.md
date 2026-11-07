@@ -49,6 +49,13 @@ The previous audits and implementation history are in [the November 4–5 audit]
    support reporting and deletion on a physical iPhone. Native simulator/browser checks alone do not
    establish this acceptance. Confirm support/report triage is operated.
 
+4. **iPhone push rollout.** Push is now requested for this release. Assign the dedicated Concors
+   APNs key in Expo, verify the new full native TestFlight build and its production push entitlement,
+   deploy the policy update, then coordinate the production flag with Pier. Complete opt-in,
+   completion/input/error delivery, tap-to-chat and registration-revocation checks on a real phone.
+   See [ios-push-acceptance.md](ios-push-acceptance.md). The previous push exclusion no longer
+   satisfies the release gate.
+
 Do not infer readiness from a successful upload. The iOS-only gate file is
 [readiness-ios.json](readiness-ios.json); the Android/combined gates remain separate.
 `node apps/mobile/scripts/release-check.mjs --platform=ios --json` must continue failing until the
