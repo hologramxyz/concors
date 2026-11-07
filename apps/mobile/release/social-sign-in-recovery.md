@@ -27,5 +27,10 @@ reconnection during a prompt, saved approval and withdrawal, configuration chang
 storage writes and large provider registries. All 19 repository CI checks pass, as does CI on the
 merged application revision `1bfc77273fd39a85e84057eb0a63150e2c233504`.
 
+On November 7, the owner confirmed that TestFlight 0.1.0 (13) shows one AI-sharing prompt and
+remembers approval across several conversations and closing/reopening the app.
+[Owner device confirmation](ios-build-13-device-acceptance.md) records that result and its limits.
+The owner has not yet tested GitHub sign-in on this build; its device acceptance remains pending.
+
 App Store submission remains blocked on the other recorded release gates. No public review was
 submitted by these changes.
