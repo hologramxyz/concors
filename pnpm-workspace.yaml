@@ -7,3 +7,7 @@ allowBuilds:
   esbuild: true
   node-pty: set this to true or false
   sharp: true
+
+# Native autolinking must use the same UI release in the app and Expo Router.
+overrides:
+  "@expo/ui": "57.0.26"
