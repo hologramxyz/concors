@@ -94,13 +94,13 @@ The account API now implements durable deletion and private content reports. Dep
 migrations before clients. `accountDeletionFlow: "reauth-plan-v1"` advertises the new flow;
 legacy `accountDeletion` remains false to keep password-only clients from offering it.
 
-| Route                                  | Request                                                               | Result                                                     |
-| -------------------------------------- | --------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `GET /api/v1/mobile/capabilities`      | authenticated                                                         | Version 1, managed access, no push, deletion flow marker   |
-| `GET /api/v1/account/deletion`         | authenticated                                                         | Plan, affected organizations/machines, ownership transfers |
-| `POST /api/v1/account/deletion`        | `{confirmation:"DELETE",planToken}` and fresh same-user sign-in       | Durable job and private status receipt                     |
-| `POST /api/v1/account/deletion/status` | `{receipt}`                                                           | Processing/completed status, no account data               |
-| `POST /api/v1/support/reports`         | category, user-written message, optional authorized machine reference | Private report reference                                   |
+| Route                                  | Request                                                               | Result                                                                      |
+| -------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `GET /api/v1/mobile/capabilities`      | authenticated                                                         | Version 1, managed access, configured push capability, deletion flow marker |
+| `GET /api/v1/account/deletion`         | authenticated                                                         | Plan, affected organizations/machines, ownership transfers                  |
+| `POST /api/v1/account/deletion`        | `{confirmation:"DELETE",planToken}` and fresh same-user sign-in       | Durable job and private status receipt                                      |
+| `POST /api/v1/account/deletion/status` | `{receipt}`                                                           | Processing/completed status, no account data                                |
+| `POST /api/v1/support/reports`         | category, user-written message, optional authorized machine reference | Private report reference                                                    |
 
 The API revokes all account sessions, disables owned-machine credentials and retries provider cleanup.
 Owned cloud disks are rebuilt and subscriptions stopped; the user's own external computers are not
@@ -129,10 +129,12 @@ plane notifies the machine's creator. The control plane sends through Expo; see
 concors-server `docs/push-notifications.md`. The desktop app's own local daemon has no machine
 credential and reports nothing.
 
-Relay authoritative completion/input events via Expo Push/APNs/FCM, not background
-WebSockets. Maintain event IDs, bounded retries/deduplication, receipt processing,
-inactive-registration expiry, invalid-token cleanup and rate limits. Use generic text;
-no code/prompts/paths/secrets/output in push payloads.
+The implemented sender batches requests and handles immediate Expo ticket errors, including
+invalid-token cleanup. It does not poll Expo delivery receipts or retry failed Expo sends; the
+machine retries its event report, not a confirmed downstream delivery. Receipt processing,
+transient-send retries and inactive-registration expiry remain reliability work. An accepted Expo
+ticket does not prove APNs or phone delivery. Use generic text; no code/prompts/paths/secrets/output
+in push payloads.
 
 ```json
 {

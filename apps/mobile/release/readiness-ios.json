@@ -75,15 +75,17 @@
     },
     {
       "id": "push",
-      "title": "Push excluded from the first iPhone release",
+      "title": "Production iPhone push enrollment, delivery, chat routing and revocation",
       "owner": "backend + release owner",
-      "status": "verified",
+      "status": "blocked",
       "evidence": [
-        "Server src/modules/account/routes.ts explicitly advertises pushNotifications:false; mobile host hides enrollment when unsupported.",
-        "No push delivery is advertised in the iOS listing; push installation/delivery/revocation is outside this release."
-      ],
-      "verifiedBy": "Codex source and signed-binary audit",
-      "verifiedAt": "2026-11-06T01:34:00Z"
+        "Owner requested iOS push setup and a new native TestFlight build on 2026-11-07; push is now in the requested release scope.",
+        "Client and daemon push support merged; server PR 26 is deployed at 85618cb9bcb066b6964e98bfc8ecd216802ed422. Production PUSH_NOTIFICATIONS remained false at the setup check.",
+        "Apple bundle xyz.hologram.concors has PUSH_NOTIFICATIONS enabled. Its paid-team App Store profile includes aps-environment:production; verify the new signed IPA separately.",
+        "A dedicated Concors APNs key still needs assignment in Expo; the existing Heist key was not reused. Fresh Apple Developer login is required.",
+        "Website PR 16 discloses account-linked installation IDs, push tokens, Expo/Apple delivery, generic status and machine-name payloads, choices and retention.",
+        "ios-push-acceptance.md"
+      ]
     },
     {
       "id": "domain-links",
