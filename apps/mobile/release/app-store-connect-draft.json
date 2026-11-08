@@ -64,9 +64,9 @@
     "tracking": false
   },
   "remainingOwnerFields": [
-    "Confirm real Continue with Apple sign-in (Hide My Email if offered) on the signed iPhone. Keep Apple credentials and verification codes on the device."
+    "Clarify whether Apple authorization was shown and approved during the successful build 16 return. Production currently has no Apple-linked identity or stored authorization."
   ],
-  "note": "Build 16 is VALID / IN_BETA_TESTING and attached to iOS 0.1.0. Reviewer login, connected isolated machine, bounded company API access, reviewer notes and required screenshots are prepared. Production deletion and report intake/resolution passed. Push rollout accepted by owner with further push QA deferred. Actual Apple-account sign-in remains unverified. Public App Review has not been submitted.",
+  "note": "Build 16 is VALID / IN_BETA_TESTING and attached to iOS 0.1.0. Reviewer login, connected isolated machine, bounded company API access, reviewer notes and required screenshots are prepared. Production deletion and report intake/resolution passed. Push rollout accepted by owner with further push QA deferred. Owner reports successful Apple sign-in return on build 16, but matched production database/Privy checks contain no Apple-linked authorization; this discrepancy remains open. Public App Review has not been submitted.",
   "copyright": "2026 Rolling Inc.",
   "ageRatingQuestionnaireSaved": true,
   "ageRatingOverride": "SIXTEEN_PLUS",
@@ -106,5 +106,7 @@
   "reviewSubmissionState": "READY_FOR_REVIEW",
   "reviewSubmittedDate": null,
   "sentToAppReview": false,
-  "reviewDraftEvidence": "ios-review-draft.json"
+  "reviewDraftEvidence": "ios-review-draft.json",
+  "ownerReportedAppleSignInSuccess": true,
+  "appleAccountAcceptanceEvidence": "ios-apple-sign-in-device-acceptance.md"
 }

@@ -11,5 +11,7 @@
   "submittedDate": null,
   "sentToAppReview": false,
   "submissionFlagSet": false,
-  "remainingFunctionalCheck": "Real Apple account sign-in and token return"
+  "remainingFunctionalCheck": "Reconcile owner-reported Apple sign-in return with absent production Apple-linked authorization",
+  "ownerReportedAppleSignInSuccess": true,
+  "functionalEvidence": "ios-apple-sign-in-device-acceptance.md"
 }

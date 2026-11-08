@@ -75,16 +75,21 @@ in use by Hologram and is not a disposable review-only key.
 
 ## Remaining functional verification
 
-**Real Continue with Apple sign-in is still unverified.** Privy reports Apple enabled; the production
-page reaches Apple's authorization endpoint with the correct Concors client ID/callback. The Apple
-portal session used for signing does not authenticate this app login: Apple's sign-in page still
-requires personal authentication. The owner has been asked to try build 16 and choose Hide My Email
-if offered. No password or verification code is needed in chat.
+The owner confirmed that **Apple sign-in returned to Concors successfully on build 16**.
+[The device report](ios-apple-sign-in-device-acceptance.md) records this result without inventing
+the selected email option or other unreported steps.
 
-The backend requires a valid, revocable Apple authorization for a new Apple identity. Actual token
-return and private-email behavior therefore need that login confirmation. Existing automated tests
-cover retry cleanup and revocation behavior; configuration/browser-request checks do not establish
-completion of a real Apple account login. [Activation evidence](apple-provider-activation.json).
+However, the subsequent [aggregate production check](ios-apple-sign-in-production-check.json)
+matched the service's database and found no Apple-linked Concors account/stored revocable
+authorization, and no Apple-linked identity in its Privy project. The successful return therefore
+has not yet established a completed production Apple authorization. The owner was asked whether
+Apple's authorization screen appeared and was approved or whether Concors reopened immediately.
+An existing session or another environment is only a possible explanation, not a finding.
+
+Privy and the production API offer Apple with the correct client/callback. The backend requires
+revocable authorization for a new Apple identity. Automated retry/revocation checks remain separate
+from the physical report and do not resolve this mismatch. No Apple credentials are requested in
+chat. [Activation evidence](apple-provider-activation.json).
 
 The iOS [readiness file](readiness-ios.json) keeps this auth gate blocked. Its remaining gates record
 scoped evidence, not a claim that every original manual test scenario ran. Ongoing support/report

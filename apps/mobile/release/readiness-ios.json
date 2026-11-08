@@ -33,7 +33,10 @@
         "https://github.com/hologramxyz/concors-server/pull/25",
         "Social OAuth retries clear partial Privy state and prevent duplicate starts; real GitHub sign-in on the owner\u2019s iPhone remains unverified after the fix.",
         "social-sign-in-recovery.md",
-        "November 8: Privy apple_oauth:true, production Apple authorization URL/client/callback verified; fresh reviewer email-code/PKCE sign-in passed. Apple developer-portal cookies did not authenticate the app sign-in page, which requires the owner to sign in on their device. No Apple password or verification code was requested in chat."
+        "November 8: Privy apple_oauth:true, production Apple authorization URL/client/callback verified; fresh reviewer email-code/PKCE sign-in passed. Apple developer-portal cookies did not authenticate the app sign-in page, which requires the owner to sign in on their device. No Apple password or verification code was requested in chat.",
+        "ios-apple-sign-in-device-acceptance.md",
+        "ios-apple-sign-in-production-check.json",
+        "November 8: owner reports Apple sign-in returned to Concors successfully on build 16. Matched-production aggregate checks found no Apple-linked account or revocable authorization in Concors and no Apple-linked identity in Privy. The successful screen return is recorded, but the authorization discrepancy remains unresolved; clarification requested without asking for credentials."
       ]
     },
     {

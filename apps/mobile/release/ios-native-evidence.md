@@ -69,7 +69,8 @@ image remains the sole uploaded image. A saved screenshot is not a passing inter
 The workflow preserves original simulator signing, normalizes the status bar, captures before later
 assertions and retains XCTest diagnostics. See [the runbook](../../../docs/mobile-release.md#native-iphone-store-captures).
 
-Additional physical-device edge cases are not separately claimed as tested. Actual Apple-account
-sign-in and OAuth-token return remain unverified; see the current
+Additional physical-device edge cases are not separately claimed as tested. The owner reports
+a successful Apple sign-in return on build 16; production authorization remains unresolved in
+[the device/production reconciliation](ios-apple-sign-in-device-acceptance.md). See the current
 [submission packet](submission-packet.md). The earlier November 6 Apple-disabled/no-reviewer state
 has been superseded by the activation and reviewer-access records linked there.

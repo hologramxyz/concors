@@ -38,7 +38,7 @@
   "sessionHostOwnedBySystemd": true,
   "reviewServiceBuildWrapperApplied": true,
   "reviewerWorkspaceReady": true,
-  "remaining": "App Store Apple-account sign-in verification; additional physical-device scenarios are not claimed as tested.",
+  "remaining": "Reconcile owner-reported Apple sign-in return with absent production Apple authorization. Keep the reviewer machine available and support/quota checks active while review is open.",
   "aiBudgetEnforcement": "Local loopback service; durable 25-cent request reservations, 80 requests per UTC month",
   "providerAccountBillingSettingsChanged": false,
   "apiProvider": "Anthropic",
