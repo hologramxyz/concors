@@ -1,7 +1,10 @@
 # Signed iPhone build 16 — push candidate
 
-Verified 2026-11-07T03:53:24.263Z. **Available in Internal TestFlight.** Push delivery is not verified. The dedicated APNs key and
-production activation were [verified November 8](ios-push-activation.md); real-phone acceptance remains pending. Public App Review is not submitted.
+Verified 2026-11-07T03:53:24.263Z. **Available in Internal TestFlight.** The dedicated APNs key and
+production activation were [verified November 8](ios-push-activation.md). The owner then confirmed
+completion-alert delivery and tap-to-chat on a physical iPhone; see
+[the device report](ios-build-16-device-acceptance.md). Other phone acceptance remains pending.
+Public App Review is not submitted.
 
 | Field                  | Verified value                                                                                                                           |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -33,7 +36,8 @@ are present; no camera purpose is added. The saved AI-sharing consent implementa
 The merged UI fix pins both app and router to 57.0.26. The EAS log confirms `Installing ExpoUI
 (57.0.26)`. Expo Doctor no longer reports duplicate native modules: 20 of 21 checks pass. Its remaining
 warning concerns other Expo SDK patch-version recommendations; those dependencies were not broadly
-upgraded in this push setup. A physical install/upgrade remains part of acceptance.
+upgraded in this push setup. The owner subsequently exercised push on this build; installation and
+upgrade/session-restoration behavior were not separately reported.
 
 The native privacy manifest contains all nine linked categories: Name, Email Address, User ID,
 Device ID, Product Interaction, Other User Content, Photos or Videos, Customer Support, and Other
@@ -52,7 +56,9 @@ API reasons remain File Timestamp `C617.1`, User Defaults `CA92.1`, and System B
 - The updated privacy page is live at https://concors.dev/privacy; existing Device ID/functionality
   declarations cover optional push identifiers. Android/Firebase setup is outside this iOS rollout.
 - Seventeen focused push regressions, 222 mobile tests and mobile typechecking passed. PR 187 and
-  PR 188 each passed all 19 CI checks before merge. Real phone delivery and tap routing are pending.
+  PR 188 each passed all 19 CI checks before merge. The owner confirmed real-phone completion
+  delivery and tap routing; needs-input/error delivery and remaining navigation/revocation cases
+  are pending.
 - [Physical acceptance and activation checklist](ios-push-acceptance.md) remains open, alongside the
   other [App Store submission requirements](submission-packet.md). No public or external beta
   review was submitted.
