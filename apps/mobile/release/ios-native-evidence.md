@@ -1,8 +1,10 @@
 # Native iPhone evidence — acceptance incomplete
 
-Checked November 6, 2026. The production build remains **0.1.0 (12)**, source
-`89efcccb5412af7cd1b18a9fce904e11d3a2bf3d`; it is VALID / IN_BETA_TESTING and attached to
-the iOS 0.1.0 draft. The internal group includes the owner's confirmed email address.
+Current update November 8: TestFlight **0.1.0 (16)** is the selected production candidate.
+[The fresh medium-display capture and native control run](ios-medium-screenshots.md) passed;
+[the reviewer workspace and AI](reviewer-ai-operations.md) are configured. Owner phone results are in
+[the device report](ios-build-16-device-acceptance.md). The November 6 artifact details below are
+historical and do not describe the current build, provider configuration or reviewer readiness.
 
 ## Screenshot already verified in Apple
 
@@ -63,11 +65,7 @@ image remains the sole uploaded image. A saved screenshot is not a passing inter
 The workflow preserves original simulator signing, normalizes the status bar, captures before later
 assertions and retains XCTest diagnostics. See [the runbook](../../../docs/mobile-release.md#native-iphone-store-captures).
 
-Physical-iPhone install/upgrade, permissions, keyboard/reconnect, accessibility, production Apple
-sign-in, AI decline/withdrawal, reporting and disposable-account deletion remain unverified. A stable
-reviewer account, machine and AI-provider access are also required. These gates stay blocked in
-[readiness-ios.json](readiness-ios.json).
-
-Production readback at 06:19 UTC still reports Apple disabled in both Privy and the backend, and
-the Privy test-credential endpoint returned no issued credentials. No private credential values or
-customer workspace data are included in this record.
+Additional physical-device edge cases are not separately claimed as tested. Actual Apple-account
+sign-in and OAuth-token return remain unverified; see the current
+[submission packet](submission-packet.md). The earlier November 6 Apple-disabled/no-reviewer state
+has been superseded by the activation and reviewer-access records linked there.

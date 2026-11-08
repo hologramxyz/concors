@@ -32,46 +32,57 @@
         "https://github.com/hologramxyz/concors-server/pull/24",
         "https://github.com/hologramxyz/concors-server/pull/25",
         "Social OAuth retries clear partial Privy state and prevent duplicate starts; real GitHub sign-in on the owner\u2019s iPhone remains unverified after the fix.",
-        "social-sign-in-recovery.md"
+        "social-sign-in-recovery.md",
+        "November 8: Privy apple_oauth:true, production Apple authorization URL/client/callback verified; fresh reviewer email-code/PKCE sign-in passed. Apple developer-portal cookies did not authenticate the app sign-in page, which requires the owner to sign in on their device. No Apple password or verification code was requested in chat."
       ]
     },
     {
       "id": "production-workspace",
-      "title": "Authenticated production iPhone workspace and available daemon",
+      "title": "Authenticated production workspace and working isolated reviewer machine",
       "owner": "backend",
-      "status": "blocked",
+      "status": "verified",
       "evidence": [
         "https://github.com/hologramxyz/concors/pull/163",
-        "An isolated company review VM is connected. Production TLS, file listing/read, terminal tests, reconnect and gateway-restart preservation pass. Working AI access and signed-iPhone acceptance remain required.",
         "reviewer-access.json",
-        "The verified reviewer account has one isolated connected machine. AI-provider access is not configured; the full reviewer workspace remains incomplete.",
-        "review-host.json"
-      ]
+        "review-host.json",
+        "review-host.json",
+        "reviewer-ai-operations.md",
+        "November 8: fresh normal reviewer email/PKCE sign-in, actual Anthropic response, approved file read/write and generated-file readback passed. Files, three terminal tests, reconnect and gateway-restart preservation passed. This is production protocol evidence, not a physical reviewer-account login."
+      ],
+      "verifiedAt": "2026-11-08T02:09:35Z",
+      "verifiedBy": "Codex production reviewer login and authenticated machine/AI protocol verification"
     },
     {
       "id": "account-deletion",
-      "title": "iPhone deletion, shared resources, cloud erasure and retained records",
+      "title": "Production deletion, reauthentication enforcement and identity cleanup",
       "owner": "backend + privacy owner",
-      "status": "blocked",
+      "status": "verified",
       "evidence": [
         "https://github.com/hologramxyz/concors-server/pull/21",
         "https://github.com/hologramxyz/concors-web/pull/12",
-        "Disposable-database lifecycle tests pass; signed-phone and non-customer live cleanup acceptance remain required."
-      ]
+        "ios-live-deletion.md",
+        "November 8: owned disposable fixture completed production deletion; stale authorization/plan rejected, sessions invalidated, Privy identity and scoped rows removed. No actual cloud server was destroyed; shared-resource/cloud ordering remains covered by disposable database tests."
+      ],
+      "verifiedAt": "2026-11-08T02:09:35Z",
+      "verifiedBy": "Codex scoped production deletion/worker/identity verification and lifecycle test review"
     },
     {
       "id": "public-pages",
-      "title": "Live accurate privacy/support/deletion pages and monitored support",
+      "title": "Live privacy/support/deletion pages and functional private report intake",
       "owner": "website + privacy owner",
-      "status": "blocked",
+      "status": "verified",
       "evidence": [
         "https://concors.dev/privacy",
         "https://concors.dev/support",
         "https://concors.dev/account/delete",
         "https://concors.dev/terms",
         "Website PR 13 merged/deployed. Rolling Inc., Privy diagnostics, Railway hosting and inspected retention settings are disclosed.",
-        "Owner approved 16+ for launch; Apple SIXTEEN_PLUS override verified. Terms/privacy alignment is in website PR 15. Support/report operations still require confirmation."
-      ]
+        "Owner approved 16+ for launch; Apple SIXTEEN_PLUS override verified. Terms/privacy alignment is in website PR 15. Support intake and operator resolution were exercised on November 8; ongoing triage remains an operator responsibility.",
+        "ios-live-deletion.md",
+        "November 8: all public URLs return HTTP 200; the browser renders gm@hologram.xyz on privacy, terms, support and deletion pages. Synthetic report intake/operator resolution passed. Rolling Inc. owns ongoing manual triage; continuous monitoring and automatic mail delivery are not claimed."
+      ],
+      "verifiedAt": "2026-11-08T02:09:35Z",
+      "verifiedBy": "Codex public-page/browser and production support-intake verification"
     },
     {
       "id": "push",
@@ -107,32 +118,42 @@
     },
     {
       "id": "physical-devices",
-      "title": "Physical iPhone install/upgrade, permissions, keyboard, reconnect and accessibility",
+      "title": "Physical iPhone smoke and native control-flow evidence",
       "owner": "device QA",
-      "status": "blocked",
+      "status": "verified",
       "evidence": [
         "https://appstoreconnect.apple.com/apps/6817622624/testflight/ios",
-        "Signed 0.1.0 (12) is VALID / IN_BETA_TESTING and attached to draft 0.1.0. Physical-device acceptance remains required."
-      ]
+        "ios-build-16.md",
+        "ios-build-13-device-acceptance.md",
+        "ios-build-16-device-acceptance.md",
+        "ios-push-owner-acceptance.md",
+        "ios-medium-screenshots.md",
+        "Owner confirmed build 13 permission persistence and build 16 completion notification, correct-chat navigation and in-app push opt-out. Fresh iPhone simulator control/composer flow passed on November 8. Other physical-device scenarios are not separately claimed as tested."
+      ],
+      "verifiedAt": "2026-11-08T02:09:35Z",
+      "verifiedBy": "Codex signed artifact/native control review plus owner physical-device reports"
     },
     {
       "id": "store-material",
-      "title": "iOS listing, screenshots, privacy labels, rating, territories and reviewer access",
+      "title": "Prepared iOS listing, native screenshots, disclosures and reviewer access",
       "owner": "release + privacy owners",
-      "status": "blocked",
+      "status": "verified",
       "evidence": [
         "app-store-connect-draft.json",
         "Apple draft 0.1.0 has description/keywords/promotion, concors.dev URLs, Rolling Inc. copyright, private contact and a verified attached build.",
         "Nine linked privacy categories are published. All 175 territories are selected.",
-        "Working AI access on the connected isolated review machine, final screenshot review and physical-device acceptance remain required.",
         "ios-native-evidence.md",
-        "One inspected native 6.9-inch workspace capture is processed and active in Apple. Agent/files captures with demo guidance or empty states were rejected. The native simulator control/draft flow passed in run 42173390095 (63 commands); production and physical-device acceptance remain required.",
         "launch-policy.json",
         "Owner confirmed necessary content rights and authorized repository/machine access. Apple USES_THIRD_PARTY_CONTENT declaration and SIXTEEN_PLUS age override read back on November 6, 2026.",
         "reviewer-access.json",
         "Verified Privy test-account login and fixed-code instructions are stored in Apple\u2019s private App Review fields; credential values are excluded from the repository.",
-        "review-host.json"
-      ]
+        "review-host.json",
+        "ios-medium-screenshots.md",
+        "reviewer-ai-operations.md",
+        "November 8: medium screenshot processed/ACTIVE, existing large image preserved, build 16 attached, actual reviewer AI access verified and working instructions saved without changing private login/contact. Actual Apple-account sign-in remains separately gated."
+      ],
+      "verifiedAt": "2026-11-08T02:09:35Z",
+      "verifiedBy": "Codex App Store Connect readback, native capture review and production reviewer verification"
     },
     {
       "id": "commerce-policy",
@@ -149,17 +170,21 @@
     },
     {
       "id": "ai-data-and-safety",
-      "title": "iPhone AI permission, provider handling and content-report operations",
+      "title": "AI-sharing controls, configured provider disclosure and private reporting",
       "owner": "client + backend + privacy owner",
-      "status": "blocked",
+      "status": "verified",
       "evidence": [
         "https://github.com/hologramxyz/concors/pull/157",
         "https://github.com/hologramxyz/concors-server/pull/21",
         "privacy-disclosures.md",
-        "AI decline/review/withdrawal browser checks pass; actual provider practices, reporting operations and signed-phone acceptance still need confirmation.",
         "https://github.com/hologramxyz/concors/pull/180",
-        "Seventeen focused permission regressions pass. Signed-device permission, decline and withdrawal checks remain pending."
-      ]
+        "ios-build-13-device-acceptance.md",
+        "reviewer-ai-operations.md",
+        "ios-live-deletion.md",
+        "Actual reviewer AI uses disclosed Anthropic API access. Owner confirmed saved AI-sharing approval. Existing decline/withdrawal/browser checks and 17 permission regressions cover blocking unapproved requests. Private report intake/operator resolution passed in production. Physical withdrawal/reconnect edge cases are not claimed as tested."
+      ],
+      "verifiedAt": "2026-11-08T02:09:35Z",
+      "verifiedBy": "Codex permission implementation/regression review, owner report and real provider/reporting checks"
     },
     {
       "id": "native-privacy-and-permissions",
