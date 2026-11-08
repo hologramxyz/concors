@@ -1,15 +1,34 @@
 # Concors
 
-> A cross-platform client and runtime for orchestrating coding agents locally and in the cloud.
+**Concors is a desktop app for running Claude Code, Codex and OpenCode side by side, with your
+terminals and dev servers, on a machine that stays on.** Close your laptop and your agents, tests and
+dev servers keep running. Open the app tomorrow and every session is where you left it.
 
-Concors lets you run coding agents such as **Claude Code**, **Codex** and **OpenCode** either on your
-own machine or on a persistent VPS, and drive them from desktop or the new iOS/Android client.
+- **Your own agents and accounts.** Claude Code, Codex and OpenCode run as their real CLIs, signed in
+  with your own subscriptions. Usage stays with each provider.
+- **One window.** Agent chats, terminals and dev-server previews for a project sit together. The
+  sidebar shows which agents are working, need your input, are done or hit an error.
+- **A machine that stays on.** Run on your own computer for free with no account, or on a Concors
+  Cloud machine (Ubuntu, 2 to 8 vCPU) billed at a flat monthly price.
+- **macOS (Apple Silicon), Windows and Linux.** Open source under the MIT license.
 
-> **Status: early-stage.** This repository currently contains the project foundation — the
-> synchronized workspace UI, project opening/creation/cloning, and real terminal sessions with shell/Codex/Claude Code/OpenCode
-> profiles, Codex chat and agent tracking. The Expo mobile client is implemented with a testable
-> preview; authenticated cloud connectivity, push delivery and store release still need integration.
-> Expect breaking changes.
+[Download](https://concors.dev) · [Guides](https://concors.dev/guides) ·
+[Docs](https://docs.concors.dev) · [Changelog](https://concors.dev/changelog)
+
+Common questions this answers:
+
+- *How do I keep Claude Code running when my laptop is closed?* Run it on a machine that stays on;
+  see [How to keep Claude Code running 24/7](https://concors.dev/guides/run-claude-code-24-7).
+- *How do I run Claude Code and Codex on the same project?* See
+  [the side-by-side guide](https://concors.dev/guides/claude-code-and-codex-side-by-side).
+- *What can replace Conductor Cloud?* See
+  [Conductor alternatives after the shutdown](https://concors.dev/guides/conductor-cloud-shutdown).
+
+> **Status:** desktop releases ship several times a week. The iOS and Android apps are coming soon.
+> Connecting a server you run yourself is a preview. Expect breaking changes.
+
+The rest of this README is for contributors: how the client and daemon fit together and how to run
+them from source.
 
 ## Architecture
 
