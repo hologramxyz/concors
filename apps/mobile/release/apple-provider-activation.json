@@ -20,5 +20,11 @@
   "appleRevocationVerified": false,
   "signedIPhoneVerified": false,
   "credentialValuesIncluded": false,
-  "verificationLimit": "Observed the authorization request without entering Apple account credentials. The Apple request was intercepted after URL inspection; Apple account authentication and token exchange were not completed."
+  "verificationLimit": "Owner reports a successful return to Concors on TestFlight build 16. The subsequent matched-production database/Privy aggregate check found no Apple-linked identity or stored revocable authorization. Actual production Apple authorization/token return and the selected email option remain unresolved; no physical revocation test is claimed.",
+  "ownerDeviceReportRecordedAt": "2026-11-08T02:30:16.757Z",
+  "ownerReportedBuild16SignInSuccess": true,
+  "signedIPhoneReturnReported": true,
+  "productionAppleAuthorizationObserved": false,
+  "deviceAcceptanceEvidence": "ios-apple-sign-in-device-acceptance.md",
+  "productionAuthorizationEvidence": "ios-apple-sign-in-production-check.json"
 }

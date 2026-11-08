@@ -1,0 +1,14 @@
+{
+  "checkedAt": "2026-11-08T02:30:16.757Z",
+  "databaseMatchesProductionService": true,
+  "knownPrivyAccountsPresent": true,
+  "productionAppleAccountObserved": false,
+  "storedRevocableAuthorizationObserved": false,
+  "privateRelayEmailAccountObserved": false,
+  "privyAppleLinkedIdentityObserved": false,
+  "privyPrivateRelayEmailObserved": false,
+  "privyScanComplete": true,
+  "aggregateReadOnlyCheck": true,
+  "privateIdentitiesOrTokensIncluded": false,
+  "ownerReportedBuild16SignInSuccess": true
+}

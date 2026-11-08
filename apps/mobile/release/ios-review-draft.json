@@ -1,0 +1,17 @@
+{
+  "checkedAt": "2026-11-08T02:22:04.631Z",
+  "appId": "6817622624",
+  "version": "0.1.0",
+  "build": "16",
+  "reviewSubmissionId": "ab74d755-9d3f-4de1-87d9-cfe38d2f0347",
+  "reviewSubmissionState": "READY_FOR_REVIEW",
+  "reviewItemId": "YWI3NGQ3NTUtOWQzZi00ZGUxLTg3ZDktY2ZlMzhkMmYwMzQ3fDZ8ODkyMjUyOTk5",
+  "reviewItemState": "READY_FOR_REVIEW",
+  "versionState": "READY_FOR_REVIEW",
+  "submittedDate": null,
+  "sentToAppReview": false,
+  "submissionFlagSet": false,
+  "remainingFunctionalCheck": "Reconcile owner-reported Apple sign-in return with absent production Apple-linked authorization",
+  "ownerReportedAppleSignInSuccess": true,
+  "functionalEvidence": "ios-apple-sign-in-device-acceptance.md"
+}

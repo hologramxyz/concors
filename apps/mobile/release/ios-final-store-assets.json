@@ -1,0 +1,10 @@
+{
+  "checkedAt": "2026-11-08T02:21:59.719Z",
+  "oldLargePlacementRemoved": true,
+  "originalLibraryImageRetained": true,
+  "activeMediumScreenshotRetained": true,
+  "activeMediumCount": 1,
+  "activeLargeCount": 0,
+  "reason": "Old Tabs sheet was replaced by the current tab strip; retain accurate current UI only",
+  "sentToAppReview": false
+}

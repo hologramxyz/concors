@@ -21,9 +21,10 @@ is included in this record.
 
 Needs-input and error alerts, a separate terminated-app launch, duplicate navigation, lock-screen
 payload inspection, denied permission, enrollment persistence, sign-out, account switching,
-account deletion and iOS permission withdrawal still require their own physical acceptance evidence.
+account deletion and iOS permission withdrawal were not physically tested.
 See [the remaining checklist](ios-push-acceptance.md).
 
-The composite push gate remains blocked until those checks are complete. This confirmation does
-not complete the other [App Store submission requirements](submission-packet.md); public App Review
-has not been submitted.
+The owner subsequently [accepted the push rollout and deferred further push tests](ios-push-owner-acceptance.md).
+The push gate records that acceptance without claiming untested scenarios passed. Other
+[App Store submission requirements](submission-packet.md) remain independent; public App Review has
+not been submitted.
