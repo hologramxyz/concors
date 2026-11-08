@@ -36,7 +36,10 @@
         "November 8: Privy apple_oauth:true, production Apple authorization URL/client/callback verified; fresh reviewer email-code/PKCE sign-in passed. Apple developer-portal cookies did not authenticate the app sign-in page, which requires the owner to sign in on their device. No Apple password or verification code was requested in chat.",
         "ios-apple-sign-in-device-acceptance.md",
         "ios-apple-sign-in-production-check.json",
-        "November 8: owner reports Apple sign-in returned to Concors successfully on build 16. Matched-production aggregate checks found no Apple-linked account or revocable authorization in Concors and no Apple-linked identity in Privy. The successful screen return is recorded, but the authorization discrepancy remains unresolved; clarification requested without asking for credentials."
+        "November 8: owner reports Apple sign-in returned to Concors successfully on build 16. Matched-production aggregate checks found no Apple-linked account or revocable authorization in Concors and no Apple-linked identity in Privy. The successful screen return is recorded, but the authorization discrepancy remains unresolved; clarification requested without asking for credentials.",
+        "ios-apple-auth-self-test.md",
+        "ios-apple-auth-self-test.json",
+        "November 8 independent follow-up: reproduced the wrong-provider production acceptance, merged/deployed server PR 27, and verified real SDK restored-session handling, fresh Apple authorization, API rejection and normal reviewer email/PKCE. All 563 backend tests pass with database suites enabled. No owner questionnaire or further device test is pending. Real personal Apple consent/grant exchange remains unobserved; provider-fake integration results are not claimed as live Apple authentication."
       ]
     },
     {
