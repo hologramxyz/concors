@@ -38,7 +38,7 @@
   "sessionHostOwnedBySystemd": true,
   "reviewServiceBuildWrapperApplied": true,
   "reviewerWorkspaceReady": true,
-  "remaining": "Reconcile owner-reported Apple sign-in return with absent production Apple authorization. Keep the reviewer machine available and support/quota checks active while review is open.",
+  "remaining": "Keep the reviewer machine available and support/quota checks active. Production-auth retains the unobserved real Apple consent/grant exchange hold; no additional owner questionnaire is pending.",
   "aiBudgetEnforcement": "Local loopback service; durable 25-cent request reservations, 80 requests per UTC month",
   "providerAccountBillingSettingsChanged": false,
   "apiProvider": "Anthropic",

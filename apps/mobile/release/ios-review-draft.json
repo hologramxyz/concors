@@ -11,7 +11,8 @@
   "submittedDate": null,
   "sentToAppReview": false,
   "submissionFlagSet": false,
-  "remainingFunctionalCheck": "Reconcile owner-reported Apple sign-in return with absent production Apple-linked authorization",
+  "remainingFunctionalCheck": "Real personal Apple consent and Apple-issued grant exchange remain unobserved; no owner questionnaire is pending",
   "ownerReportedAppleSignInSuccess": true,
-  "functionalEvidence": "ios-apple-sign-in-device-acceptance.md"
+  "functionalEvidence": "ios-apple-sign-in-device-acceptance.md",
+  "independentVerificationEvidence": "ios-apple-auth-self-test.json"
 }

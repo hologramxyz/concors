@@ -17,8 +17,9 @@ the reported screen transition; it leaves completion of a production Apple autho
 unestablished. An existing browser/app session or another environment could explain the result,
 but neither explanation has been confirmed.
 
-The release owner was asked whether Apple's authorization screen appeared and was approved or
-whether Concors reopened immediately. The production-auth gate remains blocked while the device
-report and production observations are reconciled. Hide My Email, cancellation and actual Apple
-authorization revocation are not separately claimed as physically tested. Existing automated
-revocation/recovery tests remain distinct evidence.
+The initial clarification request has been superseded by the
+[independent operator investigation and deployed fix](ios-apple-auth-self-test.md). No additional
+owner questionnaire or device test is pending. The production-auth hold now records the remaining
+unobserved real Apple consent/grant exchange, rather than waiting for an answer about the original
+screen transition. Hide My Email selection, cancellation and actual personal Apple authorization
+revocation are not separately claimed as physically tested.

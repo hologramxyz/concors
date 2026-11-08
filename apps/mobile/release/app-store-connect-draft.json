@@ -63,10 +63,8 @@
     "analyticsCategories": ["USER_ID", "DEVICE_ID", "PRODUCT_INTERACTION", "OTHER_DIAGNOSTIC_DATA"],
     "tracking": false
   },
-  "remainingOwnerFields": [
-    "Clarify whether Apple authorization was shown and approved during the successful build 16 return. Production currently has no Apple-linked identity or stored authorization."
-  ],
-  "note": "Build 16 is VALID / IN_BETA_TESTING and attached to iOS 0.1.0. Reviewer login, connected isolated machine, bounded company API access, reviewer notes and required screenshots are prepared. Production deletion and report intake/resolution passed. Push rollout accepted by owner with further push QA deferred. Owner reports successful Apple sign-in return on build 16, but matched production database/Privy checks contain no Apple-linked authorization; this discrepancy remains open. Public App Review has not been submitted.",
+  "remainingOwnerFields": [],
+  "note": "Build 16 and the Apple review draft remain staged and unsubmitted. Hosted sign-in/API fixes from server PR 27 are deployed and apply without a new native build. Independent production SDK, wrong-provider rejection and reviewer email/PKCE checks pass; all 563 backend tests pass with database suites enabled. Real personal Apple consent/grant exchange is not independently claimed verified. No owner questionnaire is pending.",
   "copyright": "2026 Rolling Inc.",
   "ageRatingQuestionnaireSaved": true,
   "ageRatingOverride": "SIXTEEN_PLUS",
@@ -108,5 +106,9 @@
   "sentToAppReview": false,
   "reviewDraftEvidence": "ios-review-draft.json",
   "ownerReportedAppleSignInSuccess": true,
-  "appleAccountAcceptanceEvidence": "ios-apple-sign-in-device-acceptance.md"
+  "appleAccountAcceptanceEvidence": "ios-apple-sign-in-device-acceptance.md",
+  "remainingOperatorVerification": [
+    "Real personal Apple consent and Apple-issued grant exchange remain unobserved by the operator; no additional owner device test is requested."
+  ],
+  "appleIndependentVerificationEvidence": "ios-apple-auth-self-test.json"
 }

@@ -73,27 +73,24 @@ in use by Hologram and is not a disposable review-only key.
 - Native simulator controls and the owner's signed-device reports provide the recorded smoke
   evidence. Additional physical-device edge cases are distinguished from those observed results.
 
-## Remaining functional verification
+## Sign-in follow-up and verification limits
 
-The owner confirmed that **Apple sign-in returned to Concors successfully on build 16**.
-[The device report](ios-apple-sign-in-device-acceptance.md) records this result without inventing
-the selected email option or other unreported steps.
+The [independent sign-in investigation](ios-apple-auth-self-test.md) reproduced and fixed a restored
+Privy session bypass, an Apple-token callback race, a dropped grant during email verification and
+an API provider-selection gap. Server PR 27 is merged and deployed. All 563 backend tests pass,
+including every disposable database suite. Live tests verify fresh Apple authorization is required,
+wrong-provider rejection, and working normal reviewer email login/PKCE.
 
-However, the subsequent [aggregate production check](ios-apple-sign-in-production-check.json)
-matched the service's database and found no Apple-linked Concors account/stored revocable
-authorization, and no Apple-linked identity in its Privy project. The successful return therefore
-has not yet established a completed production Apple authorization. The owner was asked whether
-Apple's authorization screen appeared and was approved or whether Concors reopened immediately.
-An existing session or another environment is only a possible explanation, not a finding.
+These hosted-page/API fixes apply to existing TestFlight build 16. The owner's successful device
+return is recorded; the exact original phone flow is not inferred from the controlled probes.
+No additional owner questionnaire or device test is pending.
 
-Privy and the production API offer Apple with the correct client/callback. The backend requires
-revocable authorization for a new Apple identity. Automated retry/revocation checks remain separate
-from the physical report and do not resolve this mismatch. No Apple credentials are requested in
-chat. [Activation evidence](apple-provider-activation.json).
-
-The iOS [readiness file](readiness-ios.json) keeps this auth gate blocked. Its remaining gates record
-scoped evidence, not a claim that every original manual test scenario ran. Ongoing support/report
-triage, machine availability and provider credit/quota checks remain Rolling Inc.'s operating duties.
+The [readiness file](readiness-ios.json) retains the production-auth hold because a real personal
+Apple consent/grant exchange has not been independently completed. Local signed test tokens and
+provider fakes exercise encryption, subject binding and revocation without claiming a real Apple
+account authenticated. See [the result record](ios-apple-auth-self-test.json). App Review remains
+staged and unsubmitted. Ongoing support/report triage, machine availability and provider quota
+checks remain Rolling Inc.'s operating duties.
 
 Review notes explain the actual product boundaries: native bundled interface and renderer;
 structured data from authorized machines; commands run on those machines; no public social feed,
