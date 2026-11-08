@@ -1,7 +1,7 @@
 # Signed iPhone build 16 — push candidate
 
-Verified 2026-11-07T03:53:24.263Z. **Available in Internal TestFlight.** Push delivery is not verified; the dedicated APNs key,
-production activation and real-phone acceptance remain pending. Public App Review is not submitted.
+Verified 2026-11-07T03:53:24.263Z. **Available in Internal TestFlight.** Push delivery is not verified. The dedicated APNs key and
+production activation were [verified November 8](ios-push-activation.md); real-phone acceptance remains pending. Public App Review is not submitted.
 
 | Field                  | Verified value                                                                                                                           |
 | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
@@ -44,10 +44,11 @@ API reasons remain File Timestamp `C617.1`, User Defaults `CA92.1`, and System B
 ## Rollout boundaries
 
 - A new full native build was used; no over-the-air-only release or Personal Team signing.
-- The Apple bundle push capability is enabled. A dedicated Concors APNs key still needs private
-  Apple sign-in and Expo assignment; the existing Heist key was not reused.
+- The Apple bundle push capability is enabled. A dedicated Concors production APNs key is
+  assigned in Expo and restricted to this app's production topic; the existing Heist key is unchanged.
 - Enhanced Expo push security is disabled at the inspected project setting, so the server does
-  not currently require `EXPO_ACCESS_TOKEN`. Production push remained off at the final setup check.
+  not currently require `EXPO_ACCESS_TOKEN`. Production push is enabled and the authenticated API
+  advertises it; see [the November 8 readback](ios-push-activation.md).
 - The updated privacy page is live at https://concors.dev/privacy; existing Device ID/functionality
   declarations cover optional push identifiers. Android/Firebase setup is outside this iOS rollout.
 - Seventeen focused push regressions, 222 mobile tests and mobile typechecking passed. PR 187 and

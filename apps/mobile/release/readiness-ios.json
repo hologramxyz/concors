@@ -79,11 +79,12 @@
       "owner": "backend + release owner",
       "status": "blocked",
       "evidence": [
-        "Owner requested iOS push setup and a new native TestFlight build on 2026-11-07; push is now in the requested release scope.",
-        "Client and daemon push support merged; server PR 26 is deployed at 85618cb9bcb066b6964e98bfc8ecd216802ed422. Production PUSH_NOTIFICATIONS remained false at the setup check.",
-        "Apple bundle xyz.hologram.concors has PUSH_NOTIFICATIONS enabled. Its paid-team App Store profile includes aps-environment:production; verify the new signed IPA separately.",
-        "A dedicated Concors APNs key still needs assignment in Expo; the existing Heist key was not reused. Fresh Apple Developer login is required.",
-        "Website PR 16 discloses account-linked installation IDs, push tokens, Expo/Apple delivery, generic status and machine-name payloads, choices and retention.",
+        "November 8: dedicated Concors Push Production APNs key assigned in Expo for paid team 9WN4P724M2, restricted to the production topic for xyz.hologram.concors. Other Apple keys preserved.",
+        "Native TestFlight 0.1.0 (16) is VALID / IN_BETA_TESTING; its signed executable and profile both include aps-environment:production.",
+        "Production PUSH_NOTIFICATIONS=true; Railway deployment db041e57-6ed7-4088-8c42-3ef3615540d5 of 85618cb9bcb066b6964e98bfc8ecd216802ed422 is SUCCESS. Authenticated mobile capabilities returned pushNotifications:true at 2026-11-08T00:48:30.654Z.",
+        "The live concors.dev/privacy policy discloses push processing; existing Device ID/functionality disclosures cover retained installation identifiers and push tokens.",
+        "Physical opt-in, completion/input/error delivery, tap-to-chat, opt-out, sign-out, account switching and permission-revocation acceptance remain required.",
+        "ios-push-activation.md",
         "ios-push-acceptance.md"
       ]
     },

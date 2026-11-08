@@ -11,14 +11,15 @@ outside this iPhone rollout. Push is now in the requested iOS release scope; the
   `PUSH_NOTIFICATIONS` enabled. Its App Store provisioning profile includes
   `aps-environment: production`; the [build 16 signed executable](ios-build-16.md) has the same
   production entitlement.
-- A dedicated Concors APNs key must be assigned in Expo. The existing Heist APNs credential was
-  not reused. Apple's cached Developer session expired; the operator must sign in privately to
-  generate and save the new key. The EAS Submit and Sign in with Apple keys are separate credentials.
+- A dedicated **Concors Push Production** APNs key is assigned in Expo, restricted to production
+  and the Concors topic. Apple terminal sign-in was renewed privately; other Apple keys are
+  unchanged. See [November 8 activation](ios-push-activation.md). The EAS Submit and Sign in with
+  Apple keys remain separate credentials.
 - Server PR 26 is deployed at `85618cb9bcb066b6964e98bfc8ecd216802ed422`.
-  `PUSH_NOTIFICATIONS` was false at the configuration check. Pier will enable it after credentials
-  and the native build are ready. `EXPO_ACCESS_TOKEN` is only required if enhanced Expo push
-  security is enabled. Expo reported enhanced push security disabled on November 7; no server
-  token is required for that inspected setting.
+  `PUSH_NOTIFICATIONS=true` is now deployed and the authenticated production API advertises
+  `pushNotifications: true`. `EXPO_ACCESS_TOKEN` is only required if enhanced Expo push security is
+  enabled; that project setting was rechecked disabled on November 8. Production deployment and
+  readback are in [the activation record](ios-push-activation.md).
 - The isolated `concors-app-review` machine reports daemon `0.14.0`; its gateway and session host
   are active. Real AI access for that reviewer machine remains a separate open requirement.
 - [Full native build 16](ios-build-16.md) includes one `@expo/ui` 57.0.26 module, shared by the app
