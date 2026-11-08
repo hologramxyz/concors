@@ -12,6 +12,11 @@ on:
         description: Reuse a cached simulator app only after verifying unchanged runtime sources
         type: boolean
         default: false
+      simulator_device:
+        description: iPhone 17 Pro supplies the required medium-display store screenshots
+        type: choice
+        options: [iPhone 17 Pro, iPhone 17 Pro Max]
+        default: iPhone 17 Pro
 
 permissions:
   contents: read
@@ -35,6 +40,7 @@ jobs:
       MAESTRO_CLI_NO_ANALYTICS: "1"
       # The clean Intel runner started XCTest after 3m34s; allow its measured cold start.
       MAESTRO_DRIVER_STARTUP_TIMEOUT: "300000"
+      MOBILE_SIMULATOR_NAME: ${{ inputs.simulator_device || 'iPhone 17 Pro' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -43,9 +49,14 @@ jobs:
         id: simulator
         timeout-minutes: 5
         run: |
-          MOBILE_SIMULATOR_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"].get("com.apple.CoreSimulator.SimRuntime.iOS-26-5",[]); print(next((d["udid"] for d in devices if d["name"]=="iPhone 17 Pro Max"),""))')
+          case "$MOBILE_SIMULATOR_NAME" in
+            'iPhone 17 Pro') MOBILE_SIMULATOR_TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro ;;
+            'iPhone 17 Pro Max') MOBILE_SIMULATOR_TYPE=com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max ;;
+            *) echo 'Unsupported iPhone simulator' >&2; exit 1 ;;
+          esac
+          MOBILE_SIMULATOR_ID=$(xcrun simctl list devices available --json | python3 -c 'import json,os,sys; devices=json.load(sys.stdin)["devices"].get("com.apple.CoreSimulator.SimRuntime.iOS-26-5",[]); print(next((d["udid"] for d in devices if d["name"]==os.environ["MOBILE_SIMULATOR_NAME"]),""))')
           if [ -z "$MOBILE_SIMULATOR_ID" ]; then
-            MOBILE_SIMULATOR_ID=$(xcrun simctl create "Concors Glass CI" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro-Max com.apple.CoreSimulator.SimRuntime.iOS-26-5)
+            MOBILE_SIMULATOR_ID=$(xcrun simctl create "Concors Glass CI" "$MOBILE_SIMULATOR_TYPE" com.apple.CoreSimulator.SimRuntime.iOS-26-5)
           fi
           echo "id=$MOBILE_SIMULATOR_ID" >> "$GITHUB_OUTPUT"
           MOBILE_SIMULATOR_STATE=$(xcrun simctl list devices --json | python3 -c 'import json,sys; target=sys.argv[1]; print(next(d["state"] for ds in json.load(sys.stdin)["devices"].values() for d in ds if d["udid"]==target))' "$MOBILE_SIMULATOR_ID")
