@@ -1,7 +1,8 @@
 # iPhone push rollout and acceptance
 
 Requested November 7, 2026. **Completion delivery and tap-to-chat were confirmed by the owner on
-November 8 using TestFlight 0.1.0 (16).** See [the device report](ios-build-16-device-acceptance.md).
+November 8 using TestFlight 0.1.0 (16).** The owner also confirmed no completion alert arrived while
+push was disabled in Concors. See [the device report](ios-build-16-device-acceptance.md).
 Other physical acceptance cases remain pending. Android credentials and Firebase are
 outside this iPhone rollout. Push is now in the requested iOS release scope; the previous
 “excluded from first release” evidence no longer approves submission.
@@ -44,9 +45,12 @@ PR 188 passed all 19 repository CI checks before merging. These tests do not est
 
 The owner confirmed completion-alert delivery and navigation to the correct chat in response to the
 locked-phone test below. That covers the completion delivery in step 3 and the observed tap in
-step 4. Backgrounded and terminated navigation were not separately reported. The API capability in
-step 1 is verified in [the activation record](ios-push-activation.md). All other scenarios below
-remain open; successful delivery alone does not establish enrollment persistence or revocation.
+step 4. In a follow-up test, no completion alert arrived while push was disabled in Concors, covering
+the first opt-out check in step 6. Backgrounded and terminated navigation were not separately
+reported. The API capability in step 1 is verified in [the activation record](ios-push-activation.md).
+All other scenarios below remain open, including re-enrollment, off-setting persistence and
+registration removal; these owner observations do not establish server-side cleanup or independence
+of other installations.
 
 Install the new native build in TestFlight. Keep passwords, push tokens and keys out of screenshots,
 chat and repository records. Use a company test machine and an account authorized to access it.

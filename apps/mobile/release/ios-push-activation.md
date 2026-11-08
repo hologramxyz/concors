@@ -2,7 +2,8 @@
 
 Configuration verified **2026-11-08T00:48:30.654Z**. The owner subsequently confirmed
 **completion-alert delivery and tap-to-chat on a physical iPhone** using TestFlight **0.1.0 (16)**;
-see [the device report](ios-build-16-device-acceptance.md). Other notification cases remain pending.
+the owner also confirmed no completion alert arrived while push was disabled in Concors. See
+[the device report](ios-build-16-device-acceptance.md). Other notification cases remain pending.
 The dedicated Apple credential is assigned in Expo, production push is enabled, and the authenticated
 API advertises it. Public App Review is not submitted.
 
@@ -33,12 +34,13 @@ The production API was checked with the isolated reviewer account after deployme
 contains the native UI update and production push entitlement; this server-side credential assignment
 does not change that signed executable. Its TestFlight processing/group/draft state was rechecked.
 
-## Phone acceptance — completion and tap confirmed
+## Phone acceptance — completion, tap and in-app opt-out confirmed
 
 On November 8, the owner reported that the completion alert arrived and opened the correct chat in
 response to the TestFlight **0.1.0 (16)** locked-phone test. The
 [device report](ios-build-16-device-acceptance.md) records the confirmed scope and missing device/event
-details. Needs-input and error alerts, terminated-app navigation, opt-out, sign-out, account switching
+details. The owner then confirmed no completion alert arrived when the in-app push setting was off.
+Needs-input and error alerts, terminated-app navigation, re-enrollment, sign-out, account switching
 and permission withdrawal remain open in [the acceptance checklist](ios-push-acceptance.md).
 
 Seventeen focused automated push regressions and all 222 mobile unit tests/typechecking passed
