@@ -18,7 +18,7 @@ Public App Review is not submitted.
 | Apple build            | `440f1390-8dc3-4931-8c7a-8edaa2f8c90e`                                                                                                   |
 | Apple processing       | `VALID`                                                                                                                                  |
 | Internal beta          | `IN_BETA_TESTING`; existing Internal group contains build: true                                                                          |
-| Draft iOS 0.1.0        | `PREPARE_FOR_SUBMISSION`; build attached: true                                                                                           |
+| Draft iOS 0.1.0        | `READY_FOR_REVIEW` (unsubmitted draft); build attached: true                                                                             |
 | Native UI              | One ExpoUI **57.0.26** pod; app and router resolve the same module                                                                       |
 | Push entitlement       | `aps-environment=production` in both signed executable and embedded profile                                                              |
 | SDK / Xcode            | `iphoneos26.5` / `2660`                                                                                                                  |
