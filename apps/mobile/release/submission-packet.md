@@ -55,7 +55,7 @@ and live, covering optional push identifiers, Expo/Apple delivery, previews, cho
 4. **iPhone push acceptance.** The dedicated production APNs key is assigned in Expo, the policy
    is live, native build 16 has production push entitlements, and the deployed API advertises push.
    [Configuration and rollout readback](ios-push-activation.md) are verified. The owner confirmed
-   completion-alert delivery and tap-to-chat on build 16; see
+   completion-alert delivery, tap-to-chat and no alert with in-app push disabled on build 16; see
    [the device report](ios-build-16-device-acceptance.md). Complete enrollment persistence,
    input/error delivery, remaining navigation and registration-revocation checks on a real phone.
    See [ios-push-acceptance.md](ios-push-acceptance.md). The previous push exclusion no longer
