@@ -31,7 +31,7 @@
         "apple-provider-activation.json",
         "https://github.com/hologramxyz/concors-server/pull/24",
         "https://github.com/hologramxyz/concors-server/pull/25",
-        "Social OAuth retries clear partial Privy state and prevent duplicate starts; real GitHub sign-in on the owner’s iPhone remains unverified after the fix.",
+        "Social OAuth retries clear partial Privy state and prevent duplicate starts; real GitHub sign-in on the owner\u2019s iPhone remains unverified after the fix.",
         "social-sign-in-recovery.md"
       ]
     },
@@ -75,18 +75,23 @@
     },
     {
       "id": "push",
-      "title": "Production iPhone push enrollment, delivery, chat routing and revocation",
+      "title": "Production iPhone push configuration and release-owner acceptance",
       "owner": "backend + release owner",
-      "status": "blocked",
+      "status": "verified",
       "evidence": [
         "November 8: dedicated Concors Push Production APNs key assigned in Expo for paid team 9WN4P724M2, restricted to the production topic for xyz.hologram.concors. Other Apple keys preserved.",
         "Native TestFlight 0.1.0 (16) is VALID / IN_BETA_TESTING; its signed executable and profile both include aps-environment:production.",
         "Production PUSH_NOTIFICATIONS=true; Railway deployment db041e57-6ed7-4088-8c42-3ef3615540d5 of 85618cb9bcb066b6964e98bfc8ecd216802ed422 is SUCCESS. Authenticated mobile capabilities returned pushNotifications:true at 2026-11-08T00:48:30.654Z.",
         "The live concors.dev/privacy policy discloses push processing; existing Device ID/functionality disclosures cover retained installation identifiers and push tokens.",
-        "Physical opt-in, completion/input/error delivery, tap-to-chat, opt-out, sign-out, account switching and permission-revocation acceptance remain required.",
         "ios-push-activation.md",
-        "ios-push-acceptance.md"
-      ]
+        "ios-push-acceptance.md",
+        "Owner confirmed completion delivery, correct-chat navigation and no completion alert with in-app push disabled on TestFlight 0.1.0 (16).",
+        "Owner accepted the push rollout and explicitly deferred further push tests on November 8. Untested physical scenarios are not claimed as passed.",
+        "ios-build-16-device-acceptance.md",
+        "ios-push-owner-acceptance.md"
+      ],
+      "verifiedAt": "2026-11-08T01:49:27Z",
+      "verifiedBy": "Release owner acceptance in conversation; Codex production configuration and signed-artifact inspection"
     },
     {
       "id": "domain-links",
@@ -125,7 +130,7 @@
         "launch-policy.json",
         "Owner confirmed necessary content rights and authorized repository/machine access. Apple USES_THIRD_PARTY_CONTENT declaration and SIXTEEN_PLUS age override read back on November 6, 2026.",
         "reviewer-access.json",
-        "Verified Privy test-account login and fixed-code instructions are stored in Apple’s private App Review fields; credential values are excluded from the repository.",
+        "Verified Privy test-account login and fixed-code instructions are stored in Apple\u2019s private App Review fields; credential values are excluded from the repository.",
         "review-host.json"
       ]
     },

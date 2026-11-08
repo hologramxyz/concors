@@ -3,7 +3,8 @@
 Requested November 7, 2026. **Completion delivery and tap-to-chat were confirmed by the owner on
 November 8 using TestFlight 0.1.0 (16).** The owner also confirmed no completion alert arrived while
 push was disabled in Concors. See [the device report](ios-build-16-device-acceptance.md).
-Other physical acceptance cases remain pending. Android credentials and Firebase are
+The owner [accepted this rollout and deferred further push tests](ios-push-owner-acceptance.md).
+Additional physical scenarios below are optional follow-up coverage. Android credentials and Firebase are
 outside this iPhone rollout. Push is now in the requested iOS release scope; the previous
 “excluded from first release” evidence no longer approves submission.
 
@@ -41,14 +42,14 @@ deduplication, rate-limit and cleanup tests. The disposable database container w
 After the UI dependency fix, mobile typechecking and all 222 mobile tests passed. Both PR 187 and
 PR 188 passed all 19 repository CI checks before merging. These tests do not establish APNs delivery.
 
-## Physical acceptance — partially confirmed
+## Physical coverage — owner accepted rollout; additional scenarios deferred
 
 The owner confirmed completion-alert delivery and navigation to the correct chat in response to the
 locked-phone test below. That covers the completion delivery in step 3 and the observed tap in
 step 4. In a follow-up test, no completion alert arrived while push was disabled in Concors, covering
 the first opt-out check in step 6. Backgrounded and terminated navigation were not separately
 reported. The API capability in step 1 is verified in [the activation record](ios-push-activation.md).
-All other scenarios below remain open, including re-enrollment, off-setting persistence and
+Other scenarios below were not physically verified, including re-enrollment, off-setting persistence and
 registration removal; these owner observations do not establish server-side cleanup or independence
 of other installations.
 
@@ -75,8 +76,9 @@ chat and repository records. Use a company test machine and an account authorize
    Expo ticket errors but does not poll downstream receipts or retry transient Expo sends. An Expo
    accepted ticket is not proof of delivery to APNs or the phone.
 
-Do not mark the push release gate verified until these outcomes are recorded. A synthetic transport
-probe can help isolate credentials, but does not verify a real daemon event or an agent conversation.
+The push gate records [the owner’s acceptance](ios-push-owner-acceptance.md), based on the actual
+configuration and device evidence above. The deferred matrix does not block further App Store
+preparation. A synthetic transport probe does not verify a real agent conversation or phone delivery.
 
 References: [Expo setup](https://docs.expo.dev/push-notifications/push-notifications-setup/),
 [Expo delivery and receipts](https://docs.expo.dev/push-notifications/sending-notifications/),

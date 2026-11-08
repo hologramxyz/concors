@@ -3,7 +3,7 @@
 Configuration verified **2026-11-08T00:48:30.654Z**. The owner subsequently confirmed
 **completion-alert delivery and tap-to-chat on a physical iPhone** using TestFlight **0.1.0 (16)**;
 the owner also confirmed no completion alert arrived while push was disabled in Concors. See
-[the device report](ios-build-16-device-acceptance.md). Other notification cases remain pending.
+[the device report](ios-build-16-device-acceptance.md). The owner [accepted the rollout and deferred further push tests](ios-push-owner-acceptance.md).
 The dedicated Apple credential is assigned in Expo, production push is enabled, and the authenticated
 API advertises it. Public App Review is not submitted.
 
@@ -41,13 +41,13 @@ response to the TestFlight **0.1.0 (16)** locked-phone test. The
 [device report](ios-build-16-device-acceptance.md) records the confirmed scope and missing device/event
 details. The owner then confirmed no completion alert arrived when the in-app push setting was off.
 Needs-input and error alerts, terminated-app navigation, re-enrollment, sign-out, account switching
-and permission withdrawal remain open in [the acceptance checklist](ios-push-acceptance.md).
+and permission withdrawal are deferred in [the acceptance checklist](ios-push-acceptance.md).
 
 Seventeen focused automated push regressions and all 222 mobile unit tests/typechecking passed
 before this configuration rollout; the previous UI/readiness PRs passed all 19 CI checks each.
 These automated results do not establish physical APNs delivery; the owner's report supplies that
-evidence for the completion flow. The push release gate stays blocked until the remaining delivery,
-navigation and revocation results are recorded. The current server handles immediate
+evidence for the completion flow. The owner accepted the push rollout on that evidence plus the
+observed opt-out result; additional physical scenarios are not claimed as passed. The current server handles immediate
 Expo ticket errors but does not poll downstream receipts; accepted tickets do not prove phone delivery.
 
 References: [Apple APNs key scopes](https://developer.apple.com/documentation/usernotifications/establishing-a-token-based-connection-to-apns),

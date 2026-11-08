@@ -52,14 +52,11 @@ and live, covering optional push identifiers, Expo/Apple delivery, previews, cho
    support reporting and deletion on a physical iPhone. Native simulator/browser checks alone do not
    establish this acceptance. Confirm support/report triage is operated.
 
-4. **iPhone push acceptance.** The dedicated production APNs key is assigned in Expo, the policy
-   is live, native build 16 has production push entitlements, and the deployed API advertises push.
-   [Configuration and rollout readback](ios-push-activation.md) are verified. The owner confirmed
-   completion-alert delivery, tap-to-chat and no alert with in-app push disabled on build 16; see
-   [the device report](ios-build-16-device-acceptance.md). Complete enrollment persistence,
-   input/error delivery, remaining navigation and registration-revocation checks on a real phone.
-   See [ios-push-acceptance.md](ios-push-acceptance.md). The previous push exclusion no longer
-   satisfies the release gate.
+The owner [accepted the iPhone push rollout](ios-push-owner-acceptance.md) on November 8 after
+confirming completion delivery, correct-chat navigation and the in-app push-off control on build 16.
+Further push scenarios are deferred and do not block the remaining preparation. The
+[configuration readback](ios-push-activation.md) and [device evidence](ios-build-16-device-acceptance.md)
+remain linked; untested cases are not marked as physically passed.
 
 Do not infer readiness from a successful upload. The iOS-only gate file is
 [readiness-ios.json](readiness-ios.json); the Android/combined gates remain separate.

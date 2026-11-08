@@ -3,7 +3,8 @@
 Verified 2026-11-07T03:53:24.263Z. **Available in Internal TestFlight.** The dedicated APNs key and
 production activation were [verified November 8](ios-push-activation.md). The owner then confirmed
 completion-alert delivery, tap-to-chat and no completion alert with in-app push disabled; see
-[the device report](ios-build-16-device-acceptance.md). Other phone acceptance remains pending.
+[the device report](ios-build-16-device-acceptance.md). The owner
+[accepted the push rollout and deferred further push tests](ios-push-owner-acceptance.md).
 Public App Review is not submitted.
 
 | Field                  | Verified value                                                                                                                           |
@@ -58,9 +59,9 @@ API reasons remain File Timestamp `C617.1`, User Defaults `CA92.1`, and System B
 - Seventeen focused push regressions, 222 mobile tests and mobile typechecking passed. PR 187 and
   PR 188 each passed all 19 CI checks before merge. The owner confirmed real-phone completion
   delivery, tap routing and the in-app push-off control. Needs-input/error delivery and remaining
-  navigation/revocation cases are pending.
-- [Physical acceptance and activation checklist](ios-push-acceptance.md) remains open, alongside the
-  other [App Store submission requirements](submission-packet.md). No public or external beta
+  navigation/revocation cases were deferred by the release owner.
+- The [push checklist](ios-push-acceptance.md) preserves untested scenarios as deferred coverage.
+  Other [App Store submission requirements](submission-packet.md) remain open. No public or external beta
   review was submitted.
 
 Only sanitized verification fields are recorded here. Device tokens, APNs keys, account/session
