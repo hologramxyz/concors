@@ -1,9 +1,10 @@
 # iPhone push activation — November 8, 2026
 
-Configuration verified **2026-11-08T00:48:30.654Z**. **Real-phone push delivery remains unverified.** The dedicated
-Apple credential is assigned in Expo, production push is enabled, and the authenticated API
-advertises it. Build **0.1.0 (16)** remains available in Internal TestFlight. Public App Review is
-not submitted.
+Configuration verified **2026-11-08T00:48:30.654Z**. The owner subsequently confirmed
+**completion-alert delivery and tap-to-chat on a physical iPhone** using TestFlight **0.1.0 (16)**;
+see [the device report](ios-build-16-device-acceptance.md). Other notification cases remain pending.
+The dedicated Apple credential is assigned in Expo, production push is enabled, and the authenticated
+API advertises it. Public App Review is not submitted.
 
 | Area                     | Verified state                                                                                                                    |
 | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -32,18 +33,19 @@ The production API was checked with the isolated reviewer account after deployme
 contains the native UI update and production push entitlement; this server-side credential assignment
 does not change that signed executable. Its TestFlight processing/group/draft state was rechecked.
 
-## Phone acceptance still required
+## Phone acceptance — completion and tap confirmed
 
-On the physical iPhone, install TestFlight **0.1.0 (16)**, sign in, open Settings → Notifications,
-enable Push notifications and allow iOS permission. Send work to an authorized connected/cloud
-machine running daemon 0.14.0 or later, then lock the phone. Verify completion, needs-input and error
-alerts, and tap each to the correct chat. Also check opt-out, sign-out, account switching and
-permission withdrawal as described in [the acceptance checklist](ios-push-acceptance.md).
+On November 8, the owner reported that the completion alert arrived and opened the correct chat in
+response to the TestFlight **0.1.0 (16)** locked-phone test. The
+[device report](ios-build-16-device-acceptance.md) records the confirmed scope and missing device/event
+details. Needs-input and error alerts, terminated-app navigation, opt-out, sign-out, account switching
+and permission withdrawal remain open in [the acceptance checklist](ios-push-acceptance.md).
 
 Seventeen focused automated push regressions and all 222 mobile unit tests/typechecking passed
 before this configuration rollout; the previous UI/readiness PRs passed all 19 CI checks each.
-These are not physical APNs delivery evidence. The push release gate stays blocked until actual
-phone delivery, navigation and revocation results are recorded. The current server handles immediate
+These automated results do not establish physical APNs delivery; the owner's report supplies that
+evidence for the completion flow. The push release gate stays blocked until the remaining delivery,
+navigation and revocation results are recorded. The current server handles immediate
 Expo ticket errors but does not poll downstream receipts; accepted tickets do not prove phone delivery.
 
 References: [Apple APNs key scopes](https://developer.apple.com/documentation/usernotifications/establishing-a-token-based-connection-to-apns),
