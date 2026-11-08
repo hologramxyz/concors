@@ -150,9 +150,10 @@
         "review-host.json",
         "ios-medium-screenshots.md",
         "reviewer-ai-operations.md",
-        "November 8: medium screenshot processed/ACTIVE, existing large image preserved, build 16 attached, actual reviewer AI access verified and working instructions saved without changing private login/contact. Actual Apple-account sign-in remains separately gated."
+        "November 8: medium screenshot processed/ACTIVE, outdated large placement removed, build 16 attached, actual reviewer AI access verified and working instructions saved without changing private login/contact. Actual Apple-account sign-in remains separately gated.",
+        "ios-final-store-assets.json"
       ],
-      "verifiedAt": "2026-11-08T02:09:35Z",
+      "verifiedAt": "2026-11-08T02:22:04.631Z",
       "verifiedBy": "Codex App Store Connect readback, native capture review and production reviewer verification"
     },
     {

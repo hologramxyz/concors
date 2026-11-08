@@ -6,7 +6,11 @@ Current update November 8: TestFlight **0.1.0 (16)** is the selected production 
 [the device report](ios-build-16-device-acceptance.md). The November 6 artifact details below are
 historical and do not describe the current build, provider configuration or reviewer readiness.
 
-## Screenshot already verified in Apple
+## Historical November 6 screenshot — retired from the listing
+
+This older image was removed from the store selection on November 8 because its Tabs sheet was
+replaced by the current tab strip. [The medium capture](ios-medium-screenshots.md) is the current
+selected screenshot. The following records the earlier artifact and its original Apple readback.
 
 The workspace capture was produced by the actual iPhone simulator app with fictional workspace
 data, visually inspected, uploaded, and read back through Apple's asset-library and placement APIs.

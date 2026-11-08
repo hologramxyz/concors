@@ -5,7 +5,7 @@
   "locale": "en-US",
   "primaryCategory": "DEVELOPER_TOOLS",
   "status": "draft-populated-not-ready-not-submitted",
-  "checkedAt": "2026-11-08T02:09:35Z",
+  "checkedAt": "2026-11-08T02:22:04.631Z",
   "versionString": "0.1.0",
   "versionId": "2d5df58b-5d90-457e-85b9-61f93041ea07",
   "name": "Concors: Coding Workspace",
@@ -74,15 +74,13 @@
   "contentRightsDeclaration": "USES_THIRD_PARTY_CONTENT",
   "screenshotEvidence": {
     "record": "ios-medium-screenshots.md",
-    "checkedAt": "2026-11-08T02:00:18.584Z",
-    "processedImageCount": 2,
-    "displayGroups": [
-      "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE",
-      "IPHONE_DYNAMIC_ISLAND_LARGE_PROFILE"
-    ],
+    "checkedAt": "2026-11-08T02:21:59.719Z",
+    "processedImageCount": 1,
+    "displayGroups": ["IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE"],
     "nativeControlFlowPassed": true,
     "physicalIPhoneMatrixComplete": false,
-    "status": "One medium-display and one large-display native image are processed and active. Unselected agent/files fixture images were not uploaded."
+    "status": "Current medium-display native screenshot is active. The outdated large-display Tabs sheet placement was removed; the original image remains in the library.",
+    "finalSelectionEvidence": "ios-final-store-assets.json"
   },
   "ageRatingVerifiedAt": "2026-11-06T06:45:16.551Z",
   "contentRightsOwnerConfirmed": true,

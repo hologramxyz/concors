@@ -2,7 +2,8 @@
 
 Apple's current [screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/)
 require an iPhone Dynamic Island medium-display image. A fresh capture is processed and active in
-the iOS 0.1.0 draft; the existing large-display image is preserved.
+the iOS 0.1.0 draft. The older large-display placement was removed because it showed the retired
+Tabs sheet. Its source image remains in the library; see [the final selection](ios-final-store-assets.json).
 
 | Field             | Verified value                                                                          |
 | ----------------- | --------------------------------------------------------------------------------------- |

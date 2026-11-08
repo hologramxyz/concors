@@ -15,7 +15,7 @@ There has been no prior rejection. Earlier history remains in [the November 4–
 | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Listing                  | iOS 0.1.0 has the chosen name, subtitle, description, keywords, promotional copy, concors.dev marketing/support/privacy URLs and 2026 Rolling Inc. copyright.                                                                                        |
 | Build                    | [TestFlight 0.1.0 (16)](ios-build-16.md), VALID / IN_BETA_TESTING in Internal beta and attached to the iOS draft. The executable and profile have production APNs entitlements; ExpoUI is 57.0.26 without duplicate native modules.                  |
-| Screenshots              | One [required medium-display capture](ios-medium-screenshots.md) and the existing large-display image are processed and ACTIVE. The fresh iPhone 17 Pro native control/composer flow passed.                                                         |
+| Screenshots              | One [required medium-display capture](ios-medium-screenshots.md) is processed and ACTIVE; the outdated large-display Tabs image is no longer placed. The fresh iPhone 17 Pro native control/composer flow passed.                                    |
 | Reviewer                 | Fresh normal production email-code/PKCE login passed November 8. The same private login/code and contact fields remain saved in Apple. Updated notes explain the connected machine, working AI, permissions, terminal/files, reporting and deletion. |
 | Privacy                  | Nine linked categories, app functionality and the documented Privy analytics purposes; no tracking. Signed manifest and required-reason APIs are inspected. See [privacy disclosures](privacy-disclosures.md).                                       |
 | Price / availability     | Free in all 175 selected territories, including future territories; actual regional eligibility remains subject to Apple. No iPhone commerce.                                                                                                        |
@@ -25,6 +25,9 @@ There has been no prior rejection. Earlier history remains in [the November 4–
 Apple now reports **READY_FOR_REVIEW** for the version and its review item. This is an unsubmitted
 review draft: `submittedDate` is null and the submission flag was never set.
 [Apple readback](ios-review-draft.json) identifies the staged build 16 item.
+
+The [final screenshot selection](ios-final-store-assets.json) contains only the current native
+medium-display image. The retired large image remains in the library for history.
 
 No public App Review or external beta review has been submitted. The local draft record is
 [app-store-connect-draft.json](app-store-connect-draft.json); private review credentials are excluded.
