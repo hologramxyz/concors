@@ -132,16 +132,20 @@ and TestFlight candidate profiles keep their existing production configuration.
 
 Run **Mobile iOS native** in GitHub Actions on the reviewed ref. Supply the simulator build's
 `artifacts.buildUrl` in `simulator_artifact` to exercise that prebuilt app. Leaving the field empty
-compiles the app on the runner. The workflow uses an iPhone 17 Pro Max at **1320 × 2868**, preserves
-the original simulator signature and exercises native controls and captures workspace, agent and
+compiles the app on the runner. The default **iPhone 17 Pro** supplies **1206 × 2622** captures for
+Apple's required medium-display screenshot group; select **iPhone 17 Pro Max** for the additional
+**1320 × 2868** large-display group. The workflow preserves the original simulator signature and
+exercises native controls and captures workspace, agent and
 file views in one XCTest session. Captures are retained if a later interaction assertion fails;
 inspect the complete run result before treating native acceptance as passed.
 
 Download `mobile-ios-native-evidence` after the run. Visually inspect `store-workspaces.png`,
 `store-agent.png` and `store-files.png` for legible content, correct layout and synthetic data.
 Export store PNGs as RGB without alpha, preserve the rendered pixels, and retain original and
-uploaded hashes with the verification evidence. Upload the accepted images to the iOS 6.9-inch
-screenshot set and read back Apple's completed processing state. Production sign-in, a working
+uploaded hashes with the verification evidence. Upload accepted images to their matching medium-
+or large-display screenshot group and read back Apple's processing and placement state. See
+[Apple's screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/).
+Production sign-in, a working
 reviewer account/machine and physical-iPhone acceptance remain separate release requirements.
 
 ## Store material
