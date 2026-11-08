@@ -1,0 +1,23 @@
+{
+  "checkedAt": "2026-11-08T04:39:38.114Z",
+  "serverPr": "https://github.com/hologramxyz/concors-server/pull/27",
+  "serverCommit": "13b29b979e534ae35a3e5220e86c2106ae525389",
+  "deploymentId": "ba14bb91-1c23-41c6-86c7-d872b258d3d8",
+  "deploymentStatus": "SUCCESS",
+  "backendTestsPassed": 563,
+  "databaseTestsSkipped": 0,
+  "browserCompletionRegressionsPassed": 8,
+  "appleDatabaseCasesPassed": 6,
+  "formatLintTypesAndBuildPassed": true,
+  "beforeFixEmailIdentitySatisfiedAppleAttempt": true,
+  "afterFixWrongProviderRejected": true,
+  "actualPrivySdkRestoredSessionTestPassed": true,
+  "normalReviewerEmailAndPkcePassed": true,
+  "existingTestFlightBuild": "0.1.0 (16)",
+  "nativeCodeChanged": false,
+  "replacementNativeBuildRequired": false,
+  "personalAppleAccountAuthenticatedByOperator": false,
+  "realAppleGrantExchangeVerifiedByOperator": false,
+  "credentialValuesIncluded": false,
+  "verificationLimit": "Live checks use the isolated reviewer email identity and verify a fresh Apple authorization request. Apple identity/grant exchange, encryption and revocation are exercised against disposable Postgres with provider fakes and locally signed identity tokens. No real personal Apple authorization is claimed."
+}
