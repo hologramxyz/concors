@@ -1,0 +1,46 @@
+appId: xyz.hologram.concors.preview
+---
+# Real native screens, populated with fictional projects by the store-capture build profile.
+- launchApp:
+    clearState: true
+- tapOn:
+    text: "Explore demo"
+    retryTapIfNoChange: true
+- extendedWaitUntil:
+    visible:
+      id: native-agent-input
+    timeout: 90000
+- repeat:
+    times: 3
+    commands:
+      - swipe:
+          start: "50%,25%"
+          end: "50%,70%"
+          duration: 500
+          waitToSettleTimeoutMs: 500
+- takeScreenshot: apps/mobile/test-results/native/marketing-agent
+- tapOn:
+    id: native-header-chevron
+    waitToSettleTimeoutMs: 500
+- assertVisible: "Workspaces"
+- assertVisible: "Atlas API"
+- assertVisible: "Studio"
+- takeScreenshot: apps/mobile/test-results/native/marketing-workspaces
+- tapOn:
+    text: "Close"
+    waitToSettleTimeoutMs: 500
+- repeat:
+    times: 3
+    commands:
+      - swipe:
+          start: "50%,70%"
+          end: "50%,25%"
+          duration: 500
+          waitToSettleTimeoutMs: 500
+- assertVisible: "Allow once"
+- takeScreenshot: apps/mobile/test-results/native/marketing-approval
+- tapOn:
+    text: "Checks"
+    waitToSettleTimeoutMs: 500
+- assertVisible: "36 passed"
+- takeScreenshot: apps/mobile/test-results/native/marketing-terminal

@@ -17,6 +17,10 @@ on:
         type: choice
         options: [iPhone 17 Pro, iPhone 17 Pro Max]
         default: iPhone 17 Pro
+      marketing_captures:
+        description: Capture fictional projects for App Store marketing artwork
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -35,6 +39,7 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       APP_VARIANT: preview
       EXPO_PUBLIC_DEMO: "true"
+      EXPO_PUBLIC_STORE_CAPTURE: ${{ inputs.marketing_captures && 'true' || 'false' }}
       EXPO_NO_TELEMETRY: "1"
       CI: "1"
       MAESTRO_CLI_NO_ANALYTICS: "1"
@@ -167,7 +172,13 @@ jobs:
       # Keep captures in the same XCTest session instead of paying the cold driver startup twice.
       - name: Exercise native controls and capture store screenshots
         timeout-minutes: 20
-        run: maestro --device "${{ steps.simulator.outputs.id }}" test --test-output-dir apps/mobile/test-results/native apps/mobile/e2e/native/glass.yaml
+        run: |
+          if [ '${{ inputs.marketing_captures }}' = 'true' ]; then
+            MOBILE_CAPTURE_FLOW=apps/mobile/e2e/native/store-marketing.yaml
+          else
+            MOBILE_CAPTURE_FLOW=apps/mobile/e2e/native/glass.yaml
+          fi
+          maestro --device "${{ steps.simulator.outputs.id }}" test --test-output-dir apps/mobile/test-results/native "$MOBILE_CAPTURE_FLOW"
       - name: Retain native launch diagnostics
         if: failure()
         timeout-minutes: 1

@@ -23,6 +23,7 @@ import type { WebSocketLike } from "@concors/daemon-client";
 import { newRequestId } from "@concors/client-core";
 import { applyDemoSchedule, demoPullRequests, demoScheduleOutcome, demoSchedules } from "./pages";
 import { demoResources } from "./resources";
+import { storeCaptureDemo } from "./store-capture";
 import {
   demoAgent,
   demoItems,
@@ -58,13 +59,21 @@ const requested = (flag: string) =>
 export function createDemoServer({
   sidebarTree = requested(SIDEBAR_TREE_FLAG),
   terminalProfile = requested(TERMINAL_PROFILE_FLAG),
+  storeCapture = process.env.EXPO_PUBLIC_STORE_CAPTURE === "true",
 } = {}) {
   const resources = demoResources();
+  const capture = storeCapture ? storeCaptureDemo() : null;
   const tree = sidebarTree ? sidebarTreeDemo() : null;
-  let workspace = structuredClone(tree?.workspace ?? demoWorkspace);
+  let workspace = structuredClone(capture?.workspace ?? tree?.workspace ?? demoWorkspace);
   if (terminalProfile) workspace.terminalProfiles = structuredClone(demoTerminalProfiles);
   const conversations = new Map<string, Conversation>([
-    [ids.agent, { agent: structuredClone(demoAgent), items: structuredClone(demoItems) }],
+    [
+      ids.agent,
+      {
+        agent: structuredClone(capture?.agent ?? demoAgent),
+        items: structuredClone(capture?.items ?? demoItems),
+      },
+    ],
   ]);
   const terminals = new Map<string, TerminalState>([
     [
@@ -73,12 +82,14 @@ export function createDemoServer({
         session: structuredClone(demoTerminal),
         sequence: 0,
         output:
+          capture?.terminalOutput ??
           "\x1b[36mConcors demo terminal\x1b[0m\r\nCommands are simulated in this preview.\r\n\r\n~/concors $ ",
         owner: null,
       },
     ],
   ]);
   for (const chat of tree?.chats ?? []) conversations.set(chat.agent.id, chat);
+  for (const chat of capture?.chats ?? []) conversations.set(chat.agent.id, chat);
   for (const session of tree?.terminals ?? [])
     terminals.set(session.id, {
       session,
