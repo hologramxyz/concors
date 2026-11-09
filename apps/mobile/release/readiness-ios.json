@@ -31,7 +31,7 @@
         "apple-provider-activation.json",
         "https://github.com/hologramxyz/concors-server/pull/24",
         "https://github.com/hologramxyz/concors-server/pull/25",
-        "Social OAuth retries clear partial Privy state and prevent duplicate starts; real GitHub sign-in on the owner\u2019s iPhone remains unverified after the fix.",
+        "Social OAuth retries clear partial Privy state and prevent duplicate starts; real GitHub sign-in on the owner’s iPhone remains unverified after the fix.",
         "social-sign-in-recovery.md",
         "November 8: Privy apple_oauth:true, production Apple authorization URL/client/callback verified; fresh reviewer email-code/PKCE sign-in passed. Apple developer-portal cookies did not authenticate the app sign-in page, which requires the owner to sign in on their device. No Apple password or verification code was requested in chat.",
         "ios-apple-sign-in-device-acceptance.md",
@@ -39,7 +39,9 @@
         "November 8: owner reports Apple sign-in returned to Concors successfully on build 16. Matched-production aggregate checks found no Apple-linked account or revocable authorization in Concors and no Apple-linked identity in Privy. The successful screen return is recorded, but the authorization discrepancy remains unresolved; clarification requested without asking for credentials.",
         "ios-apple-auth-self-test.md",
         "ios-apple-auth-self-test.json",
-        "November 8 independent follow-up: reproduced the wrong-provider production acceptance, merged/deployed server PR 27, and verified real SDK restored-session handling, fresh Apple authorization, API rejection and normal reviewer email/PKCE. All 563 backend tests pass with database suites enabled. No owner questionnaire or further device test is pending. Real personal Apple consent/grant exchange remains unobserved; provider-fake integration results are not claimed as live Apple authentication."
+        "November 8 independent follow-up: reproduced the wrong-provider production acceptance, merged/deployed server PR 27, and verified real SDK restored-session handling, fresh Apple authorization, API rejection and normal reviewer email/PKCE. All 563 backend tests pass with database suites enabled. No owner questionnaire or further device test is pending. Real personal Apple consent/grant exchange remains unobserved; provider-fake integration results are not claimed as live Apple authentication.",
+        "ios-apple-auth-live-browser.json",
+        "November 9: fresh and restored-session attempts load the real Apple authorization page with the correct Concors client/callback, an enabled account field and zero premature Concors completions. A random-invalid-grant client diagnostic is inconclusive because its negative control returns the same error. Real Apple user consent and token exchange remain unverified; no owner questionnaire is pending."
       ]
     },
     {
@@ -152,7 +154,7 @@
         "launch-policy.json",
         "Owner confirmed necessary content rights and authorized repository/machine access. Apple USES_THIRD_PARTY_CONTENT declaration and SIXTEEN_PLUS age override read back on November 6, 2026.",
         "reviewer-access.json",
-        "Verified Privy test-account login and fixed-code instructions are stored in Apple\u2019s private App Review fields; credential values are excluded from the repository.",
+        "Verified Privy test-account login and fixed-code instructions are stored in Apple’s private App Review fields; credential values are excluded from the repository.",
         "review-host.json",
         "ios-medium-screenshots.md",
         "reviewer-ai-operations.md",

@@ -68,7 +68,7 @@
   "copyright": "2026 Rolling Inc.",
   "ageRatingQuestionnaireSaved": true,
   "ageRatingOverride": "SIXTEEN_PLUS",
-  "ageRatingDecision": "Owner approved 16+ for launch, matching Privy\u2019s current minimum",
+  "ageRatingDecision": "Owner approved 16+ for launch, matching Privy’s current minimum",
   "contentRightsDeclaration": "USES_THIRD_PARTY_CONTENT",
   "screenshotEvidence": {
     "record": "ios-medium-screenshots.md",
@@ -112,5 +112,6 @@
   ],
   "appleIndependentVerificationEvidence": "ios-apple-auth-self-test.json",
   "nameVerifiedAt": "2026-11-09T05:30:34.673Z",
-  "nameVerificationEvidence": "ios-app-store-name.md"
+  "nameVerificationEvidence": "ios-app-store-name.md",
+  "appleLiveProviderEvidence": "ios-apple-auth-live-browser.json"
 }
