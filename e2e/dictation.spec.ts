@@ -209,6 +209,9 @@ test("dictating into a long draft adds the words at its end, grows the box and s
     const draft = Array.from({ length: 40 }, (_, i) => `Line ${i + 1} of the prompt.`).join("\n");
     await composer.fill(draft);
     // Taller than the old 192px cap, yet capped: the rest scrolls.
+    await expect
+      .poll(() => composer.evaluate((element) => element.getBoundingClientRect().height))
+      .toBeGreaterThan(300);
     const height = await composer.evaluate((element) => element.getBoundingClientRect().height);
     expect(height).toBeGreaterThan(300);
     expect(height).toBeLessThanOrEqual(416);
