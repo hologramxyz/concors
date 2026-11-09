@@ -1,12 +1,13 @@
 # iPhone application prepared — Apple account sign-in pending
 
-Updated November 8, 2026 against [Apple's App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/), App Store Connect, the signed native artifact and production services.
+Name updated November 9, 2026; submission checks recorded November 8 against [Apple's App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/), App Store Connect, the signed native artifact and production services.
 This packet concerns iOS. The separate macOS draft has no reviewed Mac App Store binary.
 
-App: [Concors: Coding Workspace](https://appstoreconnect.apple.com/apps/6817622624),
+App: [Concors: Agent Orchestrator](https://appstoreconnect.apple.com/apps/6817622624),
 bundle `xyz.hologram.concors`, paid Apple team `9WN4P724M2` (Rolling Inc.), Expo `@guitong35/concors`.
 The owner selected free launch, existing machines added on desktop, all available countries,
 **concors.dev**, **gm@hologram.xyz**, **Rolling Inc.**, and **16+**. Necessary content rights were confirmed.
+Apple accepted the [updated App Store name](ios-app-store-name.md) on November 9.
 There has been no prior rejection. Earlier history remains in [the November 4–5 audit](audits/2026-11-04-05.md).
 
 ## Prepared in Apple
