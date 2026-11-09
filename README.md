@@ -17,11 +17,11 @@ dev servers keep running. Open the app tomorrow and every session is where you l
 
 Common questions this answers:
 
-- *How do I keep Claude Code running when my laptop is closed?* Run it on a machine that stays on;
+- _How do I keep Claude Code running when my laptop is closed?_ Run it on a machine that stays on;
   see [How to keep Claude Code running 24/7](https://concors.dev/guides/run-claude-code-24-7).
-- *How do I run Claude Code and Codex on the same project?* See
+- _How do I run Claude Code and Codex on the same project?_ See
   [the side-by-side guide](https://concors.dev/guides/claude-code-and-codex-side-by-side).
-- *What can replace Conductor Cloud?* See
+- _What can replace Conductor Cloud?_ See
   [Conductor alternatives after the shutdown](https://concors.dev/guides/conductor-cloud-shutdown).
 
 > **Status:** desktop releases ship several times a week. The iOS and Android apps are coming soon.
