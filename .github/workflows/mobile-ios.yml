@@ -43,7 +43,7 @@ jobs:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
       APP_VARIANT: preview
       EXPO_PUBLIC_DEMO: "true"
-      EXPO_PUBLIC_STORE_CAPTURE: ${{ inputs.marketing_captures && 'true' || 'false' }}
+      EXPO_PUBLIC_STORE_CAPTURE: ${{ (inputs.marketing_captures || inputs.marketing_terminal_only) && 'true' || 'false' }}
       EXPO_NO_TELEMETRY: "1"
       CI: "1"
       MAESTRO_CLI_NO_ANALYTICS: "1"
@@ -185,6 +185,22 @@ jobs:
             MOBILE_CAPTURE_FLOW=apps/mobile/e2e/native/glass.yaml
           fi
           maestro --device "${{ steps.simulator.outputs.id }}" test --test-output-dir apps/mobile/test-results/native "$MOBILE_CAPTURE_FLOW"
+      - name: Save and validate native terminal pixels
+        if: inputs.marketing_captures || inputs.marketing_terminal_only
+        timeout-minutes: 2
+        run: |
+          # XCTest can return a one-pixel placeholder after the keyboard tutorial closes.
+          # Capture the simulator framebuffer directly and reject invalid image dimensions.
+          xcrun simctl io '${{ steps.simulator.outputs.id }}' screenshot apps/mobile/test-results/native/marketing-terminal.png
+          python3 - <<'PY'
+          import struct
+          from pathlib import Path
+          image = Path('apps/mobile/test-results/native/marketing-terminal.png').read_bytes()
+          assert image[:8] == b'\x89PNG\r\n\x1a\n'
+          width, height = struct.unpack('>II', image[16:24])
+          assert width >= 1000 and height >= 2000, (width, height)
+          print(f'Native terminal capture: {width} x {height}')
+          PY
       - name: Retain native launch diagnostics
         if: failure()
         timeout-minutes: 1

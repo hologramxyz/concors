@@ -13,7 +13,7 @@ unlimited-use, or cloud-hosting offer. Connecting machines from desktop is state
 frame and in the store description.
 
 `source/campaign-background.png` is background artwork made with the built-in image-generation
-tool. Its exact prompt and mode are recorded in `source/art-direction.json`. It contains no app
+tool. Its exact prompt and mode are recorded in [the artwork prompt](source/art-direction.json). It contains no app
 interface. The geometric mark comes from the repository's existing Concors SVG. Geist is the
 app's existing font; the accompanying SIL Open Font License is retained in `source/`.
 
@@ -32,6 +32,9 @@ To recapture the native screens, build the Expo `store-capture` profile, then ru
 native** workflow with that simulator artifact and `marketing_captures=true`. The ordinary demo
 and production account flows do not use these sample projects. The captured screens should be
 visually inspected before re-rendering and staging the upload set.
+
+For a terminal-only recapture, use `marketing_terminal_only=true`. Both native capture flows
+dismiss the clean simulator's first-use keyboard tutorial before retaining the terminal image.
 
 Apple permits text and image overlays while requiring the app in use to remain visible:
 [guideline 2.3.3](https://developer.apple.com/help/app-review/guideline-reference/2-3-3-screenshots/).
