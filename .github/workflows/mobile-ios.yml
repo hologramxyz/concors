@@ -21,6 +21,10 @@ on:
         description: Capture fictional projects for App Store marketing artwork
         type: boolean
         default: false
+      marketing_terminal_only:
+        description: Recapture only the terminal after dismissing iOS keyboard tips
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -173,7 +177,9 @@ jobs:
       - name: Exercise native controls and capture store screenshots
         timeout-minutes: 20
         run: |
-          if [ '${{ inputs.marketing_captures }}' = 'true' ]; then
+          if [ '${{ inputs.marketing_terminal_only }}' = 'true' ]; then
+            MOBILE_CAPTURE_FLOW=apps/mobile/e2e/native/store-terminal.yaml
+          elif [ '${{ inputs.marketing_captures }}' = 'true' ]; then
             MOBILE_CAPTURE_FLOW=apps/mobile/e2e/native/store-marketing.yaml
           else
             MOBILE_CAPTURE_FLOW=apps/mobile/e2e/native/glass.yaml

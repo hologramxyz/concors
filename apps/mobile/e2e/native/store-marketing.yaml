@@ -42,4 +42,14 @@ appId: xyz.hologram.concors.preview
 - tapOn:
     text: "Checks"
     waitToSettleTimeoutMs: 500
+- runFlow:
+    when:
+      visible: "Continue"
+    commands:
+      - tapOn:
+          text: "Continue"
+          waitToSettleTimeoutMs: 500
+- assertNotVisible: "Speed up your typing by sliding your finger across the letters to compose a word."
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: apps/mobile/test-results/native/marketing-terminal
