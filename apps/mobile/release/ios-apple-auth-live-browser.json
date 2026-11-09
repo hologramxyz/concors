@@ -1,0 +1,66 @@
+{
+  "checkedAt": "2026-11-09T16:02:12.902Z",
+  "productionPages": true,
+  "privySdkUnmodified": true,
+  "applePageIntercepted": false,
+  "freshSession": {
+    "restoredSession": false,
+    "freshAppleAuthorizationRequested": true,
+    "configuredClientAndCallbackMatch": true,
+    "actualApplePageLoaded": true,
+    "appleAccountFieldVisible": true,
+    "appNameShownByApple": true,
+    "invalidClientOrRedirectVisible": false,
+    "unexpectedNativeCompletions": 0,
+    "providerHttpErrors": [],
+    "appleAccountAuthenticated": false,
+    "actualUserGrantExchanged": false
+  },
+  "restoredPrivySession": {
+    "restoredSession": true,
+    "freshAppleAuthorizationRequested": true,
+    "configuredClientAndCallbackMatch": true,
+    "actualApplePageLoaded": true,
+    "appleAccountFieldVisible": true,
+    "appNameShownByApple": true,
+    "invalidClientOrRedirectVisible": false,
+    "unexpectedNativeCompletions": 0,
+    "providerHttpErrors": [],
+    "appleAccountAuthenticated": false,
+    "actualUserGrantExchanged": false
+  },
+  "fullyLoadedApplePage": {
+    "checkedAt": "2026-11-09T15:42:59.477Z",
+    "realAppleProviderPage": true,
+    "appleAccountFieldEnabled": true,
+    "appleAccountFieldFocused": true,
+    "appNameShown": true,
+    "invalidConfigurationVisible": false,
+    "appleAccountAuthenticated": false,
+    "realUserGrantExchanged": false
+  },
+  "realAppleUserConsentCompleted": false,
+  "realAppleIssuedGrantExchanged": false,
+  "noOwnerQuestionnairePending": true,
+  "remainingBoundary": "Apple account authentication, consent, and real user token exchange require an authenticated Apple account; no account password or 2FA session is available to this browser.",
+  "credentialsIncluded": false,
+  "clientAuthenticationProbe": {
+    "checkedAt": "2026-11-09T16:02:12.902Z",
+    "clientId": "xyz.hologram.concors.auth",
+    "negativeControl": {
+      "status": 400,
+      "error": "invalid_grant"
+    },
+    "configuredClient": {
+      "status": 400,
+      "error": "invalid_grant"
+    },
+    "onlyRandomInvalidGrantUsed": true,
+    "personalAppleAccountAuthenticated": false,
+    "realUserAuthorizationChanged": false,
+    "credentialValuesIncluded": false,
+    "interpretation": "Apple returned invalid_grant for both the deliberately invalid client proof and the configured proof with random invalid refresh tokens. This probe does not distinguish client authentication and cannot prove credential validity. No real user authorization was tested or changed.",
+    "clientAuthenticationValidated": false,
+    "result": "inconclusive-identical-errors"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "checkedAt": "2026-11-09T16:29:44.753Z",
+  "captureComplete": true,
+  "nativeWorkflowConclusion": "success",
+  "nativeWorkflow": 42647446212,
+  "nativeWorkflowSource": "9ad3064d32fc119169d0c661233cf421007fadd6",
+  "nativeBuildId": "48deec50-2b7b-4067-9c9f-ea6900a9feec",
+  "nativeBuildSource": "37a40ca8e3958c666e1f0f1856a6cb17f98fc08c",
+  "simulator": "iPhone 17 Pro",
+  "ios": "26.5",
+  "fictionalData": true,
+  "liveUserDataUsed": false,
+  "nativeUiChangedFromBuild16": false,
+  "screens": [
+    {
+      "file": "marketing-agent.png",
+      "sha256": "852cb59a2588e93f697cdeb5d91359b03b96ca4ca07577f78818d38ef19b9d98",
+      "width": 1206,
+      "height": 2622,
+      "nativeWorkflow": 42647446212
+    },
+    {
+      "file": "marketing-approval.png",
+      "sha256": "db133babf916687dfb3ceb5f7e892abe305406c4d7199f9e9b3e4d08d8d8420c",
+      "width": 1206,
+      "height": 2622,
+      "nativeWorkflow": 42647446212
+    },
+    {
+      "file": "marketing-workspaces.png",
+      "sha256": "59cd3a897395c0e3de3f5278702d6e25c33c09a1cbcaefee93ea0a041f2647c2",
+      "width": 1206,
+      "height": 2622,
+      "nativeWorkflow": 42647446212
+    },
+    {
+      "file": "marketing-terminal.png",
+      "sha256": "658e34d63b8367e4ea6212d5bcab997037c21a480c50c7ea2ebfb42d9bc4a5d6",
+      "width": 1206,
+      "height": 2622,
+      "nativeWorkflow": 42652795940,
+      "captureMethod": "simctl io screenshot",
+      "visuallyInspected": true
+    }
+  ],
+  "terminalRecaptureReason": "First-use keyboard tutorial is excluded from the marketing set.",
+  "nativeTerminalWorkflow": 42652795940,
+  "nativeTerminalWorkflowSource": "77f977fbf101f5d5bd973c2eec52f8bd761c5b16",
+  "nativeTerminalWorkflowConclusion": "success",
+  "rejectedTerminalCapture": {
+    "workflow": 42650254416,
+    "workflowConclusion": "success",
+    "imageWidth": 1,
+    "imageHeight": 1,
+    "selected": false,
+    "reason": "XCTest returned a one-pixel placeholder; use validated simulator framebuffer capture instead."
+  },
+  "nativeTerminalCaptureMethod": "Apple simctl framebuffer after the keyboard tutorial is dismissed"
+}

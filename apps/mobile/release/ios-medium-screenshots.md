@@ -1,9 +1,9 @@
-# Required iPhone medium-display screenshot — November 8, 2026
+# Historical iPhone medium-display source capture — November 8, 2026
 
-Apple's current [screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications/)
-require an iPhone Dynamic Island medium-display image. A fresh capture is processed and active in
-the iOS 0.1.0 draft. The older large-display placement was removed because it showed the retired
-Tabs sheet. Its source image remains in the library; see [the final selection](ios-final-store-assets.json).
+This plain native capture was selected on November 8. On November 9, the
+[marketing campaign](ios-marketing-screenshots.md) replaced its placement with four composed
+screenshots. The original source PNG and library image are retained. The table below records the
+November 8 state; [the current selection](ios-final-store-assets.json) identifies the active set.
 
 | Field             | Verified value                                                                          |
 | ----------------- | --------------------------------------------------------------------------------------- |
