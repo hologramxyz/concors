@@ -35,6 +35,9 @@ visually inspected before re-rendering and staging the upload set.
 
 For a terminal-only recapture, use `marketing_terminal_only=true`. Both native capture flows
 dismiss the clean simulator's first-use keyboard tutorial before retaining the terminal image.
+The terminal PNG is captured directly with Apple's `simctl`; the workflow checks its dimensions
+to reject one-pixel XCTest placeholders. That framebuffer image already includes the Dynamic
+Island, so its `systemIsland` setting avoids drawing another device cutout over it.
 
 Apple permits text and image overlays while requiring the app in use to remain visible:
 [guideline 2.3.3](https://developer.apple.com/help/app-review/guideline-reference/2-3-3-screenshots/).

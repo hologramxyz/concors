@@ -1,0 +1,58 @@
+{
+  "versionState": "READY_FOR_REVIEW",
+  "activeMediumCount": 4,
+  "activeLargeCount": 0,
+  "checkedAt": "2026-11-09T16:31:22.080Z",
+  "appId": "6817622624",
+  "version": "0.1.0",
+  "build": "16",
+  "locale": "en-US",
+  "placementGroup": "IPHONE_DYNAMIC_ISLAND_MEDIUM_PROFILE",
+  "screenshotCount": 4,
+  "order": ["01-agents.png", "02-approvals.png", "03-workspaces.png", "04-terminal.png"],
+  "images": [
+    {
+      "file": "01-agents.png",
+      "sha256": "826bea9875f0c8bb0d6251f1ba314b031e2db64fcc1d061225bd516f9981a1a5",
+      "bytes": 1715803,
+      "imageId": "58800019-65ca-8a60-8025-6e9e15bc7856",
+      "imageState": "READY_FOR_REVIEW",
+      "placementId": "7d800019-65ca-8a60-8f35-7560d0dec7ab",
+      "placementState": "ACTIVE"
+    },
+    {
+      "file": "02-approvals.png",
+      "sha256": "be1cb341c978720a29a6f6b2f860607c835d8bf1b276290ddb28448fd11db2fd",
+      "bytes": 914536,
+      "imageId": "2ec00019-65ca-8a60-801b-7b3965725686",
+      "imageState": "READY_FOR_REVIEW",
+      "placementId": "01c00019-65ca-8a60-8f37-9e716e59bf16",
+      "placementState": "ACTIVE"
+    },
+    {
+      "file": "03-workspaces.png",
+      "sha256": "ec17cfb96b531c78917a6efc3f5b9d2a4086f43579721971971953132de663d6",
+      "bytes": 1601142,
+      "imageId": "de000019-65ca-8a60-8012-0d110792ae74",
+      "imageState": "READY_FOR_REVIEW",
+      "placementId": "ab000019-65ca-8a60-8f02-ce98b78bc44d",
+      "placementState": "ACTIVE"
+    },
+    {
+      "file": "04-terminal.png",
+      "sha256": "3779795839040fef02755b4b6dd99daaef4130d1c10e44e50b5021d9925514bb",
+      "bytes": 803051,
+      "imageId": "ec400019-65ca-8a60-8030-72a17a5b3d5a",
+      "imageState": "READY_FOR_REVIEW",
+      "placementId": "52c00019-65ca-8a60-8f35-bd226e9a6b43",
+      "placementState": "ACTIVE"
+    }
+  ],
+  "originalLibraryImagesRetained": true,
+  "reviewSubmissionId": "ab74d755-9d3f-4de1-87d9-cfe38d2f0347",
+  "reviewItemId": "YWI3NGQ3NTUtOWQzZi00ZGUxLTg3ZDktY2ZlMzhkMmYwMzQ3fDZ8ODkyMjUyOTk5",
+  "reviewItemState": "READY_FOR_REVIEW",
+  "reviewSubmissionState": "READY_FOR_REVIEW",
+  "submittedDate": null,
+  "sentToAppReview": false
+}
