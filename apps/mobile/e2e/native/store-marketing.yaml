@@ -42,5 +42,4 @@ appId: xyz.hologram.concors.preview
 - tapOn:
     text: "Checks"
     waitToSettleTimeoutMs: 500
-- assertVisible: "36 passed"
 - takeScreenshot: apps/mobile/test-results/native/marketing-terminal

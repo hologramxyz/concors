@@ -3,6 +3,7 @@ import { AgentInfoSchema, AgentItemSchema, WorkspaceSnapshotSchema } from "@conc
 import { demoAgent, demoWorkspace, ids } from "./fixtures";
 
 const captureId = (n: number) => `d0000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+const captureDirectory = (name: string) => `/home/alex/${name.toLowerCase().replaceAll(" ", "-")}`;
 
 export function storeCaptureDemo() {
   const date = "2026-11-09T09:41:00.000Z";
@@ -111,7 +112,7 @@ export function storeCaptureDemo() {
       ...extra.map((row) => ({
         id: row.project,
         name: row.name,
-        directory: `/home/alex/${row.name.toLowerCase().replaceAll(" ", "-")}`,
+        directory: captureDirectory(row.name),
         version: 1,
         tabs: [tab(row.tab, row.pane, row.task, row.agent)],
       })),
@@ -127,7 +128,7 @@ export function storeCaptureDemo() {
         id: row.agent,
         projectId: row.project,
         name: row.task,
-        directory: workspace.projects.find((project) => project.id === row.project)!.directory,
+        directory: captureDirectory(row.name),
         status: "done",
         pending: [],
         attention: null,
