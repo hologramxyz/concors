@@ -1326,6 +1326,14 @@ export class WorkspaceStore {
       )
       .get(sessionId, turnId);
   }
+  /** Whether this exact text was sent into a running turn of the session, as a steer. */
+  hasAgentSteer(sessionId: string, text: string): boolean {
+    return !!this.#db
+      .prepare(
+        "SELECT 1 FROM agent_items WHERE session_id = ? AND item_id LIKE 'steer:%' AND json_extract(item, '$.kind') = 'user' AND json_extract(item, '$.text') = ? LIMIT 1",
+      )
+      .get(sessionId, text);
+  }
   hasAgentProviderHistory(sessionId: string): boolean {
     // Check all history, not just the most recent page. Pending user prompts are reserved
     // locally before reaching a provider; every other item is evidence of provider activity.

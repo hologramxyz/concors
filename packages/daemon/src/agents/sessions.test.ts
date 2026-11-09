@@ -2074,3 +2074,64 @@ it("opening a chat leaves its time alone, with or without messages", async () =>
   await expect.poll(() => filled.agents[0]?.status).toBe("done");
   expect(filled.agents[0]?.updatedAt).not.toBe(longAgo);
 });
+
+it.each([
+  ["names its transcript entry", true],
+  ["was sent before steers named their transcript entry", false],
+])(
+  "shows a steer Claude took after its turn once when history replays, when it %s",
+  async (_, named) => {
+    const { a, id } = await setup();
+    await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
+    await expect.poll(() => a.agents[0]?.turnId?.startsWith("turn-")).toBe(true);
+    const turnId = a.agents[0]!.turnId!;
+    const provider = providers[0]!;
+    // As the Claude provider does: the steer's transcript entry is tied to the steered turn.
+    const request = provider.request.bind(provider);
+    vi.spyOn(provider, "request").mockImplementation(async (method, params) => {
+      if (method === "session/steer" && named)
+        provider.emit("turn/nativeIdentity", { nativeTurnId: "steer-entry" });
+      return request(method, params);
+    });
+    await action(a, { kind: "steer", sessionId: id, turnId, text: "no bold" });
+    provider.finish("completed", turnId);
+    await expect.poll(() => a.agents[0]?.status).toBe("done");
+    a.disconnect();
+    await server!.close();
+    // Claude Code ran the steer as a turn of its own, so its transcript holds it as a prompt.
+    const original = TestAgentProvider.prototype.request;
+    vi.spyOn(TestAgentProvider.prototype, "request").mockImplementation(async function (
+      this: TestAgentProvider,
+      method,
+      params,
+    ) {
+      if (method !== "thread/resume") return original.call(this, method, params);
+      this.requests.push({ method, params });
+      const prompt = (entry: string, text: string, reply: string) => ({
+        id: entry,
+        status: "completed",
+        items: [
+          { id: `user:${entry}`, type: "userMessage", content: [{ type: "text", text }] },
+          { id: `reply:${entry}`, type: "agentMessage", text: reply },
+        ],
+      });
+      return {
+        thread: {
+          id: this.threadId,
+          turns: [
+            prompt(turnId, "hold the turn", "Holding."),
+            prompt(named ? "steer-entry" : "random-entry", "no bold", "Plain text from now on."),
+          ],
+        },
+      };
+    });
+    const next = await open(await boot());
+    await action(next, { kind: "send", sessionId: id, text: "Done logging into treg" });
+    await expect.poll(() => next.agents[0]?.status).toBe("done");
+    const read = await action(next, { kind: "read", sessionId: id });
+    if (read.outcome.status !== "ok") throw new Error("read failed");
+    expect(
+      read.outcome.conversation.items.filter((i) => i.kind === "user").map((i) => i.text),
+    ).toEqual(["hold the turn", "no bold", "Done logging into treg"]);
+  },
+);

@@ -2115,6 +2115,11 @@ export class AgentManager {
     // Locally submitted prompts are reserved before dispatch; replace their turn identity, not their
     // text. Replayed history carries its own prompt id, so a second copy would sort to the bottom.
     if (mapped.kind === "user" && this.#store.hasAgentTurnPrompt(id, turnId)) return;
+    // A steer Claude Code took only after its turn ended is saved as a prompt of its own. Steers
+    // now name their transcript entry (see the Claude provider), but older ones did not, so a
+    // replay would show the message a second time, under the latest prompt. It was shown already.
+    if (mapped.kind === "user" && this.#quiet.has(id) && this.#store.hasAgentSteer(id, mapped.text))
+      return;
     const generated = z.object({ type: z.literal("imageGeneration") }).safeParse(raw).success
       ? generatedImage(raw as { id: string })
       : undefined;

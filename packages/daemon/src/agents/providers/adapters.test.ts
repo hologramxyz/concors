@@ -1310,6 +1310,10 @@ it("steers a running Claude turn with a message Claude reads at its next step", 
   await expect(
     provider.request("session/steer", { turnId: "another-turn", text: "Too late" }),
   ).rejects.toThrow(/active turn/);
+  const notifications: { method: string; params: Record<string, unknown> }[] = [];
+  provider.onNotification((method, params) =>
+    notifications.push({ method, params: object(params) }),
+  );
   await provider.request("session/steer", { turnId, text: "Focus on the parser" });
   await expect.poll(() => prompts).toHaveLength(2);
   expect(prompts[1]).toMatchObject({
@@ -1317,6 +1321,15 @@ it("steers a running Claude turn with a message Claude reads at its next step", 
     priority: "next",
     parent_tool_use_id: null,
     message: { role: "user", content: [{ type: "text", text: "Focus on the parser" }] },
+  });
+  // A steer that lands after the turn ends is saved as a prompt of its own, under this uuid; tied
+  // to the steered turn, a replay of the transcript does not show it a second time.
+  const uuid = object(prompts[1])["uuid"];
+  expect(uuid).toMatch(/^[0-9a-f-]{36}$/);
+  expect(uuid).not.toBe(turnId);
+  expect(notifications).toContainEqual({
+    method: "turn/nativeIdentity",
+    params: expect.objectContaining({ nativeTurnId: uuid, turnId }),
   });
   // A steered message carries its attachments as a sent one does: images as image blocks.
   expect(object(await provider.request("session/controls"))["steerAttachments"]).toBe(true);

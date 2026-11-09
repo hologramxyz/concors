@@ -528,8 +528,16 @@ export class ClaudeProvider extends EventProvider {
       // Claude Code reads a "next" message at its next step, inside the running turn, as its own
       // terminal does with a message typed while it works. Should the turn end first, it runs as
       // a turn of its own, which arrives like any turn Claude starts by itself.
+      //
+      // That late case is saved in the transcript as an ordinary prompt under the message's uuid.
+      // Naming the uuid here and tying it to the turn being steered lets a later replay know the
+      // prompt was already shown, as a steer. Left to Claude Code, the uuid is random and the
+      // replay adds the message again, as a new prompt under whatever was sent last.
+      const uuid = randomUUID();
+      this.emit("turn/nativeIdentity", { nativeTurnId: uuid });
       this.pending.push({
         type: "user",
+        uuid,
         session_id: this.threadId,
         parent_tool_use_id: null,
         priority: "next",
