@@ -46,3 +46,18 @@ account consent and Apple-issued grant exchange were not completed by the operat
 provider responses are not presented as that evidence. The production-auth gate remains blocked
 on that unobserved provider exchange. There is no pending owner questionnaire or additional
 device-test request. Public App Review remains unsubmitted.
+
+## November 9 live Apple page check
+
+The operator repeated the provider start using the normal production Concors page and Privy SDK
+with both a fresh browser and an existing isolated reviewer session. This time Apple's actual
+authorization page was loaded without intercepting or replacing it. Both cases requested the
+configured Concors client and Privy callback, displayed the Concors name, produced no provider
+HTTP errors, and made zero premature Concors completion calls. A desktop browser check also
+confirmed the fully loaded Apple account field was enabled and could receive focus.
+
+[The readback](ios-apple-auth-live-browser.json) records these checks without account identifiers,
+credentials, OAuth state, or token values. These are live browser checks up to Apple's account
+entry screen, not a completed native sign-in. No Apple-authenticated user session is available to
+this browser, so real consent, Hide My Email, and the resulting Apple-issued grant exchange remain
+unverified. Expo and Apple Developer API access do not provide that user authorization.
