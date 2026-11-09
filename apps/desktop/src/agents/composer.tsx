@@ -50,6 +50,7 @@ import { openExternal } from "@/tauri/open-external";
 import { ControlTooltip } from "./control-tooltip";
 import { useClippedControls } from "./use-clipped-controls";
 import { useComposerWheel } from "./composer-wheel";
+import { useTextareaAutosize } from "./use-textarea-autosize";
 import { FastModeToggle } from "./fast-mode-toggle";
 import { codexPermissionModes, effortName, hasComposerOptions } from "./composer-options";
 import { isNewChatStarting } from "./context";
@@ -274,20 +275,8 @@ export function AgentComposer({
     },
     () => !!form.current?.closest("[data-pane-id]")?.contains(document.activeElement),
   );
-  useLayoutEffect(() => {
-    const el = textarea.current;
-    if (el) {
-      // Hold the box's size while measuring: collapsing it for one layout grew the chat above,
-      // which clamped its scroll up and left it there.
-      const box = el.parentElement;
-      if (box) box.style.minHeight = `${box.offsetHeight}px`;
-      el.style.height = "auto";
-      // The class's max-height caps the growth; past it the text scrolls.
-      el.style.height = el.scrollHeight + "px";
-      if (box) box.style.minHeight = "";
-    }
-  }, [draft, expanded, dictation.active]);
-  // Runs after the box is sized: the dictated words were added at the end, so show the end.
+  useTextareaAutosize(textarea, draft, visible && !native && !dictation.active, expanded);
+  // The dictated words were added at the end, so restore the caret and show the end.
   useLayoutEffect(() => {
     const el = textarea.current;
     if (wasDictating.current && !dictation.active) restoreDictationFocus.current = true;
