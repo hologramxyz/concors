@@ -8,7 +8,7 @@
   "checkedAt": "2026-11-08T02:22:04.631Z",
   "versionString": "0.1.0",
   "versionId": "2d5df58b-5d90-457e-85b9-61f93041ea07",
-  "name": "Concors: Coding Workspace",
+  "name": "Concors: Agent Orchestrator",
   "subtitle": "Code, agents and terminals",
   "description": "Keep your coding workspace close with Concors. Follow coding agents, review their requests, and continue work on a compatible connected computer or server from your iPhone.\n\nFOLLOW YOUR AGENTS\nRead conversations, follow progress, review tool requests, and send messages to your coding agents.\n\nCONTINUE YOUR WORKSPACE\nSwitch between workspaces and tabs. Browse project files, read Markdown, inspect code, and save edits. Continue terminal sessions on your connected machine.\n\nSTAY IN SYNC\nYour agents and terminal sessions run on the connected machine and can keep working when you leave the app. Return to your workspace from your phone.\n\nAn account and a compatible connected machine are required. AI features may require separate provider accounts and are subject to those providers' availability and terms. Commands run on the connected machine; AI requests use its configured providers. Review generated output and tool requests before acting on them.\n\nConcors is free at launch. Add your machine using the desktop app before connecting to it from your iPhone.",
   "keywords": "code,coding,workspace,terminal,agents,developer,files,remote,git,AI",
@@ -110,5 +110,7 @@
   "remainingOperatorVerification": [
     "Real personal Apple consent and Apple-issued grant exchange remain unobserved by the operator; no additional owner device test is requested."
   ],
-  "appleIndependentVerificationEvidence": "ios-apple-auth-self-test.json"
+  "appleIndependentVerificationEvidence": "ios-apple-auth-self-test.json",
+  "nameVerifiedAt": "2026-11-09T05:30:34.673Z",
+  "nameVerificationEvidence": "ios-app-store-name.md"
 }
