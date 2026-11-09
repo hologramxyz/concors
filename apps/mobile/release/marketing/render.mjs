@@ -29,7 +29,7 @@ const styles = `
 const frames = await Promise.all(
   campaign.frames.map(async (frame, index) => {
     const screenshot = await data(frame.screen, "image/png");
-    return `<section class="slide ${escape(frame.theme)}" data-id="${escape(frame.id)}"><div class="backdrop"></div><div class="masthead"><div class="brand">${logo}<span>concors</span></div><div class="category">AGENT ORCHESTRATOR</div></div><div class="rule"></div><div class="copy"><div class="eyebrow">${escape(frame.eyebrow)}</div><h1>${frame.headline.map((line) => `<span>${escape(line)}</span>`).join("")}</h1><p class="description">${escape(frame.description)}</p></div><div class="device"><div class="screen"><img alt="Native Concors screen: ${escape(frame.id)}" src="${screenshot}"><div class="island"></div></div></div><div class="footer"><span>${escape(frame.footer)}</span><span class="number">0${index + 1} / 04</span></div></section>`;
+    return `<section class="slide ${escape(frame.theme)}" data-id="${escape(frame.id)}"><div class="backdrop"></div><div class="masthead"><div class="brand">${logo}<span>concors</span></div><div class="category">AGENT ORCHESTRATOR</div></div><div class="rule"></div><div class="copy"><div class="eyebrow">${escape(frame.eyebrow)}</div><h1>${frame.headline.map((line) => `<span>${escape(line)}</span>`).join("")}</h1><p class="description">${escape(frame.description)}</p></div><div class="device"><div class="screen"><img alt="Native Concors screen: ${escape(frame.id)}" src="${screenshot}">${frame.systemIsland ? "" : '<div class="island"></div>'}</div></div><div class="footer"><span>${escape(frame.footer)}</span><span class="number">0${index + 1} / 04</span></div></section>`;
   }),
 );
 const html = (body, extra = "") =>

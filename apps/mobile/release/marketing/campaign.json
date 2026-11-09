@@ -37,7 +37,8 @@
       "headline": ["Your terminal.", "In your pocket."],
       "description": "Check output and run commands on connected machines.",
       "screen": "marketing-terminal.png",
-      "footer": "CONNECT MACHINES FROM THE DESKTOP APP"
+      "footer": "CONNECT MACHINES FROM THE DESKTOP APP",
+      "systemIsland": true
     }
   ]
 }
