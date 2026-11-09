@@ -61,3 +61,8 @@ credentials, OAuth state, or token values. These are live browser checks up to A
 entry screen, not a completed native sign-in. No Apple-authenticated user session is available to
 this browser, so real consent, Hide My Email, and the resulting Apple-issued grant exchange remain
 unverified. Expo and Apple Developer API access do not provide that user authorization.
+
+A separate token-endpoint diagnostic used only random invalid refresh tokens. Apple returned
+`invalid_grant` for both the deliberately invalid client proof and the configured proof. This
+negative control did not distinguish valid client authentication, so the diagnostic is recorded
+as inconclusive. It is not treated as successful credential validation or a real user sign-in.
