@@ -1,0 +1,8 @@
+{
+  "mode": "built-in image_gen",
+  "useCase": "ads-marketing",
+  "prompt": "Use case: ads-marketing.\nAsset type: a premium background artwork for a coordinated Concors iPhone App Store screenshot campaign.\nPrimary request: create a very restrained, elegant editorial technology campaign backdrop. Tall portrait canvas, 1206 x 2622 aspect ratio, high resolution.\nScene/backdrop: warm off-white paper (#F4F2ED) with two oversized translucent satin-glass arcs meeting at the lower right edge, a faint cool cobalt reflection on one edge, soft realistic shadows and fine paper grain. Abstract orbital geometry suggesting coordinating agents. The upper 35 percent and central 70 percent must stay very quiet and almost plain, allowing large black headlines and an authentic app screenshot to be composited afterward.\nStyle/medium: sophisticated studio render with an architectural, calm, editorial mood. Subtle and purposeful. No stock-photo look, no neon.\nComposition: arcs mostly cropped by right and bottom canvas edges, tiny low contrast material variation across remaining paper surface; no central object.\nColor palette: warm ivory, pale stone, transparent glass, a trace of muted cobalt.\nConstraints: background artwork only. No text, no letters, no logos, no phones, no screens, no UI, no icons, no watermarks. Do not add floating badges or diagrams.",
+  "generatedAsset": "campaign-background.png",
+  "authenticScreens": "Native iPhone simulator captures; fictional project data, unchanged app UI.",
+  "composition": "HTML/CSS with separate headline typography and unaltered native screenshot images."
+}
