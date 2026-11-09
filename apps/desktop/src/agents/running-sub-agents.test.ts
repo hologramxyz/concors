@@ -1,6 +1,11 @@
 import { expect, it } from "vitest";
 import { SUB_AGENT_STEPS, type AgentItem } from "@concors/protocol";
-import { knownSubAgentRows, runningSubAgents, stepCount } from "./running-sub-agents";
+import {
+  knownSubAgentRows,
+  runningSubAgents,
+  stepCount,
+  subAgentLabel,
+} from "./running-sub-agents";
 
 function row(id: string, overrides: Partial<AgentItem> = {}): AgentItem {
   return {
@@ -151,4 +156,17 @@ it("says when a row's steps have started dropping", () => {
   expect(stepCount([1])).toBe("1 step");
   expect(stepCount([1, 2])).toBe("2 steps");
   expect(stepCount(Array.from({ length: SUB_AGENT_STEPS }))).toBe(`${SUB_AGENT_STEPS}+ steps`);
+});
+
+it("names a sub-agent by its kind only when the kind says something", () => {
+  // Each CLI's catch-all kind would head nearly every row alike.
+  expect(subAgentLabel("general-purpose")).toBe("Sub-agent");
+  expect(subAgentLabel("general")).toBe("Sub-agent");
+  expect(subAgentLabel("default")).toBe("Sub-agent");
+  expect(subAgentLabel(undefined)).toBe("Sub-agent");
+  expect(subAgentLabel("  ")).toBe("Sub-agent");
+  expect(subAgentLabel("Explore")).toBe("Explore");
+  expect(subAgentLabel("code-reviewer")).toBe("code-reviewer");
+  expect(subAgentLabel("general-purpose", 1)).toBe("Sub-agent 2");
+  expect(subAgentLabel("explorer", 0)).toBe("explorer 1");
 });

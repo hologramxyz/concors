@@ -76,6 +76,20 @@ export function runningSubAgents(rows: readonly AgentItem[], chat: ChatTurn): Ru
   return [...found.values()].flatMap(({ running }) => (running ? [running] : []));
 }
 
+/**
+ * The kinds each CLI gives a sub-agent when nothing more specific was asked for: Claude Code's
+ * "general-purpose", OpenCode's "general", Codex's "default". Nearly every sub-agent is one, so
+ * naming it on every row tells the reader nothing; the task beside it does.
+ */
+const DEFAULT_SUB_AGENT_TYPES = new Set(["general-purpose", "general", "default"]);
+
+/** What a sub-agent's row is headed with: its kind when it has a telling one, numbered among siblings. */
+export function subAgentLabel(agentType: string | undefined, index?: number): string {
+  const type = agentType?.trim();
+  const named = type && !DEFAULT_SUB_AGENT_TYPES.has(type.toLowerCase()) ? type : "Sub-agent";
+  return index === undefined ? named : `${named} ${index + 1}`;
+}
+
 /** "3 steps", or "40+ steps" once a row has started dropping its oldest. */
 export function stepCount(steps: readonly unknown[]): string | null {
   if (!steps.length) return null;

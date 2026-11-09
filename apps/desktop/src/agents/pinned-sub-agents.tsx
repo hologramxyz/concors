@@ -2,7 +2,7 @@ import { Bot, PanelRightOpen } from "lucide-react";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { formatDuration } from "./duration";
 import type { RunningSubAgent } from "./running-sub-agents";
-import { stepCount } from "./running-sub-agents";
+import { stepCount, subAgentLabel } from "./running-sub-agents";
 import type { SubAgentTarget } from "./sub-agent-context";
 import { useElapsed } from "./use-elapsed";
 
@@ -59,9 +59,7 @@ function PinnedRow({
 }) {
   const elapsed = useElapsed(agent.item.createdAt, true);
   const current = agent.steps.findLast((step) => step.status === "running");
-  const label =
-    (agent.item.presentation?.agentType?.trim() || "Sub-agent") +
-    (agent.index !== undefined ? ` ${agent.index + 1}` : "");
+  const label = subAgentLabel(agent.item.presentation?.agentType, agent.index);
   const summary = [stepCount(agent.steps), elapsed > 0 ? formatDuration(elapsed) : null].filter(
     Boolean,
   );

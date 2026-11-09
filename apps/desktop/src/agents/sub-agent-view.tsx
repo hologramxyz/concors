@@ -7,7 +7,7 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Activity } from "./activity";
 import { formatDuration } from "./duration";
 import { PlanProgress } from "./plan-progress";
-import { stepCount } from "./running-sub-agents";
+import { stepCount, subAgentLabel } from "./running-sub-agents";
 import { Report, Steps } from "./sub-agent-card";
 import { LIVE_SUB_AGENT, SubAgentViewContext, type SubAgentTarget } from "./sub-agent-context";
 import { TimelineItem } from "./timeline-item";
@@ -56,9 +56,7 @@ export function SubAgentPanel({
   const running =
     (turnActive || (!!item.presentation?.background && item.status === "running")) &&
     LIVE_SUB_AGENT.includes(child?.status ?? item.status);
-  const label =
-    (item.presentation?.agentType?.trim() || "Sub-agent") +
-    (target.index !== undefined ? ` ${target.index + 1}` : "");
+  const label = subAgentLabel(item.presentation?.agentType, target.index);
   const allSteps = item.presentation?.activity ?? [];
   const steps = children.length > 1 ? allSteps.filter((s) => s.childId === childId) : allSteps;
   const elapsed = useElapsed(item.createdAt, running);

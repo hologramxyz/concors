@@ -4,7 +4,7 @@ import type { AgentActivityStep, AgentItem } from "@concors/protocol";
 import { BrailleSpinner } from "./activity";
 import { formatDuration } from "./duration";
 import { AgentMarkdown, CopyButton } from "./markdown";
-import { stepCount } from "./running-sub-agents";
+import { stepCount, subAgentLabel } from "./running-sub-agents";
 import { LIVE_SUB_AGENT, SubAgentViewContext } from "./sub-agent-context";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { useElapsed } from "./use-elapsed";
@@ -33,7 +33,7 @@ export function SubAgentCard({
   const failed = item.status === "failed";
   const elapsed = useElapsed(item.createdAt, running);
   const current = running ? steps.findLast((step) => step.status === "running") : undefined;
-  const label = data?.agentType?.trim() || "Sub-agent";
+  const label = subAgentLabel(data?.agentType);
   const summary = [
     stepCount(steps),
     running && elapsed > 0 ? formatDuration(elapsed) : null,
