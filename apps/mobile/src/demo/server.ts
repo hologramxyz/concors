@@ -504,6 +504,40 @@ export function createDemoServer({
                 outcome: demoPullRequests(message.operation, workspace),
               });
               break;
+            case "provider.request":
+              reply({
+                type: "provider.result",
+                requestId: message.requestId,
+                outcome:
+                  message.operation.kind === "list"
+                    ? {
+                        status: "ok",
+                        revision: 0,
+                        providers: (
+                          [
+                            ["codex", "Codex"],
+                            ["claude", "Claude Code"],
+                            ["opencode", "OpenCode"],
+                          ] as const
+                        ).map(([engine, label]) => ({
+                          id: engine,
+                          engine,
+                          label,
+                          command: [engine],
+                          enabled: true,
+                          envKeys: [],
+                          installed: true,
+                          customized: false,
+                          canInstall: false,
+                          installStatus: "idle",
+                        })),
+                      }
+                    : {
+                        status: "error",
+                        message: "Provider settings are not simulated in this demo.",
+                      },
+              });
+              break;
             case "schedule.request": {
               const result = applyDemoSchedule(schedules, message.operation);
               if (typeof result !== "string") schedules = result;
