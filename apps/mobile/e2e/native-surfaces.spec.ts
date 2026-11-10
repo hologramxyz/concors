@@ -309,7 +309,11 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
       .map((item) =>
         item.content.kind === "button" ? [item.content.label, item.content.icon] : "composer",
       );
-  await expect.poll(sidebarSurfaces).toEqual([["Search workspace", "search"]]);
+  await expect.poll(sidebarSurfaces).toEqual([
+    ["Machine", "machine"],
+    ["Search workspace", "search"],
+    ["Account: Alex Morgan", "account"],
+  ]);
   // The translated workspace menu remains drawn beside Search, underneath its scrim.
   await expect
     .poll(async () =>
@@ -334,13 +338,21 @@ test("native surface bridge preserves navigation, drafts, settings, attachments 
   await expect(ui.getByPlaceholder("Search workspaces and tabs…")).toBeVisible();
   await expect.poll(async () => (await snapshot(page))?.surfaces).toEqual([]);
   await page.keyboard.press("Escape");
-  await expect.poll(sidebarSurfaces).toEqual([["Search workspace", "search"]]);
-  await ui.getByRole("button", { name: /^Account:/ }).click();
+  await expect.poll(sidebarSurfaces).toEqual([
+    ["Machine", "machine"],
+    ["Search workspace", "search"],
+    ["Account: Alex Morgan", "account"],
+  ]);
+  await event(page, "button", "Account: Alex Morgan", { kind: "press", control: "activate" });
   const account = ui.getByRole("dialog", { name: "Account", exact: true });
   await expect(account).toBeVisible();
   await expect.poll(async () => (await snapshot(page))?.surfaces).toEqual([]);
   await account.press("Escape");
-  await expect.poll(sidebarSurfaces).toEqual([["Search workspace", "search"]]);
+  await expect.poll(sidebarSurfaces).toEqual([
+    ["Machine", "machine"],
+    ["Search workspace", "search"],
+    ["Account: Alex Morgan", "account"],
+  ]);
   await ui.getByRole("button", { name: "Return to workspace", exact: true }).click();
   await expect
     .poll(async () =>
