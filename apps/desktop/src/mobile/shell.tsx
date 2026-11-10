@@ -595,6 +595,10 @@ function MobileWorkspaceContent({
                     gesture.handlers.onPointerCancel(event);
                     filesGesture.handlers.onPointerCancel(event);
                   }}
+                  onLostPointerCapture={(event) => {
+                    gesture.handlers.onLostPointerCapture(event);
+                    filesGesture.handlers.onLostPointerCapture(event);
+                  }}
                   onClickCapture={(event) => {
                     gesture.handlers.onClickCapture(event);
                     filesGesture.handlers.onClickCapture(event);

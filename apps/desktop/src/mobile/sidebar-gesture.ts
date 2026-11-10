@@ -19,6 +19,7 @@ export function useSidebarGesture(
     y: number;
     start: number;
     moved: boolean;
+    time: number;
     target: HTMLElement;
   } | null>(null);
   const [offset, setOffset] = useState<number | null>(null);
@@ -29,7 +30,10 @@ export function useSidebarGesture(
     if (!cancelled && current.moved) {
       suppressClickUntil.current = performance.now() + 400;
       const delta = (event.clientX - current.x) * direction;
-      onChange(open ? delta > -width * 0.25 : delta > width * 0.25);
+      const travel = open ? -delta : delta;
+      const velocity = travel / Math.max(1, performance.now() - current.time);
+      const committed = travel > width * 0.25 || (travel > 40 && velocity > 0.5);
+      onChange(committed ? !open : open);
     }
     gesture.current = null;
     setOffset(null);
@@ -81,6 +85,7 @@ export function useSidebarGesture(
           y: event.clientY,
           start: open ? width : 0,
           moved: false,
+          time: performance.now(),
           target,
         };
       },
@@ -89,7 +94,7 @@ export function useSidebarGesture(
         if (!current || current.id !== event.pointerId) return;
         const x = (event.clientX - current.x) * direction,
           y = event.clientY - current.y;
-        if (!current.moved && !open && x < -8) {
+        if (!current.moved && (open ? x > 8 : x < -8)) {
           gesture.current = null;
           return;
         }
@@ -120,6 +125,7 @@ export function useSidebarGesture(
       },
       onPointerUp: finish,
       onPointerCancel: (event: PointerEvent) => finish(event, true),
+      onLostPointerCapture: (event: PointerEvent) => finish(event, true),
       onClickCapture(event: React.MouseEvent) {
         if (offset !== null || performance.now() < suppressClickUntil.current) {
           event.preventDefault();
