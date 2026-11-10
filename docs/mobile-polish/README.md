@@ -2,6 +2,8 @@
 
 32 surfaces in light and dark at 390×844, with iPhone-style safe areas. These are browser captures of the shared UI. Native SwiftUI glass, OS pickers, permissions and the software keyboard require device verification. The demo is simulated; the two PDF images below come from live-daemon acceptance.
 
+The model-picker captures show the shared bottom drawer used by the compact composer, with search and provider navigation.
+
 - Navigation: [light](light-navigation-overview.png) · [dark](dark-navigation-overview.png)
 - Workspace: [light](light-workspace-overview.png) · [dark](dark-workspace-overview.png)
 - Settings: [light](light-settings-overview.png) · [dark](dark-settings-overview.png)

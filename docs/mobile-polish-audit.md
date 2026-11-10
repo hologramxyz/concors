@@ -32,6 +32,11 @@ is added. Measure cold launch and PDF scrolling on the shipping iPhone before re
 The settings review also found that an older daemon could leave Subscriptions showing
 “Connecting…” indefinitely. It now explains that the machine needs a Concors service update.
 
+The model selector now uses the shared bottom drawer in the compact composer, including model
+search, provider navigation, and pull-down dismissal. It opens with focus on the list so the
+software keyboard stays closed until search is tapped. Selection and dismissal return focus to
+the trigger and preserve the draft. The iOS native composer already uses the system bottom sheet.
+
 Native control geometry now also publishes when a panel transition ends or is cancelled. A busy
 frame can exceed the normal tracking window; the final update prevents a glass button from staying
 partly visible after its panel closes.
