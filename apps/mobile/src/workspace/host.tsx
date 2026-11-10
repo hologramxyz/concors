@@ -42,6 +42,8 @@ import { useAppearance } from "../appearance-provider";
 import { disablePush, enablePush, pushEnabled } from "../platform/notifications";
 import { Button, Copy } from "../ui";
 import { WorkspaceRenderer } from "./renderer";
+import { AISharingDrawer } from "./ai-sharing-drawer";
+import { useAISharingPrompt } from "./use-ai-sharing-prompt";
 import type { WorkspaceRendererHandle } from "./renderer-types";
 import { dispatchMobileApi } from "./api";
 import { assertWorkspaceActionAllowed } from "./access";
@@ -155,6 +157,7 @@ function SignedInWorkspace() {
     [transport, rendererKey],
   );
   const requiresAISharing = requiresAISharingPermission(Platform.OS, config.demo);
+  const sharingPrompt = useAISharingPrompt(connectionId);
   const sharingUser = auth.direct ? "direct" : auth.me?.user.id;
   const sharingOrganization = auth.me?.session.activeOrganizationId;
   const sharingStore = useMemo(() => {
@@ -179,20 +182,7 @@ function SignedInWorkspace() {
       transport && requiresAISharing
         ? createAISharingPermission(
             transport,
-            (disclosure) =>
-              Platform.OS === "web"
-                ? Promise.resolve(window.confirm(`Allow AI data sharing?\n\n${disclosure.details}`))
-                : new Promise<boolean>((resolve) =>
-                    Alert.alert(
-                      "Allow AI data sharing?",
-                      disclosure.details,
-                      [
-                        { text: "Don't allow", style: "cancel", onPress: () => resolve(false) },
-                        { text: "Allow sharing", onPress: () => resolve(true) },
-                      ],
-                      { cancelable: true, onDismiss: () => resolve(false) },
-                    ),
-                  ),
+            sharingPrompt.ask,
             (status) => setAISharingGrant({ connectionId, status }),
             sharingStore,
           )
@@ -213,7 +203,7 @@ function SignedInWorkspace() {
       aiPermission.current = null;
       relay.current = null;
     };
-  }, [transport, connectionId, sharingStore, requiresAISharing]);
+  }, [transport, connectionId, sharingStore, requiresAISharing, sharingPrompt.ask]);
   const userId = auth.me?.user.id;
   useEffect(() => {
     alive.current = true;
@@ -559,6 +549,13 @@ function SignedInWorkspace() {
           )}
         </View>
       </KeyboardAvoidingView>
+      {requiresAISharing && sharingPrompt.prompt && (
+        <AISharingDrawer
+          key={sharingPrompt.prompt.id}
+          disclosure={sharingPrompt.prompt.disclosure}
+          onAnswer={(allowed) => sharingPrompt.answer(sharingPrompt.prompt!.id, allowed)}
+        />
+      )}
     </View>
   );
 }
