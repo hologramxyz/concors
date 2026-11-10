@@ -91,7 +91,7 @@ test("mobile uploads more than three files, and files over 1 MB, through the nat
           const pixel = canvas
             .getContext("2d")
             ?.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
-          return !!pixel && pixel[0] > 200 && pixel[1] < 60;
+          return (pixel?.[0] ?? 0) > 200 && (pixel?.[1] ?? 255) < 60;
         }),
       )
       .toBe(true);

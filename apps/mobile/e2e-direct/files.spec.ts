@@ -105,7 +105,7 @@ test("mobile PDFs render offline, fit the phone, zoom and release distant page b
           const pixel = canvas
             .getContext("2d")
             ?.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
-          return !!pixel && pixel[0] > 200 && pixel[1] < 60 && pixel[2] < 60;
+          return (pixel?.[0] ?? 0) > 200 && (pixel?.[1] ?? 255) < 60 && (pixel?.[2] ?? 255) < 60;
         }),
       )
       .toBe(true);
