@@ -22,6 +22,7 @@ import { openExternal, openPreview } from "@/tauri/open-external";
 import { canSaveFiles, saveFile } from "@/tauri";
 import { LinkMenu } from "./link-menu";
 import { isFileLink, localPreviewLink, previewLinkUrl } from "./preview-links";
+import { remarkFileMentions } from "./file-mentions";
 import { InlineImage } from "./attachment-preview";
 import { messageImageIndex } from "./message-images";
 import { quotedSource } from "./markdown-quote";
@@ -174,6 +175,8 @@ function MarkdownLink({ children: content, href, node: _node, ...props }: LinkPr
     );
   }
   const open = href && openFile ? openFile(href, sourcePath) : null;
+  // A file named in plain text that the chat cannot open stays as the agent wrote it.
+  if (!open && "data-file-mention" in props) return <>{content}</>;
   // A file the chat cannot open (outside the project, or no project at all) reads as plain text:
   // following it would only land on a broken page inside the app.
   if (!href || (!open && isFileLink(href)))
@@ -235,6 +238,10 @@ const components: Components = {
   blockquote: MarkdownQuote,
 };
 
+const PLAIN = [remarkGfm];
+// Only where files can open: elsewhere a mention would turn into a link to nowhere.
+const WITH_FILE_MENTIONS = [remarkGfm, remarkFileMentions];
+
 export function AgentMarkdown({
   children,
   sourcePath,
@@ -250,7 +257,7 @@ export function AgentMarkdown({
     <MarkdownScope value={{ item, sourcePath, source: children }}>
       <div className="chat-markdown min-w-0 break-words">
         <Markdown
-          remarkPlugins={[remarkGfm]}
+          remarkPlugins={openFile ? WITH_FILE_MENTIONS : PLAIN}
           // Image sources are only matched against the images the daemon kept, never loaded.
           urlTransform={(url, key) =>
             key === "src" ||
