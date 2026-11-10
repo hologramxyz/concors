@@ -1,0 +1,43 @@
+{
+  "width": 1080,
+  "height": 1920,
+  "locale": "en-US",
+  "frames": [
+    {
+      "id": "01-agents",
+      "theme": "paper",
+      "eyebrow": "AGENT ORCHESTRATION, ON ANDROID",
+      "headline": ["Your AI agents.", "Within reach."],
+      "description": "Keep coding moving, wherever you are.",
+      "screen": "marketing-agent.png",
+      "footer": "FOLLOW THE WORK"
+    },
+    {
+      "id": "02-approvals",
+      "theme": "ink",
+      "eyebrow": "KEEP THE NEXT STEP MOVING",
+      "headline": ["Unblock work.", "On your terms."],
+      "description": "Review agent requests and choose the next step.",
+      "screen": "marketing-approval.png",
+      "footer": "REVIEW. RESPOND. KEEP GOING."
+    },
+    {
+      "id": "03-workspaces",
+      "theme": "paper",
+      "eyebrow": "A CLEAR VIEW OF YOUR WORK",
+      "headline": ["Every project.", "One place."],
+      "description": "Move between your connected workspaces.",
+      "screen": "marketing-workspaces.png",
+      "footer": "STAY IN THE LOOP"
+    },
+    {
+      "id": "04-terminal",
+      "theme": "ink",
+      "eyebrow": "THE TOOLS YOU NEED, WITH YOU",
+      "headline": ["Your terminal.", "In your pocket."],
+      "description": "Check output on connected machines.",
+      "screen": "marketing-terminal.png",
+      "footer": "CONNECT MACHINES FROM THE DESKTOP APP"
+    }
+  ]
+}

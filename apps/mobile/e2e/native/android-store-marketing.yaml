@@ -1,0 +1,51 @@
+appId: xyz.hologram.concors.preview
+---
+# Capture the installed Android app, with the same opt-in fictional projects as iPhone.
+- launchApp:
+    clearState: true
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            visible: "System UI isn't responding"
+          commands:
+            - tapOn: "Wait"
+      - assertVisible: "Explore demo"
+- tapOn: "Explore demo"
+- extendedWaitUntil:
+    visible: "Message Codex"
+    timeout: 45000
+- assertVisible: "Search improvements"
+# WebView accessibility can report clipped text as visible; scroll the actual timeline.
+- repeat:
+    times: 3
+    commands:
+      - swipe:
+          start: "50%,50%"
+          end: "50%,80%"
+          duration: 500
+          waitToSettleTimeoutMs: 500
+- takeScreenshot: apps/mobile/test-results/android/marketing-agent
+- repeat:
+    times: 3
+    commands:
+      - swipe:
+          start: "50%,75%"
+          end: "50%,35%"
+          duration: 500
+          waitToSettleTimeoutMs: 500
+- assertVisible: "Allow once"
+- assertVisible: "Run the test suite?"
+- takeScreenshot: apps/mobile/test-results/android/marketing-approval
+- tapOn: "Checks"
+- extendedWaitUntil:
+    visible: "Show keyboard"
+    timeout: 15000
+- takeScreenshot: apps/mobile/test-results/android/marketing-terminal
+- tapOn: "Search improvements"
+- tapOn: "Workspace: Orbit"
+- assertVisible: "Workspaces"
+- assertVisible: "Atlas API"
+- assertVisible: "Studio"
+- takeScreenshot: apps/mobile/test-results/android/marketing-workspaces

@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-11-10T03:18:40.112Z",
+  "productionEmailLoginVerified": true,
+  "pkceExchangeVerified": true,
+  "loginVerificationEnvironment": "Chromium browser with private fixed test code and loopback callback; not Android-native OAuth",
+  "machineCount": 1,
+  "reviewMachineRunning": true,
+  "reviewMachineTlsHealthVerified": true,
+  "gatewayActive": true,
+  "sessionHostActive": true,
+  "reviewAiServiceActive": true,
+  "realAiReplyPreviouslyVerified": true,
+  "previousAiEvidence": "../reviewer-ai-operations.md",
+  "physicalAndroidVerified": false,
+  "credentialValuesIncluded": false
+}

@@ -1,0 +1,114 @@
+{
+  "checkedAt": "2026-11-10T03:21:17.411Z",
+  "platform": "android",
+  "packageName": "xyz.hologram.concors",
+  "appVersion": "0.1.0",
+  "versionCode": 3,
+  "developerAccountId": "8831514612940319255",
+  "androidBinaryPrepared": true,
+  "readyForPlayUpload": false,
+  "internalTestAvailable": false,
+  "publicSubmissionReady": false,
+  "accountVerificationObserved": false,
+  "playPackageProbe": {
+    "status": 404,
+    "message": "Package not found: xyz.hologram.concors.",
+    "checkedAt": "2026-11-10T03:21:17.411Z"
+  },
+  "gates": [
+    {
+      "id": "cloud-and-expo",
+      "status": "verified",
+      "evidence": [
+        "Dedicated concors-mobile-hologram project in Hologram Cloud organization",
+        "Firebase Android app matches production package",
+        "EAS production GOOGLE_SERVICES_JSON file assigned",
+        "Dedicated submission and FCM credentials assigned; FCM authorization validated without sending a device push"
+      ],
+      "analyticsLinked": false
+    },
+    {
+      "id": "signed-binary",
+      "status": "verified",
+      "evidence": ["build-3.json"],
+      "limitations": [
+        "Original AAB upload certificate checked against Expo; Play app signing enrollment still pending",
+        "No physical 16 KB-device runtime test"
+      ]
+    },
+    {
+      "id": "native-launch",
+      "status": "verified",
+      "evidence": ["build-3.json#nativeSmoke"],
+      "limitations": [
+        "Derived APK signed with a temporary emulator test key",
+        "Welcome screen and sign-in availability only; no completed Android OAuth"
+      ]
+    },
+    {
+      "id": "native-workspace",
+      "status": "partial",
+      "evidence": ["https://github.com/hologramxyz/concors/actions/runs/42740003578"],
+      "limitations": [
+        "Preview fixture keyboard, navigation and draft preservation passed; production Android workspace/authentication still needs an installed release check"
+      ]
+    },
+    {
+      "id": "reviewer-backend",
+      "status": "verified",
+      "evidence": ["reviewer-backend.json", "../reviewer-ai-operations.md"],
+      "limitations": [
+        "Browser production email/PKCE and running review machine verified; Android-native login not yet verified",
+        "Enter private credentials into Play App access; do not publish them"
+      ]
+    },
+    {
+      "id": "android-push",
+      "status": "pending",
+      "evidence": [
+        "Firebase/FCM credentials configured",
+        "Validate-only FCM request reached invalid-token validation"
+      ],
+      "remaining": "Check real Android notification permission, delivery, chat routing and opt-out on the installed release; iOS evidence does not verify Android delivery"
+    },
+    {
+      "id": "public-pages",
+      "status": "verified",
+      "evidence": [
+        "https://github.com/hologramxyz/concors-web/pull/19",
+        "https://concors.dev/privacy",
+        "https://concors.dev/support",
+        "https://concors.dev/terms",
+        "https://concors.dev/account/delete"
+      ]
+    },
+    {
+      "id": "store-material",
+      "status": "prepared-not-uploaded",
+      "evidence": [
+        "listing.json",
+        "asset-manifest.json",
+        "capture-evidence.json",
+        "data-safety.md",
+        "data-safety-draft.csv",
+        "console-answers.md"
+      ],
+      "remaining": "Upload listing/assets/disclosures and finish current Console forms, IARC and private App access"
+    },
+    {
+      "id": "play-account-access",
+      "status": "blocked",
+      "remaining": "Owner creates Concors app record and grants the dedicated submission service account app access; confirm account verification and package availability"
+    },
+    {
+      "id": "internal-release",
+      "status": "blocked",
+      "remaining": "Upload audited build 3, verify Play signing/processing, complete internal release, select testers and read back opt-in URL; no upload or release performed"
+    }
+  ],
+  "httpsAndroidAppLinks": {
+    "enabled": false,
+    "note": "Native sign-in uses existing supported callback routing; HTTPS app links are not advertised or enabled"
+  },
+  "credentialValuesIncluded": false
+}
