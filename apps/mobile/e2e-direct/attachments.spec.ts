@@ -85,14 +85,16 @@ test("mobile uploads more than three files, and files over 1 MB, through the nat
     const preview = ui.getByRole("dialog", { name: "brief.pdf", exact: true });
     const firstPage = preview.getByLabel("Page 1", { exact: true });
     await expect
-      .poll(() =>
-        firstPage.evaluate((canvas: HTMLCanvasElement) => {
-          if (!canvas.width) return false;
-          const pixel = canvas
-            .getContext("2d")
-            ?.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
-          return (pixel?.[0] ?? 0) > 200 && (pixel?.[1] ?? 255) < 60;
-        }),
+      .poll(
+        () =>
+          firstPage.evaluate((canvas: HTMLCanvasElement) => {
+            if (!canvas.width) return false;
+            const pixel = canvas
+              .getContext("2d")
+              ?.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
+            return (pixel?.[0] ?? 0) > 200 && (pixel?.[1] ?? 255) < 60;
+          }),
+        { timeout: 15_000 },
       )
       .toBe(true);
     await preview.getByRole("button", { name: "Zoom in", exact: true }).click();

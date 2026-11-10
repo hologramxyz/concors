@@ -111,6 +111,7 @@ function PdfPage({
   const frame = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [aspect, setAspect] = useState(Math.SQRT2);
+  const [renderState, setRenderState] = useState<"pending" | "ready" | "error">("pending");
   const [width, setWidth] = useState(0);
   const [near, setNear] = useState(number <= 2);
   const drawn = useRef(false);
@@ -122,7 +123,10 @@ function PdfPage({
     });
     const intersect = new IntersectionObserver(
       ([entry]) => {
-        if (entry) setNear(entry.isIntersecting);
+        if (entry) {
+          setNear(entry.isIntersecting);
+          if (!entry.isIntersecting) setRenderState("pending");
+        }
       },
       { rootMargin: "100% 0px" },
     );
@@ -182,9 +186,12 @@ function PdfPage({
             target.height = drawing.height;
             target.getContext("2d")?.drawImage(drawing, 0, 0);
             drawn.current = true;
+            setRenderState("ready");
           });
         })
-        .catch(() => undefined);
+        .catch(() => {
+          if (!cancelled) setRenderState("error");
+        });
     // The first drawing goes straight away; a redraw waits for a pinch or resize to settle.
     const timer = drawn.current ? setTimeout(render, 150) : (render(), undefined);
     return () => {
@@ -197,9 +204,18 @@ function PdfPage({
     // Auto margins centre a page that fits and let one wider than the tab scroll from its left edge.
     <div
       ref={frame}
-      className="mx-auto shrink-0"
+      className="relative mx-auto shrink-0"
       style={{ width: `calc(min(100%, 56rem) * ${zoom})` }}
     >
+      {near && renderState !== "ready" && (
+        <div className="pointer-events-none absolute inset-0 grid place-items-center p-4 text-center text-xs text-muted-foreground">
+          <p role={renderState === "error" ? "alert" : "status"}>
+            {renderState === "error"
+              ? "This page could not be rendered."
+              : `Rendering page ${number}…`}
+          </p>
+        </div>
+      )}
       <canvas
         ref={canvas}
         aria-label={`Page ${number}`}

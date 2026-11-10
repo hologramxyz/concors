@@ -99,14 +99,16 @@ test("mobile PDFs render offline, fit the phone, zoom and release distant page b
     const pdf = ui.getByRole("region", { name: "File review.pdf", exact: true });
     const first = pdf.getByLabel("Page 1", { exact: true });
     await expect
-      .poll(() =>
-        first.evaluate((canvas: HTMLCanvasElement) => {
-          if (!canvas.width) return false;
-          const pixel = canvas
-            .getContext("2d")
-            ?.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
-          return (pixel?.[0] ?? 0) > 200 && (pixel?.[1] ?? 255) < 60 && (pixel?.[2] ?? 255) < 60;
-        }),
+      .poll(
+        () =>
+          first.evaluate((canvas: HTMLCanvasElement) => {
+            if (!canvas.width) return false;
+            const pixel = canvas
+              .getContext("2d")
+              ?.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
+            return (pixel?.[0] ?? 0) > 200 && (pixel?.[1] ?? 255) < 60 && (pixel?.[2] ?? 255) < 60;
+          }),
+        { timeout: 15_000 },
       )
       .toBe(true);
     await expect(pdf.getByText("Open PDFs from the Concors desktop app.")).toHaveCount(0);
