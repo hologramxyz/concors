@@ -389,6 +389,18 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
     childId: z.string().min(1).max(4096),
   }),
   z.object({ kind: z.literal("mcp-status"), sessionId: Id }),
+  /**
+   * Signing in to an MCP server: `start` returns the page to sign in on; `callback` hands over the
+   * address the browser ended on, for a server that returns to the machine itself (which a browser
+   * elsewhere cannot reach); `check` reconnects the server to pick up a sign-in made on that page.
+   */
+  z.object({
+    kind: z.literal("mcp-auth"),
+    sessionId: Id,
+    server: z.string().min(1).max(256),
+    action: z.enum(["start", "callback", "check"]),
+    callbackUrl: z.string().url().max(8192).optional(),
+  }),
   z.object({ kind: z.literal("sessions-list"), sessionId: Id }),
   z.object({
     kind: z.literal("import-session"),
@@ -537,6 +549,11 @@ export const AgentResultSchema = z.object({
         .array(z.object({ name: z.string(), status: z.string() }))
         .max(100)
         .optional(),
+      /**
+       * Where to sign in to an MCP server, and whether the page returns to the machine itself, in
+       * which case a browser on another computer lands on an address to paste back.
+       */
+      mcpSignIn: z.object({ url: z.string().url(), callback: z.boolean() }).optional(),
       account: AgentAccountSchema.optional(),
       attachment: AgentAttachmentSchema.optional(),
       /** An uploaded attachment too large for `attachment`; older clients ignore it. */

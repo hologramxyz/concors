@@ -90,6 +90,7 @@ it("drops remembered choices the provider no longer offers", () => {
           importSessions: false,
           history: false,
           mcpStatus: false,
+          mcpSignIn: false,
           mcp: false,
         },
       },

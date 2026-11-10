@@ -42,6 +42,8 @@ export const AgentControlsSchema = z.object({
   importSessions: z.boolean().default(false),
   history: z.boolean().default(false),
   mcpStatus: z.boolean().default(false),
+  /** Whether an MCP server that needs sign-in can be signed in to from the app. */
+  mcpSignIn: z.boolean().default(false),
   mcp: z.boolean().default(false),
 });
 export type AgentControls = z.infer<typeof AgentControlsSchema>;
