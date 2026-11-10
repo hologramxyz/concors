@@ -27,6 +27,9 @@ for (const colorScheme of ["light", "dark"] as const) {
         style: ".__expo_fast_refresh { visibility: hidden !important; }",
       });
     };
+    await page
+      .getByRole("img", { name: "Concors", exact: true })
+      .evaluate((image: HTMLImageElement) => image.decode());
     await capture("welcome");
     await page.getByRole("button", { name: "Explore demo" }).click();
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
@@ -135,9 +138,11 @@ for (const colorScheme of ["light", "dark"] as const) {
     await capture("pull-request-detail");
     await page.goto("/support/report");
     await expect(page.getByText("Report content or a problem", { exact: true })).toBeVisible();
+    await expect(page.getByText("support/report", { exact: true })).toHaveCount(0);
     await capture("support-report");
     await page.goto("/account/delete");
     await expect(page.getByText(/This preview has no signed-in Concors account/)).toBeVisible();
+    await expect(page.getByText("account/delete", { exact: true })).toHaveCount(0);
     await capture("account-deletion-preview");
     expect(errors).toEqual([]);
   });
