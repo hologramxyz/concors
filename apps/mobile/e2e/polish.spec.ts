@@ -72,12 +72,68 @@ test("opening and briefly reconnecting the workspace never flashes a reconnect n
   await expect(ui.getByText(/Reconnecting/)).toHaveCount(0);
 });
 
+test("model selection uses a full-width drawer with search and provider navigation", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const draft = ui.getByRole("textbox", { name: "Message Codex" });
+  await draft.fill("Keep my draft while choosing a model");
+  const trigger = ui.getByRole("button", { name: "Agent and model", exact: true });
+  await expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
+  await trigger.click();
+  const drawer = ui.getByRole("dialog", { name: "Agent and model", exact: true });
+  await expect(drawer).toHaveAttribute("data-mobile-drawer", "true");
+  await expect(drawer.getByRole("listbox", { name: "Models", exact: true })).toBeFocused();
+  const search = drawer.getByRole("combobox", { name: "Search models" });
+  await expect(search).not.toBeFocused();
+  for (const [width, height] of [
+    [320, 844],
+    [430, 844],
+    [390, 420],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await expect
+      .poll(() =>
+        drawer.evaluate((el) => {
+          const box = el.getBoundingClientRect();
+          return (
+            Math.abs(box.left) < 1 &&
+            Math.abs(box.right - innerWidth) < 1 &&
+            Math.abs(box.bottom - innerHeight) < 1 &&
+            box.top >= 0 &&
+            el.scrollWidth <= el.clientWidth
+          );
+        }),
+      )
+      .toBe(true);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  await search.fill("No matching model");
+  await expect(drawer.getByRole("option")).toHaveCount(0);
+  await search.fill("");
+  await drawer.getByRole("button", { name: "Back to providers" }).click();
+  const providers = drawer.getByRole("listbox", { name: "Providers", exact: true });
+  await expect(providers).toBeFocused();
+  await drawer.getByRole("combobox", { name: "Search providers" }).fill("codex");
+  await providers.getByRole("option", { name: /^Codex\b/ }).click();
+  await expect(search).toHaveValue("");
+  await drawer.getByRole("option", { name: "Codex", exact: true }).click();
+  await expect(drawer).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await expect(draft).toHaveValue("Keep my draft while choosing a model");
+  await trigger.click();
+  await drawer.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(drawer).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
 test("every shared drawer pulls down to dismiss and restores its trigger", async ({ page }) => {
   const ui = await enter(page);
   const draft = ui.getByRole("textbox", { name: "Message Codex" });
   await draft.fill("Keep this draft while reviewing drawers");
-  for (const name of ["Workspaces", "New tab"]) {
-    if (name === "Workspaces") await ui.getByRole("button", { name: /^Workspace: / }).click();
+  for (const name of ["Agent and model", "Workspaces", "New tab"]) {
+    if (name === "Agent and model") await ui.getByRole("button", { name, exact: true }).click();
+    else if (name === "Workspaces") await ui.getByRole("button", { name: /^Workspace: / }).click();
     else {
       await ui.getByRole("log", { name: "Chat timeline" }).click({ position: { x: 180, y: 250 } });
       await ui.getByRole("button", { name: "New tab", exact: true }).click();

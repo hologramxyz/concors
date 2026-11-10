@@ -45,6 +45,10 @@ for (const colorScheme of ["light", "dark"] as const) {
     await input.fill("Review this layout before sending.");
     await capture("composer-expanded");
     await ui.getByRole("button", { name: "Agent and model", exact: true }).click();
+    await expect(ui.getByRole("dialog", { name: "Agent and model", exact: true })).toHaveAttribute(
+      "data-mobile-drawer",
+      "true",
+    );
     await capture("model-picker");
     await page.keyboard.press("Escape");
     await input.fill("");
