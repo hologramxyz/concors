@@ -1496,3 +1496,71 @@ it("shows the turn Claude starts by itself when a background task reports back",
   await new Promise((resolve) => setTimeout(resolve, 50));
   expect(turns("turn/started")).toHaveLength(3);
 });
+
+it("signs in to Claude MCP servers through Claude Code's own sign-in calls", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-claude-mcp-"));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(join(directory, process.platform === "win32" ? "claude.cmd" : "claude"), "", {
+    mode: 0o755,
+  });
+  vi.stubEnv("PATH", directory);
+  const calls: unknown[][] = [];
+  const createQuery = vi.fn(() => {
+    const messages = new PassThrough({ objectMode: true });
+    return Object.assign(messages, {
+      initializationResult: async () => ({
+        models: [{ value: "default", displayName: "Default" }],
+      }),
+      getContextUsage: async () => ({ model: "claude-sonnet-5" }),
+      setModel: async () => undefined,
+      setPermissionMode: async () => undefined,
+      // As Claude Code answers: a claude.ai connector signs in on claude.ai, another server's
+      // page returns to a port on the machine.
+      mcpAuthenticate: async (server: string) => {
+        calls.push(["authenticate", server]);
+        return server === "claude.ai Gmail"
+          ? { authUrl: "https://claude.ai/start-auth/gmail", callbackExpected: false }
+          : { authUrl: "https://figma.example/oauth", callbackExpected: true, callbackPort: 53771 };
+      },
+      mcpSubmitOAuthCallbackUrl: async (server: string, url: string) => {
+        calls.push(["callback", server, url]);
+        if (!url.includes("state=right")) throw new Error("OAuth state mismatch");
+        return {};
+      },
+      reconnectMcpServer: async (server: string) => void calls.push(["reconnect", server]),
+      close: () => {
+        messages.end();
+      },
+    }) as unknown as Query;
+  });
+  const provider = new ClaudeProvider(directory, vi.fn(), createQuery);
+  await provider.initialize();
+  await provider.request("thread/start");
+  expect(object(await provider.request("session/controls"))["mcpSignIn"]).toBe(true);
+  expect(await provider.request("mcp/authenticate", { server: "claude.ai Gmail" })).toEqual({
+    url: "https://claude.ai/start-auth/gmail",
+    callback: false,
+  });
+  expect(await provider.request("mcp/authenticate", { server: "figma" })).toEqual({
+    url: "https://figma.example/oauth",
+    callback: true,
+  });
+  await expect(
+    provider.request("mcp/oauthCallback", {
+      server: "figma",
+      callbackUrl: "http://localhost:53771/callback?code=c&state=wrong",
+    }),
+  ).rejects.toThrow(/did not finish signing in to figma.*state mismatch/);
+  await provider.request("mcp/oauthCallback", {
+    server: "figma",
+    callbackUrl: "http://localhost:53771/callback?code=c&state=right",
+  });
+  await provider.request("mcp/reconnect", { server: "claude.ai Gmail" });
+  expect(calls.map((call) => call.slice(0, 2).join(" "))).toEqual([
+    "authenticate claude.ai Gmail",
+    "authenticate figma",
+    "callback figma",
+    "callback figma",
+    "reconnect claude.ai Gmail",
+  ]);
+});
