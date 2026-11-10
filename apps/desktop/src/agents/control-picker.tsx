@@ -2,6 +2,13 @@ import { Fragment, useContext, useId, useState, useRef, useEffect, type ReactNod
 import { ControlTooltip } from "./control-tooltip";
 import { ComposerSurfaceContext } from "./composer-expansion";
 import { CompactLayoutContext } from "@/components/compact-layout";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Popover } from "radix-ui";
 import { ArrowLeft, Check, ChevronRight, Search } from "lucide-react";
 
@@ -38,6 +45,7 @@ export function ControlPicker({
   status,
   notice,
   searchable = true,
+  mobileDrawer = false,
 }: {
   label: string;
   value: string;
@@ -60,8 +68,13 @@ export function ControlPicker({
   notice?: string | undefined;
   /** A menu of a few options has nothing worth searching. */
   searchable?: boolean;
+  /** Use the shared bottom drawer in phone hosts, retaining the desktop popover. */
+  mobileDrawer?: boolean;
 }) {
   const compact = useContext(CompactLayoutContext);
+  const drawer = compact && mobileDrawer;
+  const Root = drawer ? Dialog : Popover.Root;
+  const Trigger = drawer ? DialogTrigger : Popover.Trigger;
   // A touch screen has no keyboard position to show, and the first row would read as the selection.
   const resting = compact ? -1 : 0;
   // On a phone the field takes a row and the keyboard takes half the screen, for a few options.
@@ -100,7 +113,7 @@ export function ControlPicker({
     setQuery("");
     setActive(resting);
     if (list.current) list.current.scrollTop = 0;
-    (search.current ?? list.current)?.focus();
+    (drawer ? list.current : (search.current ?? list.current))?.focus();
   };
   const select = (next: string) => {
     if (choosingProvider) {
@@ -113,7 +126,7 @@ export function ControlPicker({
     setQuiet(true);
   };
   const triggerButton = (
-    <Popover.Trigger
+    <Trigger
       ref={trigger}
       type="button"
       aria-label={label}
@@ -127,10 +140,133 @@ export function ControlPicker({
       {icon}
       {showValue && <span className="truncate">{currentLabel}</span>}
       {notice && <span aria-hidden="true" className="agent-control-dot" />}
-    </Popover.Trigger>
+    </Trigger>
+  );
+  const heading = groups && (
+    <>
+      {group && (
+        <button
+          type="button"
+          aria-label="Back to providers"
+          onClick={() => navigate(undefined)}
+          className="mobile-tap-target flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2"
+        >
+          <ArrowLeft className="size-4" />
+        </button>
+      )}
+      {group?.icon}
+      {drawer ? (
+        <DialogTitle>{group?.label ?? "Providers"}</DialogTitle>
+      ) : (
+        <span className="truncate font-medium">{group?.label ?? "Providers"}</span>
+      )}
+    </>
+  );
+  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      setActive((a) =>
+        Math.max(0, Math.min(visible.length - 1, a + (e.key === "ArrowDown" ? 1 : -1))),
+      );
+    }
+    if (e.key === "Enter" && (e.target === search.current || e.target === list.current)) {
+      e.preventDefault();
+      const option = visible[active];
+      if (option) select(option.id);
+    }
+  };
+  const content = (
+    <>
+      {!drawer && groups && (
+        <div className="flex min-h-10 items-center gap-2 border-b px-2 pb-1.5 text-sm">
+          {heading}
+        </div>
+      )}
+      {searching && (
+        <div className="flex shrink-0 items-center gap-2 border-b px-2 pt-1 pb-2 text-muted-foreground">
+          <Search className="size-4" />
+          <input
+            ref={search}
+            role="combobox"
+            aria-label={`Search ${searchLabel.toLowerCase()}`}
+            aria-expanded="true"
+            aria-controls={id}
+            aria-activedescendant={visible[active] ? `${id}-${active}` : undefined}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setActive(0);
+            }}
+            placeholder={group ? "Search models" : searchLabel}
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+          />
+        </div>
+      )}
+      <div
+        ref={list}
+        id={id}
+        role="listbox"
+        aria-label={searchLabel}
+        // A phone opens without raising its keyboard; search takes focus only when tapped.
+        tabIndex={drawer || !searching ? -1 : undefined}
+        aria-activedescendant={
+          (drawer || !searching) && visible[active] ? `${id}-${active}` : undefined
+        }
+        className={`chat-scroll min-h-0 overflow-auto outline-none ${drawer ? "max-h-[50dvh]" : "max-h-72"} ${searching ? "py-1" : ""}`}
+      >
+        {visible.map((option, index) => (
+          <Fragment key={option.id}>
+            {option.older && !visible[index - 1]?.older && index > 0 && (
+              <div role="none" data-older-models className="mx-2 my-1 border-t" />
+            )}
+            <button
+              type="button"
+              role="option"
+              id={`${id}-${index}`}
+              aria-selected={
+                choosingProvider
+                  ? selectedGroupId === option.id
+                  : (!groups || selectedGroupId === groupId) && value === option.id
+              }
+              onMouseMove={() => setActive(index)}
+              onClick={() => select(option.id)}
+              className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm ${drawer ? "min-h-11" : ""} ${active === index ? "bg-accent" : "hover:bg-accent"}`}
+            >
+              {option.icon}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{option.label}</span>
+                {option.description && (
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {option.description}
+                  </span>
+                )}
+              </span>
+              {choosingProvider ? (
+                <>
+                  {selectedGroupId === option.id && <Check className="size-4 shrink-0" />}
+                  <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                </>
+              ) : (
+                (!groups || selectedGroupId === groupId) &&
+                value === option.id && <Check className="size-4 shrink-0" />
+              )}
+            </button>
+          </Fragment>
+        ))}
+        {!visible.length && (
+          <p className="p-3 text-sm text-muted-foreground">{group?.emptyMessage ?? "No matches"}</p>
+        )}
+      </div>
+      {group?.footer}
+      {statusText && (
+        <p role="status" className="border-t px-2 py-2 text-xs text-muted-foreground">
+          {statusText}
+        </p>
+      )}
+    </>
   );
   return (
-    <Popover.Root
+    <Root
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
@@ -148,130 +284,44 @@ export function ControlPicker({
       >
         {triggerButton}
       </ControlTooltip>
-      <Popover.Portal>
-        <Popover.Content
+      {drawer ? (
+        <DialogContent
+          aria-label={label}
+          // Keep the drawer's accessible name stable while its provider heading changes.
+          aria-labelledby={undefined}
+          aria-describedby={undefined}
           data-composer-surface={composerSurface}
-          side="top"
-          align="start"
-          sideOffset={8}
-          className="z-50 w-72 max-w-[calc(100vw-24px)] overflow-hidden rounded-[calc(var(--radius-lg)+(0.375rem+1px)*var(--concentric))] border bg-popover p-1.5 text-popover-foreground shadow-lg"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
-            (search.current ?? list.current)?.focus();
+            list.current?.focus();
           }}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-              e.preventDefault();
-              setActive((a) =>
-                Math.max(0, Math.min(visible.length - 1, a + (e.key === "ArrowDown" ? 1 : -1))),
-              );
-            }
-            if (e.key === "Enter" && (e.target === search.current || e.target === list.current)) {
-              e.preventDefault();
-              const option = visible[active];
-              if (option) select(option.id);
-            }
-          }}
+          onKeyDown={onKeyDown}
         >
-          {groups && (
-            <div className="flex min-h-10 items-center gap-2 border-b px-2 pb-1.5 text-sm">
-              {group && (
-                <button
-                  type="button"
-                  aria-label="Back to providers"
-                  onClick={() => navigate(undefined)}
-                  className="mobile-tap-target flex size-8 shrink-0 items-center justify-center rounded-md hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2"
-                >
-                  <ArrowLeft className="size-4" />
-                </button>
-              )}
-              {group?.icon}
-              <span className="truncate font-medium">{group?.label ?? "Providers"}</span>
+          <DialogHeader>
+            <div className="flex min-h-11 items-center gap-2">
+              {heading ?? <DialogTitle>{label}</DialogTitle>}
             </div>
-          )}
-          {searching && (
-            <div className="flex items-center gap-2 border-b px-2 pt-1 pb-2 text-muted-foreground">
-              <Search className="size-4" />
-              <input
-                ref={search}
-                role="combobox"
-                aria-label={`Search ${searchLabel.toLowerCase()}`}
-                aria-expanded="true"
-                aria-controls={id}
-                aria-activedescendant={visible[active] ? `${id}-${active}` : undefined}
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setActive(0);
-                }}
-                placeholder={group ? "Search models" : searchLabel}
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none"
-              />
-            </div>
-          )}
-          <div
-            ref={list}
-            id={id}
-            role="listbox"
-            aria-label={searchLabel}
-            // Without a search box, the list itself takes focus so the arrow keys still work.
-            tabIndex={searching ? undefined : -1}
-            aria-activedescendant={!searching && visible[active] ? `${id}-${active}` : undefined}
-            className={`chat-scroll max-h-72 overflow-auto outline-none ${searching ? "py-1" : ""}`}
+          </DialogHeader>
+          {content}
+        </DialogContent>
+      ) : (
+        <Popover.Portal>
+          <Popover.Content
+            data-composer-surface={composerSurface}
+            side="top"
+            align="start"
+            sideOffset={8}
+            className="z-50 w-72 max-w-[calc(100vw-24px)] overflow-hidden rounded-[calc(var(--radius-lg)+(0.375rem+1px)*var(--concentric))] border bg-popover p-1.5 text-popover-foreground shadow-lg"
+            onOpenAutoFocus={(event) => {
+              event.preventDefault();
+              (search.current ?? list.current)?.focus();
+            }}
+            onKeyDown={onKeyDown}
           >
-            {visible.map((option, index) => (
-              <Fragment key={option.id}>
-                {option.older && !visible[index - 1]?.older && index > 0 && (
-                  <div role="none" data-older-models className="mx-2 my-1 border-t" />
-                )}
-                <button
-                  type="button"
-                  role="option"
-                  id={`${id}-${index}`}
-                  aria-selected={
-                    choosingProvider
-                      ? selectedGroupId === option.id
-                      : (!groups || selectedGroupId === groupId) && value === option.id
-                  }
-                  onMouseMove={() => setActive(index)}
-                  onClick={() => select(option.id)}
-                  className={`flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm ${active === index ? "bg-accent" : "hover:bg-accent"}`}
-                >
-                  {option.icon}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{option.label}</span>
-                    {option.description && (
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {option.description}
-                      </span>
-                    )}
-                  </span>
-                  {choosingProvider ? (
-                    <>
-                      {selectedGroupId === option.id && <Check className="size-4 shrink-0" />}
-                      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                    </>
-                  ) : (
-                    (!groups || selectedGroupId === groupId) &&
-                    value === option.id && <Check className="size-4 shrink-0" />
-                  )}
-                </button>
-              </Fragment>
-            ))}
-            {!visible.length && (
-              <p className="p-3 text-sm text-muted-foreground">
-                {group?.emptyMessage ?? "No matches"}
-              </p>
-            )}
-          </div>
-          {group?.footer}
-          {statusText && (
-            <p role="status" className="border-t px-2 py-2 text-xs text-muted-foreground">
-              {statusText}
-            </p>
-          )}
-        </Popover.Content>
-      </Popover.Portal>
-    </Popover.Root>
+            {content}
+          </Popover.Content>
+        </Popover.Portal>
+      )}
+    </Root>
   );
 }

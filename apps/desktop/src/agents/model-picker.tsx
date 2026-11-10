@@ -47,6 +47,7 @@ export function AgentModelPicker({
     <>
       <ControlPicker
         label="Agent and model"
+        mobileDrawer
         notice={
           version?.updating
             ? `Updating ${providerLabel}`
