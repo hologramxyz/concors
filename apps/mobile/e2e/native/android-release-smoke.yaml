@@ -1,0 +1,31 @@
+appId: xyz.hologram.concors
+---
+- launchApp:
+    clearState: true
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            visible: "System UI isn't responding"
+          commands:
+            - tapOn: "Wait"
+      - assertVisible: "Keep your work.*"
+- assertNotVisible: "Explore demo"
+- assertNotVisible: "Demo preview.*"
+- scrollUntilVisible:
+    element: "Continue with GitHub"
+    direction: DOWN
+    timeout: 45000
+- assertVisible: "Continue with GitHub"
+- scrollUntilVisible:
+    element: "Continue with email"
+    direction: DOWN
+- assertVisible: "Continue with email"
+- takeScreenshot: apps/mobile/test-results/android/production-sign-in
+- scrollUntilVisible:
+    element: "Terms"
+    direction: DOWN
+- assertVisible: "Support"
+- assertVisible: "Privacy"
+- takeScreenshot: apps/mobile/test-results/android/production-legal-links
