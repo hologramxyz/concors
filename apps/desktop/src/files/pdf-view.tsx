@@ -208,7 +208,7 @@ function PdfPage({
       style={{ width: `calc(min(100%, 56rem) * ${zoom})` }}
     >
       {near && renderState !== "ready" && (
-        <div className="pointer-events-none absolute inset-0 grid place-items-center p-4 text-center text-xs text-muted-foreground">
+        <div className="pointer-events-none absolute inset-0 grid place-items-center p-4 text-center text-xs text-neutral-600">
           <p role={renderState === "error" ? "alert" : "status"}>
             {renderState === "error"
               ? "This page could not be rendered."

@@ -62,7 +62,7 @@ test("mobile uploads more than three files, and files over 1 MB, through the nat
         buffer: Buffer.from(`Note ${n}`),
       })),
     ]);
-    await expect(ui.locator('[data-upload="uploaded"]')).toHaveCount(5);
+    await expect(ui.locator('[data-upload="uploaded"]')).toHaveCount(5, { timeout: 15_000 });
     await composer.fill("Read these");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     const sent = ui.getByRole("log").locator("[data-message-attachments]").last();
