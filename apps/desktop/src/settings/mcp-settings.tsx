@@ -1,5 +1,6 @@
+import { EmptyState } from "@/components/empty-state";
 import { useContext, useEffect, useState } from "react";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plug, Plus, Trash2 } from "lucide-react";
 import {
   MACHINE_MCP_SERVERS_CAPABILITY,
   McpServerInputSchema,
@@ -19,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Section, SettingsCard } from "@/views/settings-primitives";
+import { CompactLayoutContext } from "@/components/compact-layout";
 import { mcpServerInput, secretKeys } from "./mcp-servers";
 
 /**
@@ -26,6 +28,7 @@ import { mcpServerInput, secretKeys } from "./mcp-servers";
  * machine: the page knows their names only, and a saved value left blank is kept.
  */
 export function McpSettings() {
+  const compact = useContext(CompactLayoutContext);
   const connection = useContext(TerminalConnectionContext);
   const [state, setState] = useState(connection?.state);
   const [servers, setServers] = useState<McpServerSummary[] | null>(null);
@@ -77,22 +80,27 @@ export function McpSettings() {
       title="MCP servers"
       description="Tools every agent on this machine can use."
       actions={
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={!supported || !servers || servers.length >= 32}
-          onClick={() => setEditing("new")}
-        >
-          <Plus /> Add server
-        </Button>
+        !(compact && !supported) && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!supported || !servers || servers.length >= 32}
+            onClick={() => setEditing("new")}
+          >
+            <Plus /> Add server
+          </Button>
+        )
       }
     >
       {!supported ? (
-        <p role="status" className="text-sm text-muted-foreground">
+        <EmptyState
+          icon={Plug}
+          title={state?.status === "ready" ? "Update your machine" : "Connect a machine"}
+        >
           {state?.status === "ready"
             ? "Update this machine’s Concors service to manage MCP servers here."
             : "Connect to a machine to manage its MCP servers."}
-        </p>
+        </EmptyState>
       ) : (
         <SettingsCard className="divide-y">
           {servers?.length === 0 && (

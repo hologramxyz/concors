@@ -1,3 +1,4 @@
+import { EmptyState } from "@/components/empty-state";
 import { useContext, useEffect, useState } from "react";
 import {
   MACHINE_PLUGINS_CAPABILITY,
@@ -6,6 +7,7 @@ import {
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { Section, SettingsCard } from "@/views/settings-primitives";
+import { Puzzle } from "lucide-react";
 
 /** Where each CLI installs plugins, since Concors leaves installing them to the CLI. */
 const INSTALL_HINTS: Record<string, string> = {
@@ -56,11 +58,14 @@ export function PluginsSettings() {
       description="Skills, commands and tools for every chat on this machine."
     >
       {!supported ? (
-        <p role="status" className="text-sm text-muted-foreground">
+        <EmptyState
+          icon={Puzzle}
+          title={state?.status === "ready" ? "Update your machine" : "Connect a machine"}
+        >
           {state?.status === "ready"
             ? "Update this machine’s Concors service to see its plugins here."
             : "Connect to a machine to see its plugins."}
-        </p>
+        </EmptyState>
       ) : !providers ? (
         !error && (
           <p role="status" className="text-sm text-muted-foreground">
@@ -68,9 +73,9 @@ export function PluginsSettings() {
           </p>
         )
       ) : providers.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <EmptyState icon={Puzzle} title="No agent providers installed">
           Neither Claude Code nor Codex is installed on this machine.
-        </p>
+        </EmptyState>
       ) : (
         <div className="space-y-6">
           {providers.map((provider) => (
@@ -170,7 +175,7 @@ function ProviderPlugins({ provider }: { provider: ProviderStatus }) {
               checked={plugin.enabled}
               disabled={!plugin.canToggle || busy !== null}
               onChange={(event) => toggle(plugin, event.target.checked)}
-              className="mt-1 size-4 shrink-0 accent-primary"
+              className="mobile-setting-toggle mt-1 size-4 shrink-0 accent-primary"
             />
           </label>
         ))}
