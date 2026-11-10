@@ -132,10 +132,15 @@ daemon**, `EXPO_PUBLIC_DEMO=false`, and use a development/preview build. Restart
 with `--clear` after switching modes. The welcome screen offers **Connect to desktop**.
 This is a real workspace connection, not a demo account or a simulated machine.
 
-Connecting opens the workspace directly; there is no AI data-sharing onboarding page
-or replacement prompt. Managed access still requires authentication, and direct access
-still requires the private endpoint. Settings retains the ordinary privacy-policy link.
-Disconnecting closes this viewer, not the remote sessions.
+Connecting opens the workspace directly. In the native iOS app, the first action that can
+send data to AI services asks for permission in a compact bottom drawer. The short message
+names the recipients and data; **Details** expands the complete disclosure. **Allow sharing**
+is the only way to approve; declining or dismissing the drawer blocks the request. Approval
+is saved for this account and machine, and configuration changes require permission again.
+Settings → Account → AI data sharing lets you withdraw it. Existing work on the machine
+continues until stopped there. This consent UI is absent from desktop, Android and web previews.
+Managed access still requires authentication, and direct access still requires the private
+endpoint. Disconnecting closes this viewer, not the remote sessions.
 
 The host uses the same `DaemonConnection` protocol as desktop and obtains the actual
 machine ID from its workspace snapshot. Cloud login is not needed for the workspace;
