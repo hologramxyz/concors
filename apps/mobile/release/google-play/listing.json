@@ -1,0 +1,26 @@
+{
+  "status": "prepared-not-uploaded",
+  "packageName": "xyz.hologram.concors",
+  "defaultLanguage": "en-US",
+  "title": "Concors: Agent Orchestrator",
+  "shortDescription": "Follow AI agents, review requests and use your terminal from your phone.",
+  "fullDescription": "Keep your coding agents within reach. Concors connects your phone to development workspaces on your existing computers and servers.\n\nFOLLOW THE WORK\nRead agent conversations, review code changes and follow progress across connected projects.\n\nKEEP THE NEXT STEP MOVING\nAnswer questions, review tool requests and choose which actions to allow.\n\nYOUR TERMINAL, WITH YOU\nCheck command output and continue terminal sessions on a connected machine. Browse project files alongside your agents.\n\nYOUR MACHINES AND AI ACCOUNTS\nSign in to Concors and connect your machines from the desktop app at concors.dev. The mobile app uses existing machines; it does not provision or sell machines or AI subscriptions. Keep your machine online and its Concors daemon up to date.\n\nAgent tools and commands run on the connected machine. AI services use the provider and account configured for that agent and may have their own charges. Review the named service and data-sharing request before allowing AI actions.\n\nFree at launch. For people aged 16 and older.\n\nSupport: gm@hologram.xyz\nWebsite: https://concors.dev\nPrivacy: https://concors.dev/privacy",
+  "category": "PRODUCTIVITY",
+  "pricing": "FREE",
+  "countries": "all-available",
+  "contactEmail": "gm@hologram.xyz",
+  "website": "https://concors.dev",
+  "privacyPolicy": "https://concors.dev/privacy",
+  "accountDeletionUrl": "https://concors.dev/account/delete",
+  "containsAds": false,
+  "targetAgeGroups": ["16-17", "18+"],
+  "contentRating": "pending-IARC-questionnaire-not-inferred-from-minimum-age",
+  "initialTrack": "internal",
+  "initialReleaseStatus": "draft",
+  "releaseNotes": [
+    {
+      "language": "en-US",
+      "text": "First Android test release: connect existing workspaces, follow coding agents, review requests, browse files and continue terminal sessions."
+    }
+  ]
+}
