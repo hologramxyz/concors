@@ -133,6 +133,12 @@ for (const colorScheme of ["light", "dark"] as const) {
     await capture("pull-requests");
     await ui.getByText("Keep the composer at the bottom of the screen").click();
     await capture("pull-request-detail");
+    await page.goto("/support/report");
+    await expect(page.getByText("Report content or a problem", { exact: true })).toBeVisible();
+    await capture("support-report");
+    await page.goto("/account/delete");
+    await expect(page.getByText(/This preview has no signed-in Concors account/)).toBeVisible();
+    await capture("account-deletion-preview");
     expect(errors).toEqual([]);
   });
 }
