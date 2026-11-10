@@ -48,7 +48,7 @@ than selecting “no” indiscriminately.
 
 Treat AI generation conservatively as in scope. Prompts/content go to the agent's named provider
 after the app's data-sharing consent. The existing in-app report route is Settings → Account →
-Report AI content or a safety concern; reviewers should be able to reach it without leaving the
+Report content or a problem; reviewers should be able to reach it without leaving the
 app. Provider safeguards and the terms prohibit abusive or malicious use. Do not promise that all
 user-selected models are filtered identically. Google's policy requires prevention of prohibited
 content and in-app reporting; a provider disclaimer alone does not establish compliance.
