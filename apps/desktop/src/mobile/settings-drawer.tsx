@@ -254,6 +254,7 @@ export function SettingsDrawer({
                   </Button>
                 </div>
               </Section>
+              {host.aiSharing !== undefined && (
               <Section
                 title="AI data sharing"
                 description="Agent requests can share prompts, code, attachments and tool context with the configured AI services. Your choice is saved on this device for this account and machine. Changes to the configured services require permission again."
@@ -287,6 +288,7 @@ export function SettingsDrawer({
                   </Button>
                 </div>
               </Section>
+              )}
               {!host.direct && (
                 <Section
                   title="Delete account"

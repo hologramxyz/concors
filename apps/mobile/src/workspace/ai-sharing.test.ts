@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AgentInfo, ClientMessage, ProviderStatus } from "@concors/protocol";
-import { createAISharingPermission, createAISharingStore } from "./ai-sharing";
+import {
+  createAISharingPermission,
+  createAISharingStore,
+  requiresAISharingPermission,
+} from "./ai-sharing";
 const id = "11111111-1111-4111-8111-111111111111";
 const send = {
   type: "agent.request",
@@ -354,5 +358,16 @@ describe("AI sharing permission at the native protocol boundary", () => {
         operation: { kind: "delete", id, expectedRevision: 1 },
       } as ClientMessage),
     ).toBeNull();
+  });
+});
+
+
+describe("AI sharing platform scope", () => {
+  it.each(["web", "android", "macos", "windows"])("does not gate AI requests on %s", (platform) => {
+    expect(requiresAISharingPermission(platform, false)).toBe(false);
+  });
+  it("requires consent only in the real iOS workspace", () => {
+    expect(requiresAISharingPermission("ios", false)).toBe(true);
+    expect(requiresAISharingPermission("ios", true)).toBe(false);
   });
 });

@@ -7,11 +7,12 @@ import { mobileDesktopSocket } from "../../../e2e/support/mobile-direct-ports.cj
 import { chooseProvider } from "../../../e2e/support/agents.ts";
 import { expect, test } from "./fixtures";
 
-test("AI sharing refusal, review and withdrawal control requests to the real machine", async ({
-  page,
-  aiSharing,
-}) => {
-  aiSharing.allow = false;
+test("browser workspaces send AI requests without the iOS consent prompt", async ({ page }) => {
+  const dialogs: string[] = [];
+  page.on("dialog", async (dialog) => {
+    dialogs.push(dialog.message());
+    await dialog.dismiss();
+  });
   const directory = await mkdtemp(join(tmpdir(), "concors-ai-permission-"));
   const desktop = new DaemonConnection({
     endpoint: describeDaemonEndpoint(mobileDesktopSocket),
@@ -51,44 +52,23 @@ test("AI sharing refusal, review and withdrawal control requests to the real mac
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
     const composer = ui.getByRole("textbox", { name: "Message Codex", exact: true });
     const send = ui.getByRole("button", { name: "Send message", exact: true });
-    // Opening a new chat starts its agent, so the first prompt precedes an editable composer.
-    await expect.poll(() => aiSharing.disclosures.length).toBeGreaterThan(0);
-    await expect(ui.getByText(/AI sharing (was not allowed|is off)/).first()).toBeVisible();
-    expect(desktop.agents.filter((agent) => agent.projectId === projectId)).toHaveLength(0);
-
-    const accountSettings = async () => {
-      await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-      await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
-      await ui.getByRole("button", { name: "Settings", exact: true }).click();
-      const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
-      await settings.getByRole("combobox", { name: "Settings section" }).click();
-      await ui.getByRole("option", { name: "Account", exact: true }).click();
-      return settings;
-    };
-    let settings = await accountSettings();
-    await expect(settings).toContainText("New agent requests from this iPhone are blocked.");
-    aiSharing.allow = true;
-    await settings.getByRole("button", { name: "Ask on the next request", exact: true }).click();
-    await settings.getByRole("button", { name: "Close", exact: true }).click();
-    await ui.getByRole("button", { name: "Retry", exact: true }).click();
     await chooseProvider(ui);
-    await composer.fill("Allowed after review");
+    await composer.fill("Browser requests do not require iOS consent");
     await send.click();
-    await expect(ui.getByRole("log")).toContainText("Allowed after review");
+    await expect(ui.getByRole("log")).toContainText("Browser requests do not require iOS consent");
     await expect
       .poll(() => desktop.agents.filter((agent) => agent.projectId === projectId).length)
       .toBe(1);
+    expect(dialogs).toEqual([]);
 
-    settings = await accountSettings();
-    await settings.getByRole("button", { name: "Withdraw permission", exact: true }).click();
-    await expect(settings).toContainText("New agent requests from this iPhone are blocked.");
-    await settings.getByRole("button", { name: "Close", exact: true }).click();
-    const prompts = aiSharing.disclosures.length;
-    await composer.fill("Blocked after withdrawal");
-    await send.click();
-    await expect(ui.getByText(/AI sharing is off/).first()).toBeVisible();
-    await expect(ui.getByRole("log")).not.toContainText("Blocked after withdrawal");
-    expect(aiSharing.disclosures).toHaveLength(prompts);
+    await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+    await ui.getByRole("button", { name: "Account: Your profile", exact: true }).click();
+    await ui.getByRole("button", { name: "Settings", exact: true }).click();
+    const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
+    await settings.getByRole("combobox", { name: "Settings section" }).click();
+    await ui.getByRole("option", { name: "Account", exact: true }).click();
+    await expect(settings.getByText("AI data sharing", { exact: true })).toHaveCount(0);
+    await expect(settings.getByRole("button", { name: "Withdraw permission" })).toHaveCount(0);
   } finally {
     off();
     desktop.disconnect();

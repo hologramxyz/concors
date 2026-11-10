@@ -46,7 +46,11 @@ import type { WorkspaceRendererHandle } from "./renderer-types";
 import { dispatchMobileApi } from "./api";
 import { assertWorkspaceActionAllowed } from "./access";
 import { deviceStorage } from "../platform/storage";
-import { createAISharingPermission, createAISharingStore } from "./ai-sharing";
+import {
+  createAISharingPermission,
+  createAISharingStore,
+  requiresAISharingPermission,
+} from "./ai-sharing";
 import {
   LAST_TARGETS_KEY,
   lastTargetKey,
@@ -150,9 +154,11 @@ function SignedInWorkspace() {
     () => (transport ? `${rendererKey}:${newRequestId()}` : null),
     [transport, rendererKey],
   );
+  const requiresAISharing = requiresAISharingPermission(Platform.OS, config.demo);
   const sharingUser = auth.direct ? "direct" : auth.me?.user.id;
   const sharingOrganization = auth.me?.session.activeOrganizationId;
   const sharingStore = useMemo(() => {
+    if (!requiresAISharing) return undefined;
     const key = Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
       JSON.stringify([config.apiUrl, sharingUser, sharingOrganization, machineId]),
@@ -161,12 +167,16 @@ function SignedInWorkspace() {
       read: async () => deviceStorage.get(await key),
       write: async (value) => deviceStorage.set(await key, value),
     });
-  }, [sharingUser, sharingOrganization, machineId]);
+  }, [sharingUser, sharingOrganization, machineId, requiresAISharing]);
   const relay = useRef<ReturnType<typeof createProtocolRelay> | null>(null);
-  const aiSharing = aiSharingGrant.connectionId === connectionId ? aiSharingGrant.status : "ask";
+  const aiSharing = requiresAISharing
+    ? aiSharingGrant.connectionId === connectionId
+      ? aiSharingGrant.status
+      : "ask"
+    : undefined;
   useEffect(() => {
     const permission =
-      transport && !config.demo
+      transport && requiresAISharing
         ? createAISharingPermission(
             transport,
             (disclosure) =>
@@ -203,7 +213,7 @@ function SignedInWorkspace() {
       aiPermission.current = null;
       relay.current = null;
     };
-  }, [transport, connectionId, sharingStore]);
+  }, [transport, connectionId, sharingStore, requiresAISharing]);
   const userId = auth.me?.user.id;
   useEffect(() => {
     alive.current = true;
@@ -386,6 +396,7 @@ function SignedInWorkspace() {
         router.push("/account/delete");
         return;
       case "ai-sharing":
+        if (!requiresAISharing) return;
         if (aiPermission.current) {
           if (action.action === "withdraw") await aiPermission.current.withdraw();
           else await aiPermission.current.review();
@@ -393,7 +404,7 @@ function SignedInWorkspace() {
           // Settings can remain open while the transport is reconnecting.
           const blocked = action.action === "withdraw";
           setAISharingGrant({ connectionId, status: blocked ? "blocked" : "ask" });
-          await sharingStore.write({ blocked, grant: null });
+          await sharingStore?.write({ blocked, grant: null });
         }
         return;
       case "report-content":

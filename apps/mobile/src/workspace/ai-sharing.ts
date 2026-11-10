@@ -2,6 +2,11 @@ import type { DaemonConnection } from "@concors/daemon-client";
 import type { ClientMessage, DaemonMessage, ProviderStatus } from "@concors/protocol";
 import { newRequestId } from "@concors/client-core";
 
+/** App Store consent belongs to the native iOS app, never desktop, Android or web previews. */
+export function requiresAISharingPermission(platform: string, demo: boolean) {
+  return platform === "ios" && !demo;
+}
+
 type Context = Pick<DaemonConnection, "agents" | "schedules" | "requestProvider">;
 type Gated = Extract<
   ClientMessage,
