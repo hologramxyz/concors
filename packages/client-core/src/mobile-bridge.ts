@@ -85,6 +85,8 @@ export const MobilePreferencesSchema = z.object({
   corners: z.enum(["square", "subtle", "rounded"]),
   sound: z.boolean().default(false),
   shortcuts: ShortcutOverridesSchema.optional(),
+  /** Kept by the native host because the offline renderer has no localStorage. */
+  followUps: z.enum(["steer", "queue"]).optional(),
   /**
    * Workspaces folded in the sidebar, as desktop keeps them in localStorage, which the phone's
    * webview does not have. Preferences saved before it existed load with none folded.
