@@ -18,6 +18,9 @@ export function MobileMachinePicker({
   return (
     <MobileSelect
       label="Machine"
+      className="mobile-glass"
+      nativeIcon="machine"
+      nativeMark={host.machines.find((machine) => machine.id === host.machineId)?.icon ?? undefined}
       presentation="sheet"
       value={host.machineId ?? ""}
       placeholder={host.direct ? "Connecting to desktop…" : "Choose a machine"}

@@ -1,6 +1,8 @@
 import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Popover } from "radix-ui";
 import { Check, ChevronDown } from "lucide-react";
+import type { NativeIcon } from "@concors/client-core";
+import { useNativeSurface } from "@/components/native-surface";
 import {
   Dialog,
   DialogContent,
@@ -36,6 +38,8 @@ export function MobileSelect({
   presentation = "popover",
   disabled = false,
   actions = [],
+  nativeIcon,
+  nativeMark,
 }: {
   label: string;
   value: string;
@@ -48,6 +52,8 @@ export function MobileSelect({
   presentation?: "popover" | "sheet";
   disabled?: boolean;
   actions?: { label: string; icon?: ReactNode; onSelect: () => void }[];
+  nativeIcon?: NativeIcon;
+  nativeMark?: string | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const id = useId();
@@ -55,6 +61,22 @@ export function MobileSelect({
   const trigger = useRef<HTMLButtonElement>(null);
   const typeahead = useRef({ text: "", time: 0 });
   const selected = groups.flatMap((group) => group.options).find((item) => item.value === value);
+  const native = useNativeSurface(
+    trigger,
+    {
+      kind: "button",
+      icon: nativeIcon ?? "chevron",
+      label,
+      title: selected?.label ?? placeholder ?? label,
+      mark: nativeMark,
+      disabled,
+    },
+    (event) => {
+      if (event.kind === "press" && event.control === "activate" && !disabled)
+        trigger.current?.click();
+    },
+    !!nativeIcon,
+  );
   const focusSelection = (event: Event) => {
     const current = content.current;
     const option =
@@ -110,6 +132,9 @@ export function MobileSelect({
       aria-controls={id}
       aria-expanded={open}
       data-value={value}
+      data-native-surface={native || undefined}
+      aria-hidden={native || undefined}
+      tabIndex={native ? -1 : undefined}
       className={`mobile-select-trigger ${className}`}
       onKeyDown={(event) => {
         if (disabled) return;

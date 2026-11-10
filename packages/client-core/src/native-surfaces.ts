@@ -23,6 +23,8 @@ export const NativeIconSchema = z.enum([
   "shield",
   "options",
   "mic",
+  "machine",
+  "account",
 ]);
 export type NativeIcon = z.infer<typeof NativeIconSchema>;
 // Model IDs and encoded feature values must survive both sides of the native bridge.
@@ -105,6 +107,8 @@ export const NativeSurfaceContentSchema = z.discriminatedUnion("kind", [
     label: z.string().max(500),
     title: z.string().max(500),
     subtitle: z.string().max(500).optional(),
+    /** A saved machine emoji or account initial before a pill's title. */
+    mark: z.string().max(32).optional(),
     icon: NativeIconSchema,
     disabled: z.boolean().default(false),
     /**
@@ -123,6 +127,7 @@ export const NativeSurfaceContentSchema = z.discriminatedUnion("kind", [
     active: z.boolean(),
     canSend: z.boolean(),
     canStop: z.boolean(),
+    canDictate: z.boolean().optional(),
     hasAttachments: z.boolean(),
     attachEnabled: z.boolean(),
     /**

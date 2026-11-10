@@ -16,12 +16,14 @@ export function useNativeSurface(
   ref: RefObject<HTMLElement | null>,
   content: NativeSurfaceContent,
   onEvent: (event: NativeSurfaceEvent) => void,
+  enabled = true,
 ) {
   const host = useContext(NativeSurfaceContext);
   const id = useId();
   useLayoutEffect(() => {
-    if (host && ref.current) host.update(id, { element: ref.current, content, onEvent });
+    if (host && enabled && ref.current) host.update(id, { element: ref.current, content, onEvent });
+    else host?.remove(id);
   });
   useLayoutEffect(() => () => host?.remove(id), [host, id]);
-  return !!host;
+  return !!host && enabled;
 }

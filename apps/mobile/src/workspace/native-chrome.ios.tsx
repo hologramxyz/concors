@@ -95,6 +95,8 @@ const symbols = {
   shield: "shield",
   options: "slider.horizontal.3",
   mic: "mic",
+  machine: "server.rack",
+  account: "person.crop.circle",
 } as const;
 const providerImages = {
   model: require("../../assets/codex.png"),
@@ -280,7 +282,7 @@ function HeaderButton({
           spacing={8}
           modifiers={[
             padding({ horizontal: 12 }),
-            ...(content.icon === "chevron"
+            ...(["chevron", "machine", "account"].includes(content.icon)
               ? [
                   // Plain buttons hit-test their label, not the outer glass frame.
                   frame({ width, height }),
@@ -289,6 +291,26 @@ function HeaderButton({
               : [frame({ maxWidth: Infinity })]),
           ]}
         >
+          {(content.icon === "machine" || content.icon === "account") &&
+            (content.mark ? (
+              <Text
+                modifiers={[
+                  font({ size: content.icon === "account" ? 13 : 18, weight: "semibold" }),
+                  ...(content.icon === "account"
+                    ? [
+                        frame({ width: 28, height: 28 }),
+                        foregroundStyle(dark ? "#141414" : "#ffffff"),
+                        background(dark ? "#ededed" : "#20211f"),
+                        clipShape(...nativeButtonShape(corners)),
+                      ]
+                    : []),
+                ]}
+              >
+                {content.mark}
+              </Text>
+            ) : (
+              <Image systemName={symbols[content.icon]} size={20} />
+            ))}
           <VStack
             alignment="leading"
             spacing={1}
@@ -309,7 +331,14 @@ function HeaderButton({
               </Text>
             ) : null}
           </VStack>
-          <Image systemName={symbols[content.icon]} size={14} />
+          <Image
+            systemName={
+              content.icon === "machine" || content.icon === "account"
+                ? "chevron.down"
+                : symbols[content.icon]
+            }
+            size={14}
+          />
         </HStack>
       ) : (
         <Image
