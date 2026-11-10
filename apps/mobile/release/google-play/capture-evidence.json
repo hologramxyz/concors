@@ -1,0 +1,46 @@
+{
+  "platform": "android",
+  "nativeRunId": "42745256504",
+  "nativeRunConclusion": "success",
+  "nativeRunUrl": "https://github.com/hologramxyz/concors/actions/runs/42745256504",
+  "workflowSourceCommit": "4b7400f19eda47786bb035af2b6709f4cbcae0dd",
+  "nativeBuild": {
+    "runId": "42741650880",
+    "jobConclusion": "success",
+    "sourceCommit": "86f99407b0a87795c0e9a425c3f1ca5483e22537",
+    "packageName": "xyz.hologram.concors.preview"
+  },
+  "device": {
+    "model": "Pixel 7 emulator",
+    "apiLevel": 36,
+    "architecture": "x86_64"
+  },
+  "fixture": "Fictional opt-in store capture projects; no customer/reviewer data",
+  "scope": "Installed native Android marketing captures; not production authentication or physical push evidence",
+  "screens": {
+    "marketing-agent.png": {
+      "sha256": "64c15ee1e10d78e5bc9cb6bcd4888f789d3d4a4d2d5372bdbb234510866c48cf",
+      "width": 1080,
+      "height": 2400,
+      "bytes": 212010
+    },
+    "marketing-approval.png": {
+      "sha256": "bf0f1670755be06085239577a9826e85762b74c85f06b8b5782e94bf71e0ce5b",
+      "width": 1080,
+      "height": 2400,
+      "bytes": 219217
+    },
+    "marketing-workspaces.png": {
+      "sha256": "5098300dd7feae425869fd885b5191e84da52184ab8177982a1510fdcc182358",
+      "width": 1080,
+      "height": 2400,
+      "bytes": 267367
+    },
+    "marketing-terminal.png": {
+      "sha256": "f12bf2e018e3916a3458b6e79d02b6dde639a5f3dd1b47ca77ba5639a8e3ef37",
+      "width": 1080,
+      "height": 2400,
+      "bytes": 118134
+    }
+  }
+}
