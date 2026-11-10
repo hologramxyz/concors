@@ -64,6 +64,10 @@ for (const native of [false, true]) {
       await page.goto("/");
       await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
       const ui = page.frameLocator('iframe[title="Concors workspace"]');
+      await expect(ui.getByRole("textbox", { name: "Preparing agent", exact: true })).toHaveCount(
+        0,
+        { timeout: 15_000 },
+      );
       await chooseProvider(ui);
       const timeline = ui.getByRole("log", { name: "Chat timeline" });
       const scrollToEdge = (edge: "top" | "bottom") =>
