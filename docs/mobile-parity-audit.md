@@ -20,7 +20,7 @@ not rebuild an already-exported Expo preview.
 | Search and workspace creation | Uses desktop machine-scoped workspace/agent/tab search, shared setup/clone/project actions and mobile drawer presentation. Search is not file-content or message-content search.                                                                                                         |
 | Settings, teams and machines  | Reuses desktop account, appearance, provider, terminal profile, SSH and shortcut views where applicable. Managed tests cover avatar, organization switching, isolation, GitHub and machine metadata. Direct preview intentionally has no cloud organization/billing/provisioning access. |
 | Navigation and resource usage | Retains mobile sidebar/files swipe arbitration, rounded glass rim, bottom drawers, and sidebar CPU/RAM. Browser tests cover gestures, hidden controls, themes and telemetry fallback.                                                                                                    |
-| Onboarding                    | Removed AI-sharing screen, stored-consent dependency and withdrawal controls with no replacement page. Authentication, private-endpoint checks, organization isolation and ordinary privacy links remain.                                                                                |
+| Onboarding                    | Native iOS alone asks before AI data sharing in a compact drawer with expandable details and saved, withdrawable permission. Desktop, Android and web previews have no AI-sharing gate. Authentication, private-endpoint checks and organization isolation remain.                       |
 
 ## Sidebar and corner-theme follow-up
 

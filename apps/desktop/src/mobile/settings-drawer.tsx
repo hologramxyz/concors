@@ -254,39 +254,41 @@ export function SettingsDrawer({
                   </Button>
                 </div>
               </Section>
-              <Section
-                title="AI data sharing"
-                description="Agent requests can share prompts, code, attachments and tool context with the configured AI services. Your choice is saved on this device for this account and machine. Changes to the configured services require permission again."
-              >
-                <p className="py-3 text-sm text-muted-foreground">
-                  {host.aiSharing === "blocked"
-                    ? "New agent requests from this iPhone are blocked."
-                    : host.aiSharing === "allowed"
-                      ? "You have allowed sharing with this machine’s configured services."
-                      : "You will be asked before an agent action shares data."}{" "}
-                  Work already running on your machine continues until you stop it there.
-                </p>
-                <div className="flex flex-wrap gap-3 pb-3">
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() =>
-                      void run(() => hostAction({ kind: "ai-sharing", action: "withdraw" }))
-                    }
-                  >
-                    Withdraw permission
-                  </Button>
-                  <Button
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() =>
-                      void run(() => hostAction({ kind: "ai-sharing", action: "review" }))
-                    }
-                  >
-                    Ask on the next request
-                  </Button>
-                </div>
-              </Section>
+              {host.aiSharing !== undefined && (
+                <Section
+                  title="AI data sharing"
+                  description="Agent requests can share prompts, code, attachments and tool context with the configured AI services. Your choice is saved on this device for this account and machine. Changes to the configured services require permission again."
+                >
+                  <p className="py-3 text-sm text-muted-foreground">
+                    {host.aiSharing === "blocked"
+                      ? "New agent requests from this iPhone are blocked."
+                      : host.aiSharing === "allowed"
+                        ? "You have allowed sharing with this machine’s configured services."
+                        : "You will be asked before an agent action shares data."}{" "}
+                    Work already running on your machine continues until you stop it there.
+                  </p>
+                  <div className="flex flex-wrap gap-3 pb-3">
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(() => hostAction({ kind: "ai-sharing", action: "withdraw" }))
+                      }
+                    >
+                      Withdraw permission
+                    </Button>
+                    <Button
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() =>
+                        void run(() => hostAction({ kind: "ai-sharing", action: "review" }))
+                      }
+                    >
+                      Ask on the next request
+                    </Button>
+                  </div>
+                </Section>
+              )}
               {!host.direct && (
                 <Section
                   title="Delete account"
