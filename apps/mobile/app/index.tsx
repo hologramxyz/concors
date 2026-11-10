@@ -44,7 +44,7 @@ export default function SignInScreen() {
             Check in on your agents, answer a request, and pick up where you left off.
           </Copy>
           <Copy muted>
-            Add machines in the desktop app, then connect here with the same account. The iPhone app
+            Add machines in the desktop app, then connect here with the same account. The mobile app
             is free at launch.
           </Copy>
         </View>
