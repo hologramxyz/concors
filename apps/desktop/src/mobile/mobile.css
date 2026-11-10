@@ -1503,6 +1503,11 @@ body {
   padding-bottom: var(--native-composer-inset, 88px);
   scroll-padding-bottom: var(--native-composer-inset, 88px);
 }
+.mobile-pane
+  [aria-label="Agent conversation"]:has([data-native-composer="true"])
+  [data-chat-latest] {
+  bottom: var(--native-composer-inset, 88px);
+}
 .mobile-composer-options-grid {
   display: grid;
   gap: 2px;
