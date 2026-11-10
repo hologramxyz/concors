@@ -44,7 +44,7 @@ test("mobile manages schedules through the native relay without horizontal overf
     await ui.getByRole("button", { name: "New schedule", exact: true }).click();
     await form.getByLabel("Name", { exact: true }).fill("Mobile review");
     await form.getByRole("combobox", { name: "Provider", exact: true }).click();
-    await ui.getByRole("menuitemradio", { name: "Codex", exact: true }).click();
+    await ui.getByRole("option", { name: "Codex", exact: true }).click();
     await form.getByLabel("Model", { exact: true }).fill("fixture");
     await form.getByLabel("Prompt", { exact: true }).fill("Review the project");
     // Files upload through the app's relay to the machine, which keeps them with the schedule.

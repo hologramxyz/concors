@@ -88,6 +88,9 @@ for (const colorScheme of ["light", "dark"] as const) {
     await page.keyboard.press("Escape");
     await ui.getByRole("button", { name: "Settings", exact: true }).click();
     const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
+    await settings.getByRole("combobox", { name: "Settings section", exact: true }).click();
+    await capture("settings-sections");
+    await page.keyboard.press("Escape");
     for (const section of [
       "Account",
       "Appearance",
@@ -120,6 +123,11 @@ for (const colorScheme of ["light", "dark"] as const) {
       }
       await page.setViewportSize({ width: 390, height: 844 });
       await capture(`settings-${section.toLowerCase().replaceAll(" ", "-")}`);
+      if (section === "Appearance") {
+        await settings.getByRole("combobox", { name: "Theme", exact: true }).click();
+        await capture("theme-picker");
+        await page.keyboard.press("Escape");
+      }
     }
     await page.keyboard.press("Escape");
     const openPage = async (name: string) => {
@@ -134,7 +142,11 @@ for (const colorScheme of ["light", "dark"] as const) {
     await expect(ui.getByText("Morning review")).toBeVisible();
     await capture("schedules");
     await ui.getByRole("button", { name: "New schedule", exact: true }).click();
+    await expect(ui.getByRole("combobox", { name: "Provider", exact: true })).toBeEnabled();
     await capture("schedule-form");
+    await ui.getByRole("combobox", { name: "Repeat", exact: true }).click();
+    await capture("schedule-repeat");
+    await page.keyboard.press("Escape");
     await openPage("Pull requests");
     await expect(ui.getByText("Keep the composer at the bottom of the screen")).toBeVisible();
     await capture("pull-requests");

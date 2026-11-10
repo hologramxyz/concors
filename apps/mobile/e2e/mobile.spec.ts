@@ -210,9 +210,9 @@ test("mobile header, terminal and host share one background across palettes and 
       await openSettings(ui);
       await choose(ui, "Settings section", "appearance");
       await ui.getByRole("radio", { name: palette, exact: true }).locator("..").click();
-      await ui.getByRole("button", { name: "Theme", exact: true }).click();
+      await ui.getByRole("combobox", { name: "Theme", exact: true }).click();
       await ui
-        .getByRole("menuitem", { name: colorScheme === "dark" ? "Dark" : "Light", exact: true })
+        .getByRole("option", { name: colorScheme === "dark" ? "Dark" : "Light", exact: true })
         .click();
       await ui
         .getByRole("dialog", { name: "Settings", exact: true })
@@ -562,12 +562,12 @@ test("sidebar pushes the workspace and settings opens as a drawer over the same 
   const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
   await expect(settings).toBeVisible();
   await choose(ui, "Settings section", "appearance");
-  await expect(settings.getByRole("button", { name: "Theme", exact: true })).toBeVisible();
+  await expect(settings.getByRole("combobox", { name: "Theme", exact: true })).toBeVisible();
   await settings.getByText("Square", { exact: true }).click();
   await expect(settings.getByRole("radio", { name: "Square", exact: true })).toBeChecked();
   await expect(settings).toHaveCSS("border-top-left-radius", "0px");
-  await settings.getByRole("button", { name: "Theme", exact: true }).click();
-  await ui.getByRole("menuitem", { name: "Dark", exact: true }).click();
+  await settings.getByRole("combobox", { name: "Theme", exact: true }).click();
+  await ui.getByRole("option", { name: "Dark", exact: true }).click();
   await expect(ui.locator("html")).toHaveClass("dark");
   await settings.getByRole("button", { name: "Close", exact: true }).click();
   await expect(ui.locator("form:has([data-agent-composer])")).toHaveCSS(
@@ -1293,14 +1293,14 @@ test("mobile Shortcuts settings preserve supported commands and all entry points
   const settings = ui.getByRole("dialog", { name: "Settings", exact: true });
   await expect(settings.getByRole("heading", { level: 2 })).toHaveText([
     "Settings",
-    "Keyboard shortcuts",
     "Follow-ups",
+    "Keyboard shortcuts",
     "Workspace",
     "Agent chat",
     "Tabs",
   ]);
-  // The same rows and wording as desktop, without phone-only notes.
-  await expect(settings).not.toContainText("An external keyboard");
+  // Phone messaging preferences come first; external-keyboard commands remain available.
+  await expect(settings).toContainText("For an external keyboard connected to your phone.");
   await expect(settings).not.toContainText("Escape cancels a sequence");
   await expect(settings).toContainText("Switch between tabs and organize your workspace.");
   await expect(settings.getByRole("textbox", { name: "Filter shortcuts" })).toHaveAttribute(
@@ -1320,7 +1320,6 @@ test("mobile Shortcuts settings preserve supported commands and all entry points
     settings.locator("dt").filter({ hasText: "Search workspaces and tabs" }).locator(".."),
   ).toContainText("outside terminals");
   for (const button of [
-    settings.getByRole("button", { name: "Restore all defaults", exact: true }),
     settings.getByRole("button", { name: "Edit New tab shortcuts", exact: true }),
   ])
     expect((await box(button)).height).toBeGreaterThanOrEqual(44);
