@@ -17,7 +17,7 @@ For an installed iPhone beta (no Metro/Expo Go), follow the
 [TestFlight runbook](../../docs/mobile-testflight.md). `pnpm testflight:check` validates the
 candidate and probes the selected API without credentials; it does not build or upload.
 
-While Apple enrollment is pending, use a free Personal Team on your Mac:
+For local development with a free Personal Team on your Mac, use:
 `pnpm --filter @concors/mobile ios:local` from the repository root. This installs **Concors Dev**
 against the development backend, without push/universal-link entitlements. See the
 [local iPhone setup](../../docs/mobile-local-iphone.md) for Xcode signing and Metro requirements.

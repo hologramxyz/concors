@@ -118,7 +118,12 @@ export function NativeSurfaces({ host, children }: { host: MobileState; children
     };
     document.addEventListener("pointerdown", dismissKeyboard, true);
     document.addEventListener("transitionrun", track, true);
+    // A busy frame can outlast the tracking window. Always publish the settled position too.
+    document.addEventListener("transitionend", schedule, true);
+    document.addEventListener("transitioncancel", schedule, true);
     document.addEventListener("animationstart", track, true);
+    document.addEventListener("animationend", schedule, true);
+    document.addEventListener("animationcancel", schedule, true);
     document.addEventListener("pointermove", schedule, true);
     document.addEventListener("scroll", schedule, true);
     window.addEventListener("resize", track);
@@ -146,7 +151,11 @@ export function NativeSurfaces({ host, children }: { host: MobileState; children
       resize.disconnect();
       unsubscribe();
       document.removeEventListener("transitionrun", track, true);
+      document.removeEventListener("transitionend", schedule, true);
+      document.removeEventListener("transitioncancel", schedule, true);
       document.removeEventListener("animationstart", track, true);
+      document.removeEventListener("animationend", schedule, true);
+      document.removeEventListener("animationcancel", schedule, true);
       document.removeEventListener("pointermove", schedule, true);
       document.removeEventListener("pointerdown", dismissKeyboard, true);
       document.removeEventListener("scroll", schedule, true);
