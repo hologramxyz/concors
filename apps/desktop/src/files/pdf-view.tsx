@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
+import { CompactLayoutContext } from "@/components/compact-layout";
 import { useZoomAnchor, useZoomGestures } from "./zoom";
 import type { PDFDocumentProxy } from "pdfjs-dist/legacy/build/pdf.mjs";
 
@@ -28,6 +29,7 @@ export default function PdfView({
   onZoom: (zoom: number) => void;
 }) {
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
+  const compact = useContext(CompactLayoutContext);
   const scroller = useRef<HTMLDivElement>(null);
   useZoomGestures(scroller, zoom, onZoom);
   useZoomAnchor(scroller, zoom);
@@ -63,6 +65,7 @@ export default function PdfView({
     // Always mounted, so the zoom gestures and scroll anchor have their element from the start.
     <div
       ref={scroller}
+      data-media-preview
       aria-label={`Pages of ${name}`}
       // Focusable, so a click into the pages lets the keyboard scroll and zoom them.
       tabIndex={0}
@@ -78,7 +81,13 @@ export default function PdfView({
         </p>
       ) : (
         Array.from({ length: pdf.numPages }, (_, index) => (
-          <PdfPage key={index} pdf={pdf} number={index + 1} zoom={zoom} />
+          <PdfPage
+            key={index}
+            pdf={pdf}
+            number={index + 1}
+            zoom={zoom}
+            maxPixels={compact ? 2048 * 2048 : MAX_PAGE_PIXELS}
+          />
         ))
       )}
     </div>
@@ -88,7 +97,17 @@ export default function PdfView({
 /** Canvas pixels per page at most: a zoomed-in page past this renders softer, not out of memory. */
 const MAX_PAGE_PIXELS = 4096 * 4096;
 
-function PdfPage({ pdf, number, zoom }: { pdf: PDFDocumentProxy; number: number; zoom: number }) {
+function PdfPage({
+  pdf,
+  number,
+  zoom,
+  maxPixels,
+}: {
+  pdf: PDFDocumentProxy;
+  number: number;
+  zoom: number;
+  maxPixels: number;
+}) {
   const frame = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [aspect, setAspect] = useState(Math.SQRT2);
@@ -103,7 +122,7 @@ function PdfPage({ pdf, number, zoom }: { pdf: PDFDocumentProxy; number: number;
     });
     const intersect = new IntersectionObserver(
       ([entry]) => {
-        if (entry?.isIntersecting) setNear(true);
+        if (entry) setNear(entry.isIntersecting);
       },
       { rootMargin: "100% 0px" },
     );
@@ -130,6 +149,13 @@ function PdfPage({ pdf, number, zoom }: { pdf: PDFDocumentProxy; number: number;
   }, [pdf, number]);
   useEffect(() => {
     const target = canvas.current;
+    // A long document must not retain every previously viewed page's bitmap on a phone.
+    if (!near && target) {
+      target.width = 0;
+      target.height = 0;
+      drawn.current = false;
+      return;
+    }
     if (!near || !width || !target) return;
     let task: { cancel(): void; promise: Promise<void> } | null = null;
     let cancelled = false;
@@ -141,7 +167,7 @@ function PdfPage({ pdf, number, zoom }: { pdf: PDFDocumentProxy; number: number;
           const natural = page.getViewport({ scale: 1 });
           const scale = Math.min(
             (width / natural.width) * window.devicePixelRatio,
-            Math.sqrt(MAX_PAGE_PIXELS / (natural.width * natural.height)),
+            Math.sqrt(maxPixels / (natural.width * natural.height)),
           );
           const viewport = page.getViewport({ scale });
           // Drawn aside and copied over when done, so a page being redrawn at a new zoom keeps
@@ -166,7 +192,7 @@ function PdfPage({ pdf, number, zoom }: { pdf: PDFDocumentProxy; number: number;
       clearTimeout(timer);
       task?.cancel();
     };
-  }, [pdf, number, near, width]);
+  }, [pdf, number, near, width, maxPixels]);
   return (
     // Auto margins centre a page that fits and let one wider than the tab scroll from its left edge.
     <div

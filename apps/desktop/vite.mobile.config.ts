@@ -10,7 +10,6 @@ export default defineConfig({
       { find: /^@\/tauri$/, replacement: source("mobile/native-platform.ts") },
       { find: "@/auth/api", replacement: source("mobile/api.ts") },
       { find: "@/tauri/open-external", replacement: source("mobile/external.ts") },
-      { find: /^\.\/pdf-view$/, replacement: source("mobile/pdf-view.tsx") },
       { find: "@", replacement: source("") },
     ],
   },
