@@ -142,6 +142,9 @@ continues until stopped there. This consent UI is absent from desktop, Android a
 Managed access still requires authentication, and direct access still requires the private
 endpoint. Disconnecting closes this viewer, not the remote sessions.
 
+[Drawer layout preview](../../docs/images/ios-ai-sharing-drawer.png) renders the shared content
+in a browser; the iOS app presents it in its native, content-sized SwiftUI sheet.
+
 The host uses the same `DaemonConnection` protocol as desktop and obtains the actual
 machine ID from its workspace snapshot. Cloud login is not needed for the workspace;
 inventory, billing, provisioning and push API calls remain blocked in this mode.
