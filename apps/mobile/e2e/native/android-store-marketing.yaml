@@ -1,0 +1,39 @@
+appId: xyz.hologram.concors.preview
+---
+# Capture the installed Android app, with the same opt-in fictional projects as iPhone.
+- launchApp:
+    clearState: true
+- retry:
+    maxRetries: 2
+    commands:
+      - runFlow:
+          when:
+            visible: "System UI isn't responding"
+          commands:
+            - tapOn: "Wait"
+      - assertVisible: "Explore demo"
+- tapOn: "Explore demo"
+- extendedWaitUntil:
+    visible: "Message Codex"
+    timeout: 45000
+- assertVisible: "Search improvements"
+- scrollUntilVisible:
+    element: "Add instant search to the project dashboard."
+    direction: UP
+    timeout: 15000
+- takeScreenshot: apps/mobile/test-results/android/marketing-agent
+- scrollUntilVisible:
+    element: "Allow once"
+    direction: DOWN
+    timeout: 15000
+- assertVisible: "Run the test suite?"
+- takeScreenshot: apps/mobile/test-results/android/marketing-approval
+- tapOn: "Checks"
+- extendedWaitUntil:
+    visible: "Show keyboard"
+    timeout: 15000
+- takeScreenshot: apps/mobile/test-results/android/marketing-terminal
+- tapOn: "Open sidebar"
+- assertVisible: "Atlas API"
+- assertVisible: "Studio"
+- takeScreenshot: apps/mobile/test-results/android/marketing-workspaces

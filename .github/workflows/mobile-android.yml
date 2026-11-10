@@ -3,6 +3,11 @@ name: Mobile Android native
 on:
   # Native compilation and simulator tests are opt-in, outside the PR time budget.
   workflow_dispatch:
+    inputs:
+      marketing_captures:
+        description: Capture the Android store screens with fictional projects
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -19,6 +24,7 @@ jobs:
     env:
       APP_VARIANT: preview
       EXPO_PUBLIC_DEMO: "true"
+      EXPO_PUBLIC_STORE_CAPTURE: ${{ inputs.marketing_captures && 'true' || 'false' }}
       EXPO_NO_TELEMETRY: "1"
       CI: "1"
     steps:
@@ -118,7 +124,14 @@ jobs:
           disable-animations: true
           script: |
             adb install native-app/app-release.apk
-            maestro test --test-output-dir apps/mobile/test-results/android apps/mobile/e2e/native/android.yaml
+            if [ "${{ inputs.marketing_captures }}" = "true" ]; then
+              adb shell settings put global sysui_demo_allowed 1
+              adb shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 0941
+              adb shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged false
+              maestro test --test-output-dir apps/mobile/test-results/android apps/mobile/e2e/native/android-store-marketing.yaml
+            else
+              maestro test --test-output-dir apps/mobile/test-results/android apps/mobile/e2e/native/android.yaml
+            fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
