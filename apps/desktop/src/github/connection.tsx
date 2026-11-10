@@ -12,6 +12,7 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
     <div className="space-y-3">
       <div
         role="group"
+        data-settings-card
         aria-label="GitHub integration"
         className={cn(
           "grid gap-4 rounded-xl border p-4",
@@ -53,7 +54,10 @@ export function GitHubConnection({ github }: { readonly github: ReturnType<typeo
             )}
           </div>
         </div>
-        <div className={cn("flex flex-wrap gap-2", status?.connected ? "pl-8" : "md:justify-end")}>
+        <div
+          data-github-refresh-only={(!status?.configured && !status?.connected) || undefined}
+          className={cn("flex flex-wrap gap-2", status?.connected ? "pl-8" : "md:justify-end")}
+        >
           {status?.configured && (
             <Button
               type="button"

@@ -59,6 +59,7 @@ export function SettingsSectionHeader({
   return (
     <>
       <div
+        data-settings-heading
         className={cn(
           "grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-start",
           inlineActions && "grid-cols-[minmax(0,1fr)_auto] items-center",
@@ -79,7 +80,7 @@ export function SettingsSectionHeader({
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
-      {(!titleHidden || description || actions) && <Separator className="my-4" />}
+      {!compact && (!titleHidden || description || actions) && <Separator className="my-4" />}
     </>
   );
 }
@@ -93,7 +94,10 @@ export function SettingsCard({
   readonly className?: string;
 }) {
   return (
-    <div className={cn("min-w-0 overflow-hidden rounded-xl border bg-card/30", className)}>
+    <div
+      data-settings-card
+      className={cn("min-w-0 overflow-hidden rounded-xl border bg-card/30", className)}
+    >
       {children}
     </div>
   );
@@ -103,14 +107,17 @@ export function Row({
   label,
   hint,
   children,
+  inline = false,
 }: {
   readonly label: string;
   readonly hint?: string;
   readonly children: ReactNode;
+  readonly inline?: boolean;
 }) {
   return (
     <div
       data-settings-row
+      data-inline={inline || undefined}
       className="flex flex-col gap-3 px-4 py-3.5 md:flex-row md:items-center md:justify-between md:gap-6"
     >
       <div className="min-w-0 md:max-w-[45%] md:shrink-0">
