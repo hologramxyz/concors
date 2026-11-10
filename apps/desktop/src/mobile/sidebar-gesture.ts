@@ -74,7 +74,8 @@ export function useSidebarGesture(
         if (
           (!open || protectInputs) &&
           (target.closest('[role="dialog"], [role="menu"], .mobile-file-tabs, .mobile-tab-strip') ||
-            (!editorEdge && target.closest(".cm-editor, pre, [contenteditable]")) ||
+            (!editorEdge &&
+              target.closest(".cm-editor, pre, [contenteditable], [data-media-preview]")) ||
             (!closingFiles && !fileHeader && target.closest("button, a")) ||
             (!terminal && target.closest("input, textarea, select")))
         )
@@ -125,7 +126,11 @@ export function useSidebarGesture(
       },
       onPointerUp: finish,
       onPointerCancel: (event: PointerEvent) => finish(event, true),
-      onLostPointerCapture: (event: PointerEvent) => finish(event, true),
+      onLostPointerCapture: (event: PointerEvent) => {
+        // Claiming a touch releases its original row's implicit capture. That event bubbles
+        // through the shell too; only losing the shell's own capture cancels navigation.
+        if (event.target === event.currentTarget) finish(event, true);
+      },
       onClickCapture(event: React.MouseEvent) {
         if (offset !== null || performance.now() < suppressClickUntil.current) {
           event.preventDefault();
