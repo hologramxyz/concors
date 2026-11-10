@@ -1,4 +1,4 @@
-import { AccountAvatar } from "./account-avatar";
+import { AccountAvatar, useAccountImage } from "./account-avatar";
 import { ChevronsUpDown, LogIn, LogOut, MapIcon, UserRound, Settings } from "lucide-react";
 import { useContext, useRef, useState, type ReactNode } from "react";
 import { useNativeSurface } from "@/components/native-surface";
@@ -152,6 +152,7 @@ export function MobileAccountMenu({
   const [open, setOpen] = useState(false);
   const person = auth?.user ?? profile;
   const name = person?.name || person?.email || "Your profile";
+  const { src } = useAccountImage(person, !!auth);
   const trigger = useRef<HTMLButtonElement>(null);
   const native = useNativeSurface(
     trigger,
@@ -161,6 +162,7 @@ export function MobileAccountMenu({
       title: name,
       label: `Account: ${name}`,
       mark: person ? initialOf(person) : undefined,
+      avatarUrl: src?.startsWith("https://") && src.length <= 2048 ? src : undefined,
       disabled: false,
     },
     (event) => {

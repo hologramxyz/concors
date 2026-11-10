@@ -219,6 +219,7 @@ function HeaderButton({
   emit: Emit;
 }) {
   const latest = useRef(emit);
+  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
   const suppressPressUntil = useRef(0);
   useEffect(() => {
     latest.current = emit;
@@ -292,7 +293,21 @@ function HeaderButton({
           ]}
         >
           {(content.icon === "machine" || content.icon === "account") &&
-            (content.mark ? (
+            (content.icon === "account" &&
+            content.avatarUrl &&
+            failedAvatar !== content.avatarUrl ? (
+              <RNHostView matchContents>
+                <RNImage
+                  source={{ uri: content.avatarUrl }}
+                  onError={() => setFailedAvatar(content.avatarUrl ?? null)}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: corners === "rounded" ? 14 : cornerRadius(corners),
+                  }}
+                />
+              </RNHostView>
+            ) : content.mark ? (
               <Text
                 modifiers={[
                   font({ size: content.icon === "account" ? 13 : 18, weight: "semibold" }),

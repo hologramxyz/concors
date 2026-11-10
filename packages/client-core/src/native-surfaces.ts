@@ -109,6 +109,11 @@ export const NativeSurfaceContentSchema = z.discriminatedUnion("kind", [
     subtitle: z.string().max(500).optional(),
     /** A saved machine emoji or account initial before a pill's title. */
     mark: z.string().max(32).optional(),
+    avatarUrl: z
+      .string()
+      .max(2048)
+      .regex(/^https:\/\//)
+      .optional(),
     icon: NativeIconSchema,
     disabled: z.boolean().default(false),
     /**

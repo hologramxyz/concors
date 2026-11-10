@@ -11,6 +11,17 @@ interface Person {
   image?: string | null;
 }
 
+/** The native glass trigger and DOM avatars resolve the same cached profile photo. */
+export function useAccountImage(user: Person | null | undefined, githubEnabled = false) {
+  const github = useGitHubStatus(githubEnabled);
+  const loading = githubEnabled && github.data === null && !github.error;
+  const login = githubEnabled && github.data?.connected ? github.data.login : null;
+  return {
+    loading,
+    src: login ? `https://github.com/${encodeURIComponent(login)}.png?size=96` : user?.image,
+  };
+}
+
 /** Shared by desktop, the sidebar rail, profile settings, and the mobile account drawer. */
 export function AccountAvatar({
   user,
@@ -21,10 +32,7 @@ export function AccountAvatar({
   githubEnabled?: boolean;
   className?: string;
 }) {
-  const github = useGitHubStatus(githubEnabled);
-  const loading = githubEnabled && github.data === null && !github.error;
-  const login = githubEnabled && github.data?.connected ? github.data.login : null;
-  const src = login ? `https://github.com/${encodeURIComponent(login)}.png?size=96` : user?.image;
+  const { loading, src } = useAccountImage(user, githubEnabled);
   const fallback = user ? initialOf(user) : <UserRound className="size-4" />;
   return (
     <span
