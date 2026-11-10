@@ -2,24 +2,13 @@ import { initialOf } from "@/auth/auth-state";
 import { useState, type ReactNode } from "react";
 import { UserRound } from "lucide-react";
 import { cn } from "cn";
-import { useGitHubStatus } from "@/github/use-github-status";
+import { useAccountImage } from "./use-account-image";
 
 interface Person {
   id?: string;
   name: string;
   email: string;
   image?: string | null;
-}
-
-/** The native glass trigger and DOM avatars resolve the same cached profile photo. */
-export function useAccountImage(user: Person | null | undefined, githubEnabled = false) {
-  const github = useGitHubStatus(githubEnabled);
-  const loading = githubEnabled && github.data === null && !github.error;
-  const login = githubEnabled && github.data?.connected ? github.data.login : null;
-  return {
-    loading,
-    src: login ? `https://github.com/${encodeURIComponent(login)}.png?size=96` : user?.image,
-  };
 }
 
 /** Shared by desktop, the sidebar rail, profile settings, and the mobile account drawer. */

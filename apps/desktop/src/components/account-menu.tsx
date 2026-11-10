@@ -1,4 +1,5 @@
-import { AccountAvatar, useAccountImage } from "./account-avatar";
+import { AccountAvatar } from "./account-avatar";
+import { useAccountImage } from "./use-account-image";
 import { ChevronsUpDown, LogIn, LogOut, MapIcon, UserRound, Settings } from "lucide-react";
 import { useContext, useRef, useState, type ReactNode } from "react";
 import { useNativeSurface } from "@/components/native-surface";

@@ -7,7 +7,10 @@ import { XIcon } from "lucide-react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { useMobileDrawerGesture } from "./mobile-drawer";
 
-const DrawerContext = React.createContext({ open: false, dismiss: () => undefined as void });
+const DrawerContext = React.createContext<{ open: boolean; dismiss(): void }>({
+  open: false,
+  dismiss: () => undefined,
+});
 
 function Dialog({
   open,
