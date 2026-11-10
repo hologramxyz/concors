@@ -1558,7 +1558,7 @@ body {
 }
 @keyframes mobile-overlay-out {
   from {
-    opacity: 1;
+    opacity: calc(1 - var(--mobile-drawer-progress, 0));
   }
   to {
     opacity: 0;

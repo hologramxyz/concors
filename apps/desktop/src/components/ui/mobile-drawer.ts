@@ -18,7 +18,10 @@ export function useMobileDrawerGesture(
   useLayoutEffect(() => {
     if (!enabled || !open || !sheet) return;
     let gesture: { id: number; x: number; y: number; time: number; offset: number } | null = null;
-    let suppressClick = false;
+    let suppressClickUntil = 0;
+    const newPress = () => {
+      suppressClickUntil = 0;
+    };
     const backdrop = overlay.current;
     const move = (offset: number, dragging: boolean) => {
       sheet.dataset.mobileDrawerDragged = "true";
@@ -38,7 +41,7 @@ export function useMobileDrawerGesture(
       gesture = null;
     };
     const start = (event: TouchEvent) => {
-      suppressClick = false;
+      newPress();
       cancel();
       const target = event.target;
       if (
@@ -55,7 +58,8 @@ export function useMobileDrawerGesture(
           if (node === sheet) break;
         }
       }
-      const touch = event.touches[0]!;
+      const touch = event.touches[0];
+      if (!touch) return;
       gesture = {
         id: touch.identifier,
         x: touch.clientX,
@@ -77,7 +81,7 @@ export function useMobileDrawerGesture(
       }
       event.preventDefault();
       gesture.offset = Math.max(0, y);
-      suppressClick = true;
+      suppressClickUntil = performance.now() + 400;
       move(gesture.offset, true);
     };
     const end = () => {
@@ -96,12 +100,13 @@ export function useMobileDrawerGesture(
       } else cancel();
     };
     const click = (event: MouseEvent) => {
-      if (!suppressClick) return;
+      if (performance.now() >= suppressClickUntil) return;
       event.preventDefault();
       event.stopPropagation();
-      suppressClick = false;
+      suppressClickUntil = 0;
     };
     sheet.addEventListener("touchstart", start, { passive: true });
+    sheet.addEventListener("pointerdown", newPress, { passive: true });
     sheet.addEventListener("touchmove", pan, { passive: false });
     sheet.addEventListener("touchend", end);
     sheet.addEventListener("touchcancel", cancel);
@@ -109,6 +114,7 @@ export function useMobileDrawerGesture(
     window.addEventListener("blur", cancel);
     return () => {
       sheet.removeEventListener("touchstart", start);
+      sheet.removeEventListener("pointerdown", newPress);
       sheet.removeEventListener("touchmove", pan);
       sheet.removeEventListener("touchend", end);
       sheet.removeEventListener("touchcancel", cancel);
