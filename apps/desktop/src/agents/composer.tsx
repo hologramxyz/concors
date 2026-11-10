@@ -1609,9 +1609,10 @@ export function AgentComposer({
             {dictationHelp}
           </p>
         )}
-        {compact && (!connected || configuring) && (
+        {/* The shell delays connection notices across a brief foreground reconnect. */}
+        {compact && configuring && (
           <p role="status" className="px-2 text-xs text-muted-foreground">
-            {!connected ? "Reconnecting…" : "Updating agent settings…"}
+            Updating agent settings…
           </p>
         )}
       </div>
