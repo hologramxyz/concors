@@ -5,9 +5,31 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { Button } from "@/components/ui/button";
 import { XIcon } from "lucide-react";
 import { CompactLayoutContext } from "@/components/compact-layout";
+import { useMobileDrawerGesture } from "./mobile-drawer";
 
-function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />;
+const DrawerContext = React.createContext({ open: false, dismiss: () => {} });
+
+function Dialog({
+  open,
+  defaultOpen = false,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  const [localOpen, setLocalOpen] = React.useState(defaultOpen);
+  const change = (next: boolean) => {
+    if (open === undefined) setLocalOpen(next);
+    onOpenChange?.(next);
+  };
+  return (
+    <DrawerContext value={{ open: open ?? localOpen, dismiss: () => change(false) }}>
+      <DialogPrimitive.Root
+        data-slot="dialog"
+        open={open ?? localOpen}
+        onOpenChange={change}
+        {...props}
+      />
+    </DrawerContext>
+  );
 }
 
 function DialogTrigger({ ...props }: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
@@ -47,6 +69,7 @@ function DialogContent({
   headerActions,
   onOpenAutoFocus,
   onCloseAutoFocus,
+  ref: forwardedRef,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   /** `media` grows with what it shows (an image at its own size) up to the window's edges. */
@@ -56,11 +79,24 @@ function DialogContent({
   headerActions?: React.ReactNode;
 }) {
   const compact = React.useContext(CompactLayoutContext);
+  const drawer = React.useContext(DrawerContext);
+  const [content, setContent] = React.useState<HTMLDivElement | null>(null);
+  const overlay = React.useRef<HTMLDivElement>(null);
+  const contentRef = React.useCallback(
+    (element: HTMLDivElement | null) => {
+      setContent(element);
+      if (typeof forwardedRef === "function") return forwardedRef(element);
+      if (forwardedRef) forwardedRef.current = element;
+    },
+    [forwardedRef],
+  );
+  useMobileDrawerGesture(content, overlay, compact, drawer.open, drawer.dismiss);
   const returnFocus = React.useRef<HTMLElement | null>(null);
   return (
     <DialogPortal>
-      <DialogOverlay className={compact ? "mobile-drawer-overlay" : undefined} />
+      <DialogOverlay ref={overlay} className={compact ? "mobile-drawer-overlay" : undefined} />
       <DialogPrimitive.Content
+        ref={contentRef}
         data-slot="dialog-content"
         data-size={size}
         data-mobile-drawer={compact || undefined}
