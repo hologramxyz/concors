@@ -302,6 +302,36 @@ test("agent file links open Markdown and code tabs without leaving the workspace
   }
 });
 
+test("files an agent names in plain text open like links", async ({ page }) => {
+  const root = await project(page);
+  mkdirSync(join(root, "notes"), { recursive: true });
+  writeFileSync(join(root, "notes", "plan.md"), "# Plan\n");
+  writeFileSync(join(root, "notes", "todo.md"), "# Todo\n");
+  try {
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
+    await chooseProvider(page);
+    await expect(page.getByLabel("Message Codex").filter({ visible: true })).toBeEnabled();
+    await page.getByLabel("Message Codex").filter({ visible: true }).fill("file-mentions");
+    await page.getByLabel("Message Codex").filter({ visible: true }).press("Enter");
+    await expect(page.getByText(/Built on Node\.js/)).toBeVisible();
+    // Words that only look like files, and files outside the project, stay as written.
+    await expect(page.getByRole("link", { name: "Node.js" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "/tmp/concors-shot.png" })).toHaveCount(0);
+    await page.getByRole("link", { name: "notes/plan.md", exact: true }).click();
+    await expect(page.getByRole("region", { name: "File notes/plan.md" })).toBeVisible();
+    await tab(page, 1).click();
+    await page.getByRole("link", { name: "src/main.ts", exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Code editor: src/main.ts" })).toBeVisible();
+    await tab(page, 1).click();
+    // A bare name is looked for, as a link written from another folder is.
+    await page.getByRole("link", { name: "todo.md", exact: true }).click();
+    await expect(page.getByRole("region", { name: "File notes/todo.md" })).toBeVisible();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("a link written from a folder the agent moved into still finds the file", async ({ page }) => {
   const root = await project(page);
   // The agent worked in render/ and wrote its link from there; the chat started at the root.

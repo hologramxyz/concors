@@ -413,6 +413,15 @@ export class TestAgentProvider implements AgentProvider {
           },
         });
       }
+      if (text.includes("file-mentions")) {
+        this.emit("item/completed", {
+          item: {
+            id: `file-mentions-${this.turnId}`,
+            type: "agentMessage",
+            text: "Files are in notes:\n\n- notes/plan.md\n- `src/main.ts`\n- todo.md\n\nBuilt on Node.js; the shot is /tmp/concors-shot.png.",
+          },
+        });
+      }
       if (text.includes("show-image")) {
         this.emit("item/completed", {
           item: {
