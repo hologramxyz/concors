@@ -7,6 +7,11 @@ export function requiresAISharingPermission(platform: string, demo: boolean) {
   return platform === "ios" && !demo;
 }
 
+export interface AISharingDisclosure {
+  summary: string;
+  details: string;
+}
+
 type Context = Pick<DaemonConnection, "agents" | "schedules" | "requestProvider">;
 type Gated = Extract<
   ClientMessage,
@@ -142,7 +147,7 @@ export function createAISharingStore(storage: {
  * reconnects. Registry revisions invalidate it even when private endpoint values are redacted. */
 export function createAISharingPermission(
   context: Context,
-  ask: (disclosure: string) => Promise<boolean>,
+  ask: (disclosure: AISharingDisclosure) => Promise<boolean>,
   changed: (state: "ask" | "allowed" | "blocked") => void = () => undefined,
   store?: ReturnType<typeof createAISharingStore>,
 ) {
@@ -183,12 +188,27 @@ export function createAISharingPermission(
       throw new Error("Choose a configured provider before continuing");
     providers.sort((a, b) => a.id.localeCompare(b.id));
     const names = providers.map(recipient);
+    const destinations = [
+      ...new Set(
+        providers.flatMap((provider) => [
+          provider.customized
+            ? `${provider.label}'s configured AI service`
+            : provider.engine === "codex"
+              ? "OpenAI"
+              : provider.engine === "claude"
+                ? "Anthropic"
+                : `${provider.label}'s configured AI service`,
+          ...(provider.mcpServerNames ?? []),
+        ]),
+      ),
+    ];
     return {
       key: JSON.stringify([
         result.outcome.revision,
         providers.map((p) => [p.id, p.engine, p.label, p.customized, p.mcpServerNames]),
       ]),
-      text: `Recipients: ${names.join("\n\n")}\nModels: those configured for these services on your machine\n\nOpening a conversation can resume its agent. Your prompts, code, attachments, conversation history and tool context may be sent from your connected machine to these AI services and configured tools. Their retention and training rules depend on your provider/account settings. Check custom endpoints and tool recipients on desktop before agreeing.\n\nAllow sharing with these services on this machine? Your choice is saved on this device for this account and machine. You will be asked again if the configuration changes. You can withdraw permission in Settings → Account → AI data sharing. Existing work on your machine keeps running until you stop it.`,
+      summary: `Send prompts, code, files and chat context to ${destinations.join(", ")}?`,
+      details: `Recipients: ${names.join("\n\n")}\nModels: those configured for these services on your machine\n\nOpening a conversation can resume its agent. Your prompts, code, attachments, conversation history and tool context may be sent from your connected machine to these AI services and configured tools. Their retention and training rules depend on your provider/account settings. Check custom endpoints and tool recipients on desktop before agreeing.\n\nAllow sharing with these services on this machine? Your choice is saved on this device for this account and machine. You will be asked again if the configuration changes. You can withdraw permission in Settings → Account → AI data sharing. Existing work on your machine keeps running until you stop it.`,
     };
   };
   return {
@@ -239,7 +259,8 @@ export function createAISharingPermission(
         if (!approval) {
           approval = queue.then(async () => {
             if (disposed || blocked || generation !== version) return false;
-            const question = () => ask(disclosure.text);
+            const question = () =>
+              ask({ summary: disclosure.summary, details: disclosure.details });
             const allowed = await (store ? store.confirm(disclosure.key, question) : question());
             if (!allowed && !disposed && generation === version) {
               blocked = true;

@@ -181,11 +181,11 @@ function SignedInWorkspace() {
             transport,
             (disclosure) =>
               Platform.OS === "web"
-                ? Promise.resolve(window.confirm(`Allow AI data sharing?\n\n${disclosure}`))
+                ? Promise.resolve(window.confirm(`Allow AI data sharing?\n\n${disclosure.details}`))
                 : new Promise<boolean>((resolve) =>
                     Alert.alert(
                       "Allow AI data sharing?",
-                      disclosure,
+                      disclosure.details,
                       [
                         { text: "Don't allow", style: "cancel", onPress: () => resolve(false) },
                         { text: "Allow sharing", onPress: () => resolve(true) },

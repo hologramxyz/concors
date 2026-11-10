@@ -4,6 +4,7 @@ import {
   createAISharingPermission,
   createAISharingStore,
   requiresAISharingPermission,
+  type AISharingDisclosure,
 } from "./ai-sharing";
 const id = "11111111-1111-4111-8111-111111111111";
 const send = {
@@ -34,7 +35,7 @@ function setup() {
       outcome: { status: "ok" as const, revision: 1, providers: [provider] },
     })),
   };
-  const ask = vi.fn(async (_disclosure: string) => true);
+  const ask = vi.fn(async (_disclosure: AISharingDisclosure) => true);
   const changed = vi.fn();
   return {
     provider,
@@ -74,7 +75,11 @@ describe("AI sharing permission at the native protocol boundary", () => {
   it("names the configured recipients, data and model without exposing credentials", async () => {
     const { permission, ask } = setup();
     expect(await permission.beforeSend(send)).toBeNull();
-    const text = ask.mock.calls[0]![0];
+    const text = ask.mock.calls[0]![0].details;
+    const { summary } = ask.mock.calls[0]![0];
+    expect(summary).toBe("Send prompts, code, files and chat context to OpenAI, Issue tracker?");
+    expect(summary).not.toContain("private code");
+    expect(summary).not.toContain("should-not-appear");
     for (const value of [
       "OpenAI",
       "Work Codex",
@@ -138,8 +143,8 @@ describe("AI sharing permission at the native protocol boundary", () => {
     });
     expect(await permission.beforeSend(send)).toBeNull();
     expect(ask).toHaveBeenCalledOnce();
-    expect(ask.mock.calls[0]![0]).toContain("Anthropic");
-    expect(ask.mock.calls[0]![0]).toContain("OpenAI");
+    expect(ask.mock.calls[0]![0].details).toContain("Anthropic");
+    expect(ask.mock.calls[0]![0].details).toContain("OpenAI");
   });
   it("keeps an individual provider usable when the machine has more than twelve configured services", async () => {
     const { permission, ask, context, provider } = setup();
@@ -151,7 +156,7 @@ describe("AI sharing permission at the native protocol boundary", () => {
     });
     expect(await permission.beforeSend(send)).toBeNull();
     expect(ask).toHaveBeenCalledOnce();
-    expect(ask.mock.calls[0]![0]).toContain("Work Codex");
+    expect(ask.mock.calls[0]![0].details).toContain("Work Codex");
   });
   it("remembers approval after reconnect and after loading the device record again", async () => {
     const { context, ask } = setup();
@@ -360,7 +365,6 @@ describe("AI sharing permission at the native protocol boundary", () => {
     ).toBeNull();
   });
 });
-
 
 describe("AI sharing platform scope", () => {
   it.each(["web", "android", "macos", "windows"])("does not gate AI requests on %s", (platform) => {
