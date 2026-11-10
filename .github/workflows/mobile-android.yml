@@ -8,9 +8,14 @@ on:
         description: Capture the Android store screens with fictional projects
         type: boolean
         default: false
+      preview_run_id:
+        description: Reuse a preview APK from a successful native build in this repository
+        type: string
+        default: ""
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: mobile-android-${{ github.ref }}
@@ -19,6 +24,7 @@ concurrency:
 jobs:
   native:
     name: Android native build
+    if: inputs.preview_run_id == ''
     runs-on: ubuntu-latest
     timeout-minutes: ${{ github.event_name == 'workflow_dispatch' && 35 || 20 }}
     env:
@@ -83,6 +89,7 @@ jobs:
   ui:
     name: Android native UI
     needs: native
+    if: ${{ !cancelled() && (needs.native.result == 'success' || inputs.preview_run_id != '') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -100,6 +107,8 @@ jobs:
         with:
           name: mobile-android-app
           path: native-app
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.preview_run_id || github.run_id }}
       - name: Install pinned native UI test runner
         run: |
           curl --fail --location --retry 3 https://github.com/mobile-dev-inc/Maestro/releases/download/cli-2.10.0/maestro.zip --output "$RUNNER_TEMP/maestro.zip"
@@ -124,14 +133,10 @@ jobs:
           disable-animations: true
           script: |
             adb install native-app/app-release.apk
-            if [ "${{ inputs.marketing_captures }}" = "true" ]; then
-              adb shell settings put global sysui_demo_allowed 1
-              adb shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 0941
-              adb shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged false
-              maestro test --test-output-dir apps/mobile/test-results/android apps/mobile/e2e/native/android-store-marketing.yaml
-            else
-              maestro test --test-output-dir apps/mobile/test-results/android apps/mobile/e2e/native/android.yaml
-            fi
+            adb shell settings put global sysui_demo_allowed 1
+            adb shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 0941
+            adb shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged false
+            maestro test --test-output-dir apps/mobile/test-results/android apps/mobile/e2e/native/${{ inputs.marketing_captures && 'android-store-marketing' || 'android' }}.yaml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
