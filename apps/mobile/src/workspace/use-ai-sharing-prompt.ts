@@ -5,17 +5,22 @@ import type { AISharingDisclosure } from "./ai-sharing";
 export function useAISharingPrompt(connectionId: string | null) {
   const sequence = useRef(0);
   const pending = useRef<{ id: number; resolve(allowed: boolean): void } | null>(null);
-  const [prompt, setPrompt] = useState<{ id: number; disclosure: AISharingDisclosure } | null>(
-    null,
+  const [request, setPrompt] = useState<{
+    connectionId: string | null;
+    id: number;
+    disclosure: AISharingDisclosure;
+  } | null>(null);
+  const ask = useCallback(
+    (disclosure: AISharingDisclosure) => {
+      pending.current?.resolve(false);
+      const id = ++sequence.current;
+      return new Promise<boolean>((resolve) => {
+        pending.current = { id, resolve };
+        setPrompt({ connectionId, id, disclosure });
+      });
+    },
+    [connectionId],
   );
-  const ask = useCallback((disclosure: AISharingDisclosure) => {
-    pending.current?.resolve(false);
-    const id = ++sequence.current;
-    return new Promise<boolean>((resolve) => {
-      pending.current = { id, resolve };
-      setPrompt({ id, disclosure });
-    });
-  }, []);
   const answer = useCallback((id: number, allowed: boolean) => {
     const request = pending.current;
     if (request?.id !== id) return;
@@ -24,11 +29,11 @@ export function useAISharingPrompt(connectionId: string | null) {
     request.resolve(allowed);
   }, []);
   useEffect(() => {
-    setPrompt(null);
     return () => {
       pending.current?.resolve(false);
       pending.current = null;
     };
   }, [connectionId]);
+  const prompt = request?.connectionId === connectionId ? request : null;
   return { prompt, ask, answer };
 }

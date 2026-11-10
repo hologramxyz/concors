@@ -157,7 +157,11 @@ function SignedInWorkspace() {
     [transport, rendererKey],
   );
   const requiresAISharing = requiresAISharingPermission(Platform.OS, config.demo);
-  const sharingPrompt = useAISharingPrompt(connectionId);
+  const {
+    prompt: sharingPrompt,
+    ask: askAISharing,
+    answer: answerAISharing,
+  } = useAISharingPrompt(connectionId);
   const sharingUser = auth.direct ? "direct" : auth.me?.user.id;
   const sharingOrganization = auth.me?.session.activeOrganizationId;
   const sharingStore = useMemo(() => {
@@ -182,7 +186,7 @@ function SignedInWorkspace() {
       transport && requiresAISharing
         ? createAISharingPermission(
             transport,
-            sharingPrompt.ask,
+            askAISharing,
             (status) => setAISharingGrant({ connectionId, status }),
             sharingStore,
           )
@@ -203,7 +207,7 @@ function SignedInWorkspace() {
       aiPermission.current = null;
       relay.current = null;
     };
-  }, [transport, connectionId, sharingStore, requiresAISharing, sharingPrompt.ask]);
+  }, [transport, connectionId, sharingStore, requiresAISharing, askAISharing]);
   const userId = auth.me?.user.id;
   useEffect(() => {
     alive.current = true;
@@ -549,11 +553,11 @@ function SignedInWorkspace() {
           )}
         </View>
       </KeyboardAvoidingView>
-      {requiresAISharing && sharingPrompt.prompt && (
+      {requiresAISharing && sharingPrompt && (
         <AISharingDrawer
-          key={sharingPrompt.prompt.id}
-          disclosure={sharingPrompt.prompt.disclosure}
-          onAnswer={(allowed) => sharingPrompt.answer(sharingPrompt.prompt!.id, allowed)}
+          key={sharingPrompt.id}
+          disclosure={sharingPrompt.disclosure}
+          onAnswer={(allowed) => answerAISharing(sharingPrompt.id, allowed)}
         />
       )}
     </View>

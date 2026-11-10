@@ -1,4 +1,4 @@
-import { createElement } from "react";
+import { createElement, useEffect } from "react";
 import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, expect, it } from "vitest";
 import { useAISharingPrompt } from "./use-ai-sharing-prompt";
@@ -8,7 +8,10 @@ let renderer: ReactTestRenderer | undefined;
 let current: ReturnType<typeof useAISharingPrompt>;
 const disclosure = { summary: "Share with Anthropic?", details: "Prompts and code." };
 function Probe({ connection }: { connection: string | null }) {
-  current = useAISharingPrompt(connection);
+  const value = useAISharingPrompt(connection);
+  useEffect(() => {
+    current = value;
+  }, [value]);
   return null;
 }
 async function mount(connection: string | null) {
