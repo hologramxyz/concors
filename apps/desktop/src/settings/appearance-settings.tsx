@@ -1,13 +1,6 @@
 import { ColorThemeSettings } from "./color-theme-settings";
-import { Check, ChevronDown, Monitor, Moon, Sun } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Monitor, Moon, Sun } from "lucide-react";
+import { SettingsChoice } from "./settings-choice";
 import { THEME_PREFERENCES, type ThemePreference } from "@/theme/use-theme";
 import { CORNER_STYLES, type CornerStyle } from "@/theme/use-corner-style";
 import { Row, Section, SettingsCard } from "@/views/settings-primitives";
@@ -39,41 +32,20 @@ export function AppearanceSettings({
   cornerStyle,
   onSetCornerStyle,
 }: AppearanceSettingsProps) {
-  const CurrentThemeIcon = THEME_ICON[theme];
-
   return (
     <>
       <Section title="Theme">
         <SettingsCard>
           <Row label="Interface theme">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  aria-label="Theme"
-                  variant="outline"
-                  size="sm"
-                  className="min-w-28 justify-between"
-                >
-                  <span className="flex items-center gap-2">
-                    <CurrentThemeIcon aria-hidden="true" />
-                    {THEME_LABEL[theme]}
-                  </span>
-                  <ChevronDown className="opacity-60" aria-hidden="true" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-36">
-                {THEME_PREFERENCES.map((option) => {
-                  const Icon = THEME_ICON[option];
-                  return (
-                    <DropdownMenuItem key={option} onSelect={() => onSetTheme(option)}>
-                      <Icon aria-hidden="true" />
-                      {THEME_LABEL[option]}
-                      {option === theme && <Check className="ml-auto" aria-hidden="true" />}
-                    </DropdownMenuItem>
-                  );
-                })}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <SettingsChoice
+              label="Theme"
+              value={theme}
+              options={THEME_PREFERENCES.map((value) => {
+                const Icon = THEME_ICON[value];
+                return { value, label: THEME_LABEL[value], icon: <Icon aria-hidden="true" /> };
+              })}
+              onChange={onSetTheme}
+            />
           </Row>
         </SettingsCard>
       </Section>

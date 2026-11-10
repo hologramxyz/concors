@@ -212,6 +212,7 @@ export function ScheduleForm({
           placeholder={projects[0]?.name}
           options={projects.map((p) => ({
             value: p.id,
+            textValue: p.name,
             label: <span className="truncate">{p.name}</span>,
             tooltip: p.directory ? homePath(p.directory) : undefined,
           }))}
@@ -230,9 +231,10 @@ export function ScheduleForm({
               .filter((a) => a.projectId === projectId)
               .map((a) => ({
                 value: a.id,
+                textValue: a.name,
                 label: (
                   <>
-                    <span className="truncate">{a.name}</span>
+                    <span className="truncate">{a.name}</span>{" "}
                     <span className="shrink-0 text-muted-foreground">
                       {a.providerLabel ?? a.provider}
                     </span>

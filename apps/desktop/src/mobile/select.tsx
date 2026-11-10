@@ -13,7 +13,9 @@ import {
 
 export interface MobileSelectOption {
   value: string;
-  label: string;
+  label: ReactNode;
+  /** Plain text for typeahead and native controls when the visible label contains markup. */
+  textValue?: string;
   icon?: ReactNode;
   /** A short muted word right after the label. */
   tag?: string;
@@ -25,7 +27,11 @@ export interface MobileSelectOption {
   disabled?: boolean;
 }
 
-/** Shared selection behavior; workspace/machine pickers use sheets, settings use popovers. */
+const optionText = (option: MobileSelectOption) =>
+  option.textValue ??
+  (typeof option.label === "string" ? option.label : (option.accessibleName ?? ""));
+
+/** Shared selection behavior for phone drawers and compact inline popovers. */
 export function MobileSelect({
   label,
   value,
@@ -67,7 +73,7 @@ export function MobileSelect({
       kind: "button",
       icon: nativeIcon ?? "chevron",
       label,
-      title: selected?.label ?? placeholder ?? label,
+      title: (selected ? optionText(selected) : undefined) ?? placeholder ?? label,
       mark: nativeMark,
       disabled,
     },
@@ -181,7 +187,7 @@ export function MobileSelect({
           aria-selected={value === option.value}
           tabIndex={value === option.value ? 0 : -1}
           data-value={option.value}
-          data-label={option.label}
+          data-label={optionText(option)}
           className="mobile-select-option disabled:opacity-50"
           onClick={() => {
             setOpen(false);
