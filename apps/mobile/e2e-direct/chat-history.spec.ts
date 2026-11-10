@@ -6,6 +6,7 @@ import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client
 import type { WorkspaceOperation } from "@concors/protocol";
 import { mockChatHistory } from "../../../e2e/support/chat-history.ts";
 import { chooseProvider } from "../../../e2e/support/agents.ts";
+import { mobileDesktopSocket } from "../../../e2e/support/mobile-direct-ports.cjs";
 
 for (const native of [false, true]) {
   test(`mobile ${native ? "native bridge" : "web"} automatically loads earlier and newer history`, async ({
@@ -13,7 +14,7 @@ for (const native of [false, true]) {
   }) => {
     const directory = await mkdtemp(join(tmpdir(), "concors-mobile-history-"));
     const desktop = new DaemonConnection({
-      endpoint: describeDaemonEndpoint("ws://127.0.0.1:7440/ws"),
+      endpoint: describeDaemonEndpoint(mobileDesktopSocket),
       client: { kind: "desktop", name: "mobile-history-test", version: "0.1.0" },
     });
     const unsubscribe = desktop.subscribeWorkspace(() => undefined);
