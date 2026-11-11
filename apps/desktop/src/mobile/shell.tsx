@@ -69,6 +69,7 @@ import type { SettingsPage } from "@/settings/navigation";
 import { NativeSurfaces } from "./native-surfaces";
 import { NativeHeaderButton } from "./native-header-button";
 import { useHostCollapsedWorkspaces } from "./collapsed-workspaces";
+import { FollowUpPreferencesContext } from "@/agents/follow-ups";
 import { ResourceStatus } from "@/host/resource-status";
 import { ResourcesView } from "@/host/resources-view";
 import { PreviewsSidebar } from "@/host/previews-sidebar";
@@ -96,22 +97,33 @@ export function MobileApp() {
   }, [host?.safeArea]);
   return host ? (
     <CompactLayoutContext value={true}>
-      <ShortcutProvider
-        preferences={{
-          overrides: host.preferences.shortcuts ?? {},
-          save: (shortcuts) =>
+      <FollowUpPreferencesContext
+        value={{
+          mode: host.preferences.followUps ?? "steer",
+          save: (followUps) =>
             hostAction({
               kind: "preferences",
-              preferences: { ...(getHostState()?.preferences ?? host.preferences), shortcuts },
+              preferences: { ...(getHostState()?.preferences ?? host.preferences), followUps },
             }),
         }}
       >
-        <TooltipProvider>
-          <NativeSurfaces key={host.scope} host={host}>
-            <MobileWorkspace host={host} />
-          </NativeSurfaces>
-        </TooltipProvider>
-      </ShortcutProvider>
+        <ShortcutProvider
+          preferences={{
+            overrides: host.preferences.shortcuts ?? {},
+            save: (shortcuts) =>
+              hostAction({
+                kind: "preferences",
+                preferences: { ...(getHostState()?.preferences ?? host.preferences), shortcuts },
+              }),
+          }}
+        >
+          <TooltipProvider>
+            <NativeSurfaces key={host.scope} host={host}>
+              <MobileWorkspace host={host} />
+            </NativeSurfaces>
+          </TooltipProvider>
+        </ShortcutProvider>
+      </FollowUpPreferencesContext>
     </CompactLayoutContext>
   ) : (
     <p role="status" className="p-6 text-sm">

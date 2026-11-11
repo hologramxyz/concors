@@ -1,8 +1,8 @@
 # Mobile screenshot audit
 
-32 surfaces in light and dark at 390×844, with iPhone-style safe areas. These are browser captures of the shared UI. Native SwiftUI glass, OS pickers, permissions and the software keyboard require device verification. The demo is simulated; the two PDF images below come from live-daemon acceptance.
+35 surfaces in light and dark at 390×844, with iPhone-style safe areas. These are browser captures of the shared UI. Native SwiftUI glass, OS pickers, permissions and the software keyboard require device verification. The demo is simulated; the two PDF images below come from live-daemon acceptance in the preceding production-polish pass.
 
-The model-picker captures show the shared bottom drawer used by the compact composer, with search and provider navigation.
+The latest visual refinement includes Settings cards, switches, empty states and phone selectors, Files guidance, and schedule fields and actions. Settings section, Theme and schedule Repeat drawers are captured separately.
 
 - Navigation: [light](light-navigation-overview.png) · [dark](dark-navigation-overview.png)
 - Workspace: [light](light-workspace-overview.png) · [dark](dark-workspace-overview.png)
@@ -27,8 +27,10 @@ The model-picker captures show the shared bottom drawer used by the compact comp
 | Resources                | [View](light-resources.png)                | [View](dark-resources.png)                |
 | Account                  | [View](light-account.png)                  | [View](dark-account.png)                  |
 | Organizations            | [View](light-organizations.png)            | [View](dark-organizations.png)            |
+| Settings sections        | [View](light-settings-sections.png)        | [View](dark-settings-sections.png)        |
 | Settings account         | [View](light-settings-account.png)         | [View](dark-settings-account.png)         |
 | Settings appearance      | [View](light-settings-appearance.png)      | [View](dark-settings-appearance.png)      |
+| Theme picker             | [View](light-theme-picker.png)             | [View](dark-theme-picker.png)             |
 | Settings shortcuts       | [View](light-settings-shortcuts.png)       | [View](dark-settings-shortcuts.png)       |
 | Settings notifications   | [View](light-settings-notifications.png)   | [View](dark-settings-notifications.png)   |
 | Settings machines        | [View](light-settings-machines.png)        | [View](dark-settings-machines.png)        |
@@ -39,6 +41,7 @@ The model-picker captures show the shared bottom drawer used by the compact comp
 | Settings about           | [View](light-settings-about.png)           | [View](dark-settings-about.png)           |
 | Schedules                | [View](light-schedules.png)                | [View](dark-schedules.png)                |
 | Schedule form            | [View](light-schedule-form.png)            | [View](dark-schedule-form.png)            |
+| Schedule repeat          | [View](light-schedule-repeat.png)          | [View](dark-schedule-repeat.png)          |
 | Pull requests            | [View](light-pull-requests.png)            | [View](dark-pull-requests.png)            |
 | Pull request detail      | [View](light-pull-request-detail.png)      | [View](dark-pull-request-detail.png)      |
 | Support report           | [View](light-support-report.png)           | [View](dark-support-report.png)           |

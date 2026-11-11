@@ -86,6 +86,14 @@ describe("mobile host boundary", () => {
     expect(MobilePreferencesSchema.safeParse({ theme: "custom", corners: "sharp" }).success).toBe(
       false,
     );
+    expect(
+      MobilePreferencesSchema.parse({ theme: "system", corners: "rounded", followUps: "queue" })
+        .followUps,
+    ).toBe("queue");
+    expect(
+      MobilePreferencesSchema.safeParse({ theme: "system", corners: "rounded", followUps: "send" })
+        .success,
+    ).toBe(false);
   });
   it("ignores malformed, oversized and unauthenticated envelopes", () => {
     expect(parseMobileRendererMessage("not json")).toBeNull();

@@ -167,6 +167,7 @@ export function SchedulesPage({
             const agent = agents.find((a) => a.id === schedule.sessionId);
             return (
               <article
+                data-schedule-card
                 key={schedule.id}
                 className="overflow-hidden rounded-lg border bg-background text-ui shadow-xs"
               >
@@ -206,7 +207,10 @@ export function SchedulesPage({
                       {schedule.source === "agent" && <span>Created by agent</span>}
                     </p>
                   </div>
-                  <div className="flex w-full items-center justify-end gap-0.5 sm:w-auto">
+                  <div
+                    data-schedule-actions
+                    className="flex w-full items-center justify-end gap-0.5 sm:w-auto"
+                  >
                     <SidebarTooltip place="title-bar" content="Run now">
                       <Button
                         type="button"

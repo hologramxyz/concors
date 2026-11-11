@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { createContext, useContext, useSyncExternalStore } from "react";
 
 /**
  * What Enter does with a message written while an agent works, as the Codex app's Follow-ups
@@ -11,12 +11,17 @@ export type FollowUpMode = (typeof FOLLOW_UP_MODES)[number];
 export const FOLLOW_UP_KEY = "concors.follow-ups";
 
 const listeners = new Set<() => void>();
+let fallback: FollowUpMode = "steer";
+export const FollowUpPreferencesContext = createContext<{
+  mode: FollowUpMode;
+  save(mode: FollowUpMode): Promise<unknown>;
+} | null>(null);
 
 function read(): FollowUpMode {
   try {
     return window.localStorage.getItem(FOLLOW_UP_KEY) === "queue" ? "queue" : "steer";
   } catch {
-    return "steer";
+    return fallback;
   }
 }
 
@@ -33,10 +38,13 @@ function subscribe(listener: () => void) {
 }
 
 export function useFollowUpMode(): FollowUpMode {
-  return useSyncExternalStore(subscribe, read, () => "steer");
+  const external = useContext(FollowUpPreferencesContext);
+  const local = useSyncExternalStore<FollowUpMode>(subscribe, read, () => "steer");
+  return external?.mode ?? local;
 }
 
 export function setFollowUpMode(mode: FollowUpMode) {
+  fallback = mode;
   try {
     window.localStorage.setItem(FOLLOW_UP_KEY, mode);
   } catch {

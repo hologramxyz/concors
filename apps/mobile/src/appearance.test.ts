@@ -42,6 +42,22 @@ it("hydrates the device preference once for every app surface", async () => {
   expect(notify).toHaveBeenCalledTimes(1);
 });
 
+it("keeps the follow-up choice across host and renderer reloads", async () => {
+  let saved: string | null = null;
+  const storage = {
+    get: async () => saved,
+    set: async (_key: string, value: string) => {
+      saved = value;
+    },
+  };
+  const store = createAppearanceStore(storage);
+  await store.setPreferences({ ...DEFAULT_APPEARANCE, followUps: "queue" });
+  const reloaded = createAppearanceStore(storage);
+  await reloaded.hydrate();
+  expect(reloaded.getSnapshot().followUps).toBe("queue");
+  expect(reloaded.getSnapshot().theme).toBe(DEFAULT_APPEARANCE.theme);
+});
+
 it.each([null, "not json", '{"corners":"typo"}'])(
   "tolerates unreadable saved preferences: %s",
   async (raw) => {

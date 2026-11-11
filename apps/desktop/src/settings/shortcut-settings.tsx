@@ -2,17 +2,12 @@ import { useContext, useState } from "react";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { BINDINGS, isCompactCommand, type CommandId } from "@/shortcuts/bindings";
 import { Row, Section, SettingsCard } from "@/views/settings-primitives";
-import { Check, ChevronDown } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { SettingsChoice } from "./settings-choice";
 import {
   FOLLOW_UP_MODES,
   setFollowUpMode,
   useFollowUpMode,
+  FollowUpPreferencesContext,
   type FollowUpMode,
 } from "@/agents/follow-ups";
 import { MOD_KEY } from "@/lib/platform";
@@ -84,6 +79,9 @@ const FOLLOW_UP_LABEL: Record<FollowUpMode, string> = {
 function FollowUpSettings() {
   const mode = useFollowUpMode();
   const compact = useContext(CompactLayoutContext);
+  const external = useContext(FollowUpPreferencesContext);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   return (
     <Section
       title="Follow-ups"
@@ -95,29 +93,32 @@ function FollowUpSettings() {
           // On a phone, ⌘/Ctrl+Enter is how an external keyboard sends at all.
           {...(compact ? {} : { hint: `${MOD_KEY}+Enter does the other.` })}
         >
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                aria-label="Follow-ups"
-                variant="outline"
-                size="sm"
-                className="min-w-48 justify-between"
-              >
-                {FOLLOW_UP_LABEL[mode]}
-                <ChevronDown className="opacity-60" aria-hidden="true" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-48">
-              {FOLLOW_UP_MODES.map((option) => (
-                <DropdownMenuItem key={option} onSelect={() => setFollowUpMode(option)}>
-                  {FOLLOW_UP_LABEL[option]}
-                  {option === mode && <Check className="ml-auto" aria-hidden="true" />}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <SettingsChoice
+            label="Follow-ups"
+            value={mode}
+            disabled={saving}
+            options={FOLLOW_UP_MODES.map((value) => ({ value, label: FOLLOW_UP_LABEL[value] }))}
+            onChange={(next) => {
+              if (!external) return setFollowUpMode(next);
+              setSaving(true);
+              setError(null);
+              void external
+                .save(next)
+                .catch((cause: unknown) =>
+                  setError(
+                    cause instanceof Error ? cause.message : "Could not save follow-up preference.",
+                  ),
+                )
+                .finally(() => setSaving(false));
+            }}
+          />
         </Row>
       </SettingsCard>
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-destructive">
+          {error}
+        </p>
+      )}
     </Section>
   );
 }
@@ -169,7 +170,11 @@ export function ShortcutSettings() {
   };
   return (
     <>
-      <Section title="Keyboard shortcuts">
+      {compact && <FollowUpSettings />}
+      <Section
+        title="Keyboard shortcuts"
+        description={compact ? "For an external keyboard connected to your phone." : undefined}
+      >
         <SettingsCard className="p-4">
           <div className="flex flex-wrap items-center gap-3">
             <Input
@@ -182,6 +187,9 @@ export function ShortcutSettings() {
             />
             <Button
               variant="outline"
+              className={
+                compact && !Object.keys(preferences.overrides).length ? "hidden" : undefined
+              }
               disabled={busy || !Object.keys(preferences.overrides).length}
               onClick={() => {
                 setBusy(true);
@@ -211,7 +219,7 @@ export function ShortcutSettings() {
           )}
         </SettingsCard>
       </Section>
-      <FollowUpSettings />
+      {!compact && <FollowUpSettings />}
       {!BINDINGS.some(
         (binding) => matches(binding.id) && (!compact || isCompactCommand(binding.id)),
       ) && (

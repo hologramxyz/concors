@@ -1,5 +1,6 @@
+import { EmptyState } from "@/components/empty-state";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, CircleOff, Pencil, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, CircleOff, Pencil, Plus, Trash2, Users, X } from "lucide-react";
 import {
   AGENT_USAGE_TTL_MS,
   PROVIDER_SUBSCRIPTIONS_CAPABILITY,
@@ -445,6 +446,17 @@ export function SubscriptionsSettings({
       });
   };
   const visibleError = pageError ?? libraryError ?? local.error;
+  if (compact && libraryUnavailable)
+    return (
+      <Section
+        title="Subscriptions"
+        description="Choose which account your machine uses for each agent."
+      >
+        <EmptyState icon={Users} title="Update your machine">
+          Update this machine’s Concors service to manage subscriptions.
+        </EmptyState>
+      </Section>
+    );
   return (
     <Section
       title="Subscriptions"

@@ -26,8 +26,8 @@ test("mobile applies built-in and local-file palettes through the native prefere
     .getByRole("button", { name: "Settings", exact: true })
     .click();
   await ui.getByRole("radio", { name: "Cobalt", exact: true }).locator("..").click();
-  await ui.getByRole("button", { name: "Theme", exact: true }).click();
-  await ui.getByRole("menuitem", { name: "Dark", exact: true }).click();
+  await ui.getByRole("combobox", { name: "Theme", exact: true }).click();
+  await ui.getByRole("option", { name: "Dark", exact: true }).click();
   await expect(ui.locator("html")).toHaveAttribute("data-color-theme", "cobalt");
   await expectCanvas("rgb(16, 22, 37)");
   await expect(ui.getByLabel("Theme directory")).toBeVisible();

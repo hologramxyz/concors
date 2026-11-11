@@ -1,3 +1,4 @@
+import { EmptyState } from "@/components/empty-state";
 import { ApiError, type Organization } from "@concors/api-client";
 import { KeyRound, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -56,7 +57,9 @@ export function SshKeysSection({ organization }: SshKeysSectionProps) {
             Loading keys…
           </p>
         ) : keys !== null && keys.length === 0 ? (
-          <p className="p-4 text-sm text-muted-foreground">No keys yet.</p>
+          <EmptyState inCard icon={KeyRound} title="No SSH keys yet">
+            Add a public key to connect to your machines from your own terminal.
+          </EmptyState>
         ) : (
           <ul className="flex flex-col divide-y">
             {(keys ?? []).map((key) => (
@@ -100,7 +103,7 @@ export function SshKeysSection({ organization }: SshKeysSectionProps) {
             ))}
           </ul>
         )}
-        <div className="flex flex-wrap items-center gap-2 border-t p-4">
+        <div data-empty-state-actions className="flex flex-wrap items-center gap-2 border-t p-4">
           {device.supported && !device.registered && (
             <Button size="sm" disabled={device.settingUp} onClick={device.setUp}>
               <KeyRound data-icon="inline-start" aria-hidden="true" />

@@ -4,6 +4,33 @@ import { createDemoServer } from "./server";
 import { ids } from "./fixtures";
 import { ApiClient } from "@concors/api-client";
 describe("mobile demo protocol fixture", () => {
+  it("answers schedule provider discovery without enabling provider settings mutations", async () => {
+    const server = createDemoServer();
+    const connection = new DaemonConnection({
+      endpoint: describeDaemonEndpoint("wss://demo.invalid/ws"),
+      client: { kind: "mobile", name: "demo-providers", version: "0.1.0" },
+      webSocketFactory: server.socket,
+    });
+    connection.subscribeWorkspace(() => undefined);
+    try {
+      await connection.connect();
+      const list = await connection.requestProvider({ kind: "list" }, crypto.randomUUID());
+      expect(list.outcome.status).toBe("ok");
+      if (list.outcome.status === "ok")
+        expect(list.outcome.providers.map((p) => p.label)).toEqual([
+          "Codex",
+          "Claude Code",
+          "OpenCode",
+        ]);
+      const update = await connection.requestProvider(
+        { kind: "update", id: "codex" },
+        crypto.randomUUID(),
+      );
+      expect(update.outcome.status).toBe("error");
+    } finally {
+      connection.disconnect();
+    }
+  });
   it("validates machine, billing, organization and SSH fixtures through the real API client", async () => {
     const server = createDemoServer();
     const api = new ApiClient({ baseUrl: "https://demo.invalid", fetch: server.fetch });

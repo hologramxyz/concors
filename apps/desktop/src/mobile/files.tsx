@@ -7,7 +7,8 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FolderOpen } from "lucide-react";
+import { EmptyState } from "@/components/empty-state";
 import type { WorkspaceProject, WorkspaceSnapshot } from "@concors/protocol";
 import { FilesProvider, ProjectFileLinks } from "@/files/provider";
 import { FilePromptsContext } from "@/files/prompts";
@@ -229,21 +230,23 @@ export function MobileFiles({
               {available ? (
                 <FileTree key={scope} project={project} open={open && browsing} onClose={close} />
               ) : (
-                <div role="status" className="space-y-2 p-5 text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">
-                    {demo
-                      ? "Connect a machine to browse files"
-                      : connected
-                        ? "File access needs a newer daemon"
-                        : "Waiting for your machine"}
-                  </p>
-                  <p>
+                <div className="space-y-3 p-5 text-sm text-muted-foreground">
+                  <EmptyState
+                    icon={FolderOpen}
+                    title={
+                      demo
+                        ? "Connect a machine to browse files"
+                        : connected
+                          ? "File access needs a newer daemon"
+                          : "Waiting for your machine"
+                    }
+                  >
                     {demo
                       ? "The demo has no filesystem. Connect to a desktop daemon with project file support to browse and edit real files."
                       : connected
                         ? "This daemon does not support project files. Connect to an updated desktop daemon to browse and edit this directory. Updating the mobile app alone does not enable file access."
                         : "File browsing will resume when the desktop daemon reconnects."}
-                  </p>
+                  </EmptyState>
                   {documents.length > 0 && <p>Your open files and unsaved drafts are kept.</p>}
                 </div>
               )}

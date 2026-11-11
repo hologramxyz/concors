@@ -1,5 +1,7 @@
 import { ChevronDown } from "lucide-react";
-import { useId, type ReactNode } from "react";
+import { useContext, useId, type ReactNode } from "react";
+import { CompactLayoutContext } from "@/components/compact-layout";
+import { MobileSelect } from "@/mobile/select";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +15,7 @@ import {
 export interface ScheduleSelectOption<Value extends string> {
   value: Value;
   label: ReactNode;
+  textValue?: string;
   tooltip?: string | undefined;
 }
 
@@ -34,7 +37,35 @@ export function ScheduleSelect<Value extends string>({
   onChange: (value: Value) => void;
 }) {
   const labelId = useId();
+  const compact = useContext(CompactLayoutContext);
   const chosen = options.find((option) => option.value === value);
+  if (compact)
+    return (
+      <div className="min-w-0 space-y-1.5">
+        <span>{label}</span>
+        <MobileSelect
+          label={label}
+          value={value}
+          disabled={!!disabled}
+          selectedLabel={chosen?.label ?? placeholder}
+          presentation="sheet"
+          groups={[
+            {
+              options: options.map((option) => ({
+                value: option.value,
+                label: option.label,
+                ...(option.textValue ? { textValue: option.textValue } : {}),
+                ...(option.tooltip ? { description: option.tooltip } : {}),
+              })),
+            },
+          ]}
+          onValueChange={(next) => {
+            const option = options.find((option) => option.value === next);
+            if (option) onChange(option.value);
+          }}
+        />
+      </div>
+    );
   return (
     <div className="min-w-0 space-y-1.5">
       <span id={labelId}>{label}</span>

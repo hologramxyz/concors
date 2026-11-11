@@ -1,6 +1,6 @@
 import { ProvidersSettings } from "@/settings/providers-settings";
 import { SubscriptionsSettings } from "@/settings/subscriptions-settings";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { ConnectionState } from "@concors/daemon-client";
 import type { MobileState } from "@concors/client-core";
 import {
@@ -21,6 +21,8 @@ import { MobileSelect } from "./select";
 import { AppearanceSettings } from "@/settings/appearance-settings";
 import { ShortcutSettings } from "@/settings/shortcut-settings";
 import { AboutSettings } from "@/settings/about-settings";
+import { ArrowUpRight, ChevronRight } from "lucide-react";
+import { SettingsCard } from "@/views/settings-primitives";
 
 export function SettingsDrawer({
   open,
@@ -39,6 +41,10 @@ export function SettingsDrawer({
 }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const body = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (body.current) body.current.scrollTop = 0;
+  }, [page]);
   const run = async (work: () => Promise<unknown>) => {
     if (busy) return;
     setBusy(true);
@@ -71,6 +77,7 @@ export function SettingsDrawer({
         </DialogHeader>
         <MobileSelect
           label="Settings section"
+          presentation="sheet"
           value={page}
           onValueChange={(value) => onPageChange(value as SettingsPage)}
           groups={SETTINGS_NAV_GROUPS.map((group) => ({
@@ -98,7 +105,7 @@ export function SettingsDrawer({
             ],
           })).filter((group) => group.options.length)}
         />
-        <div className="mobile-settings-body">
+        <div ref={body} className="mobile-settings-body">
           {error && (
             <p role="alert" className="px-4 text-sm text-destructive">
               {error}
@@ -180,6 +187,7 @@ export function SettingsDrawer({
                     <span className="text-sm font-medium">Push notifications</span>
                     <input
                       type="checkbox"
+                      className="mobile-setting-toggle"
                       aria-label="Push notifications"
                       checked={host.pushEnabled}
                       disabled={busy || !host.capabilities.pushNotifications}
@@ -229,30 +237,36 @@ export function SettingsDrawer({
           {page === "account" && (
             <div className="px-4 pb-4">
               <Section title="Help and privacy">
-                <div className="flex flex-wrap gap-3 py-3">
+                <SettingsCard className="mobile-settings-links divide-y">
                   <Button
-                    variant="outline"
+                    variant="ghost"
+                    disabled={busy}
                     onClick={() => void run(() => hostAction({ kind: "report-content" }))}
                   >
                     Report content or a problem
+                    <ChevronRight aria-hidden="true" />
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="ghost"
+                    disabled={busy}
                     onClick={() =>
                       void run(() => hostAction({ kind: "open-url", url: host.supportUrl }))
                     }
                   >
                     Support
+                    <ArrowUpRight aria-hidden="true" />
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="ghost"
+                    disabled={busy}
                     onClick={() =>
                       void run(() => hostAction({ kind: "open-url", url: host.privacyUrl }))
                     }
                   >
                     Privacy policy
+                    <ArrowUpRight aria-hidden="true" />
                   </Button>
-                </div>
+                </SettingsCard>
               </Section>
               {host.aiSharing !== undefined && (
                 <Section
@@ -300,7 +314,7 @@ export function SettingsDrawer({
                     </p>
                   ) : (
                     <Button
-                      variant="outline"
+                      variant="destructive"
                       disabled={busy}
                       onClick={() => void run(() => hostAction({ kind: "delete-account" }))}
                     >

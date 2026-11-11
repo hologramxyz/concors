@@ -66,6 +66,7 @@ export function NotificationSettings({
             </span>
             <input
               type="checkbox"
+              className="mobile-setting-toggle"
               aria-label="Agent sounds"
               disabled={busy}
               checked={preferences.sound}

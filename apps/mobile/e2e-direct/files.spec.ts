@@ -181,8 +181,8 @@ test("mobile file syntax follows theme changes while retaining its draft", async
         .getByRole("button", { name: "Settings", exact: true })
         .click();
       await ui.getByRole("radio", { name: palette, exact: true }).locator("..").click();
-      await ui.getByRole("button", { name: "Theme", exact: true }).click();
-      await ui.getByRole("menuitem", { name: "Dark", exact: true }).click();
+      await ui.getByRole("combobox", { name: "Theme", exact: true }).click();
+      await ui.getByRole("option", { name: "Dark", exact: true }).click();
       await expect(ui.locator("html")).toHaveAttribute("data-color-theme", palette.toLowerCase());
       const color = await ui.locator("html").evaluate((node) => {
         const hex = getComputedStyle(node).getPropertyValue("--syntax-keyword").trim();
