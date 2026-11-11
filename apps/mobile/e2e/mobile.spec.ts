@@ -1574,7 +1574,7 @@ test("custom shortcuts persist through the mobile preference bridge and renderer
   await openSettings(ui);
   await choose(ui, "Settings section", "shortcuts");
   await ui.getByRole("button", { name: "Restore all defaults" }).click();
-  await expect(ui.getByRole("button", { name: "Restore all defaults" })).toBeDisabled();
+  await expect(ui.getByRole("button", { name: "Restore all defaults" })).toHaveCount(0);
 });
 test("an image on the phone's clipboard can be pasted into the composer", async ({
   page,

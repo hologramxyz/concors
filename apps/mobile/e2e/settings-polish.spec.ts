@@ -44,7 +44,8 @@ test("settings choices use nested drawers, preserve the parent and reset section
   await sections.getByRole("option", { name: "Notifications", exact: true }).click();
   const sounds = settings.getByRole("checkbox", { name: "Agent sounds" });
   const wasChecked = await sounds.isChecked();
-  await sounds.setChecked(!wasChecked);
+  // The controlled value updates after the native host confirms the preference write.
+  await sounds.click();
   if (wasChecked) await expect(sounds).not.toBeChecked();
   else await expect(sounds).toBeChecked();
   await expect(sounds).toBeEnabled();
