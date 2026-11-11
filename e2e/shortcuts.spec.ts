@@ -22,7 +22,12 @@ test("workspace shortcuts create, search, split and close the active pane withou
     ).toBeEnabled();
     await expect(page.getByRole("button", { name: "Shortcuts", exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: /^Account:/ }).click();
-    await expect(page.getByRole("menuitem")).toHaveText([/^Settings/, "Take the tour", "Sign out"]);
+    await expect(page.getByRole("menuitem")).toHaveText([
+      /^Settings/,
+      "Take the tour",
+      "Get the iOS app",
+      "Sign out",
+    ]);
     await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
     await page
       .getByRole("navigation", { name: "Settings" })
@@ -190,7 +195,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
   }
 });
 
-test("shortcuts have a dedicated settings page and the account menu only shows identity and account actions", async ({
+test("shortcuts have a dedicated settings page and stay out of the account menu", async ({
   page,
 }) => {
   await signedIn(page);
@@ -199,7 +204,12 @@ test("shortcuts have a dedicated settings page and the account menu only shows i
   await account.focus();
   await page.keyboard.press("Enter");
   const menu = page.getByRole("menu");
-  await expect(menu.getByRole("menuitem")).toHaveText([/^Settings/, "Take the tour", "Sign out"]);
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    /^Settings/,
+    "Take the tour",
+    "Get the iOS app",
+    "Sign out",
+  ]);
   await expect(menu.getByText("E2E User", { exact: true })).toBeVisible();
   await expect(menu.getByText("e2e@example.com", { exact: true })).toBeVisible();
   await expect(menu.getByText("Personal organization", { exact: true })).toHaveCount(0);

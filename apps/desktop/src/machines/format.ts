@@ -38,11 +38,16 @@ export function isExternal(machine: Pick<Machine, "provider">): boolean {
   return machine.provider === "external";
 }
 
-/** An own server that has connected while Concors is still installing itself on it. */
+/**
+ * A server that is up while Concors is still installing itself on it: an own server that has
+ * connected, or a new VPS whose daemon is not installed yet. Neither can be opened until then.
+ */
 export function isSettingUp(
   machine: Pick<Machine, "provider" | "status" | "agentInstalledAt">,
 ): boolean {
-  return isExternal(machine) && machine.status === "running" && !machine.agentInstalledAt;
+  if (machine.status !== "running") return false;
+  // A VPS only counts when the control plane reports installs (`undefined` on older ones).
+  return isExternal(machine) ? !machine.agentInstalledAt : machine.agentInstalledAt === null;
 }
 
 export type StatusTone = "neutral" | "pending" | "success" | "danger";

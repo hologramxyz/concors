@@ -198,8 +198,21 @@ describe("own server setup", () => {
     expect(isSettling({ ...own, agentInstalledAt: null })).toBe(true);
     expect(isSettingUp({ ...own, agentInstalledAt: "2026-10-05" })).toBe(false);
     expect(statusTone({ ...own, agentInstalledAt: "2026-10-05" })).toBe("success");
-    // A Concors VPS keeps its own meaning of running.
-    expect(isSettingUp({ ...own, provider: "ovh", agentInstalledAt: null })).toBe(false);
+  });
+
+  it("shows a new VPS as setting up until Concors is installed on it", () => {
+    const vps = { provider: "contabo", status: "running" } as const;
+    expect(isSettingUp({ ...vps, agentInstalledAt: null })).toBe(true);
+    expect(
+      describeStatus({ ...vps, ovhState: "running", serviceName: "1", agentInstalledAt: null }),
+    ).toBe("Setting up");
+    expect(statusTone({ ...vps, agentInstalledAt: null })).toBe("pending");
+    expect(isSettling({ ...vps, agentInstalledAt: null })).toBe(true);
+    expect(isSettingUp({ ...vps, provider: "ovh", agentInstalledAt: "2026-11-10" })).toBe(false);
+    expect(statusTone({ ...vps, agentInstalledAt: "2026-11-10" })).toBe("success");
+    // Control planes that do not report installs keep the plain status.
+    expect(isSettingUp({ provider: "ovh", status: "running" })).toBe(false);
+    expect(isSettingUp({ ...vps, status: "provisioning", agentInstalledAt: null })).toBe(false);
   });
 });
 
