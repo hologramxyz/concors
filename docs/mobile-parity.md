@@ -69,7 +69,8 @@ Phone-specific behavior:
   scroll it and never open a side panel. Schedules and Pull requests keep their page title and
   have no strip.
   Workspace and machine selection open bottom drawers with scrollable, touch-sized options.
-  The backdrop, Close button and Escape dismiss them and restore focus. Tapping the
+  A downward pull, the backdrop, Close button and Escape dismiss them and restore focus.
+  Short pulls spring back, and a scrolled list retains vertical scrolling until it reaches its top. Tapping the
   covered trigger dismisses via the backdrop without reopening. The settings section
   picker remains a popover. Workspace choices support arrow keys and Home/End; machine and settings
   choices also support typeahead. Row actions are separate buttons, not nested listbox controls.
@@ -83,8 +84,8 @@ Phone-specific behavior:
   popovers. Owned option controls preserve expansion.
   Keyboard dismissal or an outside click collapses it without losing the draft.
   Height/content animations respect reduced motion; collapsed action taps do not move their target.
-  One centered primary action shows Stop while active with an empty draft, Queue with
-  follow-up content, or Send when idle. Controls fit a single row down to 320px width.
+  One centered primary action shows Microphone for an empty idle draft, Stop while active with
+  an empty draft, Queue with follow-up content, or Send for idle text or attachments. Controls fit a single row down to 320px width.
 - Desktop split/placement/arrangement/resize controls and commands are intentionally
   absent on phones. Existing desktop split panes remain accessible in the tab strip.
 - Each strip tab has a menu sheet (pin, rename for single-pane desktop tabs, fork, type/profile,
@@ -100,6 +101,8 @@ Phone-specific behavior:
   opposite gesture. Horizontal terminal gestures are handled before xterm can consume them;
   vertical gestures and taps retain terminal behavior.
   Tree, CodeMirror, Markdown, file links, create, explicit save and conflict review are desktop code.
+  PDFs render offline with shared fit/zoom controls, both in Files and chat attachment drawers.
+  Mobile canvas limits and offscreen page release bound bitmap memory for long documents.
   Editors preserve their own gestures and do not automatically summon the keyboard on opening.
   The Files header shares the chat header's native/web glass surfaces, button dimensions,
   pressed states and accessibility fallback. Its project pill returns to the directory, replacing

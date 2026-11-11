@@ -5,7 +5,8 @@ bundled, offline WebView. The phone shell is chat-first: bottom composer, swipea
 push sidebar, flat top Tabs picker, and modal settings. There is no bottom navigation
 and no second implementation of chat/tool rendering.
 
-**Status: implemented client and interactive preview, not store-submission ready.**
+**Status: iOS App Review approved.** The current polish review and verification boundaries are
+recorded in the [mobile polish audit](../../docs/mobile-polish-audit.md).
 Direct desktop testing works without a cloud account or server change; see below.
 Managed cloud connectivity uses desktop's machine/token contract; optional push and deletion
 still require backend services. See the [server contract](../../docs/mobile-backend.md).
@@ -16,7 +17,7 @@ For an installed iPhone beta (no Metro/Expo Go), follow the
 [TestFlight runbook](../../docs/mobile-testflight.md). `pnpm testflight:check` validates the
 candidate and probes the selected API without credentials; it does not build or upload.
 
-While Apple enrollment is pending, use a free Personal Team on your Mac:
+For local development with a free Personal Team on your Mac, use:
 `pnpm --filter @concors/mobile ios:local` from the repository root. This installs **Concors Dev**
 against the development backend, without push/universal-link entitlements. See the
 [local iPhone setup](../../docs/mobile-local-iphone.md) for Xcode signing and Metro requirements.
@@ -59,20 +60,23 @@ phone-size mode. Select **Explore demo**; it opens straight into the agent chat.
    OpenCode and Pi when installed on the machine. Changing provider starts a new chat;
    the original remains available in Tabs.
    The sidebar button, picker and **Files** button are separate backdrop-blurred controls.
-   Choose a pane to switch views, or dismiss with Close, Escape or the backdrop.
+   Choose a pane to switch views, or dismiss with a downward pull, Close, Escape or the backdrop.
    Tapping the covered trigger hits the backdrop and closes the drawer without reopening it.
    Desktop-only split/arrange/resize actions are intentionally absent on phones.
 
-The in-memory demo has no filesystem; **Files** opens an explanation. Use a current desktop
-daemon to test actual files, as described below. 6. Add a project from the sidebar's animated drawer (open/create/clone). Expand tool calls, diffs,
-plans, thinking and sub-agent updates. Try `ask me a question` for an input request.
-Model, effort and permissions use icon-only desktop controls when expanded.
-Context usage and dictation sit on the right beside the primary button; the sliders button contains only
-Plan and Speed. On iPhone, dictation records through the machine, as on desktop; where the webview
-offers no microphone (Android) it focuses the keyboard and explains how to use its microphone.
-There is one primary button: Stop while working with an empty draft, Queue for a follow-up,
-or Send when idle. 7. Select **Mobile launch 2** (Terminal) for the shared xterm terminal: type, use extra keys,
-reload the renderer or explicitly stop the process after confirmation.
+   The in-memory demo has no filesystem; **Files** opens an explanation. Use a current desktop
+   daemon to test actual files, as described below.
+
+6. Add a project from the sidebar's animated drawer (open/create/clone). Expand tool calls, diffs,
+   plans, thinking and sub-agent updates. Try `ask me a question` for an input request.
+   Model, effort and permissions use icon-only desktop controls when expanded.
+   Context usage and dictation sit on the right beside the primary button; the sliders button contains only
+   Plan and Speed. On iPhone, dictation records through the machine, as on desktop; where the webview
+   offers no microphone (Android) it focuses the keyboard and explains how to use its microphone.
+   There is one primary button: Microphone for an empty idle draft, Stop while working with an empty
+   draft, Queue for a follow-up, or Send when there is text or an attachment.
+7. Select **Mobile launch 2** (Terminal) for the shared xterm terminal: type, use extra keys,
+   reload the renderer or explicitly stop the process after confirmation.
 
 ### Mobile tabs and desktop sync
 

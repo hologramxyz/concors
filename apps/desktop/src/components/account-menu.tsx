@@ -1,4 +1,5 @@
 import { AccountAvatar } from "./account-avatar";
+import { useAccountImage } from "./use-account-image";
 import { MobileAppDialog } from "./mobile-app";
 import {
   ChevronsUpDown,
@@ -10,6 +11,7 @@ import {
   Smartphone,
 } from "lucide-react";
 import { useContext, useRef, useState, type ReactNode } from "react";
+import { useNativeSurface } from "@/components/native-surface";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import {
   Dialog,
@@ -20,7 +22,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
-import { type SignedInAuth } from "@/auth/auth-state";
+import { initialOf, type SignedInAuth } from "@/auth/auth-state";
 import { MenuKeyChips } from "@/shortcuts/key-chips";
 import { replayTour } from "@/tour/store";
 import {
@@ -143,9 +145,33 @@ export function MobileAccountMenu({
   const [open, setOpen] = useState(false);
   const person = auth?.user ?? profile;
   const name = person?.name || person?.email || "Your profile";
+  const { src } = useAccountImage(person, !!auth);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const native = useNativeSurface(
+    trigger,
+    {
+      kind: "button",
+      icon: "account",
+      title: name,
+      label: `Account: ${name}`,
+      mark: person ? initialOf(person) : undefined,
+      avatarUrl: src?.startsWith("https://") && src.length <= 2048 ? src : undefined,
+      disabled: false,
+    },
+    (event) => {
+      if (event.kind === "press" && event.control === "activate") trigger.current?.click();
+    },
+  );
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger className="mobile-account-trigger" aria-label={`Account: ${name}`}>
+      <DialogTrigger
+        ref={trigger}
+        className="mobile-account-trigger mobile-glass"
+        aria-label={`Account: ${name}`}
+        data-native-surface={native || undefined}
+        aria-hidden={native || undefined}
+        tabIndex={native ? -1 : undefined}
+      >
         <AccountAvatar user={person} githubEnabled={!!auth} className="mobile-account-avatar" />
         <span className="min-w-0 flex-1 truncate">{name}</span>
         <ChevronsUpDown className="size-4 text-muted-foreground" aria-hidden="true" />

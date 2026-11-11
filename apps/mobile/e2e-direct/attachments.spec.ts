@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
 import { chooseProvider } from "../../../e2e/support/agents.ts";
+import { samplePdf } from "../../../e2e/support/pdf";
 
 test("mobile uploads more than three files, and files over 1 MB, through the native host", async ({
   page,
@@ -54,17 +55,18 @@ test("mobile uploads more than three files, and files over 1 MB, through the nat
     await expect(composer).toBeEnabled();
     await ui.getByLabel("Upload files").setInputFiles([
       { name: "big.txt", mimeType: "text/plain", buffer: Buffer.from("x".repeat(1_500_000)) },
+      { name: "brief.pdf", mimeType: "application/pdf", buffer: samplePdf() },
       ...[1, 2, 3].map((n) => ({
         name: `note-${n}.md`,
         mimeType: "text/markdown",
         buffer: Buffer.from(`Note ${n}`),
       })),
     ]);
-    await expect(ui.locator('[data-upload="uploaded"]')).toHaveCount(4);
+    await expect(ui.locator('[data-upload="uploaded"]')).toHaveCount(5, { timeout: 15_000 });
     await composer.fill("Read these");
     await ui.getByRole("button", { name: "Send message", exact: true }).click();
     const sent = ui.getByRole("log").locator("[data-message-attachments]").last();
-    await expect(sent.getByRole("button")).toHaveCount(4);
+    await expect(sent.getByRole("button")).toHaveCount(5);
     // Another client of the machine sees the same message with every file.
     await expect
       .poll(async () => {
@@ -78,7 +80,30 @@ test("mobile uploads more than three files, and files over 1 MB, through the nat
           ? read.outcome.conversation.items.find((i) => i.kind === "user")?.attachments?.length
           : null;
       })
-      .toBe(4);
+      .toBe(5);
+    await sent.getByRole("button", { name: "brief.pdf", exact: true }).click();
+    const preview = ui.getByRole("dialog", { name: "brief.pdf", exact: true });
+    const firstPage = preview.getByLabel("Page 1", { exact: true });
+    await expect
+      .poll(
+        () =>
+          firstPage.evaluate((canvas: HTMLCanvasElement) => {
+            if (!canvas.width) return false;
+            const pixel = canvas
+              .getContext("2d")
+              ?.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
+            return (pixel?.[0] ?? 0) > 200 && (pixel?.[1] ?? 255) < 60;
+          }),
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+    await preview.getByRole("button", { name: "Zoom in", exact: true }).click();
+    await expect(
+      preview.getByRole("button", { name: "Zoom 110%, reset to fit", exact: true }),
+    ).toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("mobile-pdf-attachment.png") });
+    await preview.getByRole("button", { name: "Close attachment", exact: true }).click();
+    await expect(preview).toHaveCount(0);
     expect(errors).toEqual([]);
   } finally {
     off();

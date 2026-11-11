@@ -135,7 +135,7 @@ test("chat-first shell reuses desktop approvals, streaming and bottom composer",
   await ui.getByRole("textbox", { name: "Message Codex" }).fill("Review the mobile client");
   await ui.getByRole("button", { name: "Send message", exact: true }).click();
   await expect(ui.getByText(/This is a simulated response/)).toBeVisible();
-  await expect(ui.getByRole("button", { name: "Send message", exact: true })).toBeVisible();
+  await expect(ui.getByRole("button", { name: "Start dictation", exact: true })).toBeVisible();
   const metrics = await ui.locator("[data-agent-composer]").evaluate((element) => {
     const rect = element.getBoundingClientRect();
     return {
@@ -891,7 +891,7 @@ test("composer expands on focus, preserves portaled controls, and collapses afte
   await ui.getByText(/cumulative tokens/).press("Escape");
   await input.fill("");
   await primary.click();
-  await expect(primary).toHaveAttribute("aria-label", "Send message");
+  await expect(primary).toHaveAttribute("aria-label", "Start dictation");
   const centered = await primary.evaluate((button) => {
     const b = button.getBoundingClientRect(),
       s = button.querySelector("svg")?.getBoundingClientRect();

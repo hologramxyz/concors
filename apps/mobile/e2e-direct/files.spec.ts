@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
 import { swipe } from "../e2e/support/swipe";
 import { chooseProvider } from "../../../e2e/support/agents.ts";
+import { samplePdf } from "../../../e2e/support/pdf";
 
 async function setup(page: Page, projectName = "Mobile file test", favicon = false) {
   const root = await mkdtemp(join(tmpdir(), "concors-mobile-files-"));
@@ -83,6 +84,78 @@ async function setup(page: Page, projectName = "Mobile file test", favicon = fal
     },
   };
 }
+
+test("mobile PDFs render offline, fit the phone, zoom and release distant page bitmaps", async ({
+  page,
+}) => {
+  const { ui, root, cleanup } = await setup(page);
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    await writeFile(join(root, "review.pdf"), samplePdf(12));
+    await writeFile(join(root, "damaged.pdf"), "%PDF-1.4\nnot a valid document");
+    await ui.getByRole("button", { name: "Project files", exact: true }).click();
+    await ui.getByRole("button", { name: "review.pdf", exact: true }).click();
+    const pdf = ui.getByRole("region", { name: "File review.pdf", exact: true });
+    const first = pdf.getByLabel("Page 1", { exact: true });
+    await expect
+      .poll(
+        () =>
+          first.evaluate((canvas: HTMLCanvasElement) => {
+            if (!canvas.width) return false;
+            const pixel = canvas
+              .getContext("2d")
+              ?.getImageData(canvas.width / 2, canvas.height / 2, 1, 1).data;
+            return (pixel?.[0] ?? 0) > 200 && (pixel?.[1] ?? 255) < 60 && (pixel?.[2] ?? 255) < 60;
+          }),
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+    await expect(pdf.getByText("Open PDFs from the Concors desktop app.")).toHaveCount(0);
+    for (const width of [320, 390, 430]) {
+      await page.setViewportSize({ width, height: 844 });
+      await expect
+        .poll(() => pdf.evaluate((el) => el.scrollWidth <= el.clientWidth + 1))
+        .toBe(true);
+      expect(
+        await first.evaluate((canvas: HTMLCanvasElement) => canvas.width * canvas.height),
+      ).toBeLessThanOrEqual(2048 * 2048);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({ path: test.info().outputPath("mobile-pdf-pages.png") });
+    await pdf.getByRole("button", { name: "Zoom in", exact: true }).click();
+    await expect(
+      pdf.getByRole("button", { name: "Zoom 110%, reset to fit", exact: true }),
+    ).toBeVisible();
+    const pages = pdf.getByLabel("Pages of review.pdf", { exact: true });
+    const box = await pages.boundingBox();
+    if (!box) throw new Error("PDF pages are missing");
+    await swipe(page, { x: box.x + 100, y: box.y + 160 }, { x: box.x + 240, y: box.y + 160 });
+    await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-files-open", "true");
+    await pages.evaluate((el) => {
+      el.scrollTop = el.scrollHeight;
+    });
+    const last = pdf.getByLabel("Page 12", { exact: true });
+    await expect
+      .poll(() => last.evaluate((canvas: HTMLCanvasElement) => canvas.width))
+      .toBeGreaterThan(0);
+    await expect.poll(() => first.evaluate((canvas: HTMLCanvasElement) => canvas.width)).toBe(0);
+    await pages.evaluate((el) => {
+      el.scrollTop = 0;
+    });
+    await expect
+      .poll(() => first.evaluate((canvas: HTMLCanvasElement) => canvas.width))
+      .toBeGreaterThan(0);
+    await ui.getByRole("button", { name: "Browse project directory", exact: true }).click();
+    await ui.getByRole("button", { name: "damaged.pdf", exact: true }).click();
+    await expect(
+      ui.getByRole("region", { name: "File damaged.pdf", exact: true }).getByRole("alert"),
+    ).toContainText("could not be read");
+    expect(errors).toEqual([]);
+  } finally {
+    await cleanup();
+  }
+});
 
 test("mobile file syntax follows theme changes while retaining its draft", async ({ page }) => {
   const { ui, cleanup } = await setup(page, "Mobile code themes");

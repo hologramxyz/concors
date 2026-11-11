@@ -267,6 +267,7 @@ export function AgentComposer({
     dictationBase.current = base;
     dictation.start();
   };
+  const showDictate = compact && !showStop && !draft.trim() && !attachments.length;
   useCommand(
     "start-dictation",
     visible && !compact && canDictate,
@@ -710,6 +711,7 @@ export function AgentComposer({
         !uncertain &&
         !!agent.threadId,
       canStop: connected && !!agent.turnId && !agent.turnId.startsWith("pending:"),
+      canDictate,
       hasAttachments: !!attachments.length,
       attachEnabled: !!advanced && connected && !busy && !attaching && !uncertain,
       uploads,
@@ -1008,41 +1010,48 @@ export function AgentComposer({
       )}
     </>
   );
+  const microphone = (primary = false) => (
+    <ControlTooltip
+      text={
+        compact
+          ? (dictationHelp ?? "Dictate a message")
+          : (dictation.preparing ??
+            (dictation.supported
+              ? "Dictate a message"
+              : "Dictation is not supported by this browser."))
+      }
+      shortcut={
+        !compact && shortcutLabel("start-dictation") !== "Unassigned"
+          ? shortcutLabel("start-dictation")
+          : undefined
+      }
+    >
+      <button
+        type="button"
+        aria-label="Start dictation"
+        disabled={!canDictate}
+        onClick={() => {
+          if (dictationHelp) {
+            textarea.current?.focus();
+            setKeyboardHelp((value) => !value);
+          } else {
+            startDictation();
+          }
+        }}
+        className={
+          primary
+            ? "rounded-lg bg-primary p-2 text-primary-foreground disabled:opacity-30"
+            : "agent-control text-muted-foreground hover:bg-muted"
+        }
+      >
+        <Mic className="size-4" />
+      </button>
+    </ControlTooltip>
+  );
   const utilityControls = (
     <>
       <ContextMeter agent={agent} />
-      <ControlTooltip
-        text={
-          compact
-            ? (dictationHelp ?? "Dictate a message")
-            : (dictation.preparing ??
-              (dictation.supported
-                ? "Dictate a message"
-                : "Dictation is not supported by this browser."))
-        }
-        shortcut={
-          !compact && shortcutLabel("start-dictation") !== "Unassigned"
-            ? shortcutLabel("start-dictation")
-            : undefined
-        }
-      >
-        <button
-          type="button"
-          aria-label="Start dictation"
-          disabled={!canDictate}
-          onClick={() => {
-            if (dictationHelp) {
-              textarea.current?.focus();
-              setKeyboardHelp((value) => !value);
-            } else {
-              startDictation();
-            }
-          }}
-          className="agent-control text-muted-foreground hover:bg-muted"
-        >
-          <Mic className="size-4" />
-        </button>
-      </ControlTooltip>
+      {!showDictate && microphone()}
     </>
   );
   const durableRows = agent.queue?.map((entry, i, all) => (
@@ -1555,7 +1564,8 @@ export function AgentComposer({
                       </button>
                     </ControlTooltip>
                   )}
-                  {(!compact || !showStop) && (
+                  {showDictate && microphone(true)}
+                  {(!compact || (!showStop && !showDictate)) && (
                     <ControlTooltip
                       text={
                         failedUpload
@@ -1609,9 +1619,10 @@ export function AgentComposer({
             {dictationHelp}
           </p>
         )}
-        {compact && (!connected || configuring) && (
+        {/* The shell delays connection notices across a brief foreground reconnect. */}
+        {compact && configuring && (
           <p role="status" className="px-2 text-xs text-muted-foreground">
-            {!connected ? "Reconnecting…" : "Updating agent settings…"}
+            Updating agent settings…
           </p>
         )}
       </div>

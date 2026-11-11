@@ -146,7 +146,10 @@ export function SubscriptionsSettings({
             : [],
     [localLibrary, server.data, server.error, signedIn],
   );
-  const libraryReady = signedIn ? !!server.data || !!server.error : !!local.data;
+  const libraryUnavailable = !signedIn && localState?.status === "ready" && !local.supported;
+  const libraryReady = signedIn
+    ? !!server.data || !!server.error
+    : !!local.data || libraryUnavailable;
   const libraryError =
     signedIn && server.error && !server.data
       ? "Could not load your subscriptions. Showing this computer's."
@@ -567,8 +570,15 @@ export function SubscriptionsSettings({
               }}
             />
           ))}
-          {libraryReady && subscriptions.length === 0 && (
-            <p className="px-4 py-5 text-sm text-muted-foreground">No subscriptions added yet.</p>
+          {libraryUnavailable ? (
+            <p className="px-4 py-5 text-sm text-muted-foreground">
+              Update this machine’s Concors service to manage subscriptions.
+            </p>
+          ) : (
+            libraryReady &&
+            subscriptions.length === 0 && (
+              <p className="px-4 py-5 text-sm text-muted-foreground">No subscriptions added yet.</p>
+            )
           )}
           {!libraryReady && <p className="px-4 py-5 text-sm text-muted-foreground">Connecting…</p>}
         </SettingsCard>

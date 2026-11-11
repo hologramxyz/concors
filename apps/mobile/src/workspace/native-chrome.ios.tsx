@@ -60,13 +60,14 @@ import * as ImagePicker from "expo-image-picker";
 import { File, Paths } from "expo-file-system";
 import { MAX_UPLOAD_BYTES } from "@concors/protocol";
 import { cornerRadius, nativeButtonShape, type CornerStyle } from "../appearance";
-import type {
-  NativeComposerContent,
-  NativeControl,
-  NativeIcon,
-  NativeSurface,
-  NativeSurfaceEvent,
-  NativeUsage,
+import {
+  newRequestId,
+  type NativeComposerContent,
+  type NativeControl,
+  type NativeIcon,
+  type NativeSurface,
+  type NativeSurfaceEvent,
+  type NativeUsage,
 } from "@concors/client-core";
 import {
   contextRingStroke,
@@ -95,6 +96,8 @@ const symbols = {
   shield: "shield",
   options: "slider.horizontal.3",
   mic: "mic",
+  machine: "server.rack",
+  account: "person.crop.circle",
 } as const;
 const providerImages = {
   model: require("../../assets/codex.png"),
@@ -217,6 +220,7 @@ function HeaderButton({
   emit: Emit;
 }) {
   const latest = useRef(emit);
+  const [failedAvatar, setFailedAvatar] = useState<string | null>(null);
   const suppressPressUntil = useRef(0);
   useEffect(() => {
     latest.current = emit;
@@ -280,7 +284,7 @@ function HeaderButton({
           spacing={8}
           modifiers={[
             padding({ horizontal: 12 }),
-            ...(content.icon === "chevron"
+            ...(["chevron", "machine", "account"].includes(content.icon)
               ? [
                   // Plain buttons hit-test their label, not the outer glass frame.
                   frame({ width, height }),
@@ -289,6 +293,40 @@ function HeaderButton({
               : [frame({ maxWidth: Infinity })]),
           ]}
         >
+          {(content.icon === "machine" || content.icon === "account") &&
+            (content.icon === "account" &&
+            content.avatarUrl &&
+            failedAvatar !== content.avatarUrl ? (
+              <RNHostView matchContents>
+                <RNImage
+                  source={{ uri: content.avatarUrl }}
+                  onError={() => setFailedAvatar(content.avatarUrl ?? null)}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: corners === "rounded" ? 14 : cornerRadius(corners),
+                  }}
+                />
+              </RNHostView>
+            ) : content.mark ? (
+              <Text
+                modifiers={[
+                  font({ size: content.icon === "account" ? 13 : 18, weight: "semibold" }),
+                  ...(content.icon === "account"
+                    ? [
+                        frame({ width: 28, height: 28 }),
+                        foregroundStyle(dark ? "#141414" : "#ffffff"),
+                        background(dark ? "#ededed" : "#20211f"),
+                        clipShape(...nativeButtonShape(corners)),
+                      ]
+                    : []),
+                ]}
+              >
+                {content.mark}
+              </Text>
+            ) : (
+              <Image systemName={symbols[content.icon]} size={20} />
+            ))}
           <VStack
             alignment="leading"
             spacing={1}
@@ -309,7 +347,14 @@ function HeaderButton({
               </Text>
             ) : null}
           </VStack>
-          <Image systemName={symbols[content.icon]} size={14} />
+          <Image
+            systemName={
+              content.icon === "machine" || content.icon === "account"
+                ? "chevron.down"
+                : symbols[content.icon]
+            }
+            size={14}
+          />
         </HStack>
       ) : (
         <Image
@@ -582,7 +627,7 @@ function Composer({
       const base64 = image?.data.split(",", 2)[1];
       if (!base64) return null;
       // Into the cache like the pickers' copies, so it is checked, sent and removed as they are.
-      const file = new File(Paths.cache, `pasted-${Date.now()}.png`);
+      const file = new File(Paths.cache, `pasted-${newRequestId()}.png`);
       file.create();
       file.write(base64, { encoding: "base64" });
       return [{ uri: file.uri, name: "Pasted image.png", mime: "image/png", size: file.size }];
@@ -689,8 +734,31 @@ function Composer({
     }
   };
   const stop = content.active && !draft.trim() && !content.hasAttachments;
+  const dictate = !stop && !draft.trim() && !content.hasAttachments;
+  const microphone = (primary = false) => (
+    <Control
+      icon="mic"
+      corners={corners}
+      label="Start dictation"
+      dark={dark}
+      primary={primary}
+      blocked={!(content.canDictate ?? content.editable) || picking}
+      onPress={() => {
+        if (!content.dictationHelp) {
+          emit({ kind: "press", control: "dictate", text: draft });
+          return;
+        }
+        onPresent(true);
+        Alert.alert("Dictation", content.dictationHelp, [
+          { text: "OK", onPress: () => onPresent(false) },
+        ]);
+      }}
+    />
+  );
   const glassShape = { borderRadius: cornerRadius(corners) * 3.6 };
-  const sendButton = (
+  const sendButton = dictate ? (
+    microphone(true)
+  ) : (
     <Control
       icon={stop ? "stop" : "send"}
       corners={corners}
@@ -782,23 +850,7 @@ function Composer({
               onPresent={onPresent}
             />
           ) : null}
-          <Control
-            icon="mic"
-            corners={corners}
-            label="Start dictation"
-            dark={dark}
-            blocked={!content.editable}
-            onPress={() => {
-              if (!content.dictationHelp) {
-                emit({ kind: "press", control: "dictate", text: draft });
-                return;
-              }
-              onPresent(true);
-              Alert.alert("Dictation", content.dictationHelp, [
-                { text: "OK", onPress: () => onPresent(false) },
-              ]);
-            }}
-          />
+          {!dictate && microphone()}
           {sendButton}
         </View>
       ) : (

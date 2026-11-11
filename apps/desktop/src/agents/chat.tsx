@@ -786,6 +786,7 @@ export function Chat({
             {/* Floats so showing it never resizes the timeline under a pinned reader. */}
             {!atBottom && (
               <Button
+                data-chat-latest
                 variant="outline"
                 className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 bg-background/80 shadow backdrop-blur-md hover:bg-raised-opaque dark:hover:bg-none"
                 onClick={latest}

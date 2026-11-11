@@ -2,7 +2,7 @@ import { initialOf } from "@/auth/auth-state";
 import { useState, type ReactNode } from "react";
 import { UserRound } from "lucide-react";
 import { cn } from "cn";
-import { useGitHubStatus } from "@/github/use-github-status";
+import { useAccountImage } from "./use-account-image";
 
 interface Person {
   id?: string;
@@ -21,10 +21,7 @@ export function AccountAvatar({
   githubEnabled?: boolean;
   className?: string;
 }) {
-  const github = useGitHubStatus(githubEnabled);
-  const loading = githubEnabled && github.data === null && !github.error;
-  const login = githubEnabled && github.data?.connected ? github.data.login : null;
-  const src = login ? `https://github.com/${encodeURIComponent(login)}.png?size=96` : user?.image;
+  const { loading, src } = useAccountImage(user, githubEnabled);
   const fallback = user ? initialOf(user) : <UserRound className="size-4" />;
   return (
     <span

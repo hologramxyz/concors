@@ -19,6 +19,7 @@ export function useSidebarGesture(
     y: number;
     start: number;
     moved: boolean;
+    time: number;
     target: HTMLElement;
   } | null>(null);
   const [offset, setOffset] = useState<number | null>(null);
@@ -29,7 +30,10 @@ export function useSidebarGesture(
     if (!cancelled && current.moved) {
       suppressClickUntil.current = performance.now() + 400;
       const delta = (event.clientX - current.x) * direction;
-      onChange(open ? delta > -width * 0.25 : delta > width * 0.25);
+      const travel = open ? -delta : delta;
+      const velocity = travel / Math.max(1, performance.now() - current.time);
+      const committed = travel > width * 0.25 || (travel > 40 && velocity > 0.5);
+      onChange(committed ? !open : open);
     }
     gesture.current = null;
     setOffset(null);
@@ -70,7 +74,8 @@ export function useSidebarGesture(
         if (
           (!open || protectInputs) &&
           (target.closest('[role="dialog"], [role="menu"], .mobile-file-tabs, .mobile-tab-strip') ||
-            (!editorEdge && target.closest(".cm-editor, pre, [contenteditable]")) ||
+            (!editorEdge &&
+              target.closest(".cm-editor, pre, [contenteditable], [data-media-preview]")) ||
             (!closingFiles && !fileHeader && target.closest("button, a")) ||
             (!terminal && target.closest("input, textarea, select")))
         )
@@ -81,6 +86,7 @@ export function useSidebarGesture(
           y: event.clientY,
           start: open ? width : 0,
           moved: false,
+          time: performance.now(),
           target,
         };
       },
@@ -89,7 +95,7 @@ export function useSidebarGesture(
         if (!current || current.id !== event.pointerId) return;
         const x = (event.clientX - current.x) * direction,
           y = event.clientY - current.y;
-        if (!current.moved && !open && x < -8) {
+        if (!current.moved && (open ? x > 8 : x < -8)) {
           gesture.current = null;
           return;
         }
@@ -120,6 +126,11 @@ export function useSidebarGesture(
       },
       onPointerUp: finish,
       onPointerCancel: (event: PointerEvent) => finish(event, true),
+      onLostPointerCapture: (event: PointerEvent) => {
+        // Claiming a touch releases its original row's implicit capture. That event bubbles
+        // through the shell too; only losing the shell's own capture cancels navigation.
+        if (event.target === event.currentTarget) finish(event, true);
+      },
       onClickCapture(event: React.MouseEvent) {
         if (offset !== null || performance.now() < suppressClickUntil.current) {
           event.preventDefault();

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useContext, useEffect, useState, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,13 +9,15 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
-import { Check, Download, File, ImageOff, LoaderCircle } from "lucide-react";
+import { Check, Download, File, ImageOff, LoaderCircle, ZoomIn, ZoomOut } from "lucide-react";
 import type { AgentAttachment, AgentItem } from "@concors/protocol";
 import { Button } from "@/components/ui/button";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { canSaveFiles, saveFile, type FileToSave } from "@/tauri";
 import { cachedAttachment, isPreviewableImage, loadAttachment } from "./attachment-cache";
 import { downloadName } from "./download-name";
+import { MAX_ZOOM, MIN_ZOOM, stepZoom } from "@/files/zoom";
+const PdfView = lazy(() => import("@/files/pdf-view"));
 
 /** Saving a file from a preview, with its progress for the button and any error for the dialog. */
 function useSave(file: FileToSave | null) {
@@ -295,6 +297,8 @@ export function AttachmentPreview({
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState<AgentAttachment | null>(null);
   const [text, setText] = useState<string | null>(null);
+  const [pdf, setPdf] = useState<Uint8Array | null>(null);
+  const [zoom, setZoom] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const save = useSave(value);
   const show = async () => {
@@ -303,6 +307,8 @@ export function AttachmentPreview({
     try {
       if (!connection) throw new Error("Reconnect to preview this attachment.");
       const attachment = await loadAttachment(connection, item.sessionId, item.id, index);
+      if (attachment.mime === "application/pdf" || /\.pdf$/i.test(attachment.name))
+        setPdf(Uint8Array.from(atob(attachment.data), (char) => char.charCodeAt(0)));
       let previewText: string | null = null;
       if (
         attachment.mime.startsWith("text/") ||
@@ -351,6 +357,45 @@ export function AttachmentPreview({
             <p role="alert">{error}</p>
           ) : !value ? (
             <p role="status">Loading attachment…</p>
+          ) : pdf ? (
+            <div className="flex min-h-0 flex-col gap-2">
+              <div
+                role="group"
+                aria-label="PDF zoom"
+                className="flex shrink-0 items-center justify-end gap-1"
+              >
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Zoom out"
+                  disabled={zoom <= MIN_ZOOM}
+                  onClick={() => setZoom(stepZoom(zoom, -1))}
+                >
+                  <ZoomOut className="size-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  aria-label={`Zoom ${Math.round(zoom * 100)}%, reset to fit`}
+                  onClick={() => setZoom(1)}
+                >
+                  {Math.round(zoom * 100)}%
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Zoom in"
+                  disabled={zoom >= MAX_ZOOM}
+                  onClick={() => setZoom(stepZoom(zoom, 1))}
+                >
+                  <ZoomIn className="size-4" />
+                </Button>
+              </div>
+              <div className="h-[min(60dvh,40rem)] min-h-48">
+                <Suspense fallback={<p role="status">Opening PDF…</p>}>
+                  <PdfView data={pdf} name={attachment.name} zoom={zoom} onZoom={setZoom} />
+                </Suspense>
+              </div>
+            </div>
           ) : text !== null ? (
             <pre className="text-sm break-words whitespace-pre-wrap">{text}</pre>
           ) : (

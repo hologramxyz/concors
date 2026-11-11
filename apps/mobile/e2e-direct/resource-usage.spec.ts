@@ -10,7 +10,7 @@ async function connect(page: Page) {
   return ui;
 }
 
-test("live CPU and RAM fit below the mobile machine selector and unsubscribe when the sidebar closes", async ({
+test("live CPU and RAM are ready before the sidebar opens and retain their subscription when it closes", async ({
   page,
 }) => {
   const subscriptions: boolean[] = [];
@@ -27,7 +27,9 @@ test("live CPU and RAM fit below the mobile machine selector and unsubscribe whe
   const ui = await connect(page);
   const usage = ui.getByRole("group", { name: "Machine resource usage", exact: true });
   await expect(usage).toHaveCount(0);
-  expect(subscriptions).toEqual([]);
+  const mountedUsage = ui.locator('[aria-label="Machine resource usage"]');
+  await expect(mountedUsage).toHaveAttribute("data-usage-status", "live");
+  await expect.poll(() => subscriptions).toEqual([true]);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await expect(usage).toHaveAttribute("data-usage-status", "live");
   await expect(usage).toContainText(/CPU \d+%/);
@@ -53,10 +55,10 @@ test("live CPU and RAM fit below the mobile machine selector and unsubscribe whe
   });
   await ui.getByRole("button", { name: "Return to workspace", exact: true }).click();
   await expect(usage).toHaveCount(0);
-  await expect.poll(() => subscriptions).toEqual([true, false]);
+  expect(subscriptions).toEqual([true]);
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
   await expect(usage).toHaveAttribute("data-usage-status", "live");
-  await expect.poll(() => subscriptions).toEqual([true, false, true]);
+  expect(subscriptions).toEqual([true]);
   expect(sockets).toBe(1);
 });
 

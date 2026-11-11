@@ -595,6 +595,10 @@ function MobileWorkspaceContent({
                     gesture.handlers.onPointerCancel(event);
                     filesGesture.handlers.onPointerCancel(event);
                   }}
+                  onLostPointerCapture={(event) => {
+                    gesture.handlers.onLostPointerCapture(event);
+                    filesGesture.handlers.onLostPointerCapture(event);
+                  }}
                   onClickCapture={(event) => {
                     gesture.handlers.onClickCapture(event);
                     filesGesture.handlers.onClickCapture(event);
@@ -635,23 +639,21 @@ function MobileWorkspaceContent({
                         <Search />
                       </NativeHeaderButton>
                     </div>
-                    {sidebarOpen && (
-                      <div className="px-3 pb-3">
-                        <ResourceStatus
-                          compact
-                          onOpenResources={() => {
-                            setSidebarOpen(false);
-                            setResourcesOpen(true);
-                          }}
-                          connection={connection}
-                          state={connection?.state ?? { status: "disconnected" }}
-                          machine={
-                            host.machines.find((machine) => machine.id === host.machineId)?.name ??
-                            "Desktop daemon"
-                          }
-                        />
-                      </div>
-                    )}
+                    <div className="mobile-sidebar-usage">
+                      <ResourceStatus
+                        compact
+                        onOpenResources={() => {
+                          setSidebarOpen(false);
+                          setResourcesOpen(true);
+                        }}
+                        connection={connection}
+                        state={connection?.state ?? { status: "disconnected" }}
+                        machine={
+                          host.machines.find((machine) => machine.id === host.machineId)?.name ??
+                          "Desktop daemon"
+                        }
+                      />
+                    </div>
                     <nav aria-label="Primary" className="mobile-sidebar-content">
                       <div className="space-y-0.5">
                         <SchedulesNav
