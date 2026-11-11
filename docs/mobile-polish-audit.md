@@ -41,6 +41,26 @@ Native control geometry now also publishes when a panel transition ends or is ca
 frame can exceed the normal tracking window; the final update prevents a glass button from staying
 partly visible after its panel closes.
 
+## Visual refinement after the first review
+
+This pass gives Settings one card surface, a consistent spacing scale, clear section
+headings and larger switches. Help and Privacy use grouped rows, GitHub's refresh action stays
+beside its status, and About uses the shared Concors mark with aligned version details.
+Messaging preferences come first in Shortcuts; external-keyboard commands remain available below.
+
+Settings sections, Theme, Follow-ups, and every schedule field now use the shared bottom drawer.
+Nested dismissal preserves the parent and restores focus, and changing Settings sections starts
+the content at the top. Schedule cards have evenly spaced actions. Files, SSH keys, plugins, MCP
+servers and unsupported subscriptions use a shared empty-state presentation. An unsupported
+subscription service shows update guidance rather than inactive forms and Save controls.
+
+Interaction checks caught a functional issue in Follow-ups: the offline mobile renderer cannot
+read localStorage, so the selected mode was immediately lost. Its choice now travels through the
+native preference bridge, survives app reloads, and reports failed saves. Older saved preferences
+remain valid and continue to default to Steer. The demo also answers provider-list requests, so
+schedule previews settle instead of remaining in Loading providers; provider changes are still
+explicitly simulated or unavailable.
+
 ## Surface inventory
 
 The visual suite captures each listed surface in light and dark at 390×844 with iPhone-style safe
@@ -75,8 +95,8 @@ The contact sheets below are generated from the visual audit captures. Full-size
 them in [mobile-polish/](mobile-polish/). The demo clearly labels its simulated behavior; live file
 and resource behavior is checked separately against an isolated daemon.
 
-64 screenshots cover 32 surfaces in both appearances. The final gallery uses a static production
-JavaScript export in demo mode. All eight contact sheets were inspected; the review also caught
+70 screenshots cover 35 surfaces in both appearances. The final gallery uses a static production
+JavaScript export in demo mode. All eight contact sheets are inspected; the review also caught
 and removed duplicate route-name headers on Support and Delete account. Welcome captures wait
 for the app image to decode so the dark appearance does not capture an unloaded logo.
 
@@ -93,6 +113,15 @@ Live-daemon PDF evidence: [project preview](mobile-polish/pdf-project.png) and
 [chat attachment preview](mobile-polish/pdf-attachment.png).
 
 ## Verification
+
+The visual-refinement follow-up passed formatting, ESLint and workspace type checking, all 1,767
+unit tests (two opt-in integrations skipped), 16 affected Chromium mobile cases and two WebKit
+cases across bounded runs. Four real-machine schedule/appearance/editor cases and four desktop
+Appearance/MCP/navigation/follow-up cases also passed.
+Expo exports for iOS, Android and web cover the new shared renderer. The 70 current browser images
+are refreshed in both appearances; the two PDF captures retain their preceding live-daemon evidence.
+
+The broader baseline from the preceding production-polish pass is retained below:
 
 - Formatting, ESLint and workspace type checking passed.
 - All 75 phone acceptance cases were verified across bounded batches. The final production export
