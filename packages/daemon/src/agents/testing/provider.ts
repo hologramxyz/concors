@@ -15,6 +15,7 @@ export class TestAgentProvider implements AgentProvider {
   turnId = "";
   closed = false;
   private childReads = 0;
+  private mcpSignedIn = false;
   readonly provider: AgentProviderId;
   constructor(onRequest: Parameters<AgentProviderFactory>[1], provider: AgentProviderId = "codex") {
     this.provider = provider;
@@ -48,6 +49,7 @@ export class TestAgentProvider implements AgentProvider {
         steer: true,
         steerAttachments: TestAgentProvider.steerAttachments,
         mcpStatus: true,
+        mcpSignIn: true,
         compact: true,
         childHistory: true,
         commands: [
@@ -56,11 +58,21 @@ export class TestAgentProvider implements AgentProvider {
         ],
       };
     // Statuses as Claude Code reports them: Concors's own tools connect, a server needs sign-in.
+    // A server whose sign-in page returns to the machine, as an OAuth MCP server's does.
+    if (method === "mcp/authenticate")
+      return { url: "https://example.com/oauth/github", callback: true };
+    if (method === "mcp/oauthCallback") {
+      const url = new URL((params as { callbackUrl: string }).callbackUrl);
+      if (url.searchParams.get("code") !== "fixture-code") throw new Error("Invalid sign-in code");
+      this.mcpSignedIn = true;
+      return {};
+    }
+    if (method === "mcp/reconnect") return {};
     if (method === "mcp/status")
       return {
         servers: [
           { name: "concors-schedules", status: "connected" },
-          { name: "github", status: "needs-auth" },
+          { name: "github", status: this.mcpSignedIn ? "connected" : "needs-auth" },
         ],
       };
     if (method === "session/child-history") {

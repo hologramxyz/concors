@@ -17,6 +17,7 @@ import type { WorkspaceSnapshot, WorkspaceOperation } from "@concors/protocol";
 import type { View } from "@/navigation";
 import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { AccountMenu } from "@/components/account-menu";
+import { MobileAppCard } from "@/components/mobile-app";
 import { GuestSignInCard } from "@/auth/guest-sign-in-card";
 import { UpdateBadge } from "@/update/update-badge";
 import { MachineSwitcher } from "@/workspace/machine-switcher";
@@ -168,6 +169,7 @@ export function AppSidebar(props: AppSidebarProps) {
             onDismissed={() => footer.current?.querySelector("button")?.focus()}
           />
         )}
+        <MobileAppCard onDismissed={() => footer.current?.querySelector("button")?.focus()} />
         <div ref={footer} className="space-y-1 p-2">
           <UpdateBadge collapsed={false} />
           <AccountMenu

@@ -86,6 +86,15 @@ export function canBypassPermissions(
   return uid !== 0 || sandboxed === "1";
 }
 
+/**
+ * Claude Code's MCP sign-in calls, which its SDK has but does not declare yet (0.3.246); optional, so
+ * an SDK without them reports that rather than failing on a missing method.
+ */
+type McpAuthQuery = Query & {
+  mcpAuthenticate?: (server: string, redirectUri?: string) => Promise<unknown>;
+  mcpSubmitOAuthCallbackUrl?: (server: string, callbackUrl: string) => Promise<unknown>;
+};
+
 export class ClaudeProvider extends EventProvider {
   private session: Query | undefined;
   private pending: SDKUserMessage[] = [];
@@ -361,6 +370,7 @@ export class ClaudeProvider extends EventProvider {
       contextUsage: true,
       mcp: true,
       mcpStatus: true,
+      mcpSignIn: true,
       modes: [
         { id: "default", label: "Always ask" },
         { id: "plan", label: "Plan", description: "Analyze before making changes" },
@@ -405,6 +415,13 @@ export class ClaudeProvider extends EventProvider {
       return {
         servers: (await session.mcpServerStatus()).map((s) => ({ name: s.name, status: s.status })),
       };
+    if (
+      (method === "mcp/authenticate" ||
+        method === "mcp/oauthCallback" ||
+        method === "mcp/reconnect") &&
+      session
+    )
+      return this.mcpAuth(session as McpAuthQuery, method, string(p["server"]), p);
     if (method === "session/child-history")
       return {
         thread: {
@@ -605,6 +622,44 @@ export class ClaudeProvider extends EventProvider {
     });
     this.wake?.();
     return result;
+  }
+  /**
+   * Signing in to an MCP server, as Claude Code's own /mcp does. A claude.ai connector signs in on
+   * claude.ai and needs no answer; another server's page returns to a port Claude Code listens on,
+   * which only a browser on this machine reaches, so elsewhere the address is handed over instead.
+   */
+  private async mcpAuth(
+    session: McpAuthQuery,
+    method: string,
+    server: string,
+    p: Record<string, unknown>,
+  ) {
+    if (!server) throw new Error("Name the MCP server to sign in to.");
+    if (method === "mcp/reconnect") {
+      await session.reconnectMcpServer(server);
+      return {};
+    }
+    if (!session.mcpAuthenticate || !session.mcpSubmitOAuthCallbackUrl)
+      throw new Error("This version of Claude Code cannot sign in to MCP servers here.");
+    if (method === "mcp/oauthCallback") {
+      let result: Record<string, unknown>;
+      try {
+        result = object(await session.mcpSubmitOAuthCallbackUrl(server, string(p["callbackUrl"])));
+      } catch (error) {
+        result = { error: error instanceof Error ? error.message : String(error) };
+      }
+      // Claude Code's own words ("OAuth state mismatch") say little to someone who pasted an address.
+      if (typeof result["error"] === "string")
+        throw new Error(
+          `That address did not finish signing in to ${server}. Copy it again from the page the sign-in ended on (${result["error"]}).`,
+        );
+      return {};
+    }
+    const result = object(await session.mcpAuthenticate(server));
+    if (typeof result["error"] === "string") throw new Error(result["error"]);
+    const url = string(result["authUrl"]);
+    if (!url) throw new Error(`${server} did not offer a page to sign in on.`);
+    return { url, callback: result["callbackExpected"] === true };
   }
   /** Message content from Concors input items; images go as images to models that read them. */
   private async content(input: unknown[]): Promise<SDKUserMessage["message"]["content"]> {

@@ -667,7 +667,9 @@ function MachineCard({
             detail={
               machine.agentError
                 ? "Concors tries again by itself in a few minutes."
-                : "Your server is connected. This takes a few minutes; nothing to do on your side."
+                : isExternal(machine)
+                  ? "Your server is connected. This takes a few minutes; nothing to do on your side."
+                  : "Your server is ready. Concors is installing itself on it, which takes about a minute."
             }
           />
         </div>

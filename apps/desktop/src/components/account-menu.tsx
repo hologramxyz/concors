@@ -1,6 +1,15 @@
 import { AccountAvatar } from "./account-avatar";
 import { useAccountImage } from "./use-account-image";
-import { ChevronsUpDown, LogIn, LogOut, MapIcon, UserRound, Settings } from "lucide-react";
+import { MobileAppDialog } from "./mobile-app";
+import {
+  ChevronsUpDown,
+  LogIn,
+  LogOut,
+  MapIcon,
+  UserRound,
+  Settings,
+  Smartphone,
+} from "lucide-react";
 import { useContext, useRef, useState, type ReactNode } from "react";
 import { useNativeSurface } from "@/components/native-surface";
 import { CompactLayoutContext } from "@/components/compact-layout";
@@ -46,19 +55,30 @@ export function AccountMenu({
   canTour = true,
 }: AccountMenuProps) {
   const compact = useContext(CompactLayoutContext);
+  const [mobileAppOpen, setMobileAppOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   if (compact)
     return <MobileAccountMenu auth={auth} onSignOut={onSignOut} onOpenSettings={onOpenSettings} />;
-  if (!auth)
-    return (
+  return (
+    <>
       <DropdownMenu>
         <DropdownMenuTrigger
+          ref={trigger}
           className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "w-full gap-2 p-[8px] text-left"}`}
-          aria-label="Using this computer without an account"
+          aria-label={
+            auth ? `Account: ${auth.user.name}` : "Using this computer without an account"
+          }
         >
-          <UserRound className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          {auth ? (
+            <AccountAvatar user={auth.user} githubEnabled />
+          ) : (
+            <UserRound className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          )}
           {!collapsed && (
             <>
-              <span className="min-w-0 flex-1 truncate text-ui font-medium">This computer</span>
+              <span className="min-w-0 flex-1 truncate text-ui font-medium">
+                {auth ? auth.user.name : "This computer"}
+              </span>
               <ChevronsUpDown
                 className="size-3.5 shrink-0 text-muted-foreground"
                 aria-hidden="true"
@@ -70,7 +90,21 @@ export function AccountMenu({
           align="start"
           side="top"
           className="w-[calc(var(--sidebar-width)-16px)] max-w-[calc(100vw-16px)]"
+          onCloseAutoFocus={(event) => {
+            if (mobileAppOpen) event.preventDefault();
+          }}
         >
+          {auth && (
+            <>
+              <DropdownMenuLabel className="p-[8px] text-ui font-normal text-muted-foreground">
+                <span className="block truncate text-foreground">{auth.user.name}</span>
+                <span className="block truncate" title={auth.user.email}>
+                  {auth.user.email}
+                </span>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuItem className="p-[8px] text-ui" onSelect={onOpenSettings}>
             <Settings aria-hidden="true" />
             Settings
@@ -80,60 +114,18 @@ export function AccountMenu({
             <MapIcon aria-hidden="true" />
             Take the tour
           </DropdownMenuItem>
-          <DropdownMenuItem className="p-[8px] text-ui" onSelect={onSignIn}>
-            <LogIn aria-hidden="true" />
-            Sign in
+          <DropdownMenuItem className="p-[8px] text-ui" onSelect={() => setMobileAppOpen(true)}>
+            <Smartphone aria-hidden="true" />
+            Get the iOS app
+          </DropdownMenuItem>
+          <DropdownMenuItem className="p-[8px] text-ui" onSelect={auth ? onSignOut : onSignIn}>
+            {auth ? <LogOut aria-hidden="true" /> : <LogIn aria-hidden="true" />}
+            {auth ? "Sign out" : "Sign in"}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-    );
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        className={`flex items-center rounded-md hover:bg-sidebar-accent aria-expanded:bg-sidebar-accent ${collapsed ? "sidebar-rail-control" : "w-full gap-2 p-[8px] text-left"}`}
-        aria-label={`Account: ${auth.user.name}`}
-      >
-        <AccountAvatar user={auth.user} githubEnabled />
-        {!collapsed && (
-          <>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-ui font-medium">{auth.user.name}</span>
-            </span>
-            <ChevronsUpDown
-              className="size-3.5 shrink-0 text-muted-foreground"
-              aria-hidden="true"
-            />
-          </>
-        )}
-      </DropdownMenuTrigger>
-
-      <DropdownMenuContent
-        align="start"
-        side="top"
-        className="w-[calc(var(--sidebar-width)-16px)] max-w-[calc(100vw-16px)]"
-      >
-        <DropdownMenuLabel className="p-[8px] text-ui font-normal text-muted-foreground">
-          <span className="block truncate text-foreground">{auth.user.name}</span>
-          <span className="block truncate" title={auth.user.email}>
-            {auth.user.email}
-          </span>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="p-[8px] text-ui" onSelect={onOpenSettings}>
-          <Settings aria-hidden="true" />
-          Settings
-          <MenuKeyChips id="settings" />
-        </DropdownMenuItem>
-        <DropdownMenuItem className="p-[8px] text-ui" disabled={!canTour} onSelect={replayTour}>
-          <MapIcon aria-hidden="true" />
-          Take the tour
-        </DropdownMenuItem>
-        <DropdownMenuItem className="p-[8px] text-ui" onSelect={onSignOut}>
-          <LogOut aria-hidden="true" />
-          Sign out
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      <MobileAppDialog open={mobileAppOpen} onOpenChange={setMobileAppOpen} returnFocus={trigger} />
+    </>
   );
 }
 

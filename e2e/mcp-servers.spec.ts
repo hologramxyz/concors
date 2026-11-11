@@ -64,6 +64,23 @@ test("MCP servers are set once for the machine, keep their secrets there, and sh
       /Concors schedules \(built in\)\s*Connected/,
       /github\s*Needs sign-in/,
     ]);
+    // A server that needs sign-in opens its page in the browser. This one returns to the machine,
+    // so the address the browser ends on can be pasted back to finish.
+    const signInPage = page.context().waitForEvent("page");
+    await status.getByRole("button", { name: "Sign in to github" }).click();
+    expect((await signInPage).url()).toBe("https://example.com/oauth/github");
+    const progress = page.getByRole("group", { name: "Signing in to github" });
+    const address = progress.getByLabel("Address your browser ended on for github");
+    await address.fill("http://localhost:4567/callback?code=wrong");
+    await progress.getByRole("button", { name: "Finish" }).click();
+    await expect(progress.getByRole("alert")).toContainText("Invalid sign-in code");
+    await address.fill("http://localhost:4567/callback?code=fixture-code&state=s");
+    await progress.getByRole("button", { name: "Finish" }).click();
+    await expect(status.getByRole("listitem")).toHaveText([
+      /Concors schedules \(built in\)\s*Connected/,
+      /github\s*Connected/,
+    ]);
+    await expect(progress).toHaveCount(0);
     await page.keyboard.press("Escape");
 
     // Removing clears it from the machine.

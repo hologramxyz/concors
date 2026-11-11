@@ -1148,6 +1148,40 @@ export class AgentManager {
           },
         };
       }
+      if (op.kind === "mcp-auth") {
+        const info = this.#store.agent(op.sessionId),
+          provider = await this.provider(info.id);
+        if (!this.#store.agent(info.id).controls?.mcpSignIn)
+          throw new Error("This agent cannot sign in to MCP servers from Concors.");
+        let mcpSignIn: { url: string; callback: boolean } | undefined;
+        if (op.action === "start") {
+          mcpSignIn = z
+            .object({ url: z.string().url(), callback: z.boolean() })
+            .parse(await provider.request("mcp/authenticate", { server: op.server }));
+          // The page opens in the user's browser, so only a web page will do.
+          if (!/^https?:$/.test(new URL(mcpSignIn.url).protocol))
+            throw new Error("The server asked to sign in somewhere other than a web page.");
+        } else if (op.action === "callback") {
+          if (!op.callbackUrl) throw new Error("Paste the address your browser ended on.");
+          await provider.request("mcp/oauthCallback", {
+            server: op.server,
+            callbackUrl: op.callbackUrl,
+          });
+        } else await provider.request("mcp/reconnect", { server: op.server });
+        const response = z
+          .object({ servers: z.array(z.object({ name: z.string(), status: z.string() })).max(100) })
+          .parse(await provider.request("mcp/status"));
+        return {
+          type: "agent.result",
+          requestId: request.requestId,
+          outcome: {
+            status: "ok",
+            conversation: this.#store.agentConversation(info.id),
+            servers: response.servers,
+            ...(mcpSignIn ? { mcpSignIn } : {}),
+          },
+        };
+      }
       if (op.kind === "sessions-list") {
         const info = this.#store.agent(op.sessionId),
           provider = await this.provider(info.id);
