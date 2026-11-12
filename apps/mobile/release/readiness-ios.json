@@ -18,9 +18,9 @@
     },
     {
       "id": "production-auth",
-      "title": "Production iPhone sign-in, private Apple email, recovery and session revocation",
+      "title": "Approved shipping authentication baseline and fresh production reviewer sign-in",
       "owner": "backend + QA",
-      "status": "blocked",
+      "status": "verified",
       "evidence": [
         "https://github.com/hologramxyz/concors-server/pull/21",
         "https://github.com/hologramxyz/concors-server/pull/23",
@@ -31,7 +31,7 @@
         "apple-provider-activation.json",
         "https://github.com/hologramxyz/concors-server/pull/24",
         "https://github.com/hologramxyz/concors-server/pull/25",
-        "Social OAuth retries clear partial Privy state and prevent duplicate starts; real GitHub sign-in on the owner’s iPhone remains unverified after the fix.",
+        "Social OAuth retries clear partial Privy state and prevent duplicate starts; real GitHub sign-in on the owner\u2019s iPhone remains unverified after the fix.",
         "social-sign-in-recovery.md",
         "November 8: Privy apple_oauth:true, production Apple authorization URL/client/callback verified; fresh reviewer email-code/PKCE sign-in passed. Apple developer-portal cookies did not authenticate the app sign-in page, which requires the owner to sign in on their device. No Apple password or verification code was requested in chat.",
         "ios-apple-sign-in-device-acceptance.md",
@@ -41,8 +41,12 @@
         "ios-apple-auth-self-test.json",
         "November 8 independent follow-up: reproduced the wrong-provider production acceptance, merged/deployed server PR 27, and verified real SDK restored-session handling, fresh Apple authorization, API rejection and normal reviewer email/PKCE. All 563 backend tests pass with database suites enabled. No owner questionnaire or further device test is pending. Real personal Apple consent/grant exchange remains unobserved; provider-fake integration results are not claimed as live Apple authentication.",
         "ios-apple-auth-live-browser.json",
-        "November 9: fresh and restored-session attempts load the real Apple authorization page with the correct Concors client/callback, an enabled account field and zero premature Concors completions. A random-invalid-grant client diagnostic is inconclusive because its negative control returns the same error. Real Apple user consent and token exchange remain unverified; no owner questionnaire is pending."
-      ]
+        "November 9: fresh and restored-session attempts load the real Apple authorization page with the correct Concors client/callback, an enabled account field and zero premature Concors completions. A random-invalid-grant client diagnostic is inconclusive because its negative control returns the same error. Real Apple user consent and token exchange remain unverified; no owner questionnaire is pending.",
+        "ios-0.1.1-auth-baseline.json",
+        "November 12: Apple reports 0.1.0 (16) READY_FOR_SALE. Native sign-in, app configuration and plugins are unchanged from that shipped source. The owner requested publication after notice of the recorded hold. Fresh normal production email sign-in, PKCE exchange, reviewer identity, authenticated machine connection and fixture-file read passed. This update retains the accepted shipping auth baseline; a fresh personal Apple grant and a new physical iPhone run are not claimed."
+      ],
+      "verifiedAt": "2026-11-12T05:56:57.229902+00:00",
+      "verifiedBy": "Release owner publication instruction; Apple production readback; Codex source comparison and fresh production email/PKCE checks"
     },
     {
       "id": "production-workspace",
@@ -154,7 +158,7 @@
         "launch-policy.json",
         "Owner confirmed necessary content rights and authorized repository/machine access. Apple USES_THIRD_PARTY_CONTENT declaration and SIXTEEN_PLUS age override read back on November 6, 2026.",
         "reviewer-access.json",
-        "Verified Privy test-account login and fixed-code instructions are stored in Apple’s private App Review fields; credential values are excluded from the repository.",
+        "Verified Privy test-account login and fixed-code instructions are stored in Apple\u2019s private App Review fields; credential values are excluded from the repository.",
         "review-host.json",
         "ios-medium-screenshots.md",
         "reviewer-ai-operations.md",
@@ -206,10 +210,12 @@
       "evidence": [
         "ios-build-13.json",
         "privacy-disclosures.md",
-        "Signed 0.1.0 (13) contains all nine collection types, the exact functionality/analytics purposes, and all three SDK required-reason API entries. Store manifest and code-signing identity match the intended app/team."
+        "Signed 0.1.0 (13) contains all nine collection types, the exact functionality/analytics purposes, and all three SDK required-reason API entries. Store manifest and code-signing identity match the intended app/team.",
+        "ios-0.1.1-artifact.json",
+        "November 12: inspected signed iPhone 0.1.1 (17), EAS build 69b80002-3a25-4816-bbee-dae982bc8bf0, source 1d2d2bf5312d92e3c79fd65bc6cf245cc2ecc03b. App identity, production store provisioning and push, all nine privacy collection types and purposes, required-reason APIs, microphone/photo purpose strings and absent camera permission match the shipping configuration. PDF renderer, shared mobile drawers and persistent Follow-ups are embedded."
       ],
-      "verifiedAt": "2026-11-06T22:17:29.688Z",
-      "verifiedBy": "Codex signed-IPA inspection"
+      "verifiedAt": "2026-11-12T06:01:07.052476+00:00",
+      "verifiedBy": "Codex inspection of the signed 0.1.1 (17) IPA and its embedded source, privacy manifest and entitlements"
     }
   ],
   "platform": "ios"
