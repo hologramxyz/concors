@@ -1,5 +1,5 @@
 {
-  "status": "prepared-not-uploaded",
+  "status": "api-accepted-console-readback-pending",
   "templateSource": "https://storage.googleapis.com/support-kms-prod/b5v9It2EgwrgyY1gPFVB3jPUypc5lL3oNg2G",
   "templateSha256": "5eea7d426509e97523de02d31d2e94d574f096c111a6857f78929e735cf99e13",
   "selectedDataTypes": [
@@ -16,10 +16,19 @@
     "PSL_DEVICE_ID"
   ],
   "sharingApproach": "Disclose possible AI/tool transfers of user content; do not rely on an unverified sharing exception.",
-  "missingTemplateFields": ["account creation methods", "account deletion URL"],
-  "consoleFollowUp": {
-    "accountCreation": ["email one-time code", "OAuth via configured sign-in providers"],
-    "accountDeletionUrl": "https://concors.dev/account/delete"
+  "humanQuestionLabelsOmitted": true,
+  "apiAcceptedAt": "2026-11-12T05:39:43.468Z",
+  "submittedCsvSha256": "38d8444f561663efcd7fb5442ae5580cb21b0e52f32fe5e3183ee2bf3e37c8b7",
+  "originalTemplateMissingFields": ["account creation methods", "account deletion URL"],
+  "supplementedMachineFields": [
+    "PSL_SUPPORTED_ACCOUNT_CREATION_METHODS",
+    "PSL_ACCOUNT_DELETION_URL",
+    "PSL_SUPPORT_DATA_DELETION_BY_USER"
+  ],
+  "submittedAccountSettings": {
+    "methods": ["Email identifier and one-time code", "OAuth"],
+    "accountDeletionUrl": "https://concors.dev/account/delete",
+    "separatePartialDeletionWithoutAccountDeletion": false
   },
-  "humanQuestionLabelsOmitted": true
+  "remainingConsoleVerification": "API accepted the declaration; no Data safety readback endpoint or policy-approval state is available."
 }

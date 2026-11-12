@@ -1,15 +1,21 @@
 # Google Play data safety preparation
 
-Prepared November 10, 2026 for `xyz.hologram.concors`. These are draft form answers, not a submitted
-Google disclosure or a claim that the Android binary has been inspected. Review the exact candidate
-and configured Firebase services before saving the final form.
+Prepared November 10 and updated November 12, 2026 for `xyz.hologram.concors`. Google accepted the
+updated CSV through its Data safety API on November 12. This is an accepted write, not policy
+approval or a complete readback of the Console's App content forms. The uploaded Android build
+0.1.0 (3) and its configured Firebase identity have been audited; see [upload evidence](play-upload-2026-11-12.json).
 
 [The importable CSV draft](data-safety-draft.csv) uses Google's linked sample template and discloses
 possible AI/tool sharing of message, attachment, file and other supplied content. It does not rely
 on an unverified sharing exception. [Its preparation record](data-safety-draft.json) identifies the
-template and selected categories. The sample lacks current account-creation and deletion-URL
-questions: complete those separately in Console with email-code/OAuth authentication and the
-deletion URL below. A successful CSV import alone does not prove every current form is complete.
+template and selected categories. Google's public sample omitted required account-creation and
+deletion questions. The submitted CSV now includes API-validated responses for email-identifier
+plus one-time-code authentication, OAuth and `https://concors.dev/account/delete`. The obsolete
+`PSL_DATA_COLLECTION_USER_REQUEST_DELETE` row was removed. No separate partial-data-deletion
+workflow without account deletion is advertised, so that optional capability is answered **No**;
+this does not remove the implemented account-deletion pathway. All eleven original data-category
+and handling disclosures are preserved. A successful write does not complete other App content
+declarations or establish Google policy approval.
 
 ## Collection and security
 
