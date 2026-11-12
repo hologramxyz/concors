@@ -140,10 +140,12 @@
         "ios-build-16-device-acceptance.md",
         "ios-push-owner-acceptance.md",
         "ios-medium-screenshots.md",
-        "Owner confirmed build 13 permission persistence and build 16 completion notification, correct-chat navigation and in-app push opt-out. Fresh iPhone simulator control/composer flow passed on November 8. Other physical-device scenarios are not separately claimed as tested."
+        "Owner confirmed build 13 permission persistence and build 16 completion notification, correct-chat navigation and in-app push opt-out. Fresh iPhone simulator control/composer flow passed on November 8. Other physical-device scenarios are not separately claimed as tested.",
+        "ios-build-17-device-acceptance.md",
+        "November 12: after being offered TestFlight 0.1.1 (17) and asked specifically about drawers, the keyboard and PDF previews, the owner replied \u201cLooks good on my iPhone\u201d. This records those three physical-device flows on the new build. Device/iOS details and additional physical scenarios were not provided."
       ],
-      "verifiedAt": "2026-11-08T02:09:35Z",
-      "verifiedBy": "Codex signed artifact/native control review plus owner physical-device reports"
+      "verifiedAt": "2026-11-12T06:23:13.166039+00:00",
+      "verifiedBy": "Release owner physical iPhone confirmation in conversation; prior native and push evidence retained under its original scope"
     },
     {
       "id": "store-material",

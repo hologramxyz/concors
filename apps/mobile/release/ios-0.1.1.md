@@ -32,6 +32,8 @@ The release preflight passes after reconciling the shipped authentication baseli
 reviewer sign-in and workspace access passed, all four public support/privacy/deletion/terms URLs
 returned HTTP 200, and the authenticated mobile capability still enables production push.
 
-Apple upload and native simulator acceptance are in progress. Existing physical-device evidence
-remains identified by its original version and verification date; this update does not claim a
-new physical iPhone run.
+The owner subsequently confirmed drawers, keyboard and PDF previews on the physical iPhone
+running 0.1.1 (17). Apple accepted the update into App Review at 06:23:18 UTC on November 12,
+with automatic release after approval. See the
+[device acceptance and submission receipt](ios-build-17-device-acceptance.md). The supplementary
+native simulator run continues independently; its current result is retained in GitHub Actions.
