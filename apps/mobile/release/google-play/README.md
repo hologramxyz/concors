@@ -1,140 +1,112 @@
 # Google Play launch preparation
 
-Prepared November 10, 2026. Package `xyz.hologram.concors`, Expo project
+Updated November 12, 2026. Package `xyz.hologram.concors`, Expo project
 `b928233e-14cd-4e58-95e5-b19d8101bcb6` owned by `guitong35`, legal company Rolling Inc.
-The owner created developer account **8831514612940319255** and supplied its
-[Console dashboard](https://play.google.com/console/u/1/developers/8831514612940319255/home).
-Its verification status and app record have not yet been read back through an authenticated
-Play Console session.
+Developer account **8831514612940319255** is connected and the dedicated submission account has
+working app access. Its identity/contact verification state has not been observed in Console.
 
-## Prepared and pending
+## Uploaded and verified
 
-- [Listing](listing.json): selected name, free launch, all available countries, support/site links,
-  remote-workspace requirements and copy without unverified Android push promises.
-- [Data safety](data-safety.md): Android-specific data inventory and deletion/sharing answers,
-  with an importable CSV draft. Current Console account/deletion questions still need completing.
-- Expo Android signing is configured under **Concors Google Play**, for the production package.
-  The keystore stays in Expo. No unrelated app credential is used.
-- Firebase project **concors-mobile-hologram** belongs to the Hologram Cloud organization. Its
-  Android app matches the production package. Google Analytics and Crashlytics were not added.
-  The Firebase config is assigned to EAS production as secret file `GOOGLE_SERVICES_JSON`.
-- Dedicated submission and FCM service keys are assigned in Expo. The FCM account has Cloud
-  Messaging permission; the submission account does not. A validate-only request reached FCM
-  token validation, which checks authorization but does not prove real-device delivery.
-- Four real Android captures, four finished phone marketing images, the 1024×500 feature graphic
-  and 512×512 icon are in [exports](exports/). [Capture evidence](capture-evidence.json) binds the
-  fictional store fixture to the successful native emulator run and exact source APK commit.
-- Signed production-identity candidate **0.1.0 (3)** is finished from
-  `8087bbcb3948ba3b22ed7d1a8e091793981a079c`. Its original AAB audit and production welcome-screen
-  emulator check passed. [Build evidence](build-3.json) records the hashes, signing fingerprint,
-  Firebase identity and successful native run. [Readiness](readiness.json) keeps upload and device
-  checks separate.
-- Native compilation, APK permissions/alignment and workspace/keyboard tests passed in
-  [run 42740003578](https://github.com/hologramxyz/concors/actions/runs/42740003578).
-  Production authentication and physical-device push are separate from those preview checks.
-- The Android privacy/support/terms update is merged in
-  [website PR 19](https://github.com/hologramxyz/concors-web/pull/19) and live at concors.dev.
-- The [Console declaration packet](console-answers.md) covers audience, account access, ads,
-  account deletion and content-rating context. Actual IARC and current Console forms remain open.
-- Reviewer production email login/PKCE was rechecked on November 10, with no provider errors.
-  The review machine, gateway, session host and AI service are running; see
-  [reviewer backend evidence](reviewer-backend.json). Android-native authentication is still pending.
-- Play app/package access, owner verification, final internal upload, Android device delivery,
-  IARC rating and Console-only declarations remain pending. Nothing has been published to Play.
+- **0.1.0 (3)** is uploaded through [Expo Submit](https://expo.dev/accounts/guitong35/projects/concors/submissions/fb4cbcdd-f461-42fb-a5ab-abaad4c3a5ad).
+  The exact AAB hash matches [build evidence](build-3.json). This binary was built from
+  `8087bbcb3948ba3b22ed7d1a8e091793981a079c`; later main-branch changes are not in it.
+- The **internal** track reads back **completed**, with version code 3 and the prepared release
+  notes. The **production** track has no release. This is an internal test release, not public
+  publication or Google policy approval.
+- The English title, short/full descriptions, `gm@hologram.xyz` support email and `concors.dev`
+  website read back correctly. Four phone screenshots, one feature graphic and one icon match
+  the exact prepared SHA-256 hashes and screenshot order.
+- The images use real Android UI captures. Their decorative campaign background was created with
+  image generation, so the four composites and feature graphic carry the API's AI-origin
+  attestation. No unverified AI-origin assertion was supplied for the existing app icon.
+- Google accepted the updated [Data safety CSV](data-safety-draft.csv), including email-code/OAuth
+  account creation and the account-deletion URL. This write has no readback endpoint and does not
+  establish that all other Console declarations are complete.
+- Google generated signed APKs. The Play signing certificate differs from Expo's upload
+  certificate, as expected for Play App Signing. Both fingerprints and the exact upload/readback
+  evidence are in [play-upload-2026-11-12.json](play-upload-2026-11-12.json).
 
-The owner selected **16+** as the service minimum. In Target audience choose 16–17 and 18+;
-Google's actual age rating is determined separately by the truthful IARC questionnaire. Complete
-the ads, app access, data safety, content rating, target audience and any other Console-required
-declarations against the real app. The app is a coding/productivity tool, with no mobile checkout,
-public content feed or machine provisioning. Do not describe it as a general-purpose local code
-runtime: commands run on authorized connected machines.
+## Remaining Console steps
 
-## Account connection
+Open the [developer dashboard](https://play.google.com/console/u/1/developers/8831514612940319255/home)
+and select Concors.
 
-The developer account creation does not sign this workspace into Google or automatically grant
-Expo Play access. An authorized owner must complete any identity, website, contact or agreement
-verification shown in Console. The corporate address must match the current D&B/Google Payments
-record; the Apple public trader address alone is not proof of the D&B address.
+1. **Testing → Internal testing → Testers**: select an email list containing
+   `simone@hologram.xyz`, then copy the tester opt-in link. The API supports Google Groups but
+   cannot read/update individual email lists or return the opt-in URL. No tester email or link
+   has been inferred from an empty API response.
+2. Before public submission, verify the privacy URL `https://concors.dev/privacy`, Productivity
+   category, all-available-country scope, free pricing, no ads, audience 16–17 and 18+, IARC content
+   rating and the other required App content forms. [The declaration packet](console-answers.md)
+   supplies the prepared answers. The service minimum **16+** is separate from the IARC rating.
+3. Enter the private reviewer login/instructions in **App content → App access**. Use the existing
+   isolated `concors-app-review` machine, **Task Notes → Review agent** and company-funded AI.
+   The private packet is in the operator's release workspace; credential values never belong in
+   public listing text or this repository. Preserve the machine while either store's review is open.
+4. Complete any developer identity, contact, website or agreement verification shown by Console.
+   Corporate address verification must use the current D&B/Google Payments record; a historical
+   filing or Apple trader address is not proof of the current record.
 
-1. In Play Console create **Concors: Agent Orchestrator**, English (United States), **App**, **Free**,
-   package `xyz.hologram.concors` when prompted. Confirm the resulting app/developer account URL.
-2. Invite `concors-expo-submit@concors-mobile-hologram.iam.gserviceaccount.com` in Play Console
-   with access to Concors: view app information, manage store presence, testing releases,
-   testing tracks/tester lists, draft apps and policy declarations as available in Console.
-   The service account and Expo Submit key are already created. A Cloud IAM role by itself
-   does not grant Play Console app permissions. Production-release permission can wait.
+[Readiness](readiness.json) keeps installed-device authentication, workspace and Android push
+checks open. The internal release state does not prove an eligible tester has installed it.
 
-If the release operator is setting up Firebase/Cloud through this workspace, the owner can sign
-in privately in its terminal with `npx firebase-tools login --no-localhost`. Enter the sign-in
-response in the terminal, not chat. A Firebase CLI login does not grant Play Console permissions.
+## Native evidence and Firebase
 
-Follow the [Expo Google service-account guide](https://expo.fyi/creating-google-service-account)
-and [submission prerequisites](https://docs.expo.dev/submit/android/). The current submission guide
-supports a first release through EAS after the app record and credentials exist. A manual upload
-remains available if Console/API setup requires it; do not assume either route has succeeded.
+The original signed AAB passes production identity, upload-certificate, Firebase app identity,
+restricted-permission and 16 KB ELF checks. Its derived APK also passes ZIP alignment and the
+production welcome/sign-in-options/legal-links emulator smoke. The emulator APK uses a temporary
+signing key; the original upload signature was checked separately. Completed Android OAuth,
+physical push delivery and physical 16 KB-device runtime testing have not been established.
 
-## Android push
+Preview native compilation, workspace navigation, keyboard and draft-preservation evidence is in
+[run 42740003578](https://github.com/hologramxyz/concors/actions/runs/42740003578). Marketing captures
+use a fictional preview fixture, with hashes/source APK binding in [capture evidence](capture-evidence.json).
+Those preview artifacts must never be submitted as the production app.
 
-The Android Firebase app and EAS production file are configured. To reproduce setup, register the
-exact production package without adding Google Analytics or Crashlytics, and set the downloaded
-`google-services.json` as the **file** variable `GOOGLE_SERVICES_JSON` in EAS production.
+Firebase project **concors-mobile-hologram** belongs to the Hologram Cloud organization and its
+Android app matches the production package. Analytics and Crashlytics were not added. The Firebase
+config is assigned to EAS production as secret file `GOOGLE_SERVICES_JSON`. Dedicated submission
+and FCM credentials are assigned in Expo; the FCM account has Cloud Messaging permission and the
+submission account does not. A validate-only FCM request checked authorization without proving
+delivery to a physical device. No unrelated app credential is used and no signing key was downloaded.
 
-The dedicated FCM V1 key is assigned in Expo. Keep submission and FCM service accounts separate
-so their Play/Cloud permissions and rotation remain independent. FCM requires Firebase Cloud
-Messaging permissions; a Play submission key alone cannot deliver push.
-See [Expo FCM instructions](https://docs.expo.dev/push-notifications/fcm-credentials/).
+The Android privacy/support/terms update is merged in
+[website PR 19](https://github.com/hologramxyz/concors-web/pull/19) and live at concors.dev. Reviewer
+production email/PKCE and the running machine/AI services were checked November 10; see
+[reviewer backend evidence](reviewer-backend.json). These browser/backend checks do not replace
+Android-native authentication and notification checks.
 
-The server push feature is already deployed for iPhone. Check the Android registration,
-notification permission/channel, completion delivery, tapping into the correct chat and opt-out
-on the final Android build. Do not infer Android FCM delivery from the iPhone APNs checks.
+## Future builds and uploads
 
-## Build and upload
-
-After the Firebase file and native credentials are assigned, build a production-identity candidate
-from a recorded reviewed commit. From `apps/mobile`, with the production EAS environment:
+From `apps/mobile`, create a production-identity candidate with the configured EAS production
+file and credentials:
 
 ```bash
 APP_VARIANT=production npx eas-cli build --platform android --profile candidate
 ```
 
-Inspect the AAB/APK for the package, version code, target SDK, blocked permissions, app signing
-and Android 16 KB compatibility. Record the exact build ID/source commit. The candidate profile
-allows collecting native evidence; it does not approve a public release or mark readiness gates
-verified. Keep outstanding auth/device/Google verification gates visible in [readiness.json](readiness.json).
-
-**Actions → Mobile Android native** accepts `candidate_aab_url`, `candidate_sha256`,
-`candidate_version_code` and the public `candidate_cert_sha256`. It verifies the original AAB's
-upload certificate, production package/Firebase identity, permissions and 16 KB ELF alignment,
-then derives an APK signed with a temporary test key. The emulator checks the real production
-welcome screen, sign-in options and legal links. This does not establish completed OAuth,
-Play-signed installation or physical push delivery. No production signing key is downloaded.
-
-For marketing fixture capture, use `marketing_captures`; `preview_run_id` can reuse a compiled
-preview APK. Those preview artifacts must never be submitted as the production app.
-
-The existing candidate submission profile selects **internal** and **draft**:
+Record the exact source/build ID and audit the AAB before upload. The candidate profile permits
+native evidence collection; it does not approve a public release. The submission profile selects
+**internal** and **draft**:
 
 ```bash
 APP_VARIANT=production npx eas-cli submit --platform android --profile candidate --id ANDROID_BUILD_ID
 ```
 
-Confirm the uploaded package/version code and draft state in Console before completing the
-internal release and adding testers. Only use a final reviewed production-identity build, never
-the preview demo/store-capture artifact.
+The first upload through EAS succeeded after the owner created the app and invited the service
+account. Confirm each upload's version code and AAB hash by reading it back from Play. Promote
+only the intended internal version and verify the committed track state before sharing it.
 
-## Reviewer access
+**Actions → Mobile Android native** accepts `candidate_aab_url`, `candidate_sha256`,
+`candidate_version_code` and the public `candidate_cert_sha256`. It audits the bundle and derives
+an emulator APK without downloading production signing keys. Use `marketing_captures` for the
+fictional store fixture and `preview_run_id` to reuse a compiled preview APK.
 
-Use the verified private reviewer email/test code from the release workspace, entered in Play's
-**App access** instructions. Do not put it into public listing text. Provide the existing isolated
-`concors-app-review` machine and **Task Notes → Review agent**, with working company-funded API
-access. The same machine can serve both stores while their reviews are open; preserve it and its
-quota for that period. The iOS packet's post-review cleanup must wait until every active review
-has finished.
+Keep Play edit operations and their verification sequential: a second edit for the same app and
+service account invalidates the earlier edit. For this new app, Google rejected the optional
+`changesNotSentForReview` parameter; committing without it worked. Do not infer a production
+release or policy approval from a successful listing/Data safety write.
 
-Explain: sign in by email, open the supplied machine/project, send a short agent prompt, approve
-tool requests, browse files/use Checks terminal, report content in Settings → Account, and find
-account deletion there. No reviewer purchase, machine setup or personal AI subscription is needed.
-
-Recheck the production reviewer login and machine before uploading; previous iOS evidence does
-not replace Android-native login/navigation and FCM checks. Internal testing is not public review
-approval or public publication.
+References: [Expo submission](https://docs.expo.dev/submit/android/),
+[Google service-account setup](https://expo.fyi/creating-google-service-account),
+[Expo FCM setup](https://docs.expo.dev/push-notifications/fcm-credentials/).

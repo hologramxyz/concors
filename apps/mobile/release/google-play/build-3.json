@@ -57,8 +57,8 @@
     "physical16KBDeviceTested": false,
     "physicalPushDeliveryTested": false
   },
-  "playUploaded": false,
-  "internalReleaseAvailable": false,
+  "playUploaded": true,
+  "internalReleaseAvailable": true,
   "productionSubmitted": false,
   "nativeSmoke": {
     "runId": "42748278033",
@@ -77,5 +77,7 @@
     ],
     "completedNativeSignIn": false,
     "physicalPushDelivery": false
-  }
+  },
+  "internalTesterAccessVerified": false,
+  "playUploadEvidence": "play-upload-2026-11-12.json"
 }

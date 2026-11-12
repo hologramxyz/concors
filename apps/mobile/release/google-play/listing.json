@@ -1,5 +1,5 @@
 {
-  "status": "prepared-not-uploaded",
+  "status": "listing-copy-uploaded-console-setup-pending",
   "packageName": "xyz.hologram.concors",
   "defaultLanguage": "en-US",
   "title": "Concors: Agent Orchestrator",
@@ -22,5 +22,25 @@
       "language": "en-US",
       "text": "First Android test release: connect existing workspaces, follow coding agents, review requests, browse files and continue terminal sessions."
     }
-  ]
+  ],
+  "appliedViaApi": [
+    "defaultLanguage",
+    "title",
+    "shortDescription",
+    "fullDescription",
+    "contactEmail",
+    "website"
+  ],
+  "consoleVerificationPending": [
+    "category",
+    "pricing",
+    "countries",
+    "privacyPolicy",
+    "containsAds",
+    "targetAgeGroups",
+    "contentRating"
+  ],
+  "uploadEvidence": "play-upload-2026-11-12.json",
+  "currentInternalReleaseStatus": "completed",
+  "currentInternalVersionCode": 3
 }
