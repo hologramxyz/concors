@@ -1,0 +1,76 @@
+{
+  "ipaSha256": "a179395400e707add5d5cf5c98221df66bf026daa88010d0ebd16c287f1484bd",
+  "identity": {
+    "CFBundleIdentifier": "xyz.hologram.concors",
+    "CFBundleShortVersionString": "0.1.1",
+    "CFBundleVersion": "17"
+  },
+  "teamId": "9WN4P724M2",
+  "storeProvisioning": true,
+  "signedPushEnvironment": "production",
+  "provisioningPushEnvironment": "production",
+  "sourceRevisionEmbedded": "1d2d2bf5312d92e3c79fd65bc6cf245cc2ecc03b",
+  "approvedApiEmbedded": true,
+  "photoPickerConfigured": true,
+  "microphonePurposeConfigured": true,
+  "cameraPurposeAbsent": true,
+  "iosWorkspaceOriginEmbedded": true,
+  "savedAISharingImplementationEmbedded": true,
+  "persistentFollowUpsEmbedded": true,
+  "sharedMobileDrawersEmbedded": true,
+  "pdfRendererEmbedded": true,
+  "profileExpires": "2027-08-10T03:03:54",
+  "sdk": "iphoneos26.5",
+  "xcode": "2660",
+  "minimumOSVersion": "16.4",
+  "deviceFamily": [1],
+  "usesNonExemptEncryption": false,
+  "associatedDomainsAbsentFromSignedEntitlements": true,
+  "collectedDataTypes": [
+    "NSPrivacyCollectedDataTypeCustomerSupport",
+    "NSPrivacyCollectedDataTypeDeviceID",
+    "NSPrivacyCollectedDataTypeEmailAddress",
+    "NSPrivacyCollectedDataTypeName",
+    "NSPrivacyCollectedDataTypeOtherDiagnosticData",
+    "NSPrivacyCollectedDataTypeOtherUserContent",
+    "NSPrivacyCollectedDataTypePhotosorVideos",
+    "NSPrivacyCollectedDataTypeProductInteraction",
+    "NSPrivacyCollectedDataTypeUserID"
+  ],
+  "collectedDataLinkedToUser": true,
+  "collectedDataUsedForTracking": false,
+  "collectedDataPurposes": {
+    "NSPrivacyCollectedDataTypeName": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+    "NSPrivacyCollectedDataTypeEmailAddress": ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+    "NSPrivacyCollectedDataTypeUserID": [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      "NSPrivacyCollectedDataTypePurposeAnalytics"
+    ],
+    "NSPrivacyCollectedDataTypeDeviceID": [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      "NSPrivacyCollectedDataTypePurposeAnalytics"
+    ],
+    "NSPrivacyCollectedDataTypeProductInteraction": [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      "NSPrivacyCollectedDataTypePurposeAnalytics"
+    ],
+    "NSPrivacyCollectedDataTypeOtherUserContent": [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+    ],
+    "NSPrivacyCollectedDataTypePhotosorVideos": [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+    ],
+    "NSPrivacyCollectedDataTypeCustomerSupport": [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality"
+    ],
+    "NSPrivacyCollectedDataTypeOtherDiagnosticData": [
+      "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      "NSPrivacyCollectedDataTypePurposeAnalytics"
+    ]
+  },
+  "requiredReasonAPIs": {
+    "NSPrivacyAccessedAPICategoryFileTimestamp": ["C617.1"],
+    "NSPrivacyAccessedAPICategoryUserDefaults": ["CA92.1"],
+    "NSPrivacyAccessedAPICategorySystemBootTime": ["35F9.1"]
+  }
+}

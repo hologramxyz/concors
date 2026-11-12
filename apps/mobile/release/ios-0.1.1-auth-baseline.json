@@ -1,0 +1,48 @@
+{
+  "checkedAt": "2026-11-12T05:56:57.229902+00:00",
+  "release": "0.1.1",
+  "releaseOwnerAuthorization": "Release owner requested building and publishing the merged iPhone polish on November 12, after being informed of the recorded historical auth hold.",
+  "shippedBaseline": {
+    "appId": "6817622624",
+    "version": "0.1.0",
+    "build": "16",
+    "state": "READY_FOR_SALE",
+    "sourceRevision": "75be916a4f5beded50270a071daf532ba847717a",
+    "appleReadbackAt": "2026-11-12T05:50:17.697Z"
+  },
+  "authenticationSourceUnchanged": {
+    "comparedTo": "1d2d2bf5312d92e3c79fd65bc6cf245cc2ecc03b",
+    "paths": ["apps/mobile/src/auth", "apps/mobile/app.config.ts", "apps/mobile/plugins"],
+    "changedFiles": []
+  },
+  "reviewerSignIn": {
+    "checkedAt": "2026-11-12T05:53:55.597Z",
+    "apiOrigin": "https://api.concors.dev",
+    "testAccountSource": "Privy generated test account",
+    "emailLoginVerified": true,
+    "normalProductionBrowserFlow": true,
+    "pkceExchangeVerified": true,
+    "accountEmailMatchesGeneratedCredential": true,
+    "machineCount": 1,
+    "connectedWorkspaceVerified": false,
+    "physicalIPhoneVerified": false,
+    "providerErrors": []
+  },
+  "reviewerWorkspace": {
+    "checkedAt": "2026-11-12T05:55:02.801Z",
+    "apiOrigin": "https://api.concors.dev",
+    "authenticatedReviewerAccess": true,
+    "isolatedMachineRunning": true,
+    "authenticatedWebSocket": true,
+    "workspaceSnapshot": true,
+    "sampleFileReadable": true,
+    "projectCount": 1,
+    "physicalIPhoneVerified": false
+  },
+  "acceptanceScope": "Retain the approved and live version's authentication behavior for this UI update, with fresh production email/PKCE and reviewer-workspace checks.",
+  "limitations": [
+    "A new personal Apple consent/grant exchange was not observed.",
+    "No new physical iPhone acceptance is claimed for 0.1.1.",
+    "The previous unobserved-consent finding remains in the historical evidence."
+  ]
+}
