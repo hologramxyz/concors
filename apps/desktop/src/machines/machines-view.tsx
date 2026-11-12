@@ -61,6 +61,7 @@ import {
   isExternal,
   isRelayed,
   isSettingUp,
+  sizeName,
   statusTone,
   isUndeployed,
   sshCommand,
@@ -550,9 +551,9 @@ function MachineCard({
                     <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
                     {location}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 capitalize">
+                  <span className="inline-flex items-center gap-1.5">
                     <Server className="size-3.5 shrink-0" aria-hidden="true" />
-                    {machine.size}
+                    {sizeName(machine.size)}
                   </span>
                   {!undeployed && purchases && <span>{formatMonthly(machine.monthlyPrice)}</span>}
                 </>

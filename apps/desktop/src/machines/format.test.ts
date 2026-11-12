@@ -9,6 +9,7 @@ import {
   isExternal,
   isRelayed,
   isSettingUp,
+  sizeName,
   statusTone,
   isSettling,
   isRegionSoldOut,
@@ -236,5 +237,15 @@ describe("own servers", () => {
     expect(describeStatus({ ...waiting, status: "running", agentInstalledAt: "2026-10-05" })).toBe(
       "Running",
     );
+  });
+});
+
+describe("size names", () => {
+  it("capitalize the first letter, also after leading digits", () => {
+    expect(sizeName("small")).toBe("Small");
+    expect(sizeName("xlarge")).toBe("Xlarge");
+    expect(sizeName("2xlarge")).toBe("2Xlarge");
+    expect(sizeName("3xlarge")).toBe("3Xlarge");
+    expect(sizeName("max")).toBe("Max");
   });
 });

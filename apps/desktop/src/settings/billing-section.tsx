@@ -8,7 +8,7 @@ import { useBillingPortal } from "@/billing/use-billing-portal";
 import { PaymentFailedWarning } from "@/billing/payment-failed-warning";
 import { api } from "@/auth/api";
 import { describeAuthError } from "@/auth/auth-state";
-import { formatMoney, formatMonthly } from "@/machines/format";
+import { formatMoney, formatMonthly, sizeName } from "@/machines/format";
 import { openExternal } from "@/tauri";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -114,8 +114,7 @@ export function BillingSection({ organization }: BillingSectionProps) {
                   )
                   .map((price) => (
                     <span key={price.size} className="min-w-0 break-words">
-                      <span className="capitalize">{price.size}</span>{" "}
-                      {formatMonthly(price.monthlyPrice)}
+                      {sizeName(price.size)} {formatMonthly(price.monthlyPrice)}
                     </span>
                   ))}
               </span>

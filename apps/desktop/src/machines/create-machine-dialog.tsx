@@ -28,6 +28,7 @@ import {
   formatMonthly,
   isRegionSoldOut,
   isSoldOut,
+  sizeName,
   isValidMachineName,
   MACHINE_NAME_MAX_LENGTH,
   orderableSize,
@@ -289,7 +290,7 @@ export function CreateMachineDialog({
                                 onChange={() => setSize(candidate.id)}
                                 className="size-3.5 shrink-0 accent-primary"
                               />
-                              <span className="font-medium capitalize">{candidate.id}</span>
+                              <span className="font-medium">{sizeName(candidate.id)}</span>
                             </span>
                             <span className="text-xs font-medium tabular-nums">
                               {soldOut
@@ -346,7 +347,7 @@ export function CreateMachineDialog({
                     <div className="min-w-0 space-y-1">
                       <p className="font-medium break-all">{name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {chosenRegion?.location}, <span className="capitalize">{size}</span>
+                        {chosenRegion?.location}, {sizeName(size)}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {chosenSize?.vcpus} vCPU, {chosenSize?.ramGb} GB RAM, {chosenSize?.diskGb}{" "}
@@ -405,7 +406,7 @@ export function CreateMachineDialog({
                       </span>
                       <div className="min-w-0 space-y-1">
                         <p className="font-medium">
-                          <span className="capitalize">{chosenSize?.id}</span> VPS
+                          {chosenSize ? sizeName(chosenSize.id) : null} VPS
                         </p>
                         <p className="text-xs break-words text-muted-foreground">
                           {chosenRegion?.location}
