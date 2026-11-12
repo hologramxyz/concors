@@ -1,7 +1,9 @@
 # Play Console declaration packet
 
-Prepared November 10, 2026 for `xyz.hologram.concors`. These are draft answers for the actual
-Console questions; this file does not mean Google has received or accepted the declarations.
+Prepared November 10 and updated November 12, 2026 for `xyz.hologram.concors`. Listing copy and six
+images are uploaded, Data safety was accepted by the API, and build 3 is active on internal testing.
+The remaining Console-only declarations below are prepared answers, not verified completed forms.
+See [upload evidence](play-upload-2026-11-12.json).
 
 | Field                 | Prepared answer                                                                                 |
 | --------------------- | ----------------------------------------------------------------------------------------------- |
@@ -28,10 +30,12 @@ in the audited candidate.
 
 ## Data safety and deletion
 
-Use [the inventory](data-safety.md) and [CSV draft](data-safety-draft.csv), then complete the current
-Console questions omitted from Google's sample CSV: account-creation methods and deletion URL.
-Include third-party sign-in diagnostics and optional notification tokens. Do not answer that no
-data is collected or that workspace content is end-to-end encrypted.
+The [inventory](data-safety.md) and [submitted CSV](data-safety-draft.csv) include account-creation
+methods, the account-deletion URL, third-party sign-in diagnostics and optional notification
+tokens. Google accepted the updated CSV on November 12. Verify the displayed answers in Console;
+the publishing API has no Data safety readback endpoint. Do not answer that no data is collected
+or that workspace content is end-to-end encrypted. Separate partial-data deletion without account
+deletion is answered No; full account deletion remains available.
 
 Google requires both an in-app deletion route and an external route for apps that create accounts.
 The public Concors route names the app, explains retained records and allows a deletion request.
@@ -62,10 +66,12 @@ AI instructions. Do not paste these into store descriptions or a public issue. T
 not require a reviewer-owned inbox, social account, machine or paid AI subscription.
 See [Google's review sign-in requirements](https://support.google.com/googleplay/android-developer/answer/15748846).
 
-Upload the audited production AAB to **Internal testing** first. Confirm the version code, app
-signing enrollment, testers and opt-in URL before describing a test release as available. An
-API-created draft is not a distributed release. Native sign-in, workspace reconnect and Android
-push should be verified on the actual installed release before requesting public review.
+The audited production AAB **0.1.0 (3)** is uploaded and the internal track reads back **completed**.
+Google generated Play-signed packages and a signing-certificate fingerprint. The production track
+has no release. In **Internal testing → Testers**, confirm/select the tester email list containing
+`simone@hologram.xyz` and copy the opt-in link. The API exposes Google Groups but cannot read or
+update individual email tester lists or return the opt-in link. Native sign-in, workspace reconnect
+and Android push still need verification on the installed release before requesting public review.
 
 Complete the identity/contact/website agreements shown for this developer account. Google may
 require additional production-access steps depending on account type; the twelve-tester testing

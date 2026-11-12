@@ -1,0 +1,109 @@
+{
+  "checkedAt": "2026-11-12T05:41:48.429Z",
+  "packageName": "xyz.hologram.concors",
+  "developerAccountId": "8831514612940319255",
+  "expoSubmissionId": "fb4cbcdd-f461-42fb-a5ab-abaad4c3a5ad",
+  "expoSubmissionUrl": "https://expo.dev/accounts/guitong35/projects/concors/submissions/fb4cbcdd-f461-42fb-a5ab-abaad4c3a5ad",
+  "versionCode": 3,
+  "appVersion": "0.1.0",
+  "sourceCommit": "8087bbcb3948ba3b22ed7d1a8e091793981a079c",
+  "bundleSha256": "6683a5974171bedb49984b224f7ad35ba016d6cc051de1d23c9aa5ce42b5ea73",
+  "uploaded": true,
+  "internalTrack": {
+    "track": "internal",
+    "releases": [
+      {
+        "name": "0.1.0 (3)",
+        "versionCodes": ["3"],
+        "releaseNotes": [
+          {
+            "language": "en-US",
+            "text": "First Android test release: connect existing workspaces, follow coding agents, review requests, browse files and continue terminal sessions."
+          }
+        ],
+        "status": "completed"
+      }
+    ]
+  },
+  "productionReleaseExists": false,
+  "storeListingReadbackVerifiedAt": "2026-11-12T05:39:14.119Z",
+  "storeListing": {
+    "defaultLanguage": "en-US",
+    "title": "Concors: Agent Orchestrator",
+    "shortDescription": "Follow AI agents, review requests and use your terminal from your phone.",
+    "fullDescriptionMatchesPrepared": true,
+    "contactEmail": "gm@hologram.xyz",
+    "contactWebsite": "https://concors.dev"
+  },
+  "images": {
+    "phoneScreenshots": [
+      {
+        "id": "13502711427828873141",
+        "sha256": "59343a779196298770ab72b148f30f627af367cb1553acd3c6bee5f6765a31b8"
+      },
+      {
+        "id": "13915457188661074808",
+        "sha256": "eb53d1a0a455bf0b4a75a057bca68dab74f5d22960ae28a865732518d488f7da"
+      },
+      {
+        "id": "7924821045319951135",
+        "sha256": "6599f0783a583405ff13a06b33d561f0eb0948dbf4cc3271861a8c4f52027161"
+      },
+      {
+        "id": "13629857729351123558",
+        "sha256": "27ebcfdcf30e30dfe83b498d2fe5b582f868b3c3e4ba9a6983aec886cf12e083"
+      }
+    ],
+    "featureGraphic": [
+      {
+        "id": "8677636646911074632",
+        "sha256": "c8360c5829a52302a9d21d69938eea80e22339cb89476037e4deb0ad721f840c"
+      }
+    ],
+    "icon": [
+      {
+        "id": "1035952727732694163",
+        "sha256": "fe39f2d36654f5dff1e3bf46f6487cb22427b11755958d3f803496c2813f1751"
+      }
+    ]
+  },
+  "aiImageAttestation": {
+    "phoneScreenshotsAndFeatureGraphic": "AI-generated background artwork attested; native Android UI captures are real",
+    "icon": "Existing app icon; no unverified AI-origin attestation supplied"
+  },
+  "playSigning": [
+    {
+      "certificateSha256Hash": "CA:E6:9C:59:3F:D8:E5:32:F7:D7:96:FF:A3:DC:5F:F5:21:42:54:D5:01:B7:9E:0F:D2:86:E9:B9:8D:BF:CF:6D",
+      "universalApkAvailable": true,
+      "splitCount": 173
+    }
+  ],
+  "dataSafety": {
+    "checkedAt": "2026-11-12T05:39:43.468Z",
+    "apiAccepted": true,
+    "response": {},
+    "csvSha256": "38d8444f561663efcd7fb5442ae5580cb21b0e52f32fe5e3183ee2bf3e37c8b7",
+    "consoleReadbackVerified": false,
+    "allConsoleDeclarationsComplete": false,
+    "accountCreation": ["email one-time code", "OAuth"],
+    "accountDeletionUrl": "https://concors.dev/account/delete",
+    "separatePartialDeletionWithoutAccountDeletion": false
+  },
+  "individualTesterListsReadableByApi": false,
+  "testerGoogleGroups": [],
+  "optInUrl": null,
+  "testerAccessVerified": false,
+  "physicalAndroidAuthVerified": false,
+  "physicalAndroidPushVerified": false,
+  "remainingConsoleVerification": [
+    "Tester opt-in link (email list is owner-confirmed)",
+    "Privacy policy URL, category and country availability",
+    "IARC content rating and 16+/target-audience declarations",
+    "Ads and other required App content forms",
+    "Private reviewer App access instructions",
+    "Developer account verification status"
+  ],
+  "credentialValuesIncluded": false,
+  "testerListConfigured": true,
+  "testerListVerification": "Owner reported the internal tester email list containing simone@hologram.xyz saved on November 12, 2026"
+}

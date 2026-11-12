@@ -1,19 +1,19 @@
 {
-  "checkedAt": "2026-11-10T03:21:17.411Z",
+  "checkedAt": "2026-11-12T05:41:48.429Z",
   "platform": "android",
   "packageName": "xyz.hologram.concors",
   "appVersion": "0.1.0",
   "versionCode": 3,
   "developerAccountId": "8831514612940319255",
   "androidBinaryPrepared": true,
-  "readyForPlayUpload": false,
-  "internalTestAvailable": false,
+  "readyForPlayUpload": true,
+  "internalTestAvailable": true,
   "publicSubmissionReady": false,
   "accountVerificationObserved": false,
   "playPackageProbe": {
-    "status": 404,
-    "message": "Package not found: xyz.hologram.concors.",
-    "checkedAt": "2026-11-10T03:21:17.411Z"
+    "status": 200,
+    "message": "App access, exact uploaded AAB hash and active internal track verified",
+    "checkedAt": "2026-11-12T05:41:48.429Z"
   },
   "gates": [
     {
@@ -30,11 +30,8 @@
     {
       "id": "signed-binary",
       "status": "verified",
-      "evidence": ["build-3.json"],
-      "limitations": [
-        "Original AAB upload certificate checked against Expo; Play app signing enrollment still pending",
-        "No physical 16 KB-device runtime test"
-      ]
+      "evidence": ["build-3.json", "play-upload-2026-11-12.json"],
+      "limitations": ["No physical 16 KB-device runtime test"]
     },
     {
       "id": "native-launch",
@@ -84,31 +81,40 @@
     },
     {
       "id": "store-material",
-      "status": "prepared-not-uploaded",
+      "status": "partial",
       "evidence": [
         "listing.json",
         "asset-manifest.json",
         "capture-evidence.json",
         "data-safety.md",
         "data-safety-draft.csv",
-        "console-answers.md"
+        "console-answers.md",
+        "play-upload-2026-11-12.json"
       ],
-      "remaining": "Upload listing/assets/disclosures and finish current Console forms, IARC and private App access"
+      "remaining": "Listing copy, six store images and Data safety are uploaded; verify Console-only setup, IARC, audience, privacy URL and private App access."
     },
     {
       "id": "play-account-access",
-      "status": "blocked",
-      "remaining": "Owner creates Concors app record and grants the dedicated submission service account app access; confirm account verification and package availability"
+      "status": "verified",
+      "remaining": "Developer identity/contact verification status has not been observed in Console.",
+      "evidence": ["play-upload-2026-11-12.json"]
     },
     {
       "id": "internal-release",
-      "status": "blocked",
-      "remaining": "Upload audited build 3, verify Play signing/processing, complete internal release, select testers and read back opt-in URL; no upload or release performed"
+      "status": "partial",
+      "remaining": "Internal track is completed and owner confirmed the tester list. The opt-in URL has not been provided, and no tester installation has been observed.",
+      "evidence": ["play-upload-2026-11-12.json"]
     }
   ],
   "httpsAndroidAppLinks": {
     "enabled": false,
     "note": "Native sign-in uses existing supported callback routing; HTTPS app links are not advertised or enabled"
   },
-  "credentialValuesIncluded": false
+  "credentialValuesIncluded": false,
+  "playUploadSucceeded": true,
+  "internalReleaseActive": true,
+  "internalTesterAccessVerified": false,
+  "optInUrl": null,
+  "internalTestAvailabilityBasis": "Internal track completed via API; tester list saved per owner report",
+  "testerListConfigured": true
 }
