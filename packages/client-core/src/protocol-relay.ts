@@ -20,6 +20,7 @@ export type RelayConnection = Pick<
   | "subscribeWorkspace"
   | "onSchedules"
   | "requestSchedule"
+  | "requestSupervisor"
   | "onAgent"
   | "onTerminal"
   | "subscribeProjectSetups"
@@ -134,10 +135,15 @@ export function createProtocolRelay(
           emit(await connection.executeWorkspace(message));
           break;
         case "agent.request":
-          emit(await connection.requestAgent(message.operation, message.requestId));
+          emit(
+            await connection.requestAgent(message.operation, message.requestId, message.sharing),
+          );
           break;
         case "project.request":
           emit(await connection.requestProject(message.operation, message.requestId));
+          break;
+        case "supervisor.request":
+          emit(await connection.requestSupervisor(message.operation, message.requestId));
           break;
         case "schedule.request":
           emit(await connection.requestSchedule(message.operation, message.requestId));
