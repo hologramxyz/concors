@@ -84,7 +84,8 @@ test("videos play in a file tab, and one that cannot play says so", async ({ pag
     // A clip smaller than the tab fills it, scaled up as a player would, not left at its size.
     const area = await video.evaluate((element) => {
       const own = element.getBoundingClientRect();
-      const around = element.parentElement!.getBoundingClientRect();
+      const around = element.parentElement?.getBoundingClientRect();
+      if (!around) throw new Error("Video has no preview area");
       return {
         width: own.width / around.width,
         height: own.height / around.height,
