@@ -1,3 +1,4 @@
+import type { MobileRendererMessage, MobileHostMessage } from "@concors/client-core";
 import { test, expect } from "./fixtures";
 
 test("mobile Supervisor uses the shared chat and composer through the native relay", async ({
@@ -56,10 +57,7 @@ test("Supervisor exposes its composer to the native mobile host", async ({ page 
       () =>
         (
           window as Window & {
-            supervisorSnapshot?: Extract<
-              import("@concors/client-core").MobileRendererMessage,
-              { type: "native-surfaces" }
-            >;
+            supervisorSnapshot?: Extract<MobileRendererMessage, { type: "native-surfaces" }>;
           }
         ).supervisorSnapshot,
     );
@@ -68,9 +66,10 @@ test("Supervisor exposes its composer to the native mobile host", async ({ page 
       (await snapshot())?.surfaces.some((s) => s.content.kind === "composer" && s.content.editable),
     )
     .toBe(true);
-  const state = (await snapshot())!,
-    composer = state.surfaces.find((s) => s.content.kind === "composer")!;
-  const frame = page.frames().find((f) => f !== page.mainFrame())!;
+  const state = await snapshot();
+  const composer = state?.surfaces.find((s) => s.content.kind === "composer");
+  const frame = page.frames().find((f) => f !== page.mainFrame());
+  if (!state || !composer || !frame) throw new Error("Missing Supervisor native composer");
   const text = "Find work across my projects";
   for (const event of [
     { kind: "text", text, sequence: 1 },
@@ -80,7 +79,7 @@ test("Supervisor exposes its composer to the native mobile host", async ({ page 
       (message) =>
         (
           window as Window & {
-            concorsMobileReceive?(value: import("@concors/client-core").MobileHostMessage): void;
+            concorsMobileReceive?(value: MobileHostMessage): void;
           }
         ).concorsMobileReceive?.(message),
       {
@@ -89,7 +88,7 @@ test("Supervisor exposes its composer to the native mobile host", async ({ page 
         connectionId: state.connectionId,
         surfaceId: composer.id,
         event,
-      } satisfies import("@concors/client-core").MobileHostMessage,
+      } satisfies MobileHostMessage,
     );
   }
   await expect(ui.getByRole("log")).toContainText(text);
