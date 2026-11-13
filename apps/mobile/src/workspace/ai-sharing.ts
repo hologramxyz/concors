@@ -1,5 +1,10 @@
 import type { DaemonConnection } from "@concors/daemon-client";
-import type { ClientMessage, DaemonMessage, ProviderStatus } from "@concors/protocol";
+import {
+  SUPERVISOR_CAPABILITY,
+  type ClientMessage,
+  type DaemonMessage,
+  type ProviderStatus,
+} from "@concors/protocol";
 import { newRequestId } from "@concors/client-core";
 
 /** App Store consent belongs to the native iOS app, never desktop, Android or web previews. */
@@ -12,7 +17,8 @@ export interface AISharingDisclosure {
   details: string;
 }
 
-type Context = Pick<DaemonConnection, "agents" | "schedules" | "requestProvider">;
+type Context = Pick<DaemonConnection, "agents" | "schedules" | "requestProvider"> &
+  Partial<Pick<DaemonConnection, "state" | "requestSupervisor">>;
 type Gated = Extract<
   ClientMessage,
   { type: "agent.request" | "provider.request" | "schedule.request" }
@@ -157,6 +163,15 @@ export function createAISharingPermission(
     blocked = false,
     disposed = false;
   let queue: Promise<unknown> = Promise.resolve();
+  const revokeSupervisor = async () => {
+    if (
+      context.state?.status === "ready" &&
+      context.state.daemon.capabilities?.includes(SUPERVISOR_CAPABILITY)
+    ) {
+      const result = await context.requestSupervisor?.({ kind: "revoke-sharing" }, newRequestId());
+      if (result?.outcome.status === "error") throw new Error(result.outcome.message);
+    }
+  };
   const describe = async (message: Gated) => {
     const result = await context.requestProvider(
       { kind: "list", checkVersions: false },
@@ -203,6 +218,7 @@ export function createAISharingPermission(
       ),
     ];
     return {
+      sharing: { revision: result.outcome.revision, providers: providers.map((p) => p.id) },
       key: JSON.stringify([
         result.outcome.revision,
         providers.map((p) => [p.id, p.engine, p.label, p.customized, p.mcpServerNames]),
@@ -218,6 +234,7 @@ export function createAISharingPermission(
       grants.clear();
       changed("blocked");
       await store?.write({ blocked: true, grant: null });
+      await revokeSupervisor();
     },
     async review() {
       blocked = false;
@@ -245,6 +262,7 @@ export function createAISharingPermission(
         if (saved?.blocked) {
           blocked = true;
           changed("blocked");
+          await revokeSupervisor();
         }
         if (disposed || blocked || generation !== version)
           return rejected(message, "AI sharing permission changed. Try again.");
@@ -253,6 +271,7 @@ export function createAISharingPermission(
           !(message.type === "provider.request" && message.operation.kind === "save")
         ) {
           changed("allowed");
+          if (message.type === "agent.request") message.sharing = disclosure.sharing;
           return null;
         }
         let approval = pending.get(disclosure.key);
@@ -268,6 +287,7 @@ export function createAISharingPermission(
               grants.clear();
               changed("blocked");
               await store?.write({ blocked: true, grant: null });
+              await revokeSupervisor();
             }
             if (!allowed || disposed || blocked || generation !== version) return false;
             const current = await describe(message);
@@ -282,9 +302,11 @@ export function createAISharingPermission(
           queue = approval.catch(() => undefined);
           void approval.finally(() => pending.delete(disclosure.key)).catch(() => undefined);
         }
-        return (await approval) && !disposed && !blocked && version === generation
-          ? null
-          : rejected(message, "AI sharing was not allowed. Your request was not sent.");
+        if ((await approval) && !disposed && !blocked && version === generation) {
+          if (message.type === "agent.request") message.sharing = disclosure.sharing;
+          return null;
+        }
+        return rejected(message, "AI sharing was not allowed. Your request was not sent.");
       } catch {
         return rejected(
           message,
