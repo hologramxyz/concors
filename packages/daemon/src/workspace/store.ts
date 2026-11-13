@@ -1066,12 +1066,13 @@ export class WorkspaceStore {
     }
   }
   /** Bring a saved/background agent into a tab without changing or restarting its turn. */
-  openAgent(request: AgentRequest): void {
+  openAgent(request: AgentRequest, options: { preserveSelection?: boolean } = {}): void {
     if (request.operation.kind !== "open-session") throw new Error("Expected open session");
     this.#db.exec("BEGIN IMMEDIATE");
     try {
       const info = this.agent(request.operation.sessionId);
       let state = this.snapshot();
+      const selection = state.selection;
       const project = sessionProjects(state).find((p) => p.id === info.projectId);
       if (!project) throw new Error("The agent's workspace is unavailable");
       if (
@@ -1099,6 +1100,7 @@ export class WorkspaceStore {
         pane.directory = info.directory;
         // A closed chat comes back under the names it was given.
         if (info.paneName) pane.name = info.paneName;
+        if (options.preserveSelection) state.selection = selection;
         this.#db.prepare("UPDATE workspace SET snapshot=? WHERE id=1").run(JSON.stringify(state));
       }
       this.#db
