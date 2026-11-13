@@ -212,7 +212,10 @@ export class TestAgentProvider implements AgentProvider {
     if (method !== "turn/start") throw new Error(`Unexpected method: ${method}`);
     this.turnId = `turn-${++TestAgentProvider.turns}`;
     this.emit("turn/started", { turn: { id: this.turnId, status: "inProgress", items: [] } });
-    const text = (input["input"] as { text: string }[])[0]?.text ?? "";
+    const text = ((input["input"] as { text: string }[])[0]?.text ?? "").replace(
+      /^<concors-tools>[\s\S]*?<\/concors-tools>\n\n/,
+      "",
+    );
     if (text === "primitive-usage-limit") {
       // The account ran out: how Codex fails a turn when the plan's limit is reached.
       const turnId = this.turnId;
