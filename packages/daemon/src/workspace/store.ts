@@ -956,7 +956,7 @@ export class WorkspaceStore {
     try {
       if (
         this.agent(info.id).providerGroupId &&
-        !this.snapshot().projects.some((project) =>
+        !sessionProjects(this.snapshot()).some((project) =>
           project.tabs.some((tab) =>
             tab.nodes.some((pane) => pane.kind === "pane" && pane.sessionId === info.id),
           ),
