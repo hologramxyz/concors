@@ -1,3 +1,5 @@
+import { SupervisorNav } from "@/supervisor/nav";
+import { SupervisorPage } from "@/supervisor/page";
 import { SchedulesNav } from "@/schedules/nav";
 import { SchedulesPage } from "@/schedules/page";
 import { PullRequestsNav } from "@/pull-requests/nav";
@@ -156,7 +158,10 @@ function MobileWorkspaceContent({
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** A full-height page over the workspace; Pull requests may show one workspace. */
   const [page, setPage] = useState<
-    { kind: "schedules" } | { kind: "pull-requests"; view: PullRequestsView } | null
+    | { kind: "supervisor" }
+    | { kind: "schedules" }
+    | { kind: "pull-requests"; view: PullRequestsView }
+    | null
   >(null);
   const [resourcesOpen, setResourcesOpen] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("account");
@@ -412,6 +417,11 @@ function MobileWorkspaceContent({
     );
   const openAgent = useCallback(
     (sessionId: string) => {
+      if (connection?.agents.some((a) => a.id === sessionId && a.supervisor)) {
+        setPage({ kind: "supervisor" });
+        setSidebarOpen(false);
+        return;
+      }
       const target =
         connection?.workspace && resolveMobileSelection(connection.workspace, { sessionId });
       if (!target?.pane || !target.tab) {
@@ -535,7 +545,7 @@ function MobileWorkspaceContent({
     !resourcesOpen &&
     !searchOpen &&
     !addingProject &&
-    !page;
+    (!page || page.kind === "supervisor");
   const cycleTab = (delta: number) => {
     if (!project || !tab || !pane) return;
     const entries = projectPanes(project);
@@ -543,7 +553,7 @@ function MobileWorkspaceContent({
     const next = entries[(index + delta + entries.length) % entries.length];
     if (next) select({ projectId: project.id, tabId: next.tab.id, paneId: next.pane.id });
   };
-  const commandsAvailable = unobscured || searchOpen;
+  const commandsAvailable = (unobscured && !page) || searchOpen;
   useCommand("search", commandsAvailable, () => setSearchOpen((open) => !open));
   useCommand("settings", commandsAvailable, () => openSettings());
   useCommand("shortcuts", commandsAvailable, () => openSettings("shortcuts"));
@@ -668,6 +678,13 @@ function MobileWorkspaceContent({
                     </div>
                     <nav aria-label="Primary" className="mobile-sidebar-content">
                       <div className="space-y-0.5">
+                        <SupervisorNav
+                          selected={page?.kind === "supervisor"}
+                          onClick={() => {
+                            setPage({ kind: "supervisor" });
+                            setSidebarOpen(false);
+                          }}
+                        />
                         <SchedulesNav
                           selected={page?.kind === "schedules"}
                           onClick={() => {
@@ -789,7 +806,11 @@ function MobileWorkspaceContent({
                           </NativeHeaderButton>
                           {page ? (
                             <h1 className="min-w-0 flex-1 truncate text-base font-medium">
-                              {page.kind === "schedules" ? "Schedules" : "Pull requests"}
+                              {page.kind === "supervisor"
+                                ? "Supervisor"
+                                : page.kind === "schedules"
+                                  ? "Schedules"
+                                  : "Pull requests"}
                             </h1>
                           ) : project && workspace ? (
                             <WorkspaceSwitcher
@@ -877,9 +898,22 @@ function MobileWorkspaceContent({
                             className="mobile-pane"
                             data-pane-id={pane?.id}
                             // A page shows instead of the pane, so it must not get a chat's layout.
-                            data-pane-profile={page ? undefined : pane?.profile}
+                            data-pane-profile={
+                              page?.kind === "supervisor"
+                                ? "chat"
+                                : page
+                                  ? undefined
+                                  : pane?.profile
+                            }
                           >
-                            {page?.kind === "schedules" ? (
+                            {page?.kind === "supervisor" ? (
+                              <SupervisorPage
+                                key={host.machineId}
+                                workspace={workspace}
+                                connected={!!ready}
+                                onOpenAgent={openAgent}
+                              />
+                            ) : page?.kind === "schedules" ? (
                               <div className="h-full overflow-y-auto">
                                 <SchedulesPage
                                   key={host.machineId}
@@ -1070,7 +1104,10 @@ function MobileWorkspaceContent({
                   onOpenChange={setSearchOpen}
                   onNavigate={(view) => {
                     if (view === "settings") openSettings();
-                    else if (view === "schedules") {
+                    else if (view === "supervisor") {
+                      setPage({ kind: "supervisor" });
+                      setSidebarOpen(false);
+                    } else if (view === "schedules") {
                       setPage({ kind: "schedules" });
                       setSidebarOpen(false);
                     } else if (view === "pull-requests") openPullRequests();
