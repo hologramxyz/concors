@@ -16,8 +16,9 @@ OpenCode or other configured harness and sign-in; Supervisor does not create ano
 2. Ask: “Find the chat where we discussed the mobile release. Read it and summarize what is left.”
 3. Ask: “Tell that chat to review the release checklist, and ask the chat in my other workspace to
    review its tests.” Name the workspace/chat when several matches are similar.
-4. Open **Delegated work** to see the real delivery states. Follow a conversation link to inspect
-   the original chat; delegated prompts carry **From Supervisor**.
+4. Ask Supervisor for progress or results in the conversation. Completion and input-needed updates
+   appear in its timeline. Follow a conversation link to inspect the original chat; delegated
+   prompts carry **From Supervisor**.
 5. While a target is busy, send another instruction. It queues by default. Explicitly ask to steer
    or stop a turn when that is what you want. Tool approvals and questions remain in the target
    conversation for you to answer.
@@ -63,8 +64,8 @@ requested code change was correct.
 Claude, Codex and OpenCode already normalize native lifecycle events in their adapters. Supervisor
 observes these events for queued/working/input-needed/completed/failed/interrupted updates, without
 installing global CLI hooks or repeatedly asking models for progress. It posts durable updates in
-the Supervisor timeline. The UI refreshes status while open; automatic extra model turns for
-summarization are intentionally not scheduled.
+the Supervisor timeline. Progress and results stay in the conversation; there is no separate
+delegation panel. Automatic extra model turns for summarization are intentionally not scheduled.
 
 The native iOS host attaches the recipient IDs and registry revision covered by its sharing drawer.
 Delegation, including queued delivery, checks those recipients; withdrawal revokes the daemon grant
