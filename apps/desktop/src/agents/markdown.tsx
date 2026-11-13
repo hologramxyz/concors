@@ -1,3 +1,4 @@
+import { SessionLinkContext, sessionLink } from "@/supervisor/session-link";
 import { useContext } from "react";
 import { FileLinkContext, FileLinkTargetContext } from "@/files/context";
 import {
@@ -143,6 +144,7 @@ function MarkdownImage({ src, alt }: ComponentProps<"img">) {
 }
 
 function MarkdownLink({ children: content, href, node: _node, ...props }: LinkProps) {
+  const openSession = useContext(SessionLinkContext);
   const openFile = useContext(FileLinkContext);
   const fileTarget = useContext(FileLinkTargetContext);
   const connection = useContext(TerminalConnectionContext);
@@ -152,6 +154,17 @@ function MarkdownLink({ children: content, href, node: _node, ...props }: LinkPr
     preview && connection?.endpoint.kind === "remote"
       ? connection.previewUrl(preview.preview)
       : null;
+  const targetSession = sessionLink(href);
+  if (targetSession && openSession)
+    return (
+      <button
+        type="button"
+        className="text-link underline underline-offset-2"
+        onClick={() => openSession(targetSession)}
+      >
+        {content}
+      </button>
+    );
   // The preview address carries access in its fragment, so it is only used on click and never
   // lands in the DOM. A preview that stopped listening simply does not open.
   if (href && previewUrl && preview) {
@@ -261,6 +274,7 @@ export function AgentMarkdown({
           // Image sources are only matched against the images the daemon kept, never loaded.
           urlTransform={(url, key) =>
             key === "src" ||
+            !!sessionLink(url) ||
             (openFile &&
               (/^file:\/\//i.test(url) ||
                 /^[a-z]:[\\/]/i.test(url) ||

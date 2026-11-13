@@ -1,5 +1,6 @@
 import {
   Activity,
+  Network,
   Clock,
   FolderKanban,
   GitPullRequest,
@@ -7,7 +8,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-export type View = "projects" | "resources" | "schedules" | "pull-requests" | "settings";
+export type View =
+  "supervisor" | "projects" | "resources" | "schedules" | "pull-requests" | "settings";
 
 export interface NavItem {
   readonly view: View;
@@ -18,6 +20,7 @@ export interface NavItem {
 }
 
 export const PRIMARY_NAV: readonly NavItem[] = [
+  { view: "supervisor", label: "Supervisor", icon: Network },
   { view: "schedules", label: "Schedules", icon: Clock },
   { view: "pull-requests", label: "Pull requests", icon: GitPullRequest },
   { view: "projects", label: "Workspaces", icon: FolderKanban },
