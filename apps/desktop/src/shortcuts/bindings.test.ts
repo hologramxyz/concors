@@ -46,6 +46,27 @@ describe("default workspace shortcuts", () => {
     expect(matchKeymap(commandT, defaultKeymap(true), false, false)).toEqual([]);
     expect(matchKeymap(commandT, defaultKeymap(false), false, true)).toEqual([]);
   });
+  it("steps through tabs with Command+Shift+] and [ in the Mac app, terminals included", () => {
+    // Shift turns the brackets into braces; the physical key still names them.
+    const bracket = (key: string, code: string) => ({
+      key,
+      code,
+      shiftKey: true,
+      ctrlKey: false,
+      metaKey: true,
+    });
+    const next = key(bracket("}", "BracketRight"));
+    const previous = key(bracket("{", "BracketLeft"));
+    for (const inTerminal of [false, true]) {
+      expect(matchKeymap(next, defaultKeymap(true), inTerminal, true)[0]?.id).toBe("next-tab");
+      expect(matchKeymap(previous, defaultKeymap(true), inTerminal, true)[0]?.id).toBe(
+        "previous-tab",
+      );
+    }
+    // A browser keeps them for its own tabs, and other systems have no Command key.
+    expect(matchKeymap(next, defaultKeymap(true), false, false)).toEqual([]);
+    expect(matchKeymap(next, defaultKeymap(false), false, true)).toEqual([]);
+  });
   it("leaves shell Ctrl+K alone while keeping the outside-terminal search alias", () => {
     expect(matchKeymap(key({ shiftKey: false }), defaultKeymap(), true, false)).toEqual([]);
     expect(matchKeymap(key({ shiftKey: false }), defaultKeymap(), false, false)[0]?.id).toBe(
