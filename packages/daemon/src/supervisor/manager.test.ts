@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -352,4 +353,25 @@ it("can send after changing harness and restores the earlier Supervisor conversa
     (await f.request({ kind: "send", sessionId: f.source.id, text: "Read the results" })).outcome
       .status,
   ).toBe("ok");
+});
+
+it("persists the binding across reopening and protects Supervisor stores from older daemons", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-supervisor-migration-"));
+  const path = join(directory, "workspace.sqlite");
+  let store = new WorkspaceStore(path);
+  const database = new DatabaseSync(path);
+  try {
+    expect(database.prepare("PRAGMA user_version").get()?.["user_version"]).toBe(4);
+    const project = store.ensureSupervisor();
+    expect(database.prepare("PRAGMA user_version").get()?.["user_version"]).toBe(5);
+    store.close();
+    store = new WorkspaceStore(path);
+    expect(store.ensureSupervisor()).toEqual(project);
+    expect(store.snapshot().projects).toEqual([]);
+    expect(database.prepare("PRAGMA user_version").get()?.["user_version"]).toBe(5);
+  } finally {
+    database.close();
+    store.close();
+    await rm(directory, { recursive: true, force: true });
+  }
 });

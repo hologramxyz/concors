@@ -88,7 +88,14 @@ export class WorkspaceStore {
         "PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000;",
       );
       const version = this.#db.prepare("PRAGMA user_version").get()?.["user_version"];
-      if (version !== 0 && version !== 1 && version !== 2 && version !== 3 && version !== 4)
+      if (
+        version !== 0 &&
+        version !== 1 &&
+        version !== 2 &&
+        version !== 3 &&
+        version !== 4 &&
+        version !== 5
+      )
         throw new Error(`Unsupported workspace database version: ${String(version)}`);
       this.#db.exec(`
         CREATE TABLE IF NOT EXISTS workspace (id INTEGER PRIMARY KEY CHECK (id = 1), snapshot TEXT NOT NULL);
@@ -109,7 +116,7 @@ export class WorkspaceStore {
         CREATE TABLE IF NOT EXISTS agent_item_images (session_id TEXT NOT NULL, item_id TEXT NOT NULL, position INTEGER NOT NULL, attachment TEXT NOT NULL, PRIMARY KEY (session_id, item_id, position));
         CREATE TABLE IF NOT EXISTS supervisor_records (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_defaults (provider TEXT PRIMARY KEY, settings TEXT NOT NULL, used_at INTEGER NOT NULL);
-        PRAGMA user_version = 4;
+        PRAGMA user_version = ${version === 5 ? 5 : 4};
       `);
       const initial: WorkspaceSnapshot = {
         schemaVersion: 1,
@@ -122,7 +129,9 @@ export class WorkspaceStore {
       this.#db
         .prepare("INSERT OR IGNORE INTO workspace (id, snapshot) VALUES (1, ?)")
         .run(JSON.stringify(initial));
-      this.snapshot(); // Fail startup on corrupt/incompatible persisted state; never silently reset it.
+      // Older daemons would mistake Supervisor sessions for orphaned workspace chats.
+      // Only machines that opened Supervisor need the new format; ordinary stores stay compatible.
+      if (this.snapshot().supervisor) this.#db.exec("PRAGMA user_version = 5");
       this.#closeStrandedChats();
     } catch (error) {
       this.#db.close();
@@ -143,6 +152,7 @@ export class WorkspaceStore {
       const directory = join(this.attachmentsDirectory, "..", "supervisor-" + state.machineId);
       mkdirSync(directory, { recursive: true, mode: 0o700 });
       const paneId = randomUUID();
+      this.#db.exec("PRAGMA user_version = 5");
       state.supervisor = {
         id: randomUUID(),
         name: "Supervisor",

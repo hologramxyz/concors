@@ -35,7 +35,9 @@ The daemon stores one internal chat container in `workspace.supervisor`, outside
 It uses the normal agent lifecycle, session binding, queues and provider adapters. Ordinary
 workspace operations cannot move or delete that container. `/clear` starts a fresh Supervisor
 conversation while preserving its special role. Clients negotiate `supervisor-v1`; older clients
-receive neither the internal container nor Supervisor agents.
+receive neither the internal container nor Supervisor agents. Opening Supervisor advances the
+workspace database format to v5 so an older daemon rejects it instead of converting the internal
+conversation into an orphaned user workspace. Machines that have not opened Supervisor stay on v4.
 
 Only a selected Supervisor runtime receives the `concors-supervisor` MCP server. Its single
 `concors_control` tool exposes a typed operation union: list workspaces/layout/sessions, search
