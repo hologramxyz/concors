@@ -80,7 +80,7 @@ export function SupervisorPage({
   const project = workspace?.supervisor,
     tab = project?.tabs[0];
   const pane = tab?.nodes.find((node) => node.kind === "pane");
-  const current = deliveries.filter((d) => d.supervisorId === pane?.sessionId).slice(0, 8);
+  const current = deliveries.filter((d) => d.supervisorId === pane?.sessionId);
   return (
     <AgentStartedContext value={undefined}>
       <SessionLinkContext value={onOpenAgent}>

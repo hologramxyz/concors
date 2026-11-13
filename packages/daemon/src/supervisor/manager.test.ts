@@ -275,3 +275,47 @@ it("negotiates the native MCP contract and executes the same authenticated opera
   expect(result.isError).not.toBe(true);
   expect(JSON.stringify(result.content)).toContain(f.projectId);
 });
+
+it("keeps local selection when opening a delegated chat and requires workspace versions", async () => {
+  const f = await setup(),
+    target = await f.target();
+  const selection = f.store.snapshot().selection;
+  await f.control({ kind: "open-session", sessionId: target.id });
+  expect(f.store.snapshot().selection).toEqual(selection);
+  expect(f.store.snapshot().projects[0]!.tabs).toHaveLength(1);
+  const project = f.store.snapshot().projects[0]!;
+  const result = await f.control({
+    kind: "workspace",
+    command: {
+      type: "workspace.command",
+      commandId: randomUUID(),
+      epoch: f.store.snapshot().epoch,
+      operation: {
+        kind: "project.rename",
+        projectId: project.id,
+        name: "Renamed",
+        expectedVersion: project.version + 1,
+      },
+    },
+  });
+  expect(result).toMatchObject({ outcome: { status: "rejected" } });
+  expect(f.store.snapshot().projects[0]!.name).toBe("App");
+});
+
+it("keeps queued delegation paused when iOS permission is withdrawn before delivery", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await f.request({ kind: "send", sessionId: target.id, text: "hold original" });
+  await f.control({ kind: "send", sessionId: target.id, text: "Do this later", whenBusy: "queue" });
+  f.manager.request({
+    type: "supervisor.request",
+    requestId: randomUUID(),
+    operation: { kind: "revoke-sharing" },
+  });
+  f.providers.at(-1)!.finish();
+  await expect.poll(() => f.store.agent(target.id).queuePaused).toBe(true);
+  expect(
+    f.providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
+  ).toHaveLength(1);
+  expect(f.store.agent(target.id).error).toContain("sharing permission");
+});

@@ -1240,7 +1240,7 @@ export class AgentManager {
         return this.result(request, receipt);
       }
       if (op.kind === "open-session") {
-        this.#store.openAgent(request);
+        this.#store.openAgent(request, { preserveSelection: owner.startsWith("supervisor:") });
         this.#workspaceChanged();
         return this.result(request, op.sessionId);
       }
