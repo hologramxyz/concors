@@ -81,6 +81,18 @@ test("videos play in a file tab, and one that cannot play says so", async ({ pag
       )
       .toEqual([true, true, true]);
     await expect(tab.getByText(/Read-only preview, \d+ (B|KB)/)).toBeVisible();
+    // A clip smaller than the tab fills it, scaled up as a player would, not left at its size.
+    const area = await video.evaluate((element) => {
+      const own = element.getBoundingClientRect();
+      const around = element.parentElement?.getBoundingClientRect();
+      if (!around) throw new Error("Video has no preview area");
+      return {
+        width: own.width / around.width,
+        height: own.height / around.height,
+        fit: getComputedStyle(element).objectFit,
+      };
+    });
+    expect(area).toEqual({ width: 1, height: 1, fit: "contain" });
 
     await page.screenshot({ path: test.info().outputPath("video.png") });
 
