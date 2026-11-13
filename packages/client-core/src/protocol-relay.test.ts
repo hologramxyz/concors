@@ -28,6 +28,11 @@ function setup(beforeSend?: Parameters<typeof createProtocolRelay>[2]) {
     subscribeWorkspace: vi.fn(() => off),
     onAgent: vi.fn(() => off),
     onSchedules: vi.fn(() => off),
+    requestSupervisor: vi.fn<RelayConnection["requestSupervisor"]>(async (_, requestId) => ({
+      type: "supervisor.result",
+      requestId,
+      outcome: { status: "ok", deliveries: [] },
+    })),
     requestSchedule: vi.fn<RelayConnection["requestSchedule"]>(async (_, requestId) => ({
       type: "schedule.result",
       requestId,
