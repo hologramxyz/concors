@@ -805,7 +805,9 @@ function MobileWorkspaceContent({
                             <Menu />
                           </NativeHeaderButton>
                           {page ? (
-                            <h1 className="min-w-0 flex-1 truncate text-base font-medium">
+                            <h1
+                              className={`min-w-0 flex-1 truncate ${page.kind === "supervisor" ? "text-ui" : "text-base font-medium"}`}
+                            >
                               {page.kind === "supervisor"
                                 ? "Supervisor"
                                 : page.kind === "schedules"

@@ -47,13 +47,10 @@ export function SupervisorPage({
   return (
     <AgentStartedContext value={undefined}>
       <SessionLinkContext value={onOpenAgent}>
-        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col" data-testid="supervisor-page">
-          {!compact && (
-            <header className="flex shrink-0 items-center gap-3 px-6 pt-2 pb-3">
-              <h2 className="text-base font-medium">Supervisor</h2>
-              <span className="text-xs text-muted-foreground">All workspaces on this machine</span>
-            </header>
-          )}
+        <div
+          className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+          data-testid="supervisor-page"
+        >
           {error ? (
             <div role="alert" className="p-6 text-sm text-destructive">
               {error}
@@ -72,11 +69,8 @@ export function SupervisorPage({
               tab={tab}
               node={pane}
               canEdit={connected}
-              start={
-                <p className="pt-4 text-center text-xs text-muted-foreground">
-                  Find a conversation or coordinate work across your workspaces.
-                </p>
-              }
+              // Keep the normal desktop new-chat layout and the phone's bottom composer.
+              start={compact ? undefined : <></>}
             />
           ) : (
             <p role="status" className="p-6 text-sm text-muted-foreground">
