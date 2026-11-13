@@ -176,7 +176,9 @@ export function VideoFileTab({ file }: { file: OpenFile }) {
             }}
             aria-label={`Video ${name}`}
             onError={() => setUnplayable(true)}
-            className="m-auto block max-h-full max-w-full"
+            // Fills the tab whatever the clip's own size, as a player fills its window, keeping
+            // its shape: a small or low-resolution clip is scaled up rather than left in a frame.
+            className="block h-full w-full bg-black object-contain"
           />
         ) : current?.status === "ready" ? (
           <Message>
