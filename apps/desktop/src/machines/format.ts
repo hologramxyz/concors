@@ -33,6 +33,15 @@ export function isRelayed(machine: Pick<Machine, "connection">): boolean {
   return machine.connection === "relay";
 }
 
+/**
+ * A size id as people read it: its first letter capitalized, also after leading digits
+ * (`small` → Small, `xlarge` → Xlarge, `2xlarge` → 2Xlarge, `max` → Max). CSS `capitalize`
+ * leaves `2xlarge` alone in some browsers.
+ */
+export function sizeName(id: string): string {
+  return id.replace(/[a-z]/, (letter) => letter.toUpperCase());
+}
+
 /** The person's own server, connected with a setup command: no region, size, price or renewal. */
 export function isExternal(machine: Pick<Machine, "provider">): boolean {
   return machine.provider === "external";
