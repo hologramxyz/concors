@@ -1,4 +1,11 @@
 import {
+  SUPERVISOR_CAPABILITY,
+  SupervisorRequestSchema,
+  type SupervisorOperation,
+  type SupervisorResult,
+  type SupervisorSharing,
+} from "@concors/protocol";
+import {
   SCHEDULES_CAPABILITY,
   ScheduleRequestSchema,
   type AgentSchedule,
@@ -558,6 +565,14 @@ export class DaemonConnection {
       timer: ReturnType<typeof setTimeout>;
     }
   >();
+  readonly #supervisorRequests = new Map<
+    string,
+    {
+      resolve: (result: SupervisorResult) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
   #terminals: TerminalInfo[] = [];
   readonly #terminalSessionListeners = new Set<() => void>();
   readonly #agentListeners = new Set<(event: AgentEvent) => void>();
@@ -993,6 +1008,34 @@ export class DaemonConnection {
     });
   }
 
+  requestSupervisor(operation: SupervisorOperation, requestId: string): Promise<SupervisorResult> {
+    if (this.#state.status !== "ready" || !this.#workspace)
+      return Promise.reject(new Error("Machine is disconnected"));
+    if (!this.#state.daemon.capabilities?.includes(SUPERVISOR_CAPABILITY))
+      return Promise.reject(new Error("Update the daemon on this machine to use Supervisor"));
+    const request = SupervisorRequestSchema.parse({
+      type: "supervisor.request",
+      requestId,
+      operation,
+    });
+    if (this.#supervisorRequests.has(requestId))
+      return Promise.reject(new Error("Request is already pending"));
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#supervisorRequests.delete(requestId);
+        reject(new Error("Supervisor request timed out. Check Supervisor before retrying."));
+      }, 15000);
+      this.#supervisorRequests.set(requestId, { resolve, reject, timer });
+      try {
+        this.#socket?.send(JSON.stringify(request));
+      } catch (error) {
+        clearTimeout(timer);
+        this.#supervisorRequests.delete(requestId);
+        reject(error);
+      }
+    });
+  }
+
   requestThemes(requestId: string): Promise<ThemeResult> {
     if (this.#state.status !== "ready" || !this.#workspace)
       return Promise.reject(new Error("Workspace is disconnected"));
@@ -1025,7 +1068,11 @@ export class DaemonConnection {
       this.#agentListeners.delete(listener);
     };
   }
-  requestAgent(operation: AgentOperation, requestId: string): Promise<AgentResult> {
+  requestAgent(
+    operation: AgentOperation,
+    requestId: string,
+    sharing?: SupervisorSharing,
+  ): Promise<AgentResult> {
     if (this.#state.status !== "ready" || !this.#workspace)
       return Promise.reject(new Error("Workspace is disconnected"));
     if (
@@ -1033,7 +1080,12 @@ export class DaemonConnection {
       !this.#state.daemon.capabilities?.includes(AGENT_USAGE_CAPABILITY)
     )
       return Promise.reject(new Error("Update the machine daemon to see plan usage."));
-    const request = AgentRequestSchema.parse({ type: "agent.request", requestId, operation });
+    const request = AgentRequestSchema.parse({
+      type: "agent.request",
+      requestId,
+      operation,
+      ...(sharing ? { sharing } : {}),
+    });
     if (this.#agentRequests.has(requestId))
       return Promise.reject(new Error("Request is already pending"));
     return new Promise((resolve, reject) => {
@@ -1210,6 +1262,7 @@ export class DaemonConnection {
             SCHEDULES_CAPABILITY,
             DICTATION_CAPABILITY,
             ATTACHMENT_UPLOADS_CAPABILITY,
+            SUPERVISOR_CAPABILITY,
           ],
           protocolVersion: this.#protocolVersion,
           client: this.#client,
@@ -1293,6 +1346,15 @@ export class DaemonConnection {
             if (pending) {
               clearTimeout(pending.timer);
               this.#scheduleRequests.delete(message.requestId);
+              pending.resolve(message);
+            }
+            break;
+          }
+          case "supervisor.result": {
+            const pending = this.#supervisorRequests.get(message.requestId);
+            if (pending) {
+              clearTimeout(pending.timer);
+              this.#supervisorRequests.delete(message.requestId);
               pending.resolve(message);
             }
             break;
@@ -1644,6 +1706,11 @@ export class DaemonConnection {
         pending.reject(new Error("Machine disconnected. Check schedules before retrying."));
       }
       this.#scheduleRequests.clear();
+      for (const pending of this.#supervisorRequests.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(new Error("Machine disconnected. Check Supervisor before retrying."));
+      }
+      this.#supervisorRequests.clear();
       this.#schedules = null;
       for (const listener of this.#scheduleListeners) listener(null);
       for (const pending of this.#resourceRequests.values()) {

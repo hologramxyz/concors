@@ -1,3 +1,4 @@
+import { sessionProjects } from "@concors/protocol";
 import { questionAnswers } from "./questions.ts";
 import { NativeSessions } from "./native-sessions.ts";
 import type { ProviderRequest, ProviderResult } from "@concors/protocol";
@@ -300,7 +301,7 @@ export class AgentManager {
     turnId: string,
     requestId: string,
     text: string,
-    files: MessageFiles,
+    files: MessageFiles & { origin?: AgentItem["origin"] },
     queued?: { remove: string; request: AgentRequest },
   ): Promise<void> {
     const uploaded = messageFiles(files).length
@@ -328,7 +329,8 @@ export class AgentManager {
     this.item(info.id, turnId, {
       id: itemId,
       kind: "user",
-      title: "You · steering",
+      title: files.origin ? "From Supervisor · steering" : "You · steering",
+      ...(files.origin ? { origin: files.origin } : {}),
       ...(attachments.length
         ? { attachments: attachments.map(({ name, mime }) => ({ name, mime })) }
         : {}),
@@ -390,12 +392,24 @@ export class AgentManager {
       });
     return next;
   }
+  recordSupervisorUpdate(id: string, item: AgentItem): void {
+    if (!this.#store.agent(id).supervisor) throw new Error("Expected a Supervisor session");
+    this.item(id, item.turnId, item);
+  }
   private item(
     id: string,
     turnId: string,
     value: Pick<
       AgentItem,
-      "id" | "kind" | "title" | "text" | "detail" | "status" | "presentation" | "attachments"
+      | "id"
+      | "kind"
+      | "title"
+      | "text"
+      | "detail"
+      | "status"
+      | "presentation"
+      | "attachments"
+      | "origin"
     >,
   ): void {
     const previous = this.#store.agentItem(id, value.id);
@@ -610,7 +624,12 @@ export class AgentManager {
       try {
         this.updateQuietly(id, {
           controls: withClear(
-            AgentControlsSchema.parse(await provider.request("session/controls")),
+            {
+              ...AgentControlsSchema.parse(await provider.request("session/controls")),
+              ...(info.supervisor
+                ? { fork: false, forkFromTurn: false, importSessions: false }
+                : {}),
+            },
             info.engine ?? info.provider,
           ),
         });
@@ -928,6 +947,20 @@ export class AgentManager {
     try {
       if (this.#closed) throw new Error("Daemon is shutting down");
       const original = request.operation;
+      if ("sessionId" in original) {
+        const current = this.#store.agent(original.sessionId);
+        if (
+          current.supervisor &&
+          ["move", "delete", "fork-session", "import-session", "resume-session"].includes(
+            original.kind,
+          )
+        )
+          throw new Error(
+            "Keep Supervisor in its own conversation. Use /clear for a fresh chat or the provider picker to change harness.",
+          );
+        if (current.supervisor && request.sharing)
+          this.#store.saveAgent({ ...current, supervisorSharing: request.sharing });
+      }
       let implementation = false;
       let operation: Exclude<AgentRequest["operation"], { kind: "implement-plan" }>;
       if (original.kind === "implement-plan") {
@@ -1207,7 +1240,7 @@ export class AgentManager {
         return this.result(request, receipt);
       }
       if (op.kind === "open-session") {
-        this.#store.openAgent(request);
+        this.#store.openAgent(request, { preserveSelection: owner.startsWith("supervisor:") });
         this.#workspaceChanged();
         return this.result(request, op.sessionId);
       }
@@ -1365,11 +1398,9 @@ export class AgentManager {
       if (op.kind === "start" || op.kind === "switch-provider") {
         const previous =
           op.kind === "switch-provider" ? this.#store.agent(op.sessionId) : undefined;
-        const project = this.#store
-          .snapshot()
-          .projects.find(
-            (p) => p.id === (op.kind === "start" ? op.projectId : previous?.projectId),
-          );
+        const project = sessionProjects(this.#store.snapshot()).find(
+          (p) => p.id === (op.kind === "start" ? op.projectId : previous?.projectId),
+        );
         const pane =
           op.kind === "start"
             ? project?.tabs
@@ -1392,6 +1423,9 @@ export class AgentManager {
         const info: AgentInfo = {
           id: randomUUID(),
           projectId: project.id,
+          ...(project.id === this.#store.snapshot().supervisor?.id
+            ? { supervisor: true as const, supervisorSharing: request.sharing }
+            : {}),
           name: UNTITLED_CHAT_NAME,
           engine: this.registry.config(providerId).engine,
           providerLabel: this.registry.config(providerId).label,
@@ -1433,6 +1467,23 @@ export class AgentManager {
         return this.result(request, reserved.id);
       }
       let info = this.#store.agent(op.sessionId);
+      if ((op.kind === "send" || op.kind === "steer" || op.kind === "queue-add") && op.origin) {
+        const source = this.#store.agent(op.origin.supervisorId);
+        if (
+          !source.supervisor ||
+          source.supervisorSharing === null ||
+          (source.supervisorSharing &&
+            (source.supervisorSharing.revision !== this.registry.revision ||
+              !source.supervisorSharing.providers.includes(info.provider)))
+        )
+          throw new Error(
+            "Supervisor sharing permission changed. Review permission before dispatching more work.",
+          );
+      }
+      if (info.supervisor && ["send", "queue-add", "steer"].includes(op.kind)) {
+        info = { ...info, supervisorSharing: request.sharing ?? undefined };
+        this.#store.saveAgent(info);
+      }
       if (this.mutations.has(info.id))
         throw new Error("This session is being changed. Try again when it finishes.");
       // Uploaded files become the chat's before anything refers to them, so they cannot be swept
@@ -1567,11 +1618,13 @@ export class AgentManager {
           delivery = {
             type: "agent.request",
             requestId: randomUUID(),
+            ...(request.sharing ? { sharing: request.sharing } : {}),
             operation: {
               kind: "send",
               sessionId: info.id,
               text: op.text,
               attachments: op.attachments,
+              ...(op.origin ? { origin: op.origin } : {}),
               ...(op.uploads ? { uploads: op.uploads } : {}),
             },
           };
@@ -1713,7 +1766,8 @@ export class AgentManager {
         this.item(info.id, turnId, {
           id: `prompt:${request.requestId}`,
           kind: "user",
-          title: "You",
+          title: op.origin ? "From Supervisor" : "You",
+          ...(op.origin ? { origin: op.origin } : {}),
           ...(files.length ? { attachments: files.map(({ name, mime }) => ({ name, mime })) } : {}),
           text: op.text,
           detail: "",
@@ -1971,6 +2025,9 @@ export class AgentManager {
     const info: AgentInfo = {
       id: randomUUID(),
       projectId: previous.projectId,
+      ...(previous.supervisor
+        ? { supervisor: true as const, supervisorSharing: previous.supervisorSharing }
+        : {}),
       name: UNTITLED_CHAT_NAME,
       ...(previous.engine ? { engine: previous.engine } : {}),
       providerLabel: label,
@@ -2061,12 +2118,13 @@ export class AgentManager {
       ? await messageInputs(this.#store.attachmentsDirectory, id, files)
       : [];
     const command = parseAgentCommand(text);
-    const instructions = ["pi", "omp", "acp"].includes(info.engine ?? info.provider)
-      ? this.tools?.(info).instructions
-      : undefined;
+    const instructions =
+      info.supervisor || ["pi", "omp", "acp"].includes(info.engine ?? info.provider)
+        ? this.tools?.(info).instructions
+        : undefined;
     const inputText =
       instructions && !command
-        ? `<concors-schedule-tools>\n${instructions}\n</concors-schedule-tools>\n\n${text}`
+        ? `<concors-tools>\n${instructions}\n</concors-tools>\n\n${text}`
         : text;
     const response = z.object({ turn: Turn }).parse(
       await provider.request(command ? "command/execute" : "turn/start", {
@@ -2757,7 +2815,7 @@ export class AgentManager {
    */
   private rememberNames(snapshot: WorkspaceSnapshot): void {
     const agents = new Map(this.#store.agents().map((agent) => [agent.id, agent]));
-    for (const tab of snapshot.projects.flatMap((project) => project.tabs)) {
+    for (const tab of sessionProjects(snapshot).flatMap((project) => project.tabs)) {
       const panes = tab.nodes.flatMap((node) => (node.kind === "pane" ? [node] : []));
       for (const pane of panes) {
         const info = pane.profile === "chat" && pane.sessionId && agents.get(pane.sessionId);
@@ -2815,7 +2873,7 @@ export class AgentManager {
   releaseHidden(snapshot: WorkspaceSnapshot = this.#store.snapshot()): void {
     if (this.#closed || !this.#runtimes.size) return;
     const shown = new Set(
-      snapshot.projects
+      sessionProjects(snapshot)
         .flatMap((project) => project.tabs.flatMap((tab) => tab.nodes))
         .flatMap((node) => (node.kind === "pane" && node.sessionId ? [node.sessionId] : [])),
     );

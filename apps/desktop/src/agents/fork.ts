@@ -7,6 +7,7 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 export function canFork(agent: AgentInfo | undefined): agent is AgentInfo {
   return (
     !!agent?.controls?.fork &&
+    !agent.supervisor &&
     !!agent.threadId &&
     !["starting", "working", "needs_input"].includes(agent.status)
   );

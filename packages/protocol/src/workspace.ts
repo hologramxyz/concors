@@ -18,6 +18,8 @@ export const PROJECT_RENAME_CAPABILITY = "project-rename";
  * chats, and opening its folder again brings them back. Older daemons only remove workspaces.
  */
 export const PROJECT_CLOSE_CAPABILITY = "project-close";
+/** A machine-owned Supervisor conversation, outside the user's workspace list. */
+export const SUPERVISOR_CAPABILITY = "supervisor-v1";
 
 const Id = z.string().uuid();
 const Name = z.string().trim().min(1).max(120);
@@ -86,11 +88,18 @@ export const WorkspaceSnapshotSchema = z.object({
   revision: Version,
   terminalProfiles: z.array(SavedTerminalProfileSchema).max(64).optional(),
   projects: z.array(WorkspaceProjectSchema).max(64),
+  /** Private chat container: reuses pane/session bindings without becoming a user workspace. */
+  supervisor: WorkspaceProjectSchema.optional(),
   /** Newest first. Absent from daemons without the "project-close" capability. */
   closedProjects: z.array(ClosedProjectSchema).max(64).optional(),
   selection: z.object({ projectId: Id, tabId: Id.nullable() }).nullable(),
 });
 export type WorkspaceSnapshot = z.infer<typeof WorkspaceSnapshotSchema>;
+
+/** Session plumbing includes the Supervisor; workspace lists and project tools deliberately do not. */
+export function sessionProjects(workspace: WorkspaceSnapshot): WorkspaceProject[] {
+  return workspace.supervisor ? [...workspace.projects, workspace.supervisor] : workspace.projects;
+}
 
 const ProjectTarget = { projectId: Id, expectedVersion: Version };
 const TabTarget = { ...ProjectTarget, tabId: Id };

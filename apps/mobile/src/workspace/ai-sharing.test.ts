@@ -375,3 +375,38 @@ describe("AI sharing platform scope", () => {
     expect(requiresAISharingPermission("ios", true)).toBe(false);
   });
 });
+
+it("passes the disclosed recipients to Supervisor on both fresh and reused consent", async () => {
+  const { permission } = setup();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const message: ClientMessage = { ...send, requestId: crypto.randomUUID() };
+    expect(await permission.beforeSend(message)).toBeNull();
+    expect(message).toMatchObject({ sharing: { revision: 1, providers: ["codex"] } });
+  }
+});
+it("withdraws Supervisor's daemon grant when native iOS consent is withdrawn", async () => {
+  const { context, ask } = setup();
+  const requestSupervisor = vi.fn(async (_op: unknown, requestId: string) => ({
+    type: "supervisor.result" as const,
+    requestId,
+    outcome: { status: "ok" as const, deliveries: [] },
+  }));
+  const permission = createAISharingPermission(
+    {
+      ...context,
+      requestSupervisor,
+      state: {
+        status: "ready",
+        daemon: {
+          status: "ready",
+          protocolVersion: "v1",
+          daemonVersion: "test",
+          capabilities: ["supervisor-v1"],
+        },
+      },
+    },
+    ask,
+  );
+  await permission.withdraw();
+  expect(requestSupervisor).toHaveBeenCalledWith({ kind: "revoke-sharing" }, expect.any(String));
+});

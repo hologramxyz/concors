@@ -1,3 +1,4 @@
+import { sessionProjects } from "@concors/protocol";
 import { PendingInput } from "./pending-input";
 import { AgentAccountPrompt } from "./account-prompt";
 import { AgentLimitPrompt } from "./limit-prompt";
@@ -137,7 +138,7 @@ export function ChatPane({
       return;
     attempted.current = true;
     const current = connection.workspace;
-    const currentProject = current.projects.find((item) => item.id === project.id);
+    const currentProject = sessionProjects(current).find((item) => item.id === project.id);
     if (!currentProject) return;
     void connection
       .requestAgent(

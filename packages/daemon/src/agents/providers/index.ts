@@ -30,7 +30,7 @@ export function providerFactory(registry: ProviderRegistry): AgentProviderFactor
   return (cwd, onInput, provider = "codex", tools = {}) => {
     const original = registry.config(provider);
     const own = (original.params?.mcpServers ?? []).filter(
-      (s) => !tools.mcp || s.name !== "concors-schedules",
+      (s) => !tools.mcp || s.name !== tools.mcp.name,
     );
     const config = {
       ...original,
@@ -42,10 +42,12 @@ export function providerFactory(registry: ProviderRegistry): AgentProviderFactor
             .mcpServers()
             .filter(
               (server) =>
-                usesMcpServer(original, server) && !own.some((s) => s.name === server.name),
+                usesMcpServer(original, server) &&
+                server.name !== tools.mcp?.name &&
+                !own.some((s) => s.name === server.name),
             ),
           ...own,
-          ...(tools.mcp ? [tools.mcp] : []),
+          ...(tools.mcp && usesMcpServer(original, tools.mcp) ? [tools.mcp] : []),
         ],
       },
     };

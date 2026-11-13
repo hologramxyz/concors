@@ -1,3 +1,4 @@
+export * from "./supervisor.ts";
 /**
  * @concors/protocol
  *

@@ -46,6 +46,9 @@ export const TimelineItem = memo(function TimelineItem({
             : "py-1"
         }
       >
+        {item.kind === "user" && item.origin && (
+          <p className="mb-1 text-xs text-muted-foreground">From Supervisor</p>
+        )}
         {item.kind === "user" && <MessageAttachments item={item} className="mb-2" />}
         <div className="chat-markdown break-words">
           {item.kind === "user" ? (
@@ -79,6 +82,12 @@ export const TimelineItem = memo(function TimelineItem({
   if (data?.type === "plan" || item.kind === "plan") return <PlanProgress item={item} />;
   if (data?.type === "thinking") return <Thinking item={item} running={running} />;
   if (data?.type === "sub_agent") return <SubAgentCard item={item} running={running} />;
+  if (item.kind === "system" && item.origin)
+    return (
+      <article className="text-sm text-muted-foreground">
+        <AgentMarkdown>{item.text}</AgentMarkdown>
+      </article>
+    );
   if (item.kind === "system")
     return (
       <article className="flex items-center gap-2 text-sm text-muted-foreground">
