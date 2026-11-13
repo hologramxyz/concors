@@ -1,3 +1,4 @@
+import { SupervisorPage } from "@/supervisor/page";
 import { X } from "lucide-react";
 import { SchedulesPage } from "@/schedules/page";
 import { PullRequestsPage } from "@/pull-requests/page";
@@ -336,6 +337,10 @@ function AppContent() {
   );
   const openAgent = useCallback(
     (id: string) => {
+      if (transport?.agents.some((a) => a.id === id && a.supervisor)) {
+        setView("supervisor");
+        return;
+      }
       const target = findSessionPane(transport?.workspace ?? null, id);
       if (target) openPane(target);
       else if (transport)
@@ -514,6 +519,7 @@ function AppContent() {
                           onSelectTab={selectTab}
                           view={view}
                           onOpenSettings={() => openSettings("account")}
+                          onOpenSupervisor={() => setView("supervisor")}
                           onOpenSchedules={() => {
                             setView("schedules");
                           }}
@@ -674,6 +680,15 @@ function AppContent() {
                                   .setActiveOrganization(organizationId)
                                   .catch((cause: unknown) => setError(describeAuthError(cause)));
                               }}
+                            />
+                          ) : view === "supervisor" ? (
+                            <SupervisorPage
+                              key={workspace?.machineId ?? endpoint?.url}
+                              workspace={workspace}
+                              connected={
+                                connection.workspaceReady && connection.state.status === "ready"
+                              }
+                              onOpenAgent={openAgent}
                             />
                           ) : view === "schedules" ? (
                             <SchedulesPage

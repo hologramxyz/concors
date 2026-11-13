@@ -1,3 +1,4 @@
+import { SupervisorNav } from "@/supervisor/nav";
 import { SchedulesNav } from "@/schedules/nav";
 import { PullRequestsNav } from "@/pull-requests/nav";
 import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
@@ -31,6 +32,7 @@ interface AppSidebarProps {
   onSelectTab: (projectId: string, tabId: string) => void;
   view: View;
   onOpenSettings: () => void;
+  onOpenSupervisor: () => void;
   onOpenSchedules: () => void;
   /** Opens the Pull requests page, for one workspace or one of its repositories when given. */
   onOpenPullRequests: (projectId?: string, repository?: string) => void;
@@ -112,6 +114,10 @@ export function AppSidebar(props: AppSidebarProps) {
         )}
         <div className={cn("min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto px-2 py-3")}>
           <div className="space-y-0.5" data-tour="schedules">
+            <SupervisorNav
+              selected={props.view === "supervisor"}
+              onClick={props.onOpenSupervisor}
+            />
             <SchedulesNav
               selected={props.view === "schedules"}
               compact={false}
