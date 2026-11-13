@@ -139,13 +139,18 @@ export function defaultKeymap(mac = false): Keymap {
       ...result["new-tab"],
       { keys: [{ key: "t", modifiers: ["Meta"] }], context: "native" },
     ];
+  // ⌘⇧] and ⌘⇧[ step through tabs on a Mac, as in a browser or Terminal. A browser keeps them.
+  const macTab = (key: string): Shortcut[] =>
+    mac ? [{ keys: [{ key, modifiers: ["Shift", "Meta"] }], context: "native" }] : [];
   result["next-tab"] = [
     ...result["next-tab"],
     { keys: [{ key: "Tab", modifiers: ["Control"] }], context: "native" },
+    ...macTab("]"),
   ];
   result["previous-tab"] = [
     ...result["previous-tab"],
     { keys: [{ key: "Tab", modifiers: ["Control", "Shift"] }], context: "native" },
+    ...macTab("["),
   ];
   return result;
 }

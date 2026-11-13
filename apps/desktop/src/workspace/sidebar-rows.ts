@@ -32,6 +32,11 @@ export interface OpenTabRow {
   readonly tool: "chat" | "codex" | "claude" | "opencode" | "shell";
   /** The most urgent dot among its panes, as the tab bar marks each of them. */
   readonly dot: AgentDot | undefined;
+  /**
+   * Whether an agent in any of its panes is replying or has sub-agents at work. A split tab is one
+   * row, so an agent working beside the main pane has to show there too.
+   */
+  readonly working?: boolean;
   readonly time: string;
 }
 
@@ -56,6 +61,13 @@ export interface BackgroundTerminalRow {
 }
 
 export type SidebarRow = OpenTabRow | ClosedChatRow | BackgroundTerminalRow;
+
+function tabActivity(statuses: readonly AgentStatus[]) {
+  return {
+    dot: strongestDot(statuses.map((status) => status.dot)),
+    working: statuses.some((status) => status.running || status.background > 0),
+  };
+}
 
 /**
  * Every workspace's rows, in the order the sidebar lists them: its pinned chats, then its open tabs
@@ -103,7 +115,7 @@ export function sidebarRows(
         chat,
         terminal,
         tool,
-        dot: strongestDot(tabAgentStatuses(tab, chats, terminals).map((status) => status.dot)),
+        ...tabActivity(tabAgentStatuses(tab, chats, terminals)),
         time: latestActivity(tab, chats, terminals) ?? firstSeen(tab.id),
       };
     });
@@ -196,6 +208,9 @@ export function rowState(
   }
   const chat = row.kind === "closed" ? row.chat.agent : row.chat;
   const dot = row.kind === "tab" ? row.dot : chat && chatDot(chat);
+  // A question waits on the user, so it outranks work going on; a finish not yet seen does not.
+  if (dot === "attention") return dot;
+  if (row.kind === "tab" && row.working) return "working";
   if (dot) return dot;
   if (chat) {
     const status = agentDisplayStatus(chat);

@@ -462,3 +462,49 @@ it("times a split tab by the newest activity in any of its panes, not only its m
     ]),
   ).toBe("2026-11-06T02:00:00Z");
 });
+
+it("spins a split tab's row while any of its panes works, not only the main one", () => {
+  const split: Pick<WorkspaceSnapshot, "projects"> = {
+    projects: [
+      {
+        id: "p",
+        name: "studio",
+        directory: "/repos/studio",
+        version: 1,
+        tabs: [
+          {
+            id: "tab",
+            name: "Main",
+            root: "split",
+            nodes: [
+              {
+                kind: "split",
+                id: "split",
+                axis: "horizontal",
+                ratio: 0.5,
+                first: "main",
+                second: "beside",
+              },
+              { kind: "pane", id: "main", profile: "chat", sessionId: "main" },
+              { kind: "pane", id: "beside", profile: "chat", sessionId: "beside" },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const unseen = {
+    attention: { id: "a", kind: "done" as const, createdAt: "2026-09-20T00:00:00Z", seen: false },
+  };
+  const state = (main: Partial<AgentInfo>, beside: Partial<AgentInfo>) =>
+    rowState(
+      sidebarRows(split, [agent("main", main), agent("beside", beside)], []).rows.get("p")![0]!,
+    );
+  expect(state({}, {})).toBeUndefined();
+  expect(state({}, { status: "working" })).toBe("working");
+  expect(state({}, { backgroundAgents: 2 })).toBe("working");
+  // A finish nobody has seen yet waits behind the work; a question does not.
+  expect(state(unseen, { status: "working" })).toBe("working");
+  expect(state({ status: "needs_input" }, { status: "working" })).toBe("attention");
+  expect(state(unseen, {})).toBe("done");
+});
