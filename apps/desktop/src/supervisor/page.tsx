@@ -1,13 +1,9 @@
 import { useContext, useEffect, useState } from "react";
-import {
-  SUPERVISOR_CAPABILITY,
-  type SupervisorDelivery,
-  type WorkspaceSnapshot,
-} from "@concors/protocol";
+import { SUPERVISOR_CAPABILITY, type WorkspaceSnapshot } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { ChatPane } from "@/agents/chat";
-import { AgentStartedContext, useAgents } from "@/agents/context";
+import { AgentStartedContext } from "@/agents/context";
 import { Button } from "@/components/ui/button";
 import { SessionLinkContext } from "./session-link";
 
@@ -23,10 +19,8 @@ export function SupervisorPage({
 }) {
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
-  const agents = useAgents();
   const [error, setError] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
-  const [deliveries, setDeliveries] = useState<SupervisorDelivery[]>([]);
   const supported =
     connection?.state.status === "ready" &&
     connection.state.daemon.capabilities?.includes(SUPERVISOR_CAPABILITY);
@@ -39,7 +33,6 @@ export function SupervisorPage({
         if (!current) return;
         if (result.outcome.status === "error") throw new Error(result.outcome.message);
         setError(null);
-        setDeliveries(result.outcome.deliveries);
       })
       .catch((cause: unknown) => {
         if (current) setError(cause instanceof Error ? cause.message : "Could not open Supervisor");
@@ -48,39 +41,9 @@ export function SupervisorPage({
       current = false;
     };
   }, [connection, connected, supported, retry]);
-  useEffect(() => {
-    if (!connection || !connected || !supported) return;
-    let current = true,
-      pending = false;
-    const refresh = () => {
-      if (pending) return;
-      pending = true;
-      void connection
-        .requestSupervisor({ kind: "status" }, crypto.randomUUID())
-        .then((result) => {
-          if (current && result.outcome.status === "ok") setDeliveries(result.outcome.deliveries);
-        })
-        .catch(() => undefined)
-        .finally(() => {
-          pending = false;
-        });
-    };
-    // Read-only status; provider lifecycle hooks, not this timer, drive execution and completion.
-    const interval = setInterval(refresh, 3000);
-    const off = connection.onAgent((event) => {
-      if (event.type === "agent.state") refresh();
-    });
-    refresh();
-    return () => {
-      current = false;
-      clearInterval(interval);
-      off();
-    };
-  }, [connection, connected, supported]);
   const project = workspace?.supervisor,
     tab = project?.tabs[0];
   const pane = tab?.nodes.find((node) => node.kind === "pane");
-  const current = deliveries.filter((d) => d.supervisorId === pane?.sessionId);
   return (
     <AgentStartedContext value={undefined}>
       <SessionLinkContext value={onOpenAgent}>
@@ -90,42 +53,6 @@ export function SupervisorPage({
               <h2 className="text-base font-medium">Supervisor</h2>
               <span className="text-xs text-muted-foreground">All workspaces on this machine</span>
             </header>
-          )}
-          {!!current.length && (
-            <details className="shrink-0 border-b px-6 py-2 text-xs text-muted-foreground">
-              <summary className="cursor-pointer">
-                Delegated work ·{" "}
-                {
-                  current.filter((d) =>
-                    ["pending", "queued", "working", "needs_input"].includes(d.status),
-                  ).length
-                }{" "}
-                active
-              </summary>
-              <div className="flex max-h-32 flex-col overflow-y-auto py-1">
-                {current.map((delivery) => {
-                  const target = agents.find((a) => a.id === delivery.sessionId);
-                  const name =
-                    workspace?.projects.find((p) => p.id === delivery.projectId)?.name ??
-                    "Workspace";
-                  return (
-                    <Button
-                      key={delivery.id}
-                      variant="ghost"
-                      size="sm"
-                      className="justify-start gap-2 text-xs"
-                      onClick={() => onOpenAgent(delivery.sessionId)}
-                    >
-                      <span className="truncate">
-                        {name} /{" "}
-                        {target?.paneName ?? target?.tabName ?? target?.name ?? "Conversation"}
-                      </span>
-                      <span className="ml-auto">{delivery.status.replaceAll("_", " ")}</span>
-                    </Button>
-                  );
-                })}
-              </div>
-            </details>
           )}
           {error ? (
             <div role="alert" className="p-6 text-sm text-destructive">
