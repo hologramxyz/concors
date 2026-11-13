@@ -566,22 +566,32 @@ function AppContent() {
                               windowChrome.enabled || windowChrome.inset ? "deep" : undefined
                             }
                             className={cn(
-                              "title-bar-row flex shrink-0 items-center gap-2 border-b border-transparent pr-2 pl-4 select-none",
+                              "title-bar-row flex shrink-0 items-center gap-2 border-b select-none",
+                              view === "supervisor" ? "px-2" : "border-transparent pr-2 pl-4",
                               windowChrome.inset ? "h-11" : "min-h-9 py-1",
                             )}
                           >
                             {titleBarToggle}
-                            {/* Each page titles itself. This strip only has to take the tab bar's
-                                height, which without a native title bar a tab decides, so that the
-                                content stays put moving between a chat and a page. */}
-                            <span aria-hidden="true" className="invisible border py-0.5 text-ui">
-                              &nbsp;
-                            </span>
-                            <h1 className="sr-only">
-                              {view === "settings"
-                                ? settingsNavItemFor(settingsPage).label
-                                : navItemFor(view).label}
-                            </h1>
+                            {view === "supervisor" ? (
+                              <h1 className="min-w-0 truncate border border-transparent px-2 py-0.5 text-ui">
+                                Supervisor
+                              </h1>
+                            ) : (
+                              <>
+                                {/* Match the tab bar's height on pages that title themselves. */}
+                                <span
+                                  aria-hidden="true"
+                                  className="invisible border py-0.5 text-ui"
+                                >
+                                  &nbsp;
+                                </span>
+                                <h1 className="sr-only">
+                                  {view === "settings"
+                                    ? settingsNavItemFor(settingsPage).label
+                                    : navItemFor(view).label}
+                                </h1>
+                              </>
+                            )}
                             <span className="flex-1" aria-hidden="true" />
                             <WindowControls />
                           </header>
