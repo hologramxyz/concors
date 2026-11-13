@@ -50,5 +50,13 @@ test("Supervisor uses the unified chat and retains its selected harness after na
     .click();
   await expect(page.getByRole("log")).toContainText("Find context across my workspaces");
   await expect(page.getByRole("log")).not.toContainText("Coordinate two projects");
+  // Verify the restored session can continue. Supervisor survives workspace cleanup, so leave
+  // Codex as the most recently used harness for the following specs on this shared daemon.
+  await page
+    .getByRole("textbox", { name: "Message Codex", exact: true })
+    .fill("Continue the original conversation");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(page.getByRole("log")).toContainText("Continue the original conversation");
+  await expect(page.getByRole("log").getByText("Hello from Codex", { exact: true })).toHaveCount(2);
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
