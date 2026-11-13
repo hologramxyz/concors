@@ -16,7 +16,14 @@ test("Supervisor uses the unified chat and retains its selected harness after na
   await page.getByRole("button", { name: "Send message", exact: true }).click();
   await expect(page.getByRole("log")).toContainText("Hello from");
   await page.screenshot({ path: test.info().outputPath("supervisor-desktop.png") });
-  await chooseProvider(page, "Claude Code");
+  await page.getByRole("button", { name: "Agent and model", exact: true }).click();
+  await page.getByRole("button", { name: "Back to providers", exact: true }).click();
+  await page.getByRole("option", { name: /^Claude Code( |$)/ }).click();
+  await page.getByRole("option").first().click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Start new conversation", exact: true })
+    .click();
   await expect(page.getByTestId("supervisor-page")).toBeVisible();
   await page
     .getByRole("textbox", { name: "Message Claude Code", exact: true })
@@ -33,7 +40,14 @@ test("Supervisor uses the unified chat and retains its selected harness after na
   await expect(
     page.getByRole("textbox", { name: "Message Claude Code", exact: true }),
   ).toBeVisible();
-  await chooseProvider(page);
+  await page.getByRole("button", { name: "Agent and model", exact: true }).click();
+  await page.getByRole("button", { name: "Back to providers", exact: true }).click();
+  await page.getByRole("option", { name: /^Codex( |$)/ }).click();
+  await page.getByRole("option").first().click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Switch to Codex", exact: true })
+    .click();
   await expect(page.getByRole("log")).toContainText("Find context across my workspaces");
   await expect(page.getByRole("log")).not.toContainText("Coordinate two projects");
   await expect(page.getByRole("alert")).toHaveCount(0);

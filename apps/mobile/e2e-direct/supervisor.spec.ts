@@ -50,8 +50,6 @@ test("Supervisor exposes its composer to the native mobile host", async ({ page 
   await page.goto("/");
   await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
-  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await ui.getByRole("button", { name: "Supervisor", exact: true }).click();
   const snapshot = () =>
     page.evaluate(
       () =>
@@ -61,6 +59,33 @@ test("Supervisor exposes its composer to the native mobile host", async ({ page 
           }
         ).supervisorSnapshot,
     );
+  await expect
+    .poll(async () =>
+      (await snapshot())?.surfaces.some(
+        (s) => s.content.kind === "button" && s.content.label === "Open sidebar",
+      ),
+    )
+    .toBe(true);
+  const menuState = await snapshot();
+  const menu = menuState?.surfaces.find(
+    (s) => s.content.kind === "button" && s.content.label === "Open sidebar",
+  );
+  const menuFrame = page.frames().find((f) => f !== page.mainFrame());
+  if (!menuState || !menu || !menuFrame) throw new Error("Missing native sidebar button");
+  await menuFrame.evaluate(
+    (message) =>
+      (
+        window as Window & { concorsMobileReceive?(value: MobileHostMessage): void }
+      ).concorsMobileReceive?.(message),
+    {
+      type: "native-event",
+      scope: menuState.scope,
+      connectionId: menuState.connectionId,
+      surfaceId: menu.id,
+      event: { kind: "press", control: "activate" },
+    } satisfies MobileHostMessage,
+  );
+  await ui.getByRole("button", { name: "Supervisor", exact: true }).click();
   await expect
     .poll(async () =>
       (await snapshot())?.surfaces.some((s) => s.content.kind === "composer" && s.content.editable),
