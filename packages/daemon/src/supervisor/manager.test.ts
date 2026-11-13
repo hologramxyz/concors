@@ -319,3 +319,37 @@ it("keeps queued delegation paused when iOS permission is withdrawn before deliv
   ).toHaveLength(1);
   expect(f.store.agent(target.id).error).toContain("sharing permission");
 });
+
+it("can send after changing harness and restores the earlier Supervisor conversation", async () => {
+  const f = await setup();
+  const changed = await f.request({
+    kind: "switch-provider",
+    sessionId: f.source.id,
+    provider: "claude",
+    model: null,
+    expectedRevision: f.store.agent(f.source.id).revision,
+  });
+  expect(changed.outcome.status).toBe("ok");
+  if (changed.outcome.status !== "ok") throw new Error(changed.outcome.message);
+  const id = changed.outcome.conversation.agent.id;
+  await expect.poll(() => f.store.agent(id).status).toBe("idle");
+  const sent = await f.request({ kind: "send", sessionId: id, text: "Review this workspace" });
+  expect(sent.outcome.status).toBe("ok");
+  await expect.poll(() => f.store.agent(id).status).toBe("done");
+  await expect(f.control({ kind: "workspaces" })).rejects.toThrow("no longer selected");
+  const restored = await f.request({
+    kind: "switch-provider",
+    sessionId: id,
+    provider: "codex",
+    model: null,
+    expectedRevision: f.store.agent(id).revision,
+  });
+  expect(restored.outcome).toMatchObject({
+    status: "ok",
+    conversation: { agent: { id: f.source.id, supervisor: true } },
+  });
+  expect(
+    (await f.request({ kind: "send", sessionId: f.source.id, text: "Read the results" })).outcome
+      .status,
+  ).toBe("ok");
+});
