@@ -25,7 +25,11 @@ export const TEMPORARY_FOLDERS = {
 export function isProjectFolder(directory: string, home: string, temporary: readonly string[]) {
   // The home folder holds everything, and a temporary folder holds nothing worth keeping.
   if (directory === home || directory === "/" || directory === sep) return false;
-  return !temporary.some((root) => directory === root || directory.startsWith(root + sep));
+  // Either separator: CLIs on Windows write both kinds of path.
+  return !temporary.some(
+    (root) =>
+      directory === root || directory.startsWith(root + "/") || directory.startsWith(root + "\\"),
+  );
 }
 
 /** The CLIs whose own history says which folders they were used in. */

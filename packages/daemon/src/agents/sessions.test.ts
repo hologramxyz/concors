@@ -2180,4 +2180,5 @@ it("offers neither the home folder nor temporary ones as projects", () => {
   expect(isProjectFolder("/private/var/folders/x/T/a", "/Users/me", temporary)).toBe(false);
   // Only inside a temporary root, not a folder whose name merely starts the same.
   expect(isProjectFolder("/tmpfiles/app", "/Users/me", temporary)).toBe(true);
+  expect(isProjectFolder("C:\\Temp\\scratch", "C:\\Users\\me", ["C:\\Temp"])).toBe(false);
 });
