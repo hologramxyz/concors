@@ -7,6 +7,8 @@ import { AgentAccountActionSchema, AgentAccountSchema } from "./agent-accounts.t
 export const PROVIDER_SUBSCRIPTIONS_CAPABILITY = "provider-subscriptions";
 /** Daemons that can read plan limits for a provider configuration without an open chat. */
 export const PROVIDER_USAGE_CAPABILITY = "provider-plan-usage";
+/** The daemon lists the folders its agent CLIs were recently used in (`recent-folders`). */
+export const RECENT_AGENT_FOLDERS_CAPABILITY = "recent-agent-folders";
 /** Engines whose CLIs support an isolated credential home per provider configuration. */
 export const SUBSCRIPTION_ENGINES = ["claude", "codex"] as const;
 
@@ -168,6 +170,13 @@ export const ProviderStatusSchema = ProviderConfigSchema.omit({ env: true, param
   version: ProviderVersionSchema.optional(),
 });
 export type ProviderStatus = z.infer<typeof ProviderStatusSchema>;
+export const RecentAgentFolderSchema = z.object({
+  directory: z.string().min(1).max(4096),
+  /** The agent CLI used there most recently. */
+  provider: ProviderIdSchema,
+  updatedAt: z.string().datetime(),
+});
+export type RecentAgentFolder = z.infer<typeof RecentAgentFolderSchema>;
 export const ProviderRequestSchema = z.object({
   type: z.literal("provider.request"),
   requestId: z.string().uuid(),
@@ -181,6 +190,11 @@ export const ProviderRequestSchema = z.object({
       query: z.string().max(200).optional(),
       refresh: z.boolean().optional(),
     }),
+    /**
+     * The folders on this machine where an installed agent CLI was used most recently, newest
+     * first, read from the CLIs' own session history. Only folders that still exist are listed.
+     */
+    z.object({ kind: z.literal("recent-folders") }),
     /** `checkVersions` also re-reads installed CLI versions and their latest releases now. */
     z.object({ kind: z.literal("list"), checkVersions: z.boolean().optional() }),
     z.object({
@@ -240,6 +254,7 @@ export const ProviderResultSchema = z.object({
       revision: z.number().int().nonnegative(),
       providers: z.array(ProviderStatusSchema).max(128),
       sessions: NativeSessionPageSchema.optional(),
+      folders: z.array(RecentAgentFolderSchema).max(50).optional(),
       account: AgentAccountSchema.optional(),
       usage: AgentPlanUsageSchema.optional(),
       /** The machine-wide MCP servers, without their secret values. */

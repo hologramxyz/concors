@@ -140,6 +140,17 @@ export class CodexAppServer {
         includeTurns: true,
       });
     if (method === "model/list") return this.models();
+    if (method === "session/folders")
+      // Without a cwd, Codex lists its threads in every folder.
+      return this.rpc("thread/list", { limit: 100, archived: false }).then((raw) => ({
+        folders: z
+          .object({ data: z.array(z.object({ cwd: z.string(), updatedAt: z.number() })) })
+          .parse(raw)
+          .data.map((thread) => ({
+            directory: thread.cwd,
+            updatedAt: new Date(thread.updatedAt * 1000).toISOString(),
+          })),
+      }));
     if (method === "session/list")
       return this.rpc("thread/list", {
         cwd: (params as { cwd: string }).cwd,

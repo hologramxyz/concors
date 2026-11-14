@@ -871,6 +871,30 @@ export class AgentManager {
       };
     }
   }
+  async recentFolders(request: ProviderRequest): Promise<ProviderResult> {
+    try {
+      const folders = await this.nativeSessions.folders();
+      return {
+        type: "provider.result",
+        requestId: request.requestId,
+        outcome: {
+          status: "ok",
+          revision: this.registry.revision,
+          providers: this.registry.statuses(),
+          folders,
+        },
+      };
+    } catch (error) {
+      return {
+        type: "provider.result",
+        requestId: request.requestId,
+        outcome: {
+          status: "error",
+          message: error instanceof Error ? error.message : "Could not list recent folders",
+        },
+      };
+    }
+  }
   /** Schedules keep a reusable saved session without changing anyone's pane layout. */
   async startScheduled(
     id: string,
