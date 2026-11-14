@@ -9,7 +9,7 @@ dev servers keep running. Open the app tomorrow and every session is where you l
 - **One window.** Agent chats, terminals and dev-server previews for a project sit together. The
   sidebar shows which agents are working, need your input, are done or hit an error.
 - **A machine that stays on.** Run on your own computer for free with no account, or on a Concors
-  Cloud machine (Ubuntu, 2 to 8 vCPU) billed at a flat monthly price.
+  Cloud machine (Ubuntu, 2 to 18 vCPU) billed at a flat monthly price.
 - **macOS (Apple Silicon), Windows and Linux.** Open source under the MIT license.
 
 [Download](https://concors.dev) · [Guides](https://concors.dev/guides) ·
@@ -21,10 +21,10 @@ Common questions this answers:
   see [How to keep Claude Code running 24/7](https://concors.dev/guides/run-claude-code-24-7).
 - _How do I run Claude Code and Codex on the same project?_ See
   [the side-by-side guide](https://concors.dev/guides/claude-code-and-codex-side-by-side).
-- _What can replace Conductor Cloud?_ See
-  [Conductor alternatives after the shutdown](https://concors.dev/guides/conductor-cloud-shutdown).
+- _Is there a Conductor alternative for Windows and Linux?_ See
+  [Conductor alternatives in 2026](https://concors.dev/guides/conductor-cloud-shutdown).
 
-> **Status:** desktop releases ship several times a week. The iOS and Android apps are coming soon.
+> **Status:** desktop releases ship several times a week. The iOS app is on the App Store; Android is coming soon.
 > Connecting a server you run yourself is a preview. Expect breaking changes.
 
 The rest of this README is for contributors: how the client and daemon fit together and how to run
