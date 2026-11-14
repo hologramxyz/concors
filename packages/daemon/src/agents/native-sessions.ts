@@ -1,12 +1,40 @@
+import { stat } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
+import { sep } from "node:path";
+import { z } from "zod";
 import { canonicalDirectory } from "./providers/session-directory.ts";
 import {
   NativeSessionPageSchema,
   type NativeSession,
   type NativeSessionPage,
+  type RecentAgentFolder,
 } from "@concors/protocol";
 import type { AgentProviderFactory } from "./providers/index.ts";
 import type { ConversationProvider } from "./providers/contract.ts";
 import type { ProviderRegistry } from "./providers/registry.ts";
+
+/**
+ * Where throwaway work lands, which is no project anyone wants back. An object so a test whose own
+ * folders live there can look past it.
+ */
+export const TEMPORARY_FOLDERS = {
+  roots: (): string[] => [tmpdir(), "/tmp", "/private/tmp", "/var/folders", "/private/var/folders"],
+};
+
+/** Whether setup offers a folder an agent was used in as a project. */
+export function isProjectFolder(directory: string, home: string, temporary: readonly string[]) {
+  // The home folder holds everything, and a temporary folder holds nothing worth keeping.
+  if (directory === home || directory === "/" || directory === sep) return false;
+  return !temporary.some((root) => directory === root || directory.startsWith(root + sep));
+}
+
+/** The CLIs whose own history says which folders they were used in. */
+const FOLDER_ENGINES = ["claude", "codex"];
+const RecentFoldersSchema = z.object({
+  folders: z
+    .array(z.object({ directory: z.string().min(1).max(4096), updatedAt: z.string().datetime() }))
+    .max(1000),
+});
 
 /** Short-lived, machine-local discovery. Never starts a thread or sends/approves a prompt. */
 export class NativeSessions {
@@ -115,6 +143,82 @@ export class NativeSessions {
       while (this.offered.size > 10_000)
         this.offered.delete(this.offered.keys().next().value ?? "");
       return { sessions, nextCursor: page.nextCursor === cursor ? null : page.nextCursor };
+    } finally {
+      clearTimeout(timer);
+      this.probes.delete(transport);
+      await transport.close().catch(() => undefined);
+    }
+  }
+
+  /**
+   * Where the installed agent CLIs were used most recently, newest first, so setup can offer those
+   * folders as projects. Each CLI answers from its own history (Claude Code's transcripts, Codex's
+   * threads); one that fails or takes too long is left out rather than failing the list.
+   */
+  async folders(): Promise<RecentAgentFolder[]> {
+    if (this.closed) throw new Error("Daemon is shutting down");
+    const home = homedir();
+    const providers = this.registry
+      .configs()
+      .filter(
+        (config) =>
+          config.enabled &&
+          FOLDER_ENGINES.includes(config.engine) &&
+          this.registry.installed(config),
+      );
+    const answers = await Promise.all(
+      providers.map((config) =>
+        this.ask(config.id, config.engine, home).then(
+          (folders) => folders.map((folder) => ({ ...folder, provider: config.id })),
+          () => [],
+        ),
+      ),
+    );
+    const newest = new Map<string, RecentAgentFolder>();
+    for (const folder of answers.flat()) {
+      const known = newest.get(folder.directory);
+      if (!known || known.updatedAt < folder.updatedAt) newest.set(folder.directory, folder);
+    }
+    const temporary = TEMPORARY_FOLDERS.roots();
+    const found: RecentAgentFolder[] = [];
+    for (const folder of [...newest.values()].sort((a, b) =>
+      b.updatedAt.localeCompare(a.updatedAt),
+    )) {
+      if (found.length >= 20) break;
+      if (!isProjectFolder(folder.directory, home, temporary)) continue;
+      // A removed folder can no longer be opened.
+      if (
+        !(await stat(folder.directory).then(
+          (s) => s.isDirectory(),
+          () => false,
+        ))
+      )
+        continue;
+      found.push(folder);
+    }
+    return found;
+  }
+
+  private async ask(provider: string, engine: string, home: string) {
+    const transport = this.factory(
+      home,
+      async () => {
+        throw new Error("Folder discovery cannot approve tools or send prompts.");
+      },
+      provider,
+    );
+    this.probes.add(transport);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        (async () => {
+          if (engine !== "claude") await transport.initialize();
+          return RecentFoldersSchema.parse(await transport.request("session/folders", {})).folders;
+        })(),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("Folder discovery timed out")), 15_000);
+        }),
+      ]);
     } finally {
       clearTimeout(timer);
       this.probes.delete(transport);

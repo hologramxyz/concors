@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm, readFile, readdir, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, mkdtemp, rm, readFile, readdir, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
@@ -18,6 +18,7 @@ import { loadDaemonConfig } from "../config.ts";
 import { TestAgentProvider } from "./testing/provider.ts";
 import { TestAccountBackend } from "./testing/account.ts";
 import { ProviderRegistry } from "./providers/registry.ts";
+import { TEMPORARY_FOLDERS, isProjectFolder } from "./native-sessions.ts";
 
 // Every test here spawns a daemon plus a fake provider; Windows CI runners need well over the
 // 5 s default before the first turn streams.
@@ -2135,3 +2136,48 @@ it.each([
     ).toEqual(["hold the turn", "no bold", "Done logging into treg"]);
   },
 );
+
+it("lists the folders the agent CLIs were used in, newest first, only those that still exist", async () => {
+  vi.spyOn(ProviderRegistry.prototype, "installed").mockReturnValue(true);
+  // This test's folders live in the temporary folder, which real discovery leaves out.
+  vi.spyOn(TEMPORARY_FOLDERS, "roots").mockReturnValue([]);
+  const { a } = await setup();
+  const kept = join(directory, "kept"),
+    older = join(directory, "older");
+  await mkdir(kept);
+  await mkdir(older);
+  TestAgentProvider.recentFolders = {
+    codex: [
+      { directory: older, updatedAt: "2026-11-01T00:00:00.000Z" },
+      { directory: kept, updatedAt: "2026-11-02T00:00:00.000Z" },
+      // Gone since, and the home folder that holds everything: neither is offered.
+      { directory: join(directory, "removed"), updatedAt: "2026-11-05T00:00:00.000Z" },
+      { directory: homedir(), updatedAt: "2026-11-06T00:00:00.000Z" },
+    ],
+    // The same folder from another CLI counts once, under the newest use.
+    claude: [{ directory: kept, updatedAt: "2026-11-03T00:00:00.000Z" }],
+  };
+  try {
+    const result = await a.requestProvider({ kind: "recent-folders" }, randomUUID());
+    expect(result.outcome).toMatchObject({
+      status: "ok",
+      folders: [
+        { directory: kept, provider: "claude", updatedAt: "2026-11-03T00:00:00.000Z" },
+        { directory: older, provider: "codex", updatedAt: "2026-11-01T00:00:00.000Z" },
+      ],
+    });
+  } finally {
+    TestAgentProvider.recentFolders = {};
+  }
+});
+
+it("offers neither the home folder nor temporary ones as projects", () => {
+  const temporary = ["/tmp", "/private/var/folders"];
+  expect(isProjectFolder("/Users/me/code/app", "/Users/me", temporary)).toBe(true);
+  expect(isProjectFolder("/Users/me", "/Users/me", temporary)).toBe(false);
+  expect(isProjectFolder("/", "/Users/me", temporary)).toBe(false);
+  expect(isProjectFolder("/tmp/ask-check/work", "/Users/me", temporary)).toBe(false);
+  expect(isProjectFolder("/private/var/folders/x/T/a", "/Users/me", temporary)).toBe(false);
+  // Only inside a temporary root, not a folder whose name merely starts the same.
+  expect(isProjectFolder("/tmpfiles/app", "/Users/me", temporary)).toBe(true);
+});

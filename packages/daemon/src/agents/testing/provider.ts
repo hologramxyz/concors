@@ -7,6 +7,8 @@ export class TestAgentProvider implements AgentProvider {
   static turns = 0;
   /** Like Codex, takes attachments mid-turn; a test turns it off for agents that cannot. */
   static steerAttachments = true;
+  /** Per provider id, the folders `session/folders` reports, as a CLI's own history would. */
+  static recentFolders: Record<string, { directory: string; updatedAt: string }[]> = {};
   readonly listeners = new Set<(method: string, params: unknown) => void>();
   readonly onRequest: Parameters<AgentProviderFactory>[1];
   readonly requests: { method: string; params: unknown }[] = [];
@@ -121,6 +123,9 @@ export class TestAgentProvider implements AgentProvider {
       }, 150);
       return { turn: { id: this.turnId, status: "inProgress", items: [] } };
     }
+    // Folders a test says this CLI was used in; see the fixture daemon's /e2e/recent-folders.
+    if (method === "session/folders")
+      return { folders: TestAgentProvider.recentFolders[this.provider] ?? [] };
     if (method === "session/list") {
       const offset = Number((params as { cursor?: string }).cursor ?? 0);
       return {

@@ -162,6 +162,7 @@ describe("WebSocket handshake", () => {
           "folder-workspaces",
           "agent-chat",
           "agent-resume-sessions",
+          "recent-agent-folders",
           "agent-message-navigation",
           "agent-accounts",
           "agent-attention",

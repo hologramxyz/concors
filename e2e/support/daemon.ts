@@ -56,6 +56,12 @@ if (uiOrigin && new URL(uiOrigin).hostname === "localhost") {
 // the daemon's own database rather than adding a way to forget them to the production protocol.
 const workspaceDatabase = new DatabaseSync(join(directory, "workspace.sqlite"));
 workspaceDatabase.exec("PRAGMA busy_timeout = 5000;");
+// Which folders the fixture CLIs say they were used in, for setup's project suggestions. Like the
+// route below, test-only: the real daemon reads them from the CLIs' own history.
+server.app.post("/e2e/recent-folders", async (request) => {
+  TestAgentProvider.recentFolders = request.body as typeof TestAgentProvider.recentFolders;
+  return { ok: true };
+});
 server.app.post("/e2e/forget-agent-defaults", async () => {
   workspaceDatabase.exec("DELETE FROM agent_defaults");
   return { forgotten: true };
