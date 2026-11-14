@@ -1,4 +1,4 @@
-import { skipTour } from "./support/tour.ts";
+import { skipSetup } from "./support/setup.ts";
 import { test, expect, type Page } from "@playwright/test";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { resolve, extname, join } from "node:path";
@@ -82,7 +82,7 @@ async function openSignIn(page: Page) {
 }
 
 test("browser and decorated native windows retain their own window controls", async ({ page }) => {
-  await skipTour(page);
+  await skipSetup(page);
   await page.route("**/api/**", (route) =>
     route.fulfill({ status: 401, json: { message: "Sign in" } }),
   );
@@ -99,7 +99,7 @@ test("sign-in exposes native actions and updates maximize/resize state", async (
   page,
   baseURL,
 }) => {
-  await skipTour(page);
+  await skipSetup(page);
   await native(page, baseURL === "http://localhost:15397" ? 7430 : 7429);
   await page.route("**/api/**", (route) =>
     route.fulfill({ status: 401, json: { message: "Sign in" } }),

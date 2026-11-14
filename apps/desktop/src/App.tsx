@@ -24,7 +24,7 @@ import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
 import { ClosedTerminalNotice, ManageTerminalsDialog } from "@/terminal/session-list";
 import { RetiredChatsNotice } from "@/agents/chat-limit";
 import { useBackgroundTerminals } from "@/terminal/use-background-terminals";
-import { DEFAULT_TERMINAL_PROFILES } from "@concors/protocol";
+import { DEFAULT_TERMINAL_PROFILES, nextWorkspaceTabName } from "@concors/protocol";
 import type { DaemonEndpoint } from "@concors/daemon-client";
 import type { WorkspaceOperation } from "@concors/protocol";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
@@ -65,7 +65,7 @@ import {
   type Host,
 } from "@/workspace/machines";
 import { ProjectWorkspace } from "@/workspace/project-workspace";
-import { Tour } from "@/tour/tour";
+import { FirstRunSetup } from "@/setup/setup";
 import { machineListResource, SETTLING_POLL_MS } from "@/machines/use-machines";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 
@@ -414,6 +414,10 @@ function AppContent() {
     );
   }
   const account = auth.state.status === "signed-in" ? auth.state : null;
+  const accountOrganization = account ? activeOrganization(account) : undefined;
+  const setupOrganization = accountOrganization
+    ? { id: accountOrganization.id, name: accountOrganization.name }
+    : null;
   const signIn = () => setSigningIn(true);
   const execute = async (operation: WorkspaceOperation) => {
     // A selection shows at once and is not version-checked, so it never holds up the next action.
@@ -540,7 +544,7 @@ function AppContent() {
                           onViewCloud={manageMachines}
                           auth={account}
                           guest={guest}
-                          canTour={connection.workspaceReady && !!workspace}
+                          canSetup={connection.workspaceReady && !!workspace}
                           onSignOut={signOut}
                           onSignIn={signIn}
                         />
@@ -786,19 +790,36 @@ function AppContent() {
                         }}
                       />
                     )}
-                    <Tour
+                    <FirstRunSetup
                       ready={connection.workspaceReady && !!workspace}
-                      firstName={account?.user.name.trim().split(/\s+/)[0] ?? ""}
                       hasWorkspace={!!workspace?.projects.length}
-                      workspaceFailed={!!newWorkspace.error}
-                      onCreateWorkspace={startWorkspace}
-                      onPrepare={(inWorkspace) => {
-                        if (sidebarCollapsed) setSidebarCollapsed(false);
-                        const first = workspace?.projects[0];
-                        if (inWorkspace && !activeProject && first) selectProject(first.id);
-                        else if (view !== "projects") setView("projects");
+                      organization={setupOrganization}
+                      selectedHost={selectedHost}
+                      onSelectMachine={selectMachine}
+                      onSignIn={signIn}
+                      onOpenFolder={() => openProjectDialog("open")}
+                      onClone={() => openProjectDialog("clone")}
+                      onNewWorkspace={startWorkspace}
+                      newWorkspaceBusy={newWorkspace.busy}
+                      onSelectProject={selectProject}
+                      onNewChat={async (projectId) => {
+                        const project = workspace?.projects.find((p) => p.id === projectId);
+                        if (!project) return;
+                        const tabId = crypto.randomUUID();
+                        await execute({
+                          kind: "tab.create",
+                          projectId,
+                          expectedVersion: project.version,
+                          tabId,
+                          paneId: crypto.randomUUID(),
+                          name: nextWorkspaceTabName(project.tabs),
+                          profile: "chat",
+                        });
+                        selectTab(projectId, tabId);
                       }}
-                      onAddWorkspace={() => openProjectDialog("open")}
+                      onShowChat={(projectId, tabId) => {
+                        if (projectId && tabId) selectTab(projectId, tabId);
+                      }}
                     />
                     <WorkspaceSearch
                       key={`${hostScope}:${memoryKey}`}

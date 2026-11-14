@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, rm, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, realpath, rm, readFile, readdir, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -2142,10 +2142,11 @@ it("lists the folders the agent CLIs were used in, newest first, only those that
   // This test's folders live in the temporary folder, which real discovery leaves out.
   vi.spyOn(TEMPORARY_FOLDERS, "roots").mockReturnValue([]);
   const { a } = await setup();
-  const kept = join(directory, "kept"),
-    older = join(directory, "older");
-  await mkdir(kept);
-  await mkdir(older);
+  await mkdir(join(directory, "kept"));
+  await mkdir(join(directory, "older"));
+  // Reported as Open folder names a workspace: by its real path (macOS's /var is /private/var).
+  const kept = await realpath(join(directory, "kept")),
+    older = await realpath(join(directory, "older"));
   TestAgentProvider.recentFolders = {
     codex: [
       { directory: older, updatedAt: "2026-11-01T00:00:00.000Z" },

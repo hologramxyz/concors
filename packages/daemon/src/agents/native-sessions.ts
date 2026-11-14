@@ -178,8 +178,11 @@ export class NativeSessions {
         ),
       ),
     );
+    // Named as Open folder names a workspace (its real path), so a folder already added is
+    // recognised, and one reached through two links counts once.
     const newest = new Map<string, RecentAgentFolder>();
-    for (const folder of answers.flat()) {
+    for (const answer of answers.flat()) {
+      const folder = { ...answer, directory: await canonicalDirectory(answer.directory) };
       const known = newest.get(folder.directory);
       if (!known || known.updatedAt < folder.updatedAt) newest.set(folder.directory, folder);
     }
