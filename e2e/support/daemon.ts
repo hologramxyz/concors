@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { createDaemonServer } from "../../packages/daemon/src/server.ts";
 import { loadDaemonConfig } from "../../packages/daemon/src/config.ts";
 import { TestAgentProvider } from "../../packages/daemon/src/agents/testing/provider.ts";
+import { TEMPORARY_FOLDERS } from "../../packages/daemon/src/agents/native-sessions.ts";
 import { fixtureGitHub } from "./github-pull-requests.ts";
 import { enableProviders } from "./enable-providers.ts";
 const directory = process.env["CONCORS_DATA_DIR"];
@@ -58,6 +59,8 @@ const workspaceDatabase = new DatabaseSync(join(directory, "workspace.sqlite"));
 workspaceDatabase.exec("PRAGMA busy_timeout = 5000;");
 // Which folders the fixture CLIs say they were used in, for setup's project suggestions. Like the
 // route below, test-only: the real daemon reads them from the CLIs' own history.
+// Every spec's folders live in the temporary folder, which real discovery leaves out.
+TEMPORARY_FOLDERS.roots = () => [];
 server.app.post("/e2e/recent-folders", async (request) => {
   TestAgentProvider.recentFolders = request.body as typeof TestAgentProvider.recentFolders;
   return { ok: true };

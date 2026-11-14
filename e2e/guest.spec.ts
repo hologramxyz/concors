@@ -3,11 +3,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { seedProject } from "./support/projects.ts";
-import { skipTour } from "./support/tour.ts";
+import { skipSetup } from "./support/setup.ts";
 
 /** No saved session, and a control plane that knows nobody. */
 async function asGuest(page: Page) {
-  await skipTour(page);
+  await skipSetup(page);
   await page.route("**/api/**", (route) =>
     route.fulfill({ status: 401, json: { message: "Authentication required" } }),
   );
@@ -36,7 +36,7 @@ test("a guest can reach sign-in, is warned what it does, and can come back", asy
   await asGuest(page);
   const sidebar = page.getByRole("navigation", { name: "Primary" });
   await sidebar.getByRole("button", { name: "Using this computer without an account" }).click();
-  await expect(page.getByRole("menuitem", { name: "Take the tour" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Set up Concors" })).toBeVisible();
   await page.getByRole("menuitem", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Sign in to Concors" })).toBeVisible();
   await expect(page.getByText(/restarts running terminals and agents/)).toBeVisible();

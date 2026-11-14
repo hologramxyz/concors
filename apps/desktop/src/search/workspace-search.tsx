@@ -21,7 +21,7 @@ import {
   CommandShortcut,
 } from "@/components/ui/command";
 import { ALL_NAV, type View } from "@/navigation";
-import { replayTour } from "@/tour/store";
+import { startSetup } from "@/setup/store";
 import type { ThemePreference } from "@/theme/use-theme";
 import { matchScore, searchEntries, workspaceEntries, type SearchCategory } from "./index";
 
@@ -162,10 +162,10 @@ function SearchContent({
     ...(!compact
       ? [
           {
-            id: "tour",
-            title: "Take the tour",
-            keywords: "onboarding welcome tour help getting started",
-            run: () => run(replayTour, false),
+            id: "setup",
+            title: "Set up Concors",
+            keywords: "onboarding welcome setup tour help getting started machine agents",
+            run: () => run(startSetup, false),
           },
         ]
       : []),

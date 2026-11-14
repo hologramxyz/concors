@@ -29,7 +29,7 @@ export function KeyChips({
 }: {
   strokes: readonly ShortcutStroke[];
   mac: boolean;
-  /** The chip for beside 15px body text, as in the tour; tooltips and lists use the smaller one. */
+  /** The chip for beside 15px body text; tooltips and lists use the smaller one. */
   large?: boolean;
 }) {
   return (

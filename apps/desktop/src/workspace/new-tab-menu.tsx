@@ -152,10 +152,7 @@ export function NewTabMenu({
       ) : (
         // A split button: "+" opens a new tab on the start screen, and the ⌄ beside it lists every
         // way to start one.
-        <div
-          data-tour-frame
-          className={cn("flex shrink-0 items-center", empty && "rounded-md border")}
-        >
+        <div className={cn("flex shrink-0 items-center", empty && "rounded-md border")}>
           <SidebarTooltip place="title-bar" content="New tab" shortcut="new-tab">
             <button
               type="button"
@@ -176,7 +173,6 @@ export function NewTabMenu({
           <DropdownMenu open={open} onOpenChange={setOpen}>
             <SidebarTooltip place="title-bar" content="New tab options">
               <DropdownMenuTrigger
-                data-tour="new-tab"
                 aria-label="New tab options"
                 data-steady-while-creating
                 disabled={disabled}

@@ -27,7 +27,7 @@ export function useShortcutPreferences() {
   if (!value) throw new Error("ShortcutProvider is missing");
   return value;
 }
-/** The shortcut menus, tooltips and the tour show for a command, among those dispatch accepts. */
+/** The shortcut menus and tooltips show for a command, among those dispatch accepts. */
 export function useMainBinding(id: CommandId) {
   return mainBinding(useShortcutPreferences().keymap[id], isTauri());
 }
