@@ -1,4 +1,12 @@
-import { Redirect } from "expo-router";
+import { Redirect, useLocalSearchParams } from "expo-router";
 export default function AppIndex() {
-  return <Redirect href="/(app)/workspace" />;
+  const { view } = useLocalSearchParams();
+  return (
+    <Redirect
+      href={{
+        pathname: "/(app)/workspace",
+        params: view === "workspaces" || view === "supervisor" ? { view } : {},
+      }}
+    />
+  );
 }

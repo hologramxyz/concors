@@ -11,7 +11,7 @@ import { DeletionReceipt } from "../src/auth/deletion-receipt";
 
 export default function SignInScreen() {
   const auth = useAuth();
-  const { returnTo } = useLocalSearchParams();
+  const { returnTo, view } = useLocalSearchParams();
   const theme = useTheme();
   const { ready } = useAppearance();
   if (!ready || auth.initializing) return <StartupScreen />;
@@ -23,7 +23,10 @@ export default function SignInScreen() {
             ? "/account/delete"
             : returnTo === "/support/report"
               ? "/support/report"
-              : "/(app)"
+              : {
+                  pathname: "/(app)/workspace",
+                  params: view === "workspaces" || view === "supervisor" ? { view } : {},
+                }
         }
       />
     );
