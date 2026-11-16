@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { lstat, mkdir, open, opendir, realpath, rename, unlink } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { locateProjectFile } from "./locate.ts";
 import { projectPath, resolveProjectPath } from "./paths.ts";
@@ -28,6 +29,8 @@ export class ProjectFiles {
   }
 
   async request(request: FileRequest): Promise<FileResult> {
+    // Named in a "not found", so it says where the file was looked for.
+    let searched: string | undefined;
     try {
       const operation = request.operation;
       const snapshot = this.workspace.snapshot();
@@ -36,6 +39,7 @@ export class ProjectFiles {
       const project = snapshot.projects.find((item) => item.id === operation.projectId);
       if (!project) throw new Error("Project is no longer available.");
       const root = await realpath(this.workspace.fileDirectory(project.id, operation.directory));
+      searched = root;
       if (operation.kind === "project-icon")
         return {
           type: "file.result",
@@ -133,7 +137,7 @@ export class ProjectFiles {
         requestId: request.requestId,
         outcome: {
           status: error instanceof FileConflict ? "conflict" : "error",
-          message: fileError(error),
+          message: fileError(error, searched),
         },
       };
     }
@@ -234,12 +238,22 @@ async function writeProjectFile(
   }
 }
 
-function fileError(error: unknown): string {
+/** A path as people write it: the home folder as `~`. */
+function tildePath(path: string): string {
+  const home = homedir();
+  return path === home ? "~" : path.startsWith(home + sep) ? `~${path.slice(home.length)}` : path;
+}
+
+export function fileError(error: unknown, root?: string): string {
   if (error && typeof error === "object" && "code" in error) {
     if (error.code === "EEXIST")
       return "A file or folder with that name already exists. Choose another name.";
     if (error.code === "ENOENT")
-      return "File or folder not found. It may have moved or not been written yet: refresh the file tree or try again.";
+      // Often the agent saved it outside the workspace (a tool's own temporary folder, say), which
+      // nothing here can open; saying where it was looked for tells the reader what to ask for.
+      return root
+        ? `Not found in ${tildePath(root)}. It may not be written yet, or the agent saved it outside this workspace: ask it to move it here.`
+        : "File or folder not found. It may have moved or not been written yet: refresh the file tree or try again.";
     if (error.code === "EACCES" || error.code === "EPERM")
       return "The machine denied access to this file.";
     if (error.code === "ENOTDIR" || error.code === "EISDIR")

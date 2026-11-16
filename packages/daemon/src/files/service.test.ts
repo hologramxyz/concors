@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { join, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 import {
   MAX_DOWNLOAD_BYTES,
@@ -11,7 +11,7 @@ import {
   type FileOperation,
 } from "@concors/protocol";
 import { WorkspaceStore } from "../workspace/store.ts";
-import { ProjectFiles } from "./service.ts";
+import { ProjectFiles, fileError } from "./service.ts";
 
 describe("project files", () => {
   let directory: string, root: string, workspace: WorkspaceStore, files: ProjectFiles;
@@ -292,7 +292,17 @@ describe("project files", () => {
     await rm(join(root, "hello.ts"));
     expect(await read()).toMatchObject({
       status: "error",
-      message: expect.stringContaining("not found"),
+      // Says where it looked: a file the agent saved elsewhere is not in this workspace.
+      message: expect.stringMatching(/^Not found in .+\. It may not be written yet/),
     });
   });
+});
+
+it("says where a missing file was looked for, and that it may be outside the workspace", () => {
+  const missing = Object.assign(new Error("gone"), { code: "ENOENT" });
+  expect(fileError(missing, join(homedir(), "code", "app"))).toBe(
+    `Not found in ~${sep}code${sep}app. It may not be written yet, or the agent saved it outside this workspace: ask it to move it here.`,
+  );
+  expect(fileError(missing, "/srv/app")).toContain("Not found in /srv/app.");
+  expect(fileError(missing)).toContain("File or folder not found");
 });
