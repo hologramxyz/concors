@@ -155,7 +155,7 @@ it("delivers once, attributes the message and follows completion without a conne
   expect(
     f.store
       .agentConversation(f.source.id)
-      .items.filter((i) => i.id === `supervisor:${requestId}:done`),
+      .items.filter((i) => i.title === "Agent result" && i.origin?.deliveryId === requestId),
   ).toHaveLength(1);
   await expect(f.control({ ...operation, text: "different" }, requestId)).rejects.toThrow(
     "already used",
@@ -374,4 +374,138 @@ it("persists the binding across reopening and protects Supervisor stores from ol
     store.close();
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+it("reports the approval blocking a queued instruction, with its command and chat link", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await f.request({ kind: "send", sessionId: target.id, text: "approve original work" });
+  await expect.poll(() => f.store.agent(target.id).pending.length).toBe(1);
+  const pending = f.store.agent(target.id).pending[0]!;
+  await f.control({
+    kind: "send",
+    sessionId: target.id,
+    text: "Review after this",
+    whenBusy: "queue",
+  });
+  expect(f.manager.deliveries()[0]?.status).toBe("queued");
+  const notices = f.store
+    .agentConversation(f.source.id)
+    .items.filter((i) => i.title === "Agent needs your input");
+  expect(notices).toHaveLength(1);
+  expect(notices[0]?.text).toContain("needs your approval");
+  expect(notices[0]?.text).toContain("echo test");
+  expect(notices[0]?.text).toContain(`concors://session/${target.id}`);
+  expect(notices[0]?.text).toContain("queued behind it");
+  expect(f.store.agent(target.id).pending[0]?.id).toBe(pending.id);
+  expect(await f.control({ kind: "status" })).toMatchObject({
+    watching: [{ sessionId: target.id, pending: [{ id: pending.id, kind: "approval" }] }],
+  });
+});
+
+it("watches existing work, waits on native events and copies the final reply without another prompt", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await f.request({ kind: "send", sessionId: target.id, text: "hold game logic" });
+  await f.control({ kind: "watch", sessionId: target.id, enabled: true });
+  const count = f.providers
+    .flatMap((p) => p.requests)
+    .filter((r) => r.method === "turn/start").length;
+  const waiting = f.control({ kind: "wait", sessionIds: [target.id], timeoutMs: 1000 });
+  f.providers.at(-1)!.emit("item/completed", {
+    item: {
+      id: "final-game-reply",
+      type: "agentMessage",
+      text: "Game logic is ready: 4 levels and score tracking.",
+    },
+  });
+  f.providers.at(-1)!.finish();
+  expect(await waiting).toMatchObject({
+    timedOut: false,
+    sessions: [
+      {
+        sessionId: target.id,
+        status: "done",
+        reply: { text: "Game logic is ready: 4 levels and score tracking." },
+      },
+    ],
+  });
+  await expect
+    .poll(() =>
+      f.store
+        .agentConversation(f.source.id)
+        .items.some((i) => i.title === "Agent result" && i.text.includes("4 levels")),
+    )
+    .toBe(true);
+  f.restart();
+  expect(await f.control({ kind: "status" })).toMatchObject({
+    watching: [{ sessionId: target.id, status: "done" }],
+  });
+  f.manager.observe({ type: "agent.state", agent: f.store.agent(target.id) });
+  expect(
+    f.store.agentConversation(f.source.id).items.filter((i) => i.title === "Agent result"),
+  ).toHaveLength(1);
+  expect(
+    f.providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
+  ).toHaveLength(count);
+});
+
+it("reports each distinct approval in a turn and stops reporting after unwatch", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await f.control({ kind: "watch", sessionId: target.id, enabled: true });
+  await f.request({ kind: "send", sessionId: target.id, text: "hold game review" });
+  const turnId = f.store.agent(target.id).turnId!;
+  const pending = (id: string) => ({
+    id,
+    turnId,
+    kind: "approval" as const,
+    title: "Run checks",
+    summary: "node --test",
+    detail: "",
+    decisions: ["accept" as const],
+    questions: [],
+  });
+  for (const id of [randomUUID(), randomUUID()]) {
+    f.store.saveAgent({
+      ...f.store.agent(target.id),
+      status: "needs_input",
+      pending: [pending(id)],
+    });
+    f.manager.observe({ type: "agent.state", agent: f.store.agent(target.id) });
+  }
+  expect(
+    f.store
+      .agentConversation(f.source.id)
+      .items.filter((i) => i.title === "Agent needs your input"),
+  ).toHaveLength(2);
+  await f.control({ kind: "watch", sessionId: target.id, enabled: false });
+  f.store.saveAgent({
+    ...f.store.agent(target.id),
+    status: "needs_input",
+    pending: [pending(randomUUID())],
+  });
+  f.manager.observe({ type: "agent.state", agent: f.store.agent(target.id) });
+  expect(
+    f.store
+      .agentConversation(f.source.id)
+      .items.filter((i) => i.title === "Agent needs your input"),
+  ).toHaveLength(2);
+});
+
+it("bounds waits and rechecks sharing before returning deferred context", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await f.request({ kind: "send", sessionId: target.id, text: "hold game rendering" });
+  expect(await f.control({ kind: "wait", sessionIds: [target.id], timeoutMs: 1 })).toMatchObject({
+    timedOut: true,
+    sessions: [{ status: "working" }],
+  });
+  const waiting = f.control({ kind: "wait", sessionIds: [target.id], timeoutMs: 20 });
+  f.manager.request({
+    type: "supervisor.request",
+    requestId: randomUUID(),
+    operation: { kind: "revoke-sharing" },
+  });
+  await expect(waiting).rejects.toThrow("withdrawn");
 });

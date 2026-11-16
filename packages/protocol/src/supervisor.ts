@@ -94,6 +94,13 @@ export const SupervisorControlSchema = z.object({
     }),
     z.object({ kind: z.literal("queue-remove"), sessionId: Id, id: Id }),
     z.object({ kind: z.literal("status") }),
+    z.object({ kind: z.literal("capabilities") }),
+    z.object({ kind: z.literal("watch"), sessionId: Id, enabled: z.boolean().default(true) }),
+    z.object({
+      kind: z.literal("wait"),
+      sessionIds: z.array(Id).min(1).max(8),
+      timeoutMs: z.number().int().min(1).max(25000).default(20000),
+    }),
   ]),
 });
 export type SupervisorControl = z.infer<typeof SupervisorControlSchema>;

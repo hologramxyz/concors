@@ -12,6 +12,7 @@ import {
 } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
 import type { AgentManager } from "../agents/manager.ts";
+import { SupervisorWatches, sessionReport } from "./watch.ts";
 import type { ProviderRegistry } from "../agents/providers/registry.ts";
 
 const active = (agent: AgentInfo) =>
@@ -32,6 +33,7 @@ interface Receipt {
 export class SupervisorManager {
   private readonly pending = new Map<string, Promise<unknown>>();
   private closed = false;
+  private readonly watches: SupervisorWatches;
   private readonly store: WorkspaceStore;
   private readonly agents: AgentManager;
   private readonly providers: ProviderRegistry;
@@ -49,6 +51,12 @@ export class SupervisorManager {
     this.providers = providers;
     this.changed = changed;
     this.workspace = workspace;
+    this.watches = new SupervisorWatches(
+      store,
+      agents,
+      (id) => this.source(id),
+      (id) => this.target(id),
+    );
     store.keepAgents(() =>
       store
         .agents()
@@ -237,6 +245,8 @@ export class SupervisorManager {
           directory: a.directory,
           status: a.status,
           pending: a.pending.length,
+          pendingRequests: sessionReport(this.store, a, false).pending,
+          permissions: a.settings?.mode ?? "default",
           queued: a.queue?.length ?? 0,
           updatedAt: a.updatedAt,
           historyRevision: a.historyRevision ?? 0,
@@ -267,9 +277,7 @@ export class SupervisorManager {
         budget -= text.length;
       }
       return {
-        sessionId: target.id,
-        projectId: target.projectId,
-        name: target.name,
+        ...sessionReport(this.store, target),
         historyRevision: target.historyRevision ?? 0,
         items,
         before: items[0]?.position,
@@ -278,7 +286,31 @@ export class SupervisorManager {
       };
     }
     if (op.kind === "status")
-      return { deliveries: this.deliveries().filter((d) => d.supervisorId === source.id) };
+      return {
+        deliveries: this.deliveries().filter((d) => d.supervisorId === source.id),
+        watching: this.watches.status(source.id),
+      };
+    if (op.kind === "capabilities")
+      return {
+        machineId: snapshot.machineId,
+        permissions: source.settings?.mode ?? "default",
+        providers: this.providers.statuses(),
+        note: "Your existing chat permission picker controls Supervisor. Targets retain their own permissions. Approval and question requests are reported here with links; only the user can answer them in the target chat.",
+      };
+    if (op.kind === "watch") {
+      this.target(op.sessionId);
+      if (op.enabled) this.watches.track(source.id, op.sessionId, request.requestId, true);
+      else this.watches.stop(source.id, op.sessionId);
+      return {
+        sessionId: op.sessionId,
+        watching: op.enabled,
+        session: sessionReport(this.store, this.target(op.sessionId)),
+      };
+    }
+    if (op.kind === "wait") {
+      for (const id of new Set(op.sessionIds)) this.watches.track(source.id, id, request.requestId);
+      return this.watches.wait(source.id, [...new Set(op.sessionIds)], op.timeoutMs);
+    }
     if (op.kind === "workspace") {
       const action = op.command.operation;
       if (
@@ -305,10 +337,14 @@ export class SupervisorManager {
         op.provider,
         op.model ?? null,
       );
+      this.watches.track(source.id, agent.id, request.requestId);
       return { sessionId: agent.id, projectId: agent.projectId, status: agent.status };
     }
     const target = this.target(op.sessionId);
-    if (op.kind === "send") this.recipient(source, target.provider);
+    if (op.kind === "send") {
+      this.recipient(source, target.provider);
+      this.watches.track(source.id, target.id, request.requestId);
+    }
     if (!receipt.agentRequest) {
       if (op.kind === "send") {
         if (op.text.startsWith("/"))
@@ -394,33 +430,13 @@ export class SupervisorManager {
           status,
           ...(info.error ? { error: info.error.slice(0, 4000) } : {}),
         });
-        if (finished(status) || status === "needs_input") this.notify(delivery, status);
       }
     }
+    this.watches.observe(event);
   }
 
-  private notify(delivery: SupervisorDelivery, status: SupervisorDelivery["status"]): void {
-    const now = new Date().toISOString();
-    const id = `supervisor:${delivery.id}:${status}`;
-    // Persist once, so reconnecting and duplicate native hooks never repeat the update.
-    if (this.store.agentItem(delivery.supervisorId, id)) return;
-    const target = this.store.agent(delivery.sessionId);
-    this.agents.recordSupervisorUpdate(delivery.supervisorId, {
-      id,
-      sessionId: delivery.supervisorId,
-      turnId: `supervisor:${delivery.id}`,
-      position: 0,
-      revision: 0,
-      kind: "system",
-      title: status === "needs_input" ? "Agent needs your input" : "Delegated work updated",
-      text: `[${target.paneName ?? target.tabName ?? target.name}](concors://session/${target.id}): ${status.replaceAll("_", " ")}.`,
-      detail: "",
-      status: status === "failed" ? "failed" : "completed",
-      createdAt: now,
-      origin: { supervisorId: delivery.supervisorId, deliveryId: delivery.id },
-    });
-  }
   close(): void {
     this.closed = true;
+    this.watches.close();
   }
 }
