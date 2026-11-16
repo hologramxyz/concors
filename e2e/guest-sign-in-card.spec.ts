@@ -4,11 +4,11 @@ import { join } from "node:path";
 import type { Locator, Page } from "@playwright/test";
 import { expect, signedIn, test } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
-import { skipTour } from "./support/tour.ts";
+import { skipSetup } from "./support/setup.ts";
 
 /** No saved session, and a control plane that knows nobody. */
 async function asGuest(page: Page) {
-  await skipTour(page);
+  await skipSetup(page);
   await page.route("**/api/**", (route) =>
     route.fulfill({ status: 401, json: { message: "Authentication required" } }),
   );
@@ -143,7 +143,7 @@ test("someone signed in never sees the card, nor does anyone while their session
 });
 
 test("a saved session that cannot be checked never shows the card", async ({ page }) => {
-  await skipTour(page);
+  await skipSetup(page);
   await page.addInitScript(() =>
     localStorage.setItem("concors.auth.session-token.v1", "saved-token"),
   );

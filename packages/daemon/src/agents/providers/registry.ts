@@ -491,7 +491,8 @@ export class ProviderRegistry {
     let cleanup: { path: string; authOnly: boolean } | undefined;
     const savedBefore = structuredClone(this.saved);
     try {
-      if (op.kind === "sessions-list") throw new Error("Use the session discovery service");
+      if (op.kind === "sessions-list" || op.kind === "recent-folders")
+        throw new Error("Use the session discovery service");
       if (op.kind === "account") throw new Error("Use the account service");
       if (op.kind === "usage") throw new Error("Use the plan usage service");
       if (op.kind === "plugins" || op.kind === "plugin-enable")

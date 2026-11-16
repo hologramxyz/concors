@@ -186,7 +186,7 @@ test("pages without tabs start where a chat's content does, under an empty strip
     await signedIn(page);
     await page.goto("/");
     await seedProject(page, "Strip project", directory, { initialPane: "default" });
-    const tabs = await page.locator('[data-tour="tabs"]').boundingBox();
+    const tabs = await page.locator("[data-workspace-tab-row]").boundingBox();
     await page.getByRole("button", { name: "Schedules", exact: true }).click();
     const main = await page.getByRole("main").boundingBox();
     expect(main?.y).toBe((tabs?.y ?? 0) + (tabs?.height ?? 0));

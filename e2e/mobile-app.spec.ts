@@ -1,6 +1,6 @@
 import { expect, signedIn, test } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
-import { skipTour } from "./support/tour.ts";
+import { skipSetup } from "./support/setup.ts";
 
 const APP_STORE_URL = "https://apps.apple.com/us/app/concors-agent-orchestrator/id6817622624";
 
@@ -59,7 +59,7 @@ test("dismissal persists, leaves keyboard focus on the footer, and the account m
 });
 
 test("guests can find the iOS app without signing in, even in a short window", async ({ page }) => {
-  await skipTour(page);
+  await skipSetup(page);
   await page.route("**/api/**", (route) => route.fulfill({ status: 401, json: {} }));
   await page.setViewportSize({ width: 1000, height: 600 });
   await page.goto("/");

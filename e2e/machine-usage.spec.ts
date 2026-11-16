@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { skipTour } from "./support/tour.ts";
+import { skipSetup } from "./support/setup.ts";
 
 test("machine cards display usage, poll, and identify stale or missing reports", async ({
   page,
 }) => {
   await page.clock.install();
   await page.emulateMedia({ colorScheme: "dark" });
-  await skipTour(page);
+  await skipSetup(page);
   await page.addInitScript(() => localStorage.setItem("concors.auth.session-token.v1", "fixture"));
   const time = new Date().toISOString();
   const user = {

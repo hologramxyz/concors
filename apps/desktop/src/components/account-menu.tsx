@@ -24,7 +24,7 @@ import {
 
 import { initialOf, type SignedInAuth } from "@/auth/auth-state";
 import { MenuKeyChips } from "@/shortcuts/key-chips";
-import { replayTour } from "@/tour/store";
+import { startSetup } from "@/setup/store";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,8 +41,8 @@ interface AccountMenuProps {
   readonly onSignIn: () => void;
   readonly onOpenSettings: () => void;
   readonly collapsed?: boolean;
-  /** The tour points at the live workspace, so it cannot run while that is not loaded. */
-  readonly canTour?: boolean;
+  /** Setup works on the live workspace, so it cannot open while that is not loaded. */
+  readonly canSetup?: boolean;
 }
 
 /** Sidebar footer: who is signed in, with settings and sign out, or the way to sign in. */
@@ -52,7 +52,7 @@ export function AccountMenu({
   onSignIn,
   onOpenSettings,
   collapsed = false,
-  canTour = true,
+  canSetup = true,
 }: AccountMenuProps) {
   const compact = useContext(CompactLayoutContext);
   const [mobileAppOpen, setMobileAppOpen] = useState(false);
@@ -110,9 +110,9 @@ export function AccountMenu({
             Settings
             <MenuKeyChips id="settings" />
           </DropdownMenuItem>
-          <DropdownMenuItem className="p-[8px] text-ui" disabled={!canTour} onSelect={replayTour}>
+          <DropdownMenuItem className="p-[8px] text-ui" disabled={!canSetup} onSelect={startSetup}>
             <MapIcon aria-hidden="true" />
-            Take the tour
+            Set up Concors
           </DropdownMenuItem>
           <DropdownMenuItem className="p-[8px] text-ui" onSelect={() => setMobileAppOpen(true)}>
             <Smartphone aria-hidden="true" />

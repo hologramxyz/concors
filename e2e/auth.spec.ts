@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
-import { skipTour } from "./support/tour.ts";
+import { skipSetup } from "./support/setup.ts";
 
-test.beforeEach(({ page }) => skipTour(page));
+test.beforeEach(({ page }) => skipSetup(page));
 
 const TOKEN_KEY = "concors.auth.session-token.v1";
 const SESSION_TOKEN = "e2e-session-token";

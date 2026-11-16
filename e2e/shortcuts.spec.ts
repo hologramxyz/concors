@@ -24,7 +24,7 @@ test("workspace shortcuts create, search, split and close the active pane withou
     await page.getByRole("button", { name: /^Account:/ }).click();
     await expect(page.getByRole("menuitem")).toHaveText([
       /^Settings/,
-      "Take the tour",
+      "Set up Concors",
       "Get the iOS app",
       "Sign out",
     ]);
@@ -206,7 +206,7 @@ test("shortcuts have a dedicated settings page and stay out of the account menu"
   const menu = page.getByRole("menu");
   await expect(menu.getByRole("menuitem")).toHaveText([
     /^Settings/,
-    "Take the tour",
+    "Set up Concors",
     "Get the iOS app",
     "Sign out",
   ]);
