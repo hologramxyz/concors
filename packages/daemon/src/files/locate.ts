@@ -5,8 +5,32 @@ import { projectPath } from "./paths.ts";
 
 /** Generated and vendored trees: large, and never where an agent's own output is meant to be. */
 const SKIPPED = new Set([".git", "node_modules", ".venv", "__pycache__"]);
-const MAX_ENTRIES = 50_000;
-const MAX_MS = 1500;
+/**
+ * Build output and caches: large and growing all day, so searched after everything else rather
+ * than not at all (an agent may well point at `dist/app.zip`). Ahead of them they would use up the
+ * search before it reached the folders an agent writes into.
+ */
+const LAST = new Set([
+  "dist",
+  "build",
+  "out",
+  "target",
+  "coverage",
+  ".next",
+  ".nuxt",
+  ".svelte-kit",
+  ".turbo",
+  ".cache",
+  ".parcel-cache",
+  ".gradle",
+  ".pnpm-store",
+  ".yarn",
+  "vendor",
+  "Pods",
+  "DerivedData",
+]);
+const MAX_ENTRIES = 200_000;
+const MAX_MS = 3000;
 
 /**
  * Finds what a path from an agent's message refers to. An agent writes paths relative to wherever
@@ -35,33 +59,41 @@ export async function locateProjectFile(
   const deadline = Date.now() + (limits.ms ?? MAX_MS);
   let budget = limits.entries ?? MAX_ENTRIES;
   const found: { path: string; modified: number }[] = [];
-  // Breadth first, so the limits cut off the deepest folders rather than whole branches of the top.
-  const folders = [root];
-  // An array's iterator also visits what is added to it along the way.
-  for (const folder of folders) {
-    let entries;
-    try {
-      entries = await opendir(folder);
-    } catch {
-      continue; // One unreadable folder should not end the search.
-    }
-    for await (const entry of entries) {
-      if (--budget < 0 || Date.now() > deadline) return newestFirst(found);
-      const full = join(folder, entry.name);
-      if (entry.isDirectory()) {
-        if (!SKIPPED.has(entry.name)) folders.push(full);
-      } else if (entry.isFile()) {
-        const path = relative(root, full).split(sep).join("/");
-        if (path.endsWith(suffix)) {
-          const modified = await stat(full).then(
-            (info) => info.mtimeMs,
-            () => null,
-          );
-          if (modified !== null) found.push({ path, modified });
+  const last: string[] = [];
+  /** Breadth first, so the limits cut off the deepest folders rather than whole branches of the top. */
+  const search = async (start: readonly string[], deferring: boolean) => {
+    const folders = [...start];
+    // An array's iterator also visits what is added to it along the way.
+    for (const folder of folders) {
+      let entries;
+      try {
+        entries = await opendir(folder);
+      } catch {
+        continue; // One unreadable folder should not end the search.
+      }
+      for await (const entry of entries) {
+        if (--budget < 0 || Date.now() > deadline) return false;
+        const full = join(folder, entry.name);
+        if (entry.isDirectory()) {
+          if (SKIPPED.has(entry.name)) continue;
+          if (deferring && LAST.has(entry.name)) last.push(full);
+          else folders.push(full);
+        } else if (entry.isFile()) {
+          const path = relative(root, full).split(sep).join("/");
+          if (path.endsWith(suffix)) {
+            const modified = await stat(full).then(
+              (info) => info.mtimeMs,
+              () => null,
+            );
+            if (modified !== null) found.push({ path, modified });
+          }
         }
       }
     }
-  }
+    return true;
+  };
+  // Build output and caches only once everything else has been searched.
+  if (await search([root], true)) await search(last, false);
   return newestFirst(found);
 }
 

@@ -73,3 +73,15 @@ it("returns a bounded list", async () => {
   for (let index = 0; index < MAX_LOCATED_FILES + 2; index++) await file(`d${index}/a.mp4`);
   expect(await locateProjectFile(root, "a.mp4")).toHaveLength(MAX_LOCATED_FILES);
 });
+
+it("searches build output and caches last, so they cannot use up the search first", async () => {
+  // A big build folder met first would end a bounded search before the agent's own folder.
+  for (let index = 0; index < 20; index++) await file(`dist/chunk-${index}.js`);
+  await file("recordings/walkthrough.mp4");
+  expect(await locateProjectFile(root, "walkthrough.mp4", { entries: 6 })).toEqual([
+    "recordings/walkthrough.mp4",
+  ]);
+  // Last, not never: a file an agent points at inside build output is still found.
+  await file("dist/app.zip");
+  expect(await locateProjectFile(root, "app.zip")).toEqual(["dist/app.zip"]);
+});
