@@ -64,6 +64,51 @@ describe("mobile pane navigation", () => {
     expect(snapshot).toEqual(before);
     expect(projectPanes({ ...project, tabs: [] })).toEqual([]);
   });
+  it("labels each pane of a split tab by its chat, as desktop titles panes", () => {
+    const project = structuredClone(workspace.projects[0]);
+    if (!project) throw new Error("Missing fixture");
+    project.tabs = [
+      {
+        id: "main",
+        name: "Main",
+        root: "s1",
+        nodes: [
+          { id: "p1", kind: "pane", profile: "chat", sessionId: "fix" },
+          { id: "s1", kind: "split", axis: "horizontal", ratio: 0.5, first: "p1", second: "s2" },
+          { id: "p2", kind: "pane", profile: "chat", sessionId: "fresh" },
+          { id: "s2", kind: "split", axis: "vertical", ratio: 0.5, first: "p2", second: "s3" },
+          { id: "p3", kind: "pane", profile: "chat", sessionId: "named", name: "Release" },
+          { id: "s3", kind: "split", axis: "vertical", ratio: 0.5, first: "p3", second: "p4" },
+          { id: "p4", kind: "pane", profile: "shell", sessionId: "server" },
+        ],
+      },
+      {
+        id: "solo",
+        name: "Tab 2",
+        root: "only",
+        nodes: [{ id: "only", kind: "pane", profile: "chat", sessionId: "solo-chat" }],
+      },
+    ];
+    const agents = [
+      { id: "fix", name: "Fix the checkout flow" },
+      { id: "fresh", name: "New chat" },
+      { id: "named", name: "Ship 0.18" },
+      { id: "solo-chat", name: "Write release notes" },
+    ];
+    const terminals = [{ id: "server", status: "running" as const, foregroundCommand: "pnpm dev" }];
+    expect(projectPanes(project, agents, terminals).map(({ label }) => label)).toEqual([
+      "Fix the checkout flow",
+      // A chat nobody wrote in yet has nothing to tell it apart: the tab's name and position.
+      "Main 2",
+      // A pane's own name wins, as on desktop.
+      "Release",
+      "pnpm dev",
+      // An unnamed tab with one pane reads as desktop's tab strip reads it.
+      "Write release notes",
+    ]);
+    // An idle terminal is only "Terminal", so it keeps the numbered name too.
+    expect(projectPanes(project, agents, [])[3]?.label).toBe("Main 4");
+  });
   it("traverses the saved tree in display order without mutating selection or geometry", () => {
     const before = structuredClone(workspace);
     const tab = workspace.projects[0]?.tabs[0];
