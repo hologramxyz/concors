@@ -108,6 +108,10 @@ describe("mobile pane navigation", () => {
     ]);
     // An idle terminal is only "Terminal", so it keeps the numbered name too.
     expect(projectPanes(project, agents, [])[3]?.label).toBe("Main 4");
+    // So does a chat titled like its tab: it tells the panes apart no better.
+    expect(
+      projectPanes(project, [{ id: "fix", name: "Main" }, ...agents.slice(1)], terminals)[0]?.label,
+    ).toBe("Main 1");
   });
   it("traverses the saved tree in display order without mutating selection or geometry", () => {
     const before = structuredClone(workspace);

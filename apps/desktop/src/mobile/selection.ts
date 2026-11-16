@@ -24,6 +24,19 @@ function distinctPaneTitle(pane: PaneNode, agents: Agents, terminals: Terminals)
   return title === UNTITLED_CHAT_NAME || title === generic ? null : title;
 }
 
+/** One pane of a split tab: what tells it apart, else the tab's name and its position. */
+function paneLabel(
+  pane: PaneNode,
+  index: number,
+  tabName: string,
+  agents: Agents,
+  terminals: Terminals,
+) {
+  const title = distinctPaneTitle(pane, agents, terminals);
+  // A chat titled like its tab tells it from the tab's other panes no better than nothing.
+  return title && title !== tabName ? title : `${tabName} ${index + 1}`;
+}
+
 /**
  * Mobile calls each leaf a tab, but keeps the original IDs and desktop split tree. A tab with one
  * pane is labelled as desktop's tab strip labels it. Each pane of a split tab is labelled as desktop
@@ -42,10 +55,7 @@ export function projectPanes(
     return panes.map((pane, index) => ({
       tab,
       pane,
-      label:
-        panes.length === 1
-          ? name
-          : (distinctPaneTitle(pane, agents, terminals) ?? `${name} ${index + 1}`),
+      label: panes.length === 1 ? name : paneLabel(pane, index, name, agents, terminals),
       profileLabel: pane.name ?? pane.terminalProfile?.name ?? PROFILE_LABELS[pane.profile],
     }));
   });
