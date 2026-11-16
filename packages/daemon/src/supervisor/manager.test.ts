@@ -4,7 +4,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import type { AgentOperation, SupervisorControl } from "@concors/protocol";
+import { SupervisorControlSchema, type AgentOperation } from "@concors/protocol";
+import type { z } from "zod";
 import { WorkspaceStore } from "../workspace/store.ts";
 import { AgentManager } from "../agents/manager.ts";
 import { ProviderRegistry } from "../agents/providers/registry.ts";
@@ -90,8 +91,10 @@ async function setup() {
     get manager() {
       return manager!;
     },
-    control: (operation: SupervisorControl["operation"], requestId = randomUUID()) =>
-      manager!.control(source.id, { requestId, operation }),
+    control: (
+      operation: z.input<typeof SupervisorControlSchema>["operation"],
+      requestId = randomUUID(),
+    ) => manager!.control(source.id, { requestId, operation }),
     target: () => agents.startScheduled(randomUUID(), projectId, "claude", "fixture-claude"),
     restart: () => {
       manager!.close();
@@ -561,4 +564,34 @@ it("can wait for an existing approval to be answered without answering it", asyn
     timedOut: false,
     sessions: [{ sessionId: target.id, pending: [] }],
   });
+});
+
+it("summarizes file approvals without copying generated source into the Supervisor chat", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await f.request({ kind: "send", sessionId: target.id, text: "hold game UI" });
+  const info = f.store.agent(target.id);
+  const pending = {
+    id: randomUUID(),
+    turnId: info.turnId!,
+    kind: "approval" as const,
+    title: "Allow command execution?",
+    summary: '{"file_path":"/tmp/style.css","content":"' + "body".repeat(1200),
+    detail: JSON.stringify({
+      reason: "Write",
+      command:
+        JSON.stringify({ file_path: "/tmp/style.css", content: "generated source".repeat(500) }) +
+        "\nWrite",
+    }),
+    decisions: ["accept" as const],
+    questions: [],
+  };
+  f.store.saveAgent({ ...info, status: "needs_input", pending: [pending] });
+  await f.control({ kind: "watch", sessionId: target.id, enabled: true });
+  const notice = f.store
+    .agentConversation(f.source.id)
+    .items.find((i) => i.title === "Agent needs your input");
+  expect(notice?.text).toContain("Write style.css");
+  expect(notice?.text).not.toContain("generated source");
+  expect(notice?.text.length).toBeLessThan(600);
 });

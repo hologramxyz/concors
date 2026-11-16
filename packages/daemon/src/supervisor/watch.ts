@@ -15,11 +15,33 @@ const quote = (text: string) =>
     .split("\n")
     .map((line) => "> " + line)
     .join("\n");
+/** The approval body may contain a whole generated file; show the action, not its source code. */
+function pendingAction(pending: AgentPending): string {
+  if (pending.kind === "questions")
+    return pending.questions
+      .map((q) => q.question)
+      .join("\n")
+      .slice(0, 1000);
+  try {
+    const detail = JSON.parse(pending.detail) as { command?: string; reason?: string };
+    const input = JSON.parse((detail.command ?? pending.summary).split("\n")[0] ?? "") as {
+      file_path?: string;
+      command?: string;
+    };
+    if (input.file_path)
+      return `${detail.reason ?? "File operation"} ${input.file_path.split(/[\\/]/).at(-1)}`;
+    if (input.command) return input.command.slice(0, 1000);
+  } catch {
+    /* Older adapters supply a plain command or question. */
+  }
+  return (pending.summary || pending.detail || pending.title).slice(0, 1000);
+}
+
 const pendingSummary = (pending: AgentPending) => ({
   id: pending.id,
   kind: pending.kind,
   title: pending.title.slice(0, 240),
-  summary: pending.summary.slice(0, 2000),
+  summary: pendingAction(pending),
   detail: pending.detail.slice(0, 2000),
 });
 
@@ -190,7 +212,7 @@ export class SupervisorWatches {
         watch,
         `input:${pending.turnId}:${pending.id}`,
         "Agent needs your input",
-        `${prefix} ${state}.\n\n${quote([pending.title, pending.summary || pending.detail].filter(Boolean).join("\n").slice(0, 3000))}\n\nOpen that chat to respond.${report.queued ? ` ${report.queued} follow-up instruction(s) are queued behind it.` : ""}`,
+        `${prefix} ${state}.\n\n${quote([pendingAction(pending)].filter(Boolean).join("\n").slice(0, 3000))}\n\nOpen that chat to respond.${report.queued ? ` ${report.queued} follow-up instruction(s) are queued behind it.` : ""}`,
       );
     }
     if (report.queuePaused && report.queued)
