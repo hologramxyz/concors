@@ -97,7 +97,20 @@ export class SupervisorWatches {
     store.keepAgents(() => this.records().map((w) => w.sessionId));
   }
   private records(): Watch[] {
-    return (this.store.supervisorRecords("watch:") as Watch[]).filter((w) => w.enabled);
+    return (this.store.supervisorRecords("watch:") as Watch[]).filter((watch) => {
+      if (!watch.enabled) return false;
+      try {
+        this.target(watch.sessionId);
+        return true;
+      } catch {
+        // Removed workspaces must not consume the bounded watch slots forever.
+        this.store.saveSupervisorRecord(this.key(watch.supervisorId, watch.sessionId), {
+          ...watch,
+          enabled: false,
+        });
+        return false;
+      }
+    });
   }
   private key(source: string, target: string) {
     return `watch:${source}:${target}`;

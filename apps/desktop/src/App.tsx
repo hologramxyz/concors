@@ -122,7 +122,7 @@ function AppContent() {
   const [settingsPage, setSettingsPage] = useState<SettingsPage>(() =>
     window.location.pathname === "/settings/billing" ? "billing" : "account",
   );
-  const settingsReturnView = useRef<Exclude<View, "settings">>("projects");
+  const settingsReturnView = useRef<Exclude<View, "settings">>("supervisor");
   const [searchOpen, setSearchOpen] = useState(false);
   const [startedEndpoint, setLocalEndpoint] = useState<{
     readonly user: string;

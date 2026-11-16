@@ -300,12 +300,14 @@ export class SupervisorManager {
         note: "Your existing chat permission picker controls Supervisor. Targets retain their own permissions. Approval and question requests are reported here with links; only the user can answer them in the target chat.",
       };
     if (op.kind === "watch") {
-      this.target(op.sessionId);
-      if (op.enabled) this.watches.track(source.id, op.sessionId, request.requestId, true);
-      else this.watches.stop(source.id, op.sessionId);
+      if (!op.enabled) {
+        this.watches.stop(source.id, op.sessionId);
+        return { sessionId: op.sessionId, watching: false };
+      }
+      this.watches.track(source.id, op.sessionId, request.requestId, true);
       return {
         sessionId: op.sessionId,
-        watching: op.enabled,
+        watching: true,
         session: sessionReport(this.store, this.target(op.sessionId)),
       };
     }

@@ -595,3 +595,26 @@ it("summarizes file approvals without copying generated source into the Supervis
   expect(notice?.text).not.toContain("generated source");
   expect(notice?.text.length).toBeLessThan(600);
 });
+
+it("lets the user stop watching a chat after its workspace was removed", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await f.control({ kind: "watch", sessionId: target.id, enabled: true });
+  const project = f.store.snapshot().projects[0]!;
+  expect(
+    f.store.execute({
+      type: "workspace.command",
+      commandId: randomUUID(),
+      epoch: f.store.snapshot().epoch,
+      operation: {
+        kind: "project.remove",
+        projectId: project.id,
+        expectedVersion: project.version,
+      },
+    }).result.outcome.status,
+  ).toBe("accepted");
+  expect(await f.control({ kind: "status" })).toMatchObject({ watching: [] });
+  expect(await f.control({ kind: "watch", sessionId: target.id, enabled: false })).toMatchObject({
+    watching: false,
+  });
+});
