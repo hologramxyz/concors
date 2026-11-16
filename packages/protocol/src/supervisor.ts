@@ -83,6 +83,8 @@ export const SupervisorControlSchema = z.object({
       projectId: Id,
       provider: z.string().min(1).max(128),
       model: z.string().max(1024).optional(),
+      name: z.string().trim().min(1).max(120).optional(),
+      open: z.boolean().default(true),
     }),
     z.object({ kind: z.literal("workspace"), command: WorkspaceCommandSchema }),
     z.object({ kind: z.literal("open-session"), sessionId: Id }),

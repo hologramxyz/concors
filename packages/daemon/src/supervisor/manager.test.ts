@@ -509,3 +509,23 @@ it("bounds waits and rechecks sharing before returning deferred context", async 
   });
   await expect(waiting).rejects.toThrow("withdrawn");
 });
+
+it("starts named chats in background tabs without stealing the user's selection", async () => {
+  const f = await setup();
+  const selection = f.store.snapshot().selection;
+  const result = (await f.control({
+    kind: "start",
+    projectId: f.projectId,
+    provider: "claude",
+    name: "Game logic",
+    open: true,
+  })) as { sessionId: string };
+  const project = f.store.snapshot().projects.find((p) => p.id === f.projectId)!;
+  expect(project.tabs).toHaveLength(1);
+  expect(project.tabs[0]?.name).toBe("Game logic");
+  expect(
+    project.tabs[0]?.nodes.some((n) => n.kind === "pane" && n.sessionId === result.sessionId),
+  ).toBe(true);
+  expect(f.store.snapshot().selection).toEqual(selection);
+  expect(f.store.agent(result.sessionId).settings?.mode).toBe("default");
+});

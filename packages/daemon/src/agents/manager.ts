@@ -920,6 +920,7 @@ export class AgentManager {
     projectId: string,
     providerId: string,
     model: string | null,
+    name?: string,
   ): Promise<AgentInfo> {
     let info = this.#store.agents().find((agent) => agent.id === id);
     if (!info) {
@@ -933,7 +934,8 @@ export class AgentManager {
       info = {
         id,
         projectId,
-        name: UNTITLED_CHAT_NAME,
+        name: name ?? UNTITLED_CHAT_NAME,
+        ...(name ? { tabName: name } : {}),
         engine: config.engine,
         providerLabel: config.label,
         directory: project.directory,

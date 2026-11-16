@@ -336,7 +336,19 @@ export class SupervisorManager {
         op.projectId,
         op.provider,
         op.model ?? null,
+        op.name,
       );
+      if (op.open) {
+        const opened = await this.agents.request(
+          {
+            type: "agent.request",
+            requestId: request.requestId,
+            operation: { kind: "open-session", sessionId: agent.id },
+          },
+          "supervisor:" + source.id,
+        );
+        if (opened.outcome.status === "error") throw new Error(opened.outcome.message);
+      }
       this.watches.track(source.id, agent.id, request.requestId);
       return { sessionId: agent.id, projectId: agent.projectId, status: agent.status };
     }
