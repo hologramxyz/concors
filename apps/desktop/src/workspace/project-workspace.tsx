@@ -332,7 +332,7 @@ export function ProjectWorkspace({
         <h1 className="sr-only">{project.name}</h1>
         <LatestAgents targetRef={agentsRef} />
         <div
-          data-tour="tabs"
+          data-workspace-tab-row
           data-tauri-drag-region={titleBar ? "true" : undefined}
           className={cn(
             "flex shrink-0 items-center gap-2 border-b px-2 select-none",

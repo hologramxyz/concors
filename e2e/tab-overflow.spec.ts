@@ -93,7 +93,7 @@ test("the tab strip scrolls without a scrollbar, fades its edges and keeps the a
     await page.goto("/");
     await seedProject(page, "Tab overflow", directory);
     await expect(tabs(page)).toHaveCount(1);
-    const bar = page.locator('[data-tour="tabs"]');
+    const bar = page.locator("[data-workspace-tab-row]");
     const height = (await bar.boundingBox())?.height;
     await expectFades(page, false, false);
 

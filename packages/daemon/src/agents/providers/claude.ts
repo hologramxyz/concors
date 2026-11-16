@@ -436,6 +436,19 @@ export class ClaudeProvider extends EventProvider {
           ),
         },
       };
+    if (method === "session/folders") {
+      // Every project's transcripts, newest first; folders are what setup offers as projects.
+      const sessions = await listSessions({
+        limit: 500,
+        includeWorktrees: false,
+        ...(this.transcriptStore ? { sessionStore: this.transcriptStore } : {}),
+      });
+      return {
+        folders: sessions.flatMap((s) =>
+          s.cwd ? [{ directory: s.cwd, updatedAt: new Date(s.lastModified).toISOString() }] : [],
+        ),
+      };
+    }
     if (method === "session/list") {
       const offset = sessionOffset(p["cursor"]);
       const sessions = await listSessions({

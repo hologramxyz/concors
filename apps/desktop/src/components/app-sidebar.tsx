@@ -51,8 +51,8 @@ interface AppSidebarProps {
   auth: SignedInAuth | null;
   /** Using this computer without an account; a session that could not be checked is not one. */
   guest: boolean;
-  /** The workspace is loaded, so Take the tour has something to point at. */
-  canTour: boolean;
+  /** The workspace is loaded, so Set up Concors has something to work on. */
+  canSetup: boolean;
   onSignIn: () => void;
   onSignOut: () => void;
   execute: (operation: WorkspaceOperation) => Promise<void>;
@@ -76,7 +76,7 @@ export function AppSidebar(props: AppSidebarProps) {
       onOpenResources={props.onOpenResources}
     />
   );
-  const search = <SearchButton onOpenSearch={props.onOpenSearch} tour />;
+  const search = <SearchButton onOpenSearch={props.onOpenSearch} />;
   const toggle = <SidebarToggle collapsed={false} onToggle={props.onCollapse} className="p-1.5" />;
   const footer = useRef<HTMLDivElement>(null);
 
@@ -113,7 +113,7 @@ export function AppSidebar(props: AppSidebarProps) {
           </div>
         )}
         <div className={cn("min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto px-2 py-3")}>
-          <div className="space-y-0.5" data-tour="schedules">
+          <div className="space-y-0.5">
             <SupervisorNav
               selected={props.view === "supervisor"}
               onClick={props.onOpenSupervisor}
@@ -131,7 +131,7 @@ export function AppSidebar(props: AppSidebarProps) {
             />
           </div>
           <>
-            <div data-tour="workspaces">
+            <div>
               <SidebarSection
                 title="Workspaces"
                 compact={false}
@@ -181,7 +181,7 @@ export function AppSidebar(props: AppSidebarProps) {
           <AccountMenu
             collapsed={false}
             auth={props.auth}
-            canTour={props.canTour}
+            canSetup={props.canSetup}
             onSignOut={props.onSignOut}
             onSignIn={props.onSignIn}
             onOpenSettings={props.onOpenSettings}
