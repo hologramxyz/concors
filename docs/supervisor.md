@@ -1,6 +1,6 @@
 # Supervisor
 
-Supervisor sits above Schedules in the sidebar. It uses the existing unified agent chat,
+Supervisor opens by default on desktop and mobile and sits above Schedules in the sidebar. Explicit session links still open their chat; `?view=workspaces` opens the last workspace. It uses the existing unified agent chat,
 provider/model picker, permissions, attachments, and mobile voice composer. Its conversation
 belongs to the selected machine and spans that machine's open and saved workspaces. Switching
 machines selects that machine's Supervisor. Switching harnesses preserves the existing
@@ -16,15 +16,25 @@ OpenCode or other configured harness and sign-in; Supervisor does not create ano
 2. Ask: “Find the chat where we discussed the mobile release. Read it and summarize what is left.”
 3. Ask: “Tell that chat to review the release checklist, and ask the chat in my other workspace to
    review its tests.” Name the workspace/chat when several matches are similar.
-4. Ask Supervisor for progress or results in the conversation. Completion and input-needed updates
-   appear in its timeline. Follow a conversation link to inspect the original chat; delegated
-   prompts carry **From Supervisor**.
-5. While a target is busy, send another instruction. It queues by default. Explicitly ask to steer
+4. Ask: “Let me know when that agent finishes and bring its reply here.” Supervisor can watch an
+   existing conversation as well as work it starts. Approval notices identify the workspace, chat,
+   and action (for example, “Write style.css” or “node --test”); they also appear when its instruction
+   is queued behind an approval. Completed replies arrive as bounded quoted text in this chat,
+   without another user message or model turn. Follow the chat link for the full reply or to answer
+   an approval; delegated prompts carry **From Supervisor**.
+5. Choose Supervisor's permissions with the existing composer picker. New targets keep normal
+   permissions; Supervisor cannot expand another chat's permissions or answer its approval prompts.
+   Ask “Which agents need my approval?” to inspect pending actions. While a target is busy, send
+   another instruction. It queues by default. Explicitly ask to steer
    or stop a turn when that is what you want. Tool approvals and questions remain in the target
    conversation for you to answer.
 6. Navigate away, reload, or disconnect your phone. Work continues on the daemon. Reopen Supervisor
    to see persisted history and delivery updates. Ask it to read the results for a combined summary.
-7. Change the harness, then switch back. Each harness's conversation returns in the same chat UI.
+7. For a longer workflow, ask it to coordinate three or four agents across two workspaces, wait for
+   their results, send dependent follow-ups, and have another agent review the final work. New
+   agents open in named tabs without changing your focus. Its event-driven wait can continue after
+   you resolve a target approval. Ask it to stop watching a chat when you no longer need updates.
+8. Change the harness, then switch back. Each harness's conversation returns in the same chat UI.
 
 The mobile browser acceptance test runs the real shared UI through the native protocol relay.
 A native iOS development build is still needed to check the OS keyboard, microphone permission and
@@ -44,7 +54,9 @@ Only a selected Supervisor runtime receives the `concors-supervisor` MCP server.
 `concors_control` tool exposes a typed operation union: list workspaces/layout/sessions, search
 saved message text, read bounded saved transcripts, create sessions, send/queue/steer, open chats,
 change workspace layouts, remove queued instructions, explicitly interrupt turns, and read delivery
-status. Harnesses without native MCP use the same authenticated loopback JSON endpoint through
+status, inspect capabilities/permissions, watch/unwatch saved sessions, and wait up to 25 seconds for
+a lifecycle change. Wait returns current pending actions and replies without prompting workers;
+`on:change` can wait for an already reported approval to be resolved. Harnesses without native MCP use the same authenticated loopback JSON endpoint through
 their shell. Gateway credentials are never passed to this endpoint. It checks a random session
 token, Host, Origin, input schema and request size. The scope is the existing daemon/machine access
 boundary, not a new multi-user authorization system.
@@ -52,7 +64,7 @@ boundary, not a new multi-user authorization system.
 Read/search calls query local saved history without waking providers. Transcript text is labeled
 untrusted context. Operations do not answer other agents' approvals, change their accounts or
 permissions, execute terminal keystrokes, remove workspace folders, or change selection directly.
-Creating a saved chat requires a separate send operation. Workspace edits use the existing epoch
+Creating a chat opens its named tab without taking focus by default (`open:false` keeps it saved only). Sending work is a separate operation. Workspace edits use the existing epoch
 and version checks and preserve the user's selection when it still exists.
 
 Mutation receipts and prompt provenance are durable. Repeated request IDs return the original
@@ -63,9 +75,11 @@ requested code change was correct.
 
 Claude, Codex and OpenCode already normalize native lifecycle events in their adapters. Supervisor
 observes these events for queued/working/input-needed/completed/failed/interrupted updates, without
-installing global CLI hooks or repeatedly asking models for progress. It posts durable updates in
-the Supervisor timeline. Progress and results stay in the conversation; there is no separate
-delegation panel. Automatic extra model turns for summarization are intentionally not scheduled.
+installing global CLI hooks or repeatedly asking models for progress. It posts durable approval and completion updates in the Supervisor timeline, including a bounded
+excerpt of the final reply. Watches persist across reconnects and restarts. Progress and results
+stay in the conversation; there is no separate delegation panel. A running Supervisor can wait and
+continue the requested multi-step workflow, while background notices do not schedule extra model
+turns for summarization.
 
 The native iOS host attaches the recipient IDs and registry revision covered by its sharing drawer.
 Delegation, including queued delivery, checks those recipients; withdrawal revokes the daemon grant
