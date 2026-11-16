@@ -111,7 +111,11 @@ function AppContent() {
   const lastPanes = useRef(new Map<string, string>());
   const [paneFocus, setPaneFocus] = useState<PaneFocusRequest | null>(null);
   const [view, setView] = useState<View>(() =>
-    window.location.pathname === "/settings/billing" ? "settings" : "projects",
+    window.location.pathname === "/settings/billing"
+      ? "settings"
+      : new URLSearchParams(window.location.search).get("view") === "workspaces"
+        ? "projects"
+        : "supervisor",
   );
   const [pullRequestsView, setPullRequestsView] = useState<PullRequestsView>(allPullRequests);
   const [focusedCloudMachineId, setFocusedCloudMachineId] = useState<string | null>(null);

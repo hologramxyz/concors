@@ -7,7 +7,7 @@ test("direct desktop cloning uses a URL and never requests cloud GitHub access",
   page.on("request", (request) => {
     if (request.url().includes("/api/v1/github")) githubRequests.push(request.url());
   });
-  await page.goto("/");
+  await page.goto("/?view=workspaces");
   await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();

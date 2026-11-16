@@ -38,7 +38,7 @@ test("mobile shows workspace pull request counts and opens a workspace's pull re
         directory,
       },
     });
-    await page.goto("/");
+    await page.goto("/?view=workspaces");
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();

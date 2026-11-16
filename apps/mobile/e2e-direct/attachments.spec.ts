@@ -46,7 +46,7 @@ test("mobile uploads more than three files, and files over 1 MB, through the nat
       name: "Tab 1",
       profile: "chat",
     });
-    await page.goto("/");
+    await page.goto("/?view=workspaces");
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
     // The workspace runs in a frame whose protocol the host relays over its own socket.
     const ui = page.frameLocator('iframe[title="Concors workspace"]');

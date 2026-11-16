@@ -7,8 +7,6 @@ test("mobile Supervisor uses the shared chat and composer through the native rel
   await page.goto("/");
   await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
-  await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
-  await ui.getByRole("button", { name: "Supervisor", exact: true }).click();
   await expect(ui.getByTestId("supervisor-page")).toBeVisible();
   const composer = ui.getByRole("textbox", { name: /Message / });
   await expect(composer).toBeVisible();

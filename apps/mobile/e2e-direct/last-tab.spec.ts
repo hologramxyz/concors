@@ -58,7 +58,7 @@ test("a launch reopens the last tab, and each workspace keeps its own last tab",
     return { projectId, firstTab: first.tabId, first: first.value, second: second.value };
   };
   const launch = async (target: Page) => {
-    await target.goto("/");
+    await target.goto("/?view=workspaces");
     await target.getByRole("button", { name: "Connect to desktop", exact: true }).click();
     return target.frameLocator('iframe[title="Concors workspace"]');
   };

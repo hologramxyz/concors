@@ -162,7 +162,15 @@ function MobileWorkspaceContent({
     | { kind: "schedules" }
     | { kind: "pull-requests"; view: PullRequestsView }
     | null
-  >(null);
+  >(() =>
+    host.target.view === "workspaces" ||
+    host.target.projectId ||
+    host.target.tabId ||
+    host.target.paneId ||
+    host.target.sessionId
+      ? null
+      : { kind: "supervisor" },
+  );
   const [resourcesOpen, setResourcesOpen] = useState(false);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("account");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -222,7 +230,14 @@ function MobileWorkspaceContent({
     setSidebarOpen(false);
   };
   // Until something is picked on this machine, reopen the tab last opened on it.
-  const picked = local.machineId === host.machineId && Object.keys(local.target).length > 0;
+  const picked =
+    local.machineId === host.machineId &&
+    !!(
+      local.target.projectId ||
+      local.target.tabId ||
+      local.target.paneId ||
+      local.target.sessionId
+    );
   const selected = workspace
     ? resolveMobileSelection(workspace, picked ? local.target : (host.lastTarget ?? {}))
     : null;
@@ -342,6 +357,15 @@ function MobileWorkspaceContent({
           setError(cause instanceof Error ? cause.message : "Could not open session"),
       );
     setLocal({ machineId: target.machineId, target });
+    if (target.view === "supervisor") setPage({ kind: "supervisor" });
+    else if (
+      target.view === "workspaces" ||
+      target.projectId ||
+      target.tabId ||
+      target.paneId ||
+      target.sessionId
+    )
+      setPage(null);
   }, [targetKey, host.machines, host.machineId, host.direct]);
   // One available machine can connect automatically; choosing another always remains explicit.
   useEffect(() => {

@@ -61,7 +61,7 @@ for (const native of [false, true]) {
             }
           });
         });
-      await page.goto("/");
+      await page.goto("/?view=workspaces");
       await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
       const ui = page.frameLocator('iframe[title="Concors workspace"]');
       await expect(ui.getByRole("textbox", { name: "Preparing agent", exact: true })).toHaveCount(

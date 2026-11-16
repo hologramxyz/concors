@@ -47,7 +47,7 @@ test("browser workspaces send AI requests without the iOS consent prompt", async
       name: "Permission test",
       profile: "chat",
     });
-    await page.goto("/");
+    await page.goto("/?view=workspaces");
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
     const composer = ui.getByRole("textbox", { name: "Message Codex", exact: true });

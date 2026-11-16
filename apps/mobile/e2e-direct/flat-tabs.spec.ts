@@ -101,7 +101,7 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
       profile: "chat",
     });
     await execute({ kind: "selection.set", projectId, tabId });
-    await page.goto("/");
+    await page.goto("/?view=workspaces");
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
     await expect(ui.getByRole("heading", { name: "Choose an agent" })).toHaveCount(0);

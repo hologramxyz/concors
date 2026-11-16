@@ -5,9 +5,8 @@ test("Supervisor uses the unified chat and retains its selected harness after na
   page,
 }) => {
   test.setTimeout(60000);
-  await signedIn(page);
+  await signedIn(page, undefined, undefined, { supervisorLanding: true });
   await page.goto("/");
-  await page.getByRole("button", { name: "Supervisor", exact: true }).click();
   await expect(page.getByTestId("supervisor-page")).toBeVisible();
   await chooseProvider(page);
   await page
@@ -36,7 +35,7 @@ test("Supervisor uses the unified chat and retains its selected harness after na
     page.getByRole("textbox", { name: "Message Claude Code", exact: true }),
   ).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: "Supervisor", exact: true }).click();
+  await expect(page.getByTestId("supervisor-page")).toBeVisible();
   await expect(
     page.getByRole("textbox", { name: "Message Claude Code", exact: true }),
   ).toBeVisible();

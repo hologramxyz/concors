@@ -103,7 +103,7 @@ for (const native of [false, true]) {
             }
           });
         });
-      await page.goto("/");
+      await page.goto("/?view=workspaces");
       await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
       await expect(page.getByRole("button", { name: "Allow AI data sharing" })).toHaveCount(0);
       const ui = page.frameLocator('iframe[title="Concors workspace"]');

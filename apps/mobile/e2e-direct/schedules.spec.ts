@@ -26,7 +26,7 @@ test("mobile manages schedules through the native relay without horizontal overf
       epoch: workspace.epoch,
       operation: { kind: "project.add", projectId, name: "Mobile schedules", directory },
     });
-    await page.goto("/");
+    await page.goto("/?view=workspaces");
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();

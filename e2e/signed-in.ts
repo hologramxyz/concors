@@ -143,9 +143,18 @@ export async function signedIn(
   name = "E2E User",
   subscriptions = new SubscriptionLibrary(),
   /** Leave first-run setup to open, for the specs that test it. */
-  options: { freshSetup?: boolean } = {},
+  options: { freshSetup?: boolean; supervisorLanding?: boolean } = {},
 ): Promise<void> {
   if (!options.freshSetup) await skipSetup(page);
+  // Workspace-focused specs explicitly open the supported workspace deep link.
+  if (!options.supervisorLanding && !options.freshSetup)
+    await page.addInitScript(() => {
+      if (window === window.top && location.pathname === "/") {
+        const url = new URL(location.href);
+        url.searchParams.set("view", "workspaces");
+        history.replaceState(null, "", url);
+      }
+    });
   await page.addInitScript(
     ([key, token]: [string, string]) => {
       // Mobile's sandboxed renderer has no storage access and must never receive account tokens.
