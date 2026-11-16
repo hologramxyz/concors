@@ -7,6 +7,7 @@ interface Watch {
   supervisorId: string;
   sessionId: string;
   enabled: boolean;
+  pending?: { id: string; turnId: string; kind: AgentPending["kind"]; action: string }[];
 }
 
 const terminal = (agent: AgentInfo) => ["done", "failed", "interrupted"].includes(agent.status);
@@ -219,6 +220,27 @@ export class SupervisorWatches {
     const name = report.name.replaceAll("[", "").replaceAll("]", "").replaceAll("\\", "");
     const link = `[${name}](concors://session/${target.id})`;
     const prefix = `**${report.workspace} / ${link}**`;
+    const pendingIds = new Set(target.pending.map((p) => p.id));
+    for (const previous of watch.pending ?? []) {
+      if (pendingIds.has(previous.id)) continue;
+      this.record(
+        watch,
+        `input:${previous.turnId}:${previous.id}`,
+        "Input no longer pending",
+        `${prefix} is no longer waiting for that ${previous.kind === "approval" ? "approval" : "input"}.\n\n${quote(previous.action)}${target.status === "working" ? "\n\nThe agent has resumed." : ""}`,
+      );
+    }
+    const pending = target.pending.map((p) => ({
+      id: p.id,
+      turnId: p.turnId,
+      kind: p.kind,
+      action: pendingAction(p),
+    }));
+    if (JSON.stringify(pending) !== JSON.stringify(watch.pending ?? []))
+      this.store.saveSupervisorRecord(this.key(watch.supervisorId, watch.sessionId), {
+        ...watch,
+        pending,
+      });
     for (const pending of target.pending) {
       const state = pending.kind === "approval" ? "needs your approval" : "needs your input";
       this.record(

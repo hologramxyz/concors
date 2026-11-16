@@ -478,9 +478,7 @@ it("reports each distinct approval in a turn and stops reporting after unwatch",
     f.manager.observe({ type: "agent.state", agent: f.store.agent(target.id) });
   }
   expect(
-    f.store
-      .agentConversation(f.source.id)
-      .items.filter((i) => i.title === "Agent needs your input"),
+    f.store.agentConversation(f.source.id).items.filter((i) => i.id.includes(":input:")),
   ).toHaveLength(2);
   await f.control({ kind: "watch", sessionId: target.id, enabled: false });
   f.store.saveAgent({
@@ -490,9 +488,7 @@ it("reports each distinct approval in a turn and stops reporting after unwatch",
   });
   f.manager.observe({ type: "agent.state", agent: f.store.agent(target.id) });
   expect(
-    f.store
-      .agentConversation(f.source.id)
-      .items.filter((i) => i.title === "Agent needs your input"),
+    f.store.agentConversation(f.source.id).items.filter((i) => i.id.includes(":input:")),
   ).toHaveLength(2);
 });
 
@@ -617,4 +613,44 @@ it("lets the user stop watching a chat after its workspace was removed", async (
   expect(await f.control({ kind: "watch", sessionId: target.id, enabled: false })).toMatchObject({
     watching: false,
   });
+});
+
+it("clears the approval notice when the user answers and the worker resumes", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await f.control({
+    kind: "send",
+    sessionId: target.id,
+    text: "approve the game tests",
+    whenBusy: "queue",
+  });
+  await expect.poll(() => f.store.agent(target.id).pending.length).toBe(1);
+  const pending = f.store.agent(target.id).pending[0]!;
+  await expect
+    .poll(() =>
+      f.store
+        .agentConversation(f.source.id)
+        .items.some((i) => i.text.includes("needs your approval")),
+    )
+    .toBe(true);
+  await f.request({
+    kind: "respond",
+    sessionId: target.id,
+    pendingId: pending.id,
+    decision: "accept",
+  });
+  await expect
+    .poll(() =>
+      f.store
+        .agentConversation(f.source.id)
+        .items.some(
+          (i) => i.title === "Input no longer pending" && i.text.includes("no longer waiting"),
+        ),
+    )
+    .toBe(true);
+  expect(
+    f.store
+      .agentConversation(f.source.id)
+      .items.filter((i) => i.title === "Agent needs your input"),
+  ).toHaveLength(0);
 });
