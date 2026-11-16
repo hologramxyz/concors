@@ -76,7 +76,8 @@ export async function seedProject(
         profile: "shell",
       });
       // Seeding through the daemon does not navigate away from Supervisor.
-      await page.locator(`button[data-workspace-id="${projectId}"]`).click();
+      if (await page.getByTestId("supervisor-page").isVisible())
+        await page.locator(`button[data-workspace-id="${projectId}"]`).click();
       // The heading appears with the empty project; the spec's own edits need the page to have
       // the tab as well, or they are rejected as based on an outdated project.
       await expect(page.locator(`[data-pane-id="${paneId}"]`)).toBeVisible();
