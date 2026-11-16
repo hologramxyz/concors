@@ -2,6 +2,7 @@ import { useRef, useState, type PointerEvent } from "react";
 import { Plus } from "lucide-react";
 import type { MobileTarget } from "@concors/client-core";
 import type { WorkspaceOperation, WorkspaceProject, WorkspaceTab } from "@concors/protocol";
+import { useAgents } from "@/agents/context";
 import { TabStrip } from "@/workspace/tab-strip";
 import { TabButton } from "@/workspace/tab-button";
 import { projectPanes, type PaneNode } from "./selection";
@@ -49,7 +50,8 @@ export function MobileTabStrip({
   const press = useRef<{ id: number; x: number; y: number; timer: number } | null>(null);
   // The click a held finger ends with is not a tap.
   const held = useRef(false);
-  const entries = projectPanes(project);
+  const agents = useAgents();
+  const entries = projectPanes(project, agents);
   const active = tab && pane ? paneKey(tab.id, pane.id) : undefined;
   const current = entries.find((entry) => paneKey(entry.tab.id, entry.pane.id) === active);
   const menuEntry =

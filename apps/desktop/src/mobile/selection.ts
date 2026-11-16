@@ -1,17 +1,61 @@
-import type { WorkspaceProject, WorkspaceSnapshot } from "@concors/protocol";
+import {
+  UNTITLED_CHAT_NAME,
+  type AgentInfo,
+  type TerminalInfo,
+  type WorkspaceProject,
+  type WorkspaceSnapshot,
+} from "@concors/protocol";
 import type { MobileTarget } from "@concors/client-core";
-import { tabPanes } from "@/workspace/tab-panes";
+import { tabPanes, type PaneNode } from "@/workspace/tab-panes";
+import { defaultPaneTitle, tabTitle } from "@/workspace/tab-title";
 export { tabPanes, type PaneNode } from "@/workspace/tab-panes";
-/** Mobile calls each leaf a tab, but keeps the original IDs and desktop split tree. */
-export function projectPanes(project: WorkspaceProject) {
+type Agents = readonly Pick<AgentInfo, "id" | "name">[];
+type Terminals = readonly Pick<TerminalInfo, "id" | "status" | "foregroundCommand">[];
+
+/**
+ * What tells one pane of a split tab from the others, as desktop titles panes: its own name, its
+ * chat's title, or the command its terminal runs. Null when it has none yet (a chat nobody wrote
+ * in, an idle terminal), which a phone would only show as "Agent" or "Terminal".
+ */
+function distinctPaneTitle(pane: PaneNode, agents: Agents, terminals: Terminals) {
+  if (pane.name) return pane.name;
+  const title = defaultPaneTitle(pane, agents, terminals);
+  const generic = pane.terminalProfile?.name ?? PROFILE_LABELS[pane.profile];
+  return title === UNTITLED_CHAT_NAME || title === generic ? null : title;
+}
+
+/** One pane of a split tab: what tells it apart, else the tab's name and its position. */
+function paneLabel(
+  pane: PaneNode,
+  index: number,
+  tabName: string,
+  agents: Agents,
+  terminals: Terminals,
+) {
+  const title = distinctPaneTitle(pane, agents, terminals);
+  // A chat titled like its tab tells it from the tab's other panes no better than nothing.
+  return title && title !== tabName ? title : `${tabName} ${index + 1}`;
+}
+
+/**
+ * Mobile calls each leaf a tab, but keeps the original IDs and desktop split tree. A tab with one
+ * pane is labelled as desktop's tab strip labels it. Each pane of a split tab is labelled as desktop
+ * titles that pane, so four chats in one tab read as their four conversations rather than "Main 1"
+ * to "Main 4"; a pane with nothing to tell it apart yet keeps the tab's name and its position.
+ * Labels come only from shared names; the shared tab is never changed to flatten it.
+ */
+export function projectPanes(
+  project: WorkspaceProject,
+  agents: Agents = [],
+  terminals: Terminals = [],
+) {
   return project.tabs.flatMap((tab) => {
     const panes = tabPanes(tab);
+    const name = tabTitle(tab, agents, terminals);
     return panes.map((pane, index) => ({
       tab,
       pane,
-      // Use the shared tab name and display position; never manufacture local-only names or
-      // change the shared tab to flatten it. A pane's own name, when set, replaces its profile.
-      label: panes.length === 1 ? tab.name : `${tab.name} ${index + 1}`,
+      label: panes.length === 1 ? name : paneLabel(pane, index, name, agents, terminals),
       profileLabel: pane.name ?? pane.terminalProfile?.name ?? PROFILE_LABELS[pane.profile],
     }));
   });
