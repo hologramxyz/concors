@@ -49,7 +49,7 @@ for (const mode of ["light", "dark"] as const) {
   }) => {
     test.setTimeout(240_000);
     await page.emulateMedia({ colorScheme: mode, reducedMotion: "reduce" });
-    await page.goto("/");
+    await page.goto("/?view=workspaces");
     await page.getByRole("button", { name: "Explore demo" }).click();
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
     const input = ui.getByRole("textbox", { name: "Message Codex" });

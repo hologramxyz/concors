@@ -56,7 +56,7 @@ async function openNativeDemo(page: Page, query = "") {
       }
     });
   });
-  await page.goto(`/${query}`);
+  await page.goto(`/?view=workspaces&${query.replace(/^\?/, "")}`);
   await page.getByRole("button", { name: "Explore demo" }).click();
   await expect.poll(async () => !!(await composer(page))).toBe(true);
   return page.frameLocator('iframe[title="Concors workspace"]');

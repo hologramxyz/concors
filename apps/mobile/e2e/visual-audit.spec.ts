@@ -17,7 +17,7 @@ for (const colorScheme of ["light", "dark"] as const) {
           message.state.safeArea = { top: 59, bottom: 34, left: 0, right: 0 };
       });
     });
-    await page.goto("/");
+    await page.goto("/?view=workspaces");
     await expect(page.getByRole("button", { name: "Explore demo" })).toBeVisible();
     const capture = async (name: string) => {
       await page.screenshot({

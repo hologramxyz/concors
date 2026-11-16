@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test("machine picker leads directly to machine settings", async ({ page }) => {
-  await page.goto("/");
+  await page.goto("/?view=workspaces");
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
@@ -34,7 +34,7 @@ test("an account with no machines gets machine setup navigation instead of proje
       }
     });
   });
-  await page.goto("/");
+  await page.goto("/?view=workspaces");
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
   await expect(ui.getByRole("heading", { name: "Connect a machine to get started" })).toBeVisible();

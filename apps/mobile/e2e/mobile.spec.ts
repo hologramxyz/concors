@@ -114,7 +114,7 @@ test("offline renderer supplies secure request IDs without the browser UUID help
   await paneCount(ui, 3);
 });
 async function enter(page: Page) {
-  await page.goto("/");
+  await page.goto("/?view=workspaces");
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = workspace(page);
   await expect(ui.locator('meta[name="concors-source-revision"]')).toHaveAttribute(
@@ -1651,7 +1651,7 @@ test("the tab strip draws each tab as desktop's tab bar does", async ({ page }) 
 test("the tab strip marks replies in progress, finishes and failures as desktop does", async ({
   page,
 }) => {
-  await page.goto(`/?${SIDEBAR_TREE_FLAG}`);
+  await page.goto(`/?view=workspaces&${SIDEBAR_TREE_FLAG}`);
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = workspace(page);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
@@ -1680,7 +1680,7 @@ test("the tab strip marks replies in progress, finishes and failures as desktop 
 test("the tab strip scrolls sideways with fades and keeps the current tab in view", async ({
   page,
 }) => {
-  await page.goto(`/?${SIDEBAR_TREE_FLAG}`);
+  await page.goto(`/?view=workspaces&${SIDEBAR_TREE_FLAG}`);
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = workspace(page);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
@@ -1749,7 +1749,7 @@ test("holding a strip tab opens its menu sheet, which a screen reader reaches to
 test("the workspace switcher lists open workspaces and returns to each one's last tab", async ({
   page,
 }) => {
-  await page.goto(`/?${SIDEBAR_TREE_FLAG}`);
+  await page.goto(`/?view=workspaces&${SIDEBAR_TREE_FLAG}`);
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = workspace(page);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
@@ -1924,7 +1924,7 @@ test("the app reopens the tab last opened on this machine", async ({ page }) => 
   await expect(tabs).toHaveAttribute("data-value", activeChat);
   await choose(ui, "Tabs", activeTerminal);
   await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
-  await page.goto("/");
+  await page.goto("/?view=workspaces");
   await page.getByRole("button", { name: "Explore demo" }).click();
   ui = workspace(page);
   await expect(ui.getByLabel("Terminal output", { exact: true })).toBeVisible();
@@ -1936,7 +1936,7 @@ test("the app reopens the tab last opened on this machine", async ({ page }) => 
 });
 test("the sidebar lists each workspace's tabs under it, as desktop does", async ({ page }) => {
   const enterTree = async () => {
-    await page.goto(`/?${SIDEBAR_TREE_FLAG}`);
+    await page.goto(`/?view=workspaces&${SIDEBAR_TREE_FLAG}`);
     await page.getByRole("button", { name: "Explore demo" }).click();
     const ui = workspace(page);
     await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
@@ -2011,7 +2011,7 @@ test("the sidebar lists each workspace's tabs under it, as desktop does", async 
 test("workspace rows show their fold chevron, and their menu starts a tab there", async ({
   page,
 }) => {
-  await page.goto(`/?${SIDEBAR_TREE_FLAG}`);
+  await page.goto(`/?view=workspaces&${SIDEBAR_TREE_FLAG}`);
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = workspace(page);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();
@@ -2056,7 +2056,7 @@ test("workspace rows show their fold chevron, and their menu starts a tab there"
 test("the New tab sheet lists a saved terminal profile after the built-in ones", async ({
   page,
 }) => {
-  await page.goto(`/?${TERMINAL_PROFILE_FLAG}`);
+  await page.goto(`/?view=workspaces&${TERMINAL_PROFILE_FLAG}`);
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = workspace(page);
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeVisible();

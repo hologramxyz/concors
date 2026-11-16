@@ -5,7 +5,7 @@ test.setTimeout(120000);
 test("settings choices use nested drawers, preserve the parent and reset section scroll", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?view=workspaces");
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
@@ -80,7 +80,7 @@ test("settings choices use nested drawers, preserve the parent and reset section
 test("schedule field drawers preserve the form and support rich-label typeahead", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?view=workspaces");
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
