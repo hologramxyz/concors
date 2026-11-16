@@ -529,3 +529,36 @@ it("starts named chats in background tabs without stealing the user's selection"
   expect(f.store.snapshot().selection).toEqual(selection);
   expect(f.store.agent(result.sessionId).settings?.mode).toBe("default");
 });
+
+it("can wait for an existing approval to be answered without answering it", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await f.control({
+    kind: "send",
+    sessionId: target.id,
+    text: "approve test run",
+    whenBusy: "queue",
+  });
+  await expect.poll(() => f.store.agent(target.id).pending.length).toBe(1);
+  const pending = f.store.agent(target.id).pending[0]!;
+  let returned = false;
+  const waiting = f
+    .control({ kind: "wait", sessionIds: [target.id], timeoutMs: 2000, on: "change" })
+    .then((result) => {
+      returned = true;
+      return result;
+    });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(returned).toBe(false);
+  expect(f.store.agent(target.id).pending).toHaveLength(1);
+  await f.request({
+    kind: "respond",
+    sessionId: target.id,
+    pendingId: pending.id,
+    decision: "accept",
+  });
+  expect(await waiting).toMatchObject({
+    timedOut: false,
+    sessions: [{ sessionId: target.id, pending: [] }],
+  });
+});

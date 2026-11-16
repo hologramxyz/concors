@@ -287,7 +287,9 @@ export class SupervisorManager {
     }
     if (op.kind === "status")
       return {
-        deliveries: this.deliveries().filter((d) => d.supervisorId === source.id),
+        deliveries: this.deliveries()
+          .filter((d) => d.supervisorId === source.id)
+          .map((d) => ({ ...d, text: d.text.slice(0, 500) })),
         watching: this.watches.status(source.id),
       };
     if (op.kind === "capabilities")

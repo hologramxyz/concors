@@ -105,7 +105,18 @@ export class SupervisorWatches {
       .filter((w) => w.supervisorId === supervisorId)
       .flatMap((w) => {
         try {
-          return [sessionReport(this.store, this.target(w.sessionId))];
+          const report = sessionReport(this.store, this.target(w.sessionId));
+          return [
+            {
+              ...report,
+              reply: report.reply
+                ? {
+                    text: report.reply.text.slice(0, 2000),
+                    truncated: report.reply.truncated || report.reply.text.length > 2000,
+                  }
+                : null,
+            },
+          ];
         } catch {
           return [];
         }
@@ -150,20 +161,27 @@ export class SupervisorWatches {
     if (this.closed || (event.type !== "agent.state" && event.type !== "agent.item")) return;
     const id = event.type === "agent.state" ? event.agent.id : event.item.sessionId;
     for (const watch of this.records())
-      if (watch.sessionId === id || watch.supervisorId === id) this.notify(watch);
+      if (watch.sessionId === id || watch.supervisorId === id)
+        this.notify(
+          watch,
+          event.type === "agent.state" && event.agent.id === watch.sessionId
+            ? event.agent
+            : undefined,
+        );
     if (event.type === "agent.state")
       for (const waiter of this.waiters) if (waiter.ids.has(id)) waiter.wake();
   }
-  private notify(watch: Watch): void {
+  private notify(watch: Watch, observed?: AgentInfo): void {
     let target: AgentInfo;
     try {
       this.source(watch.supervisorId);
       target = this.target(watch.sessionId);
+      if (observed) target = observed;
     } catch {
       return;
     }
     const report = sessionReport(this.store, target);
-    const name = report.name.replaceAll(/[\[\]\\]/g, "");
+    const name = report.name.replaceAll("[", "").replaceAll("]", "").replaceAll("\\", "");
     const link = `[${name}](concors://session/${target.id})`;
     const prefix = `**${report.workspace} / ${link}**`;
     for (const pending of target.pending) {
