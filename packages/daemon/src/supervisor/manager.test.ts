@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import { SupervisorControlSchema, type AgentOperation } from "@concors/protocol";
+import type { SupervisorControlSchema, AgentOperation } from "@concors/protocol";
 import type { z } from "zod";
 import { WorkspaceStore } from "../workspace/store.ts";
 import { AgentManager } from "../agents/manager.ts";

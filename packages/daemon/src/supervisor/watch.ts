@@ -223,13 +223,13 @@ export class SupervisorWatches {
         `${prefix} has ${report.queued} paused instruction(s).\n\n${quote(target.error ?? "Open the target chat to review its queue before resuming.")}`,
       );
     if (!terminal(target) || !target.turnId || target.pending.length) return;
-    const result = report.reply?.text;
+    const result = report.reply?.text.slice(0, 3000);
     const outcome = target.status === "done" ? "finished" : target.status;
     this.record(
       watch,
       `${target.turnId}:${target.status}`,
       "Agent result",
-      `${prefix} ${outcome}.\n\n${result ? `Agent’s reply:\n\n${quote(result)}${report.reply?.truncated ? "\n\nRead the original chat for the full reply." : ""}` : target.error ? quote(target.error.slice(0, 3000)) : "No final text reply was saved. Open the chat for its tool output."}`,
+      `${prefix} ${outcome}.\n\n${result ? `Agent’s reply:\n\n${quote(result)}${report.reply?.truncated || (report.reply?.text.length ?? 0) > 3000 ? "\n\nRead the original chat for the full reply." : ""}` : target.error ? quote(target.error.slice(0, 3000)) : "No final text reply was saved. Open the chat for its tool output."}`,
     );
   }
   private record(watch: Watch, suffix: string, title: string, text: string): void {
