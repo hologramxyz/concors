@@ -111,14 +111,16 @@ export class SupervisorWatches {
         }
       });
   }
-  async wait(supervisorId: string, ids: string[], timeoutMs: number) {
+  async wait(supervisorId: string, ids: string[], timeoutMs: number, on: "attention" | "change") {
     const reports = () => ids.map((id) => sessionReport(this.store, this.target(id)));
     const initial = reports();
     const signature = (rows: typeof initial) =>
       JSON.stringify(rows.map((r) => [r.status, r.turnId, r.pending, r.queued, r.queuePaused]));
     if (
-      !initial.some((r) => ["starting", "working"].includes(r.status)) ||
-      initial.some((r) => r.pending.length)
+      !initial.some(
+        (r) => ["starting", "working", "needs_input"].includes(r.status) || r.pending.length,
+      ) ||
+      (on === "attention" && initial.some((r) => r.pending.length))
     )
       return { sessions: initial, timedOut: false };
     let timedOut = false;

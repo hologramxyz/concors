@@ -309,7 +309,7 @@ export class SupervisorManager {
     }
     if (op.kind === "wait") {
       for (const id of new Set(op.sessionIds)) this.watches.track(source.id, id, request.requestId);
-      return this.watches.wait(source.id, [...new Set(op.sessionIds)], op.timeoutMs);
+      return this.watches.wait(source.id, [...new Set(op.sessionIds)], op.timeoutMs, op.on);
     }
     if (op.kind === "workspace") {
       const action = op.command.operation;

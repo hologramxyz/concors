@@ -102,6 +102,7 @@ export const SupervisorControlSchema = z.object({
       kind: z.literal("wait"),
       sessionIds: z.array(Id).min(1).max(8),
       timeoutMs: z.number().int().min(1).max(25000).default(20000),
+      on: z.enum(["attention", "change"]).default("attention"),
     }),
   ]),
 });
