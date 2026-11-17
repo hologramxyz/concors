@@ -12,7 +12,7 @@ import {
 } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
 import type { AgentManager } from "../agents/manager.ts";
-import { SupervisorWatches, sessionReport } from "./watch.ts";
+import { SupervisorWatches, permissionMode, sessionReport } from "./watch.ts";
 import type { ProviderRegistry } from "../agents/providers/registry.ts";
 import { randomUUID } from "node:crypto";
 
@@ -334,7 +334,7 @@ export class SupervisorManager {
           status: a.status,
           pending: a.pending.length,
           pendingRequests: sessionReport(this.store, a, false).pending,
-          permissions: a.settings?.mode ?? "default",
+          permissions: permissionMode(a),
           queued: a.queue?.length ?? 0,
           updatedAt: a.updatedAt,
           historyRevision: a.historyRevision ?? 0,
@@ -383,7 +383,7 @@ export class SupervisorManager {
     if (op.kind === "capabilities")
       return {
         machineId: snapshot.machineId,
-        permissions: source.settings?.mode ?? "default",
+        permissions: permissionMode(source),
         providers: this.providers.statuses(),
         note: "Your existing chat permission picker controls Supervisor. Targets retain their own permissions. Approval and question requests are reported here with links; only the user can answer them in the target chat.",
       };

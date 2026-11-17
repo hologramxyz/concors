@@ -369,6 +369,30 @@ it("searches a history longer than one slice without blocking", async () => {
   item(target.id, 4500, "The flaky Payment Webhook test");
   expect([...(await f.store.searchAgentText("payment webhook"))]).toEqual([target.id]);
 });
+it("reports the permission mode each chat runs in, including a harness's own", async () => {
+  const f = await setup(),
+    target = await f.target();
+  expect(await f.control({ kind: "capabilities" })).toMatchObject({ permissions: "default" });
+  f.store.saveAgent({
+    ...f.store.agent(f.source.id),
+    settings: { model: null, effort: null, mode: "full-access" },
+  });
+  const claude = f.store.agent(target.id);
+  f.store.saveAgent({
+    ...claude,
+    settings: { ...claude.settings!, mode: "default", nativeMode: "bypassPermissions" },
+    controls: {
+      ...claude.controls!,
+      modes: [{ id: "bypassPermissions", label: "Bypass permissions" }],
+    },
+  });
+  expect(await f.control({ kind: "capabilities" })).toMatchObject({
+    permissions: "full-access",
+  });
+  expect(await f.control({ kind: "sessions", offset: 0 })).toMatchObject({
+    sessions: [{ id: target.id, permissions: "Bypass permissions (bypassPermissions)" }],
+  });
+});
 it("authenticates the local bridge and refuses browser origins and oversized bodies", async () => {
   const f = await setup(),
     tools = new SupervisorTools();

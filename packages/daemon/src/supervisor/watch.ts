@@ -50,6 +50,18 @@ const pendingSummary = (pending: AgentPending) => ({
   detail: pending.detail.slice(0, 2000),
 });
 
+/**
+ * The permission mode a chat runs in, as its picker shows it. Codex uses Concors's own modes;
+ * other harnesses pick a native one (Claude Code's "Bypass permissions"), which the generic mode
+ * does not reflect.
+ */
+export function permissionMode(agent: AgentInfo): string {
+  if ((agent.engine ?? agent.provider) === "codex") return agent.settings?.mode ?? "default";
+  const id = agent.settings?.nativeMode ?? agent.controls?.currentMode ?? "default";
+  const label = agent.controls?.modes.find((mode) => mode.id === id)?.label;
+  return label && label !== id ? `${label} (${id})` : id;
+}
+
 /** Local saved context only. This never launches or prompts an agent for progress. */
 export function sessionReport(store: WorkspaceStore, agent: AgentInfo, includeReply = true) {
   const snapshot = store.snapshot();
@@ -73,7 +85,7 @@ export function sessionReport(store: WorkspaceStore, agent: AgentInfo, includeRe
     queued: agent.queue?.length ?? 0,
     queuePaused: agent.queuePaused ?? false,
     pending: agent.pending.map(pendingSummary),
-    permissions: agent.settings?.mode ?? "default",
+    permissions: permissionMode(agent),
     error: agent.error,
     reply: reply
       ? { text: reply.text.slice(0, 12000), truncated: reply.text.length > 12000 }
