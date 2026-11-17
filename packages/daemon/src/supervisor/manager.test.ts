@@ -299,23 +299,26 @@ it("limits watches per conversation, makes room from settled chats and lets /cle
     status: "done" | "working",
     explicit = false,
   ) =>
-    Array.from({ length: count }, (_, index) => {
-      const id = randomUUID();
-      f.store.createBackgroundAgent({
-        ...f.store.agent(target.id),
-        id,
-        status,
-        updatedAt: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
-      });
-      f.store.saveSupervisorRecord(`watch:${supervisorId}:${id}`, {
-        id: randomUUID(),
-        supervisorId,
-        sessionId: id,
-        enabled: true,
-        explicit,
-      });
-      return id;
-    });
+    // One transaction: hundreds of separate writes take several seconds on Windows runners.
+    f.store.transaction(() =>
+      Array.from({ length: count }, (_, index) => {
+        const id = randomUUID();
+        f.store.createBackgroundAgent({
+          ...f.store.agent(target.id),
+          id,
+          status,
+          updatedAt: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
+        });
+        f.store.saveSupervisorRecord(`watch:${supervisorId}:${id}`, {
+          id: randomUUID(),
+          supervisorId,
+          sessionId: id,
+          enabled: true,
+          explicit,
+        });
+        return id;
+      }),
+    );
   // Chats the user asked to watch are never dropped to make room, however long idle.
   const asked = followed(f.source.id, 1, "done", true);
   const old = followed(f.source.id, WATCH_LIMIT - 1, "done");
@@ -355,20 +358,22 @@ it("prunes old receipts and delivery history on restart and skips streamed text"
   const fresh = `request:${f.source.id}:${randomUUID()}`;
   f.store.saveSupervisorRecord(fresh, { createdAt: new Date().toISOString() });
   f.store.saveSupervisorRecord(`watch:${f.source.id}:${randomUUID()}`, { enabled: false });
-  for (let index = 0; index < 300; index++) {
-    const id = randomUUID(),
-      at = new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString();
-    f.store.saveSupervisorRecord("delivery:" + id, {
-      id,
-      supervisorId: f.source.id,
-      sessionId: target.id,
-      projectId: f.projectId,
-      text: "Earlier work",
-      status: "done",
-      createdAt: at,
-      updatedAt: at,
-    });
-  }
+  f.store.transaction(() => {
+    for (let index = 0; index < 300; index++) {
+      const id = randomUUID(),
+        at = new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString();
+      f.store.saveSupervisorRecord("delivery:" + id, {
+        id,
+        supervisorId: f.source.id,
+        sessionId: target.id,
+        projectId: f.projectId,
+        text: "Earlier work",
+        status: "done",
+        createdAt: at,
+        updatedAt: at,
+      });
+    }
+  });
   f.restart();
   expect(f.store.supervisorRecords("request:")).toHaveLength(1);
   expect(f.store.supervisorRecord(fresh)).toBeDefined();
@@ -415,10 +420,21 @@ it("searches a history longer than one slice without blocking", async () => {
       status: "completed",
       createdAt: new Date().toISOString(),
     });
-  for (let index = 0; index < 4500; index++) item(other.id, index, "Unrelated progress " + index);
-  // Retired chats leave positions unused: a gap of fifty million must not cost a slice per range.
+  // One transaction: saving 4,500 items one by one takes over a minute on Windows runners.
   const database = new DatabaseSync(join(f.directory, "workspace.sqlite"));
+  database.exec("BEGIN");
+  const insert = database.prepare(
+    "INSERT INTO agent_items (session_id, item_id, item) VALUES (?, ?, ?)",
+  );
+  for (let index = 0; index < 4500; index++)
+    insert.run(
+      other.id,
+      `bulk:${index}`,
+      JSON.stringify({ kind: "assistant", text: "Unrelated progress " + index }),
+    );
+  // Retired chats leave positions unused: a gap of fifty million must not cost a slice per range.
   database.exec("UPDATE sqlite_sequence SET seq = seq + 50000000 WHERE name = 'agent_items'");
+  database.exec("COMMIT");
   database.close();
   item(target.id, 4500, "The flaky Payment Webhook test");
   const yields = vi.spyOn(globalThis, "setImmediate");
@@ -533,8 +549,11 @@ it("limits unfinished deliveries per conversation and bounds their history while
   };
   // A conversation cleared earlier left 64 deliveries unfinished.
   const earlier = randomUUID();
-  for (let index = 0; index < 64; index++) record(earlier, "queued", index);
-  for (let index = 0; index < 300; index++) record(f.source.id, "done", 100 + index);
+  // One transaction: hundreds of separate writes take several seconds on Windows runners.
+  f.store.transaction(() => {
+    for (let index = 0; index < 64; index++) record(earlier, "queued", index);
+    for (let index = 0; index < 300; index++) record(f.source.id, "done", 100 + index);
+  });
   expect(
     (f.store.supervisorRecords("delivery:") as { status: string }[]).filter(
       (d) => d.status === "done",
@@ -546,7 +565,9 @@ it("limits unfinished deliveries per conversation and bounds their history while
     text: "Still possible",
     whenBusy: "queue",
   });
-  for (let index = 0; index < 64; index++) record(f.source.id, "queued", 500 + index);
+  f.store.transaction(() => {
+    for (let index = 0; index < 64; index++) record(f.source.id, "queued", 500 + index);
+  });
   await expect(
     f.control({ kind: "send", sessionId: target.id, text: "One too many", whenBusy: "queue" }),
   ).rejects.toThrow("Wait for existing delegated work");
