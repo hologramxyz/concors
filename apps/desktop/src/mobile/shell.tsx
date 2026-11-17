@@ -703,6 +703,7 @@ function MobileWorkspaceContent({
                     <nav aria-label="Primary" className="mobile-sidebar-content">
                       <div className="space-y-0.5">
                         <SupervisorNav
+                          workspace={workspace}
                           selected={page?.kind === "supervisor"}
                           onClick={() => {
                             setPage({ kind: "supervisor" });

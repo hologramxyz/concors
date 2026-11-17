@@ -252,6 +252,24 @@ export function paneState(
   });
 }
 
+/**
+ * What a chat with a row of its own shows, decided as `rowState` decides it for a tab showing only
+ * that chat: the Supervisor's chat is listed apart from every workspace.
+ */
+export function chatState(chat: AgentInfo) {
+  return rowState({
+    kind: "tab",
+    key: chat.id,
+    projectId: "",
+    tabId: "",
+    title: "",
+    chat,
+    tool: "chat",
+    dot: chatDot(chat),
+    time: "",
+  });
+}
+
 /** The dot a row shows, if any. */
 export function rowDot(row: SidebarRow): AgentDot | undefined {
   const state = rowState(row);

@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import type { AgentInfo, TerminalInfo, WorkspaceSnapshot } from "@concors/protocol";
 import { shortAge } from "@/lib/format-date";
 import {
+  chatState,
   foldRows,
   rowDot,
   rowState,
@@ -507,4 +508,29 @@ it("spins a split tab's row while any of its panes works, not only the main one"
   expect(state(unseen, { status: "working" })).toBe("working");
   expect(state({ status: "needs_input" }, { status: "working" })).toBe("attention");
   expect(state(unseen, {})).toBe("done");
+});
+
+it("marks a chat listed on its own as the tab showing only that chat is marked", () => {
+  const attention = (kind: "done" | "needs_input", seen: boolean) => ({
+    id: "a",
+    kind,
+    createdAt: "2026-09-20T00:00:00Z",
+    seen,
+  });
+  const cases: [Partial<AgentInfo>, ReturnType<typeof chatState>][] = [
+    [{}, undefined],
+    [{ status: "working" }, "working"],
+    [{ backgroundAgents: 1 }, "working"],
+    [{ status: "needs_input", attention: attention("needs_input", true) }, "attention"],
+    [{ status: "failed" }, "attention"],
+    [{ attention: attention("done", false) }, "done"],
+    [{ attention: attention("done", true) }, undefined],
+  ];
+  for (const [patch, expected] of cases) {
+    expect(chatState(agent("open", patch))).toBe(expected);
+    // The same chat in its workspace's tab row reads the same.
+    expect(rowState(sidebarRows(workspace, [agent("open", patch)], []).rows.get("p")![0]!)).toBe(
+      expected,
+    );
+  }
 });
