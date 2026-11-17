@@ -85,6 +85,8 @@ export function sessionReport(store: WorkspaceStore, agent: AgentInfo, includeRe
 export class SupervisorWatches {
   private closed = false;
   private readonly waiters = new Set<{ ids: Set<string>; wake: () => void }>();
+  /** Each chat's status as of its latest state event, so streamed items need no database read. */
+  private readonly statuses = new Map<string, AgentInfo["status"]>();
   private readonly store: WorkspaceStore;
   private readonly agents: AgentManager;
   private readonly source: (id: string) => AgentInfo;
@@ -122,9 +124,10 @@ export class SupervisorWatches {
         });
     });
   }
-  private records(): Watch[] {
-    return (this.store.supervisorRecords("watch:") as Watch[]).filter((watch) => {
-      if (!watch.enabled) return false;
+  /** Enabled watches whose chat and Supervisor still exist, optionally only those matching first. */
+  private records(match: (watch: Watch) => boolean = () => true): Watch[] {
+    return this.enabled().filter((watch) => {
+      if (!match(watch)) return false;
       try {
         this.target(watch.sessionId);
         this.store.agent(watch.supervisorId);
@@ -138,6 +141,10 @@ export class SupervisorWatches {
         return false;
       }
     });
+  }
+  /** The saved rows alone, without checking that their chats still exist. */
+  private enabled(): Watch[] {
+    return (this.store.supervisorRecords("watch:") as Watch[]).filter((watch) => watch.enabled);
   }
   private key(source: string, target: string) {
     return `watch:${source}:${target}`;
@@ -284,7 +291,24 @@ export class SupervisorWatches {
   observe(event: AgentEvent): void {
     if (this.closed || (event.type !== "agent.state" && event.type !== "agent.item")) return;
     const id = event.type === "agent.state" ? event.agent.id : event.item.sessionId;
-    for (const watch of this.records())
+    // Approvals, questions, queues and outcomes all arrive as state changes. Items matter only for
+    // a finished turn's reply saved after its state, not the text a working turn streams.
+    if (event.type === "agent.state") this.statuses.set(id, event.agent.status);
+    else {
+      if (event.item.kind !== "assistant" || !this.enabled().some((w) => w.sessionId === id))
+        return;
+      let status = this.statuses.get(id);
+      try {
+        status ??= this.store.agent(id).status;
+      } catch {
+        return;
+      }
+      if (!["done", "failed", "interrupted"].includes(status)) return;
+    }
+    // A Supervisor's own state change catches up notices withheld while it could not receive them.
+    for (const watch of this.records(
+      (w) => w.sessionId === id || (event.type === "agent.state" && w.supervisorId === id),
+    ))
       if (watch.sessionId === id || watch.supervisorId === id)
         this.notify(
           watch,

@@ -226,6 +226,7 @@ it("does not replay uncertain mutations after restart", async () => {
     sessionId: f.source.id,
     request: { requestId, operation },
     id: randomUUID(),
+    createdAt: new Date().toISOString(),
   });
   f.restart();
   expect(f.manager.deliveries()[0]?.status).toBe("interrupted");
@@ -308,6 +309,65 @@ it("limits watches per conversation, makes room from settled chats and lets /cle
   await expect(
     f.manager.control(next, { operation: { kind: "watch", sessionId: target.id } }),
   ).rejects.toThrow("Stop watching one first");
+});
+it("prunes old receipts and delivery history on restart and skips streamed text", async () => {
+  const f = await setup(),
+    target = await f.target();
+  const old = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+  f.store.saveSupervisorRecord(`request:${randomUUID()}`, { result: "unscoped, older daemon" });
+  f.store.saveSupervisorRecord(`request:${f.source.id}:${randomUUID()}`, { createdAt: old });
+  const fresh = `request:${f.source.id}:${randomUUID()}`;
+  f.store.saveSupervisorRecord(fresh, { createdAt: new Date().toISOString() });
+  f.store.saveSupervisorRecord(`watch:${f.source.id}:${randomUUID()}`, { enabled: false });
+  for (let index = 0; index < 300; index++) {
+    const id = randomUUID(),
+      at = new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString();
+    f.store.saveSupervisorRecord("delivery:" + id, {
+      id,
+      supervisorId: f.source.id,
+      sessionId: target.id,
+      projectId: f.projectId,
+      text: "Earlier work",
+      status: "done",
+      createdAt: at,
+      updatedAt: at,
+    });
+  }
+  f.restart();
+  expect(f.store.supervisorRecords("request:")).toHaveLength(1);
+  expect(f.store.supervisorRecord(fresh)).toBeDefined();
+  expect(f.store.supervisorRecords("watch:")).toHaveLength(0);
+  expect(f.store.supervisorRecords("delivery:")).toHaveLength(256);
+  expect(f.manager.deliveries()).toHaveLength(128);
+  // Streamed reply text reads neither deliveries nor the chat's saved state.
+  const item = { ...f.store.agentConversation(target.id).items[0]!, kind: "assistant" as const };
+  const reads = vi.spyOn(f.store, "supervisorRecords"),
+    agents = vi.spyOn(f.store, "agent");
+  f.manager.observe({ type: "agent.item", item });
+  expect(reads.mock.calls.filter(([prefix]) => prefix !== "watch:")).toEqual([]);
+  expect(agents).not.toHaveBeenCalled();
+});
+it("searches a history longer than one slice without blocking", async () => {
+  const f = await setup(),
+    target = await f.target(),
+    other = await f.target();
+  const item = (sessionId: string, index: number, text: string) =>
+    f.store.saveAgentItem({
+      id: `bulk:${index}`,
+      sessionId,
+      turnId: "bulk",
+      position: 0,
+      revision: 0,
+      kind: "assistant",
+      title: "",
+      text,
+      detail: "",
+      status: "completed",
+      createdAt: new Date().toISOString(),
+    });
+  for (let index = 0; index < 4500; index++) item(other.id, index, "Unrelated progress " + index);
+  item(target.id, 4500, "The flaky Payment Webhook test");
+  expect([...(await f.store.searchAgentText("payment webhook"))]).toEqual([target.id]);
 });
 it("authenticates the local bridge and refuses browser origins and oversized bodies", async () => {
   const f = await setup(),
@@ -649,6 +709,8 @@ it("summarizes file approvals without copying generated source into the Supervis
   const f = await setup(),
     target = await f.target();
   await f.request({ kind: "send", sessionId: target.id, text: "hold game UI" });
+  // Inject the approval into the started turn, not the placeholder its start replaces.
+  await expect.poll(() => f.store.agent(target.id).turnId?.startsWith("pending:")).toBe(false);
   const info = f.store.agent(target.id);
   const pending = {
     id: randomUUID(),

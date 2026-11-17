@@ -20,6 +20,8 @@ const active = (agent: AgentInfo) =>
   ["starting", "working", "needs_input"].includes(agent.status) ||
   !!agent.pending.length ||
   !!agent.queue?.length;
+/** Finished deliveries kept across restarts; status reports the newest 128 of all deliveries. */
+const DELIVERY_HISTORY = 256;
 const finished = (status: SupervisorDelivery["status"]) =>
   ["done", "failed", "interrupted", "cancelled"].includes(status);
 /** Operations that change something. Only these keep a receipt, so retrying one cannot repeat it. */
@@ -79,6 +81,7 @@ export class SupervisorManager {
     // /clear leaves the previous conversation behind; like any closed chat, it may be retired to
     // make room. The shown conversation and its other harnesses stay, so switching back works.
     store.keepAgents(() => this.selected());
+    this.prune();
     // Recovery never repeats a prompt whose delivery was uncertain at shutdown.
     for (const delivery of this.deliveries()) {
       if (finished(delivery.status)) continue;
@@ -144,20 +147,60 @@ export class SupervisorManager {
     );
   }
 
-  deliveries(): SupervisorDelivery[] {
-    const all = this.store
+  /**
+   * Every saved delivery, newest first. Agent events consult them constantly, and only this manager
+   * writes them, so they are read from the database once.
+   */
+  private saved?: SupervisorDelivery[];
+  private allDeliveries(): SupervisorDelivery[] {
+    this.saved ??= this.store
       .supervisorRecords("delivery:")
-      .map((row) => SupervisorDeliverySchema.parse(row));
+      .map((row) => SupervisorDeliverySchema.parse(row))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return this.saved;
+  }
+  deliveries(): SupervisorDelivery[] {
+    const all = this.allDeliveries();
     const active = all.filter((d) => !finished(d.status));
     return [...active, ...all.filter((d) => finished(d.status)).slice(0, 128 - active.length)].sort(
       (a, b) => b.createdAt.localeCompare(a.createdAt),
     );
   }
   private saveDelivery(delivery: SupervisorDelivery): void {
-    this.store.saveSupervisorRecord("delivery:" + delivery.id, {
-      ...delivery,
-      updatedAt: new Date().toISOString(),
-    });
+    const saved = { ...delivery, updatedAt: new Date().toISOString() };
+    this.store.saveSupervisorRecord("delivery:" + delivery.id, saved);
+    this.saved = [saved, ...this.allDeliveries().filter((d) => d.id !== delivery.id)].sort((a, b) =>
+      b.createdAt.localeCompare(a.createdAt),
+    );
+  }
+  /**
+   * Bounds what Supervisor keeps. A receipt only makes retrying a change safe, so a week is ample;
+   * status reports at most 128 deliveries; a stopped watch carries nothing worth keeping.
+   */
+  private prune(): void {
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const receipts = this.store
+      .supervisorRecordEntries("request:")
+      .filter(({ value }) => !(Date.parse((value as Receipt).createdAt ?? "") > weekAgo));
+    const deliveries = this.store.supervisorRecordEntries("delivery:").map((entry) => ({
+      key: entry.key,
+      delivery: SupervisorDeliverySchema.safeParse(entry.value).data,
+    }));
+    const history = deliveries
+      .flatMap(({ key, delivery }) =>
+        delivery && finished(delivery.status) ? [{ key, createdAt: delivery.createdAt }] : [],
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(DELIVERY_HISTORY);
+    const stopped = this.store
+      .supervisorRecordEntries("watch:")
+      .filter(({ value }) => !(value as { enabled?: boolean }).enabled);
+    this.store.deleteSupervisorRecords([
+      ...receipts.map((entry) => entry.key),
+      ...deliveries.filter((entry) => !entry.delivery).map((entry) => entry.key),
+      ...history.map((entry) => entry.key),
+      ...stopped.map((entry) => entry.key),
+    ]);
   }
   private source(id: string): AgentInfo {
     const source = this.store.agent(id);
@@ -270,7 +313,7 @@ export class SupervisorManager {
     }
     if (op.kind === "sessions") {
       const query = op.query?.trim().toLowerCase() ?? "";
-      const matches = query ? this.store.searchAgentText(query) : null;
+      const matches = query ? await this.store.searchAgentText(query) : null;
       const rows = this.store
         .agents()
         .filter((a) => !a.supervisor && (!op.projectId || a.projectId === op.projectId))
@@ -470,7 +513,10 @@ export class SupervisorManager {
   observe(event: AgentEvent): void {
     if (this.closed || (event.type !== "agent.state" && event.type !== "agent.item")) return;
     const sessionId = event.type === "agent.state" ? event.agent.id : event.item.sessionId;
-    for (const delivery of this.deliveries().filter(
+    // A delivery follows the target's state and the prompt it saves, never streamed reply text,
+    // which arrives many times a second.
+    const relevant = event.type === "agent.state" || event.item.kind === "user";
+    for (const delivery of (relevant ? this.allDeliveries() : []).filter(
       (d) => d.sessionId === sessionId && !finished(d.status),
     )) {
       const info = this.store.agent(sessionId);

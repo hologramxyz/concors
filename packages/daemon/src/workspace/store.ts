@@ -59,6 +59,9 @@ const ACTIVE_AGENT = ["starting", "working", "needs_input"];
 const StoredFileSchema = z.union([AgentAttachmentSchema, AgentUploadSchema]);
 
 /** A single daemon owns this database. Layout and retry receipts commit atomically. */
+/** Saved chat items searched between yields to the event loop: about 30 ms of work each. */
+const SEARCH_SLICE = 2000;
+
 export class WorkspaceStore {
   readonly #db: DatabaseSync;
   readonly attachmentsDirectory: string;
@@ -192,22 +195,41 @@ export class WorkspaceStore {
       )
       .run(key, JSON.stringify(value));
   }
-  supervisorRecords(prefix: string): unknown[] {
+  /** Newest first. A key range, unlike LIKE, uses the primary key's index. */
+  supervisorRecordEntries(prefix: string): { key: string; value: unknown }[] {
+    const end = prefix.slice(0, -1) + String.fromCharCode(prefix.charCodeAt(prefix.length - 1) + 1);
     return this.#db
-      .prepare("SELECT value FROM supervisor_records WHERE key LIKE ? ORDER BY rowid DESC")
-      .all(prefix + "%")
-      .map((row) => JSON.parse(String(row["value"])));
+      .prepare(
+        "SELECT key, value FROM supervisor_records WHERE key >= ? AND key < ? ORDER BY rowid DESC",
+      )
+      .all(prefix, end)
+      .map((row) => ({ key: String(row["key"]), value: JSON.parse(String(row["value"])) }));
   }
-  /** SQLite reads only: searching saved text must never launch any provider. */
-  searchAgentText(query: string): Set<string> {
-    return new Set(
-      this.#db
-        .prepare(
-          "SELECT DISTINCT session_id FROM agent_items WHERE instr(lower(json_extract(item, '$.text')), lower(?)) > 0",
-        )
-        .all(query)
-        .map((row) => String(row["session_id"])),
+  supervisorRecords(prefix: string): unknown[] {
+    return this.supervisorRecordEntries(prefix).map((entry) => entry.value);
+  }
+  deleteSupervisorRecords(keys: readonly string[]): void {
+    const remove = this.#db.prepare("DELETE FROM supervisor_records WHERE key = ?");
+    for (const key of keys) remove.run(key);
+  }
+  /**
+   * SQLite reads only: searching saved text must never launch any provider. A long history takes
+   * seconds to scan, so it is read in slices that yield in between, keeping the daemon responsive.
+   */
+  async searchAgentText(query: string): Promise<Set<string>> {
+    const found = new Set<string>();
+    const last = Number(
+      this.#db.prepare("SELECT max(position) AS last FROM agent_items").get()?.["last"] ?? 0,
     );
+    const slice = this.#db.prepare(
+      "SELECT DISTINCT session_id FROM agent_items WHERE position > ? AND position <= ? AND instr(lower(json_extract(item, '$.text')), lower(?)) > 0",
+    );
+    for (let start = 0; start < last; start += SEARCH_SLICE) {
+      for (const row of slice.all(start, start + SEARCH_SLICE, query))
+        found.add(String(row["session_id"]));
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    return found;
   }
 
   execute(
