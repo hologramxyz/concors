@@ -285,7 +285,12 @@ it("limits watches per conversation, makes room from settled chats and lets /cle
     target = await f.target();
   await expect.poll(() => f.store.agent(target.id).status).toBe("idle");
   // Saved chats a Supervisor followed, without running a provider for each.
-  const followed = (supervisorId: string, count: number, status: "done" | "working") =>
+  const followed = (
+    supervisorId: string,
+    count: number,
+    status: "done" | "working",
+    explicit = false,
+  ) =>
     Array.from({ length: count }, (_, index) => {
       const id = randomUUID();
       f.store.createBackgroundAgent({
@@ -299,14 +304,20 @@ it("limits watches per conversation, makes room from settled chats and lets /cle
         supervisorId,
         sessionId: id,
         enabled: true,
+        explicit,
       });
       return id;
     });
-  const old = followed(f.source.id, WATCH_LIMIT, "done");
+  // Chats the user asked to watch are never dropped to make room, however long idle.
+  const asked = followed(f.source.id, 1, "done", true);
+  const old = followed(f.source.id, WATCH_LIMIT - 1, "done");
   // At the limit, the chat idle longest makes room.
   await f.control({ kind: "watch", sessionId: target.id, enabled: true });
   expect(f.store.supervisorRecord(`watch:${f.source.id}:${old[0]}`)).toMatchObject({
     enabled: false,
+  });
+  expect(f.store.supervisorRecord(`watch:${f.source.id}:${asked[0]}`)).toMatchObject({
+    enabled: true,
   });
   expect(f.store.keepsAgent(old[1]!)).toBe(false);
   expect(f.store.keepsAgent(f.source.id)).toBe(true);
@@ -317,11 +328,15 @@ it("limits watches per conversation, makes room from settled chats and lets /cle
   // The cleared conversation is no longer kept, nor counts against the new one.
   expect(f.store.keepsAgent(f.source.id)).toBe(false);
   expect(f.store.keepsAgent(next)).toBe(true);
-  const busy = followed(next, WATCH_LIMIT, "working");
+  const busy = followed(next, WATCH_LIMIT - 1, "working");
+  const watched = followed(next, 1, "done", true);
   expect(f.store.keepsAgent(busy[0]!)).toBe(true);
   await expect(
     f.manager.control(next, { operation: { kind: "watch", sessionId: target.id } }),
   ).rejects.toThrow("Stop watching one first");
+  expect(f.store.supervisorRecord(`watch:${next}:${watched[0]}`)).toMatchObject({
+    enabled: true,
+  });
 });
 it("prunes old receipts and delivery history on restart and skips streamed text", async () => {
   const f = await setup(),

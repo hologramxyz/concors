@@ -172,8 +172,9 @@ export class SupervisorWatches {
   }
   /**
    * The limit belongs to one Supervisor conversation, so chats followed before /clear never block
-   * the next one. At the limit, the settled chat idle longest makes room, preferring one only
-   * followed because work was sent there; only when every followed chat is busy does this refuse.
+   * the next one. At the limit, the settled chat idle longest that was only followed because work
+   * was sent there makes room. A chat the user asked to watch is never dropped silently: when
+   * every followed chat is busy or explicitly watched, this refuses.
    */
   private makeRoom(supervisorId: string): void {
     const own = this.records().filter((watch) => watch.supervisorId === supervisorId);
@@ -182,19 +183,15 @@ export class SupervisorWatches {
       .flatMap((watch) => {
         try {
           const target = this.target(watch.sessionId);
-          return this.settled(watch, target) ? [{ watch, target }] : [];
+          return !watch.explicit && this.settled(watch, target) ? [{ watch, target }] : [];
         } catch {
           return [];
         }
       })
-      .sort(
-        (a, b) =>
-          Number(!!a.watch.explicit) - Number(!!b.watch.explicit) ||
-          a.target.updatedAt.localeCompare(b.target.updatedAt),
-      )[0];
+      .sort((a, b) => a.target.updatedAt.localeCompare(b.target.updatedAt))[0];
     if (!oldest)
       throw new Error(
-        `Supervisor already follows ${WATCH_LIMIT} chats with work in progress. Stop watching one first.`,
+        `Supervisor already follows ${WATCH_LIMIT} chats that are busy or that you asked to watch. Stop watching one first.`,
       );
     this.stop(supervisorId, oldest.watch.sessionId);
   }
