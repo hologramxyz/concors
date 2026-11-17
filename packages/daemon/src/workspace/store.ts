@@ -1,8 +1,9 @@
-import { realpathSync, rmSync } from "node:fs";
+import { realpathSync, rmSync, mkdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { z } from "zod";
 import {
+  sessionProjects,
   AgentAttachmentSchema,
   AgentInfoSchema,
   AgentItemSchema,
@@ -87,7 +88,14 @@ export class WorkspaceStore {
         "PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000;",
       );
       const version = this.#db.prepare("PRAGMA user_version").get()?.["user_version"];
-      if (version !== 0 && version !== 1 && version !== 2 && version !== 3 && version !== 4)
+      if (
+        version !== 0 &&
+        version !== 1 &&
+        version !== 2 &&
+        version !== 3 &&
+        version !== 4 &&
+        version !== 5
+      )
         throw new Error(`Unsupported workspace database version: ${String(version)}`);
       this.#db.exec(`
         CREATE TABLE IF NOT EXISTS workspace (id INTEGER PRIMARY KEY CHECK (id = 1), snapshot TEXT NOT NULL);
@@ -106,8 +114,9 @@ export class WorkspaceStore {
         CREATE TABLE IF NOT EXISTS agent_queue (id TEXT PRIMARY KEY, session_id TEXT NOT NULL, request TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_requests (id TEXT PRIMARY KEY, request TEXT NOT NULL, session_id TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_item_images (session_id TEXT NOT NULL, item_id TEXT NOT NULL, position INTEGER NOT NULL, attachment TEXT NOT NULL, PRIMARY KEY (session_id, item_id, position));
+        CREATE TABLE IF NOT EXISTS supervisor_records (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS agent_defaults (provider TEXT PRIMARY KEY, settings TEXT NOT NULL, used_at INTEGER NOT NULL);
-        PRAGMA user_version = 4;
+        PRAGMA user_version = ${version === 5 ? 5 : 4};
       `);
       const initial: WorkspaceSnapshot = {
         schemaVersion: 1,
@@ -120,7 +129,9 @@ export class WorkspaceStore {
       this.#db
         .prepare("INSERT OR IGNORE INTO workspace (id, snapshot) VALUES (1, ?)")
         .run(JSON.stringify(initial));
-      this.snapshot(); // Fail startup on corrupt/incompatible persisted state; never silently reset it.
+      // Older daemons would mistake Supervisor sessions for orphaned workspace chats.
+      // Only machines that opened Supervisor need the new format; ordinary stores stay compatible.
+      if (this.snapshot().supervisor) this.#db.exec("PRAGMA user_version = 5");
       this.#closeStrandedChats();
     } catch (error) {
       this.#db.close();
@@ -133,7 +144,76 @@ export class WorkspaceStore {
     return WorkspaceSnapshotSchema.parse(JSON.parse(String(row?.["snapshot"])));
   }
 
-  execute(command: WorkspaceCommand): {
+  /** One durable chat binding outside projects: it cannot be closed, moved or renamed as a workspace. */
+  ensureSupervisor(): WorkspaceProject {
+    return this.transaction(() => {
+      const state = this.snapshot();
+      if (state.supervisor) return state.supervisor;
+      const directory = join(this.attachmentsDirectory, "..", "supervisor-" + state.machineId);
+      mkdirSync(directory, { recursive: true, mode: 0o700 });
+      const paneId = randomUUID();
+      this.#db.exec("PRAGMA user_version = 5");
+      state.supervisor = {
+        id: randomUUID(),
+        name: "Supervisor",
+        directory: resolve(directory),
+        version: 0,
+        tabs: [
+          {
+            id: randomUUID(),
+            name: "Supervisor",
+            root: paneId,
+            nodes: [{ id: paneId, kind: "pane", profile: "chat", sessionId: null }],
+          },
+        ],
+      };
+      state.revision++;
+      this.#db.prepare("UPDATE workspace SET snapshot = ? WHERE id = 1").run(JSON.stringify(state));
+      return state.supervisor;
+    });
+  }
+
+  supervisorPrompt(sessionId: string, deliveryId: string): AgentItem | null {
+    const row = this.#db
+      .prepare(
+        "SELECT item_id FROM agent_items WHERE session_id = ? AND json_extract(item, '$.origin.deliveryId') = ? AND json_extract(item, '$.kind') = 'user' LIMIT 1",
+      )
+      .get(sessionId, deliveryId);
+    return row ? this.agentItem(sessionId, String(row["item_id"])) : null;
+  }
+  supervisorRecord(key: string): unknown {
+    const row = this.#db.prepare("SELECT value FROM supervisor_records WHERE key = ?").get(key);
+    return row ? JSON.parse(String(row["value"])) : undefined;
+  }
+  saveSupervisorRecord(key: string, value: unknown): void {
+    this.#db
+      .prepare(
+        "INSERT INTO supervisor_records (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      )
+      .run(key, JSON.stringify(value));
+  }
+  supervisorRecords(prefix: string): unknown[] {
+    return this.#db
+      .prepare("SELECT value FROM supervisor_records WHERE key LIKE ? ORDER BY rowid DESC")
+      .all(prefix + "%")
+      .map((row) => JSON.parse(String(row["value"])));
+  }
+  /** SQLite reads only: searching saved text must never launch any provider. */
+  searchAgentText(query: string): Set<string> {
+    return new Set(
+      this.#db
+        .prepare(
+          "SELECT DISTINCT session_id FROM agent_items WHERE instr(lower(json_extract(item, '$.text')), lower(?)) > 0",
+        )
+        .all(query)
+        .map((row) => String(row["session_id"])),
+    );
+  }
+
+  execute(
+    command: WorkspaceCommand,
+    options: { preserveSelection?: boolean } = {},
+  ): {
     result: WorkspaceResult;
     snapshot: WorkspaceSnapshot;
     changed: boolean;
@@ -173,6 +253,16 @@ export class WorkspaceStore {
           op.kind === "project.reopen"
             ? this.#reopenProject(current, op.projectId)
             : applyWorkspaceOperation(current, op);
+        if (
+          options.preserveSelection &&
+          current.selection &&
+          snapshot.projects.some(
+            (p) =>
+              p.id === current.selection?.projectId &&
+              (!current.selection.tabId || p.tabs.some((t) => t.id === current.selection?.tabId)),
+          )
+        )
+          snapshot.selection = current.selection;
         if (op.kind === "project.close") {
           const closed = current.projects.find((project) => project.id === op.projectId);
           if (closed) this.#keepClosedProject({ ...closed, version: closed.version + 1 });
@@ -322,7 +412,7 @@ export class WorkspaceStore {
     this.transaction(() => {
       const state = this.snapshot();
       const known = new Set([
-        ...state.projects.map((item) => item.id),
+        ...sessionProjects(state).map((item) => item.id),
         ...this.#closedProjects().map((item) => item.id),
       ]);
       const folders = new Map<string, AgentInfo[]>();
@@ -378,7 +468,9 @@ export class WorkspaceStore {
     const state = this.snapshot();
     if (!state.projects.some((project) => project.id === projectId))
       throw new Error("That workspace is no longer available.");
-    const panes = state.projects.flatMap((project) => project.tabs.flatMap((tab) => tab.nodes));
+    const panes = sessionProjects(state).flatMap((project) =>
+      project.tabs.flatMap((tab) => tab.nodes),
+    );
     const agent = this.agent(id);
     const group = agent.providerGroupId ?? agent.id;
     const members = this.agents().filter((item) => (item.providerGroupId ?? item.id) === group);
@@ -404,7 +496,7 @@ export class WorkspaceStore {
   #adoptChats(state: WorkspaceSnapshot, project: WorkspaceProject): AgentInfo[] {
     if (project.directory === this.home) return [];
     const known = new Set([
-      ...state.projects.map((item) => item.id),
+      ...sessionProjects(state).map((item) => item.id),
       ...this.#closedProjects().map((item) => item.id),
     ]);
     const moved: AgentInfo[] = [];
@@ -659,7 +751,7 @@ export class WorkspaceStore {
   /** The sessions some pane shows. */
   #shownAgents(state: WorkspaceSnapshot = this.snapshot()): Set<string> {
     return new Set(
-      state.projects.flatMap((project) =>
+      sessionProjects(state).flatMap((project) =>
         project.tabs.flatMap((tab) =>
           tab.nodes.flatMap((node) =>
             node.kind === "pane" && node.sessionId ? [node.sessionId] : [],
@@ -699,6 +791,7 @@ export class WorkspaceStore {
           !kept.has(agent.id) &&
           !queued.has(agent.id) &&
           !agent.pinned &&
+          !agent.supervisor &&
           !ACTIVE_AGENT.includes(agent.status) &&
           agent.pending.length === 0 &&
           !agent.queue?.length,
@@ -826,7 +919,7 @@ export class WorkspaceStore {
   }
 
   createBackgroundAgent(info: AgentInfo): void {
-    if (!this.snapshot().projects.some((p) => p.id === info.projectId))
+    if (!sessionProjects(this.snapshot()).some((p) => p.id === info.projectId))
       throw new Error("Project no longer exists");
     this.makeRoomForAgent();
     this.#db
@@ -873,7 +966,7 @@ export class WorkspaceStore {
     try {
       if (
         this.agent(info.id).providerGroupId &&
-        !this.snapshot().projects.some((project) =>
+        !sessionProjects(this.snapshot()).some((project) =>
           project.tabs.some((tab) =>
             tab.nodes.some((pane) => pane.kind === "pane" && pane.sessionId === info.id),
           ),
@@ -909,7 +1002,7 @@ export class WorkspaceStore {
     try {
       const previous = this.agent(op.sessionId);
       const state = this.snapshot();
-      const project = state.projects.find((p) => p.id === previous.projectId);
+      const project = sessionProjects(state).find((p) => p.id === previous.projectId);
       const tab = project?.tabs.find((tab) =>
         tab.nodes.some(
           (pane) =>
@@ -983,13 +1076,14 @@ export class WorkspaceStore {
     }
   }
   /** Bring a saved/background agent into a tab without changing or restarting its turn. */
-  openAgent(request: AgentRequest): void {
+  openAgent(request: AgentRequest, options: { preserveSelection?: boolean } = {}): void {
     if (request.operation.kind !== "open-session") throw new Error("Expected open session");
     this.#db.exec("BEGIN IMMEDIATE");
     try {
       const info = this.agent(request.operation.sessionId);
       let state = this.snapshot();
-      const project = state.projects.find((p) => p.id === info.projectId);
+      const selection = state.selection;
+      const project = sessionProjects(state).find((p) => p.id === info.projectId);
       if (!project) throw new Error("The agent's workspace is unavailable");
       if (
         !project.tabs.some((tab) =>
@@ -1016,6 +1110,7 @@ export class WorkspaceStore {
         pane.directory = info.directory;
         // A closed chat comes back under the names it was given.
         if (info.paneName) pane.name = info.paneName;
+        if (options.preserveSelection) state.selection = selection;
         this.#db.prepare("UPDATE workspace SET snapshot=? WHERE id=1").run(JSON.stringify(state));
       }
       this.#db
@@ -1038,7 +1133,7 @@ export class WorkspaceStore {
     this.#db.exec("BEGIN IMMEDIATE");
     try {
       const state = this.snapshot();
-      const project = state.projects.find((p) => p.id === previous.projectId);
+      const project = sessionProjects(state).find((p) => p.id === previous.projectId);
       const pane = project?.tabs
         .flatMap((tab) => tab.nodes)
         .find(
@@ -1081,7 +1176,7 @@ export class WorkspaceStore {
     this.#db.exec("BEGIN IMMEDIATE");
     try {
       let state = this.snapshot();
-      let project = state.projects.find((p) => p.id === info.projectId);
+      let project = sessionProjects(state).find((p) => p.id === info.projectId);
       let tabId: string, paneId: string;
       let restoring = false;
       if (op.kind !== "start") {
@@ -1162,7 +1257,7 @@ export class WorkspaceStore {
             name: nextWorkspaceTabName(project.tabs),
             profile: "chat",
           });
-          project = state.projects.find((p) => p.id === info.projectId);
+          project = sessionProjects(state).find((p) => p.id === info.projectId);
         }
       } else {
         tabId = op.tabId;

@@ -7,7 +7,7 @@ test("mobile applies built-in and local-file palettes through the native prefere
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto("/");
+  await page.goto("/?view=workspaces");
   await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
   const expectCanvas = async (color: string) => {

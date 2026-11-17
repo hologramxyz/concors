@@ -1,3 +1,4 @@
+import { SupervisorPage } from "@/supervisor/page";
 import { X } from "lucide-react";
 import { SchedulesPage } from "@/schedules/page";
 import { PullRequestsPage } from "@/pull-requests/page";
@@ -110,14 +111,18 @@ function AppContent() {
   const lastPanes = useRef(new Map<string, string>());
   const [paneFocus, setPaneFocus] = useState<PaneFocusRequest | null>(null);
   const [view, setView] = useState<View>(() =>
-    window.location.pathname === "/settings/billing" ? "settings" : "projects",
+    window.location.pathname === "/settings/billing"
+      ? "settings"
+      : new URLSearchParams(window.location.search).get("view") === "workspaces"
+        ? "projects"
+        : "supervisor",
   );
   const [pullRequestsView, setPullRequestsView] = useState<PullRequestsView>(allPullRequests);
   const [focusedCloudMachineId, setFocusedCloudMachineId] = useState<string | null>(null);
   const [settingsPage, setSettingsPage] = useState<SettingsPage>(() =>
     window.location.pathname === "/settings/billing" ? "billing" : "account",
   );
-  const settingsReturnView = useRef<Exclude<View, "settings">>("projects");
+  const settingsReturnView = useRef<Exclude<View, "settings">>("supervisor");
   const [searchOpen, setSearchOpen] = useState(false);
   const [startedEndpoint, setLocalEndpoint] = useState<{
     readonly user: string;
@@ -336,6 +341,10 @@ function AppContent() {
   );
   const openAgent = useCallback(
     (id: string) => {
+      if (transport?.agents.some((a) => a.id === id && a.supervisor)) {
+        setView("supervisor");
+        return;
+      }
       const target = findSessionPane(transport?.workspace ?? null, id);
       if (target) openPane(target);
       else if (transport)
@@ -518,6 +527,7 @@ function AppContent() {
                           onSelectTab={selectTab}
                           view={view}
                           onOpenSettings={() => openSettings("account")}
+                          onOpenSupervisor={() => setView("supervisor")}
                           onOpenSchedules={() => {
                             setView("schedules");
                           }}
@@ -564,22 +574,32 @@ function AppContent() {
                               windowChrome.enabled || windowChrome.inset ? "deep" : undefined
                             }
                             className={cn(
-                              "title-bar-row flex shrink-0 items-center gap-2 border-b border-transparent pr-2 pl-4 select-none",
+                              "title-bar-row flex shrink-0 items-center gap-2 border-b select-none",
+                              view === "supervisor" ? "px-2" : "border-transparent pr-2 pl-4",
                               windowChrome.inset ? "h-11" : "min-h-9 py-1",
                             )}
                           >
                             {titleBarToggle}
-                            {/* Each page titles itself. This strip only has to take the tab bar's
-                                height, which without a native title bar a tab decides, so that the
-                                content stays put moving between a chat and a page. */}
-                            <span aria-hidden="true" className="invisible border py-0.5 text-ui">
-                              &nbsp;
-                            </span>
-                            <h1 className="sr-only">
-                              {view === "settings"
-                                ? settingsNavItemFor(settingsPage).label
-                                : navItemFor(view).label}
-                            </h1>
+                            {view === "supervisor" ? (
+                              <h1 className="min-w-0 truncate border border-transparent px-2 py-0.5 text-ui">
+                                Supervisor
+                              </h1>
+                            ) : (
+                              <>
+                                {/* Match the tab bar's height on pages that title themselves. */}
+                                <span
+                                  aria-hidden="true"
+                                  className="invisible border py-0.5 text-ui"
+                                >
+                                  &nbsp;
+                                </span>
+                                <h1 className="sr-only">
+                                  {view === "settings"
+                                    ? settingsNavItemFor(settingsPage).label
+                                    : navItemFor(view).label}
+                                </h1>
+                              </>
+                            )}
                             <span className="flex-1" aria-hidden="true" />
                             <WindowControls />
                           </header>
@@ -678,6 +698,15 @@ function AppContent() {
                                   .setActiveOrganization(organizationId)
                                   .catch((cause: unknown) => setError(describeAuthError(cause)));
                               }}
+                            />
+                          ) : view === "supervisor" ? (
+                            <SupervisorPage
+                              key={workspace?.machineId ?? endpoint?.url}
+                              workspace={workspace}
+                              connected={
+                                connection.workspaceReady && connection.state.status === "ready"
+                              }
+                              onOpenAgent={openAgent}
                             />
                           ) : view === "schedules" ? (
                             <SchedulesPage

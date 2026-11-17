@@ -1,3 +1,4 @@
+import { SupervisorRequestSchema, SupervisorResultSchema } from "./supervisor.ts";
 import {
   DictationAudioSchema,
   DictationEventSchema,
@@ -77,6 +78,7 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   ProviderRequestSchema,
   ThemeRequestSchema,
   ScheduleRequestSchema,
+  SupervisorRequestSchema,
   ResourceRequestSchema,
   PullRequestRequestSchema,
   DictationRequestSchema,
@@ -115,6 +117,7 @@ export const DaemonMessageSchema = z.discriminatedUnion("type", [
   ProviderResultSchema,
   ThemeResultSchema,
   ScheduleResultSchema,
+  SupervisorResultSchema,
   ScheduleListSchema,
   ResourceResultSchema,
   PullRequestResultSchema,

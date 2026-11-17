@@ -1,6 +1,6 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { expect, type Page } from "@playwright/test";
 import { test, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
@@ -99,8 +99,13 @@ test("a new user is walked from nothing to a first agent at work", async ({ page
 
     // Finished is remembered: a reload goes straight to work.
     await page.reload();
-    await expect(chat).toContainText("Explain how this project is organised");
     await expect(setup(page)).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Supervisor", exact: true })).toBeVisible();
+    await page
+      .getByRole("navigation", { name: "Primary" })
+      .getByRole("button", { name: basename(project), exact: true })
+      .click();
+    await expect(chat).toContainText("Explain how this project is organised");
   } finally {
     await rm(project, { recursive: true, force: true });
   }

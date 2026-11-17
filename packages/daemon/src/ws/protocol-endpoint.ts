@@ -1,3 +1,6 @@
+import { SupervisorManager } from "../supervisor/manager.ts";
+import { SupervisorTools } from "../supervisor/tools.ts";
+import { SUPERVISOR_CAPABILITY } from "@concors/protocol";
 import { ScheduleManager } from "../schedules/manager.ts";
 import { ScheduleStore } from "../schedules/store.ts";
 import { ScheduleTools } from "../schedules/tools.ts";
@@ -82,6 +85,13 @@ export function registerProtocolEndpoint(
   const connections = new Set<WebSocket>();
   const subscribers = new Set<WebSocket>();
   const agentV2 = new WeakSet<WebSocket>();
+  const supervisorClients = new WeakSet<WebSocket>();
+  const supervisorSessions = new Set(
+    options.workspace
+      .agents()
+      .filter((a) => a.supervisor)
+      .map((a) => a.id),
+  );
   const scheduleClients = new WeakSet<WebSocket>();
   const dictationClients = new Set<WebSocket>();
   /** Clients that read attachment lists past the old bounds; the rest get them shortened. */
@@ -89,6 +99,16 @@ export function registerProtocolEndpoint(
   const hostUsage = createHostUsageMonitor();
   const send = (socket: WebSocket, message: DaemonMessage): void => {
     if (socket.readyState !== socket.OPEN) return;
+    if (!supervisorClients.has(socket)) {
+      if (message.type === "agent.state" && message.agent.supervisor) return;
+      if (message.type === "agent.item" && supervisorSessions.has(message.item.sessionId)) return;
+      if (message.type === "agent.list")
+        message = { ...message, agents: message.agents.filter((a) => !a.supervisor) };
+      if (message.type === "workspace.snapshot" && message.snapshot.supervisor) {
+        const { supervisor: _supervisor, ...snapshot } = message.snapshot;
+        message = { ...message, snapshot };
+      }
+    }
     if (!agentV2.has(socket) && (message.type === "agent.state" || message.type === "agent.item")) {
       socket.send(
         JSON.stringify({
@@ -175,10 +195,15 @@ export function registerProtocolEndpoint(
     () => providers.terminalEnvironment(),
   );
   const scheduleTools = new ScheduleTools();
+  const supervisorTools = new SupervisorTools();
   const agents = new AgentManager(
     options.workspace,
     (event) => {
-      if (event.type === "agent.state") schedules?.observe(event.agent);
+      if (event.type === "agent.state") {
+        schedules?.observe(event.agent);
+        if (event.agent.supervisor) supervisorSessions.add(event.agent.id);
+      }
+      queueMicrotask(() => supervisor?.observe(event));
       for (const target of subscribers) send(target, event);
     },
     () => {
@@ -188,7 +213,7 @@ export function registerProtocolEndpoint(
     options.agentProviderFactory ?? providerFactory(providers),
     providers,
     options.accountBackendFactory,
-    (info) => scheduleTools.context(info),
+    (info) => (info.supervisor ? supervisorTools.context(info) : scheduleTools.context(info)),
   );
   const schedules = new ScheduleManager(
     new ScheduleStore(
@@ -204,6 +229,26 @@ export function registerProtocolEndpoint(
         if (scheduleClients.has(target)) send(target, { type: "schedule.list", schedules: list });
     },
   );
+  const workspaceChanged = () => {
+    for (const target of subscribers)
+      send(target, { type: "workspace.snapshot", snapshot: options.workspace.snapshot() });
+  };
+  const supervisor = new SupervisorManager(
+    options.workspace,
+    agents,
+    providers,
+    workspaceChanged,
+    (command) => {
+      const { result, changed } = options.workspace.execute(command, { preserveSelection: true });
+      if (changed) {
+        workspaceChanged();
+        if (command.operation.kind === "project.close")
+          terminals.stopProject(command.operation.projectId);
+        agents.workspaceEdited();
+      }
+      return result;
+    },
+  );
   app.addHook("onReady", async () => {
     // Injected providers (tests) never run the real CLIs, so there are no versions to check.
     if (!options.agentProviderFactory)
@@ -213,11 +258,14 @@ export function registerProtocolEndpoint(
     dictation?.start();
     uploads.start();
     await scheduleTools.start(schedules);
+    if (supervisor) await supervisorTools.start(supervisor);
     schedules.start();
   });
   app.addHook("onClose", async () => {
     const closingSchedules = schedules.close();
     await scheduleTools.close();
+    supervisor?.close();
+    await supervisorTools.close();
     providers.close();
     hostUsage.close();
     dictation?.close();
@@ -291,6 +339,7 @@ export function registerProtocolEndpoint(
           send(socket, { type: "daemon.heartbeat" });
         }, HEARTBEAT_INTERVAL_MS);
         if (message.capabilities?.includes("agent-providers-v2")) agentV2.add(socket);
+        if (message.capabilities?.includes(SUPERVISOR_CAPABILITY)) supervisorClients.add(socket);
         if (message.capabilities?.includes(SCHEDULES_CAPABILITY)) scheduleClients.add(socket);
         if (dictation && message.capabilities?.includes(DICTATION_CAPABILITY))
           dictationClients.add(socket);
@@ -313,6 +362,25 @@ export function registerProtocolEndpoint(
             socket,
             dictation.request(viewer.id, message, (event) => send(socket, event)),
           );
+        return;
+      }
+      if (
+        message.type === "agent.request" &&
+        (("origin" in message.operation && message.operation.origin) ||
+          (!supervisorClients.has(socket) &&
+            (("sessionId" in message.operation &&
+              supervisorSessions.has(message.operation.sessionId)) ||
+              ("projectId" in message.operation &&
+                message.operation.projectId === options.workspace.snapshot().supervisor?.id))))
+      ) {
+        send(socket, {
+          type: "agent.result",
+          requestId: message.requestId,
+          outcome: {
+            status: "error",
+            message: "Use the Supervisor conversation in an up-to-date Concors client.",
+          },
+        });
         return;
       }
       if (message.type === "agent.request" && !agentV2.has(socket)) {
@@ -346,6 +414,7 @@ export function registerProtocolEndpoint(
         message.type === "provider.request" ||
         message.type === "theme.request" ||
         message.type === "schedule.request" ||
+        message.type === "supervisor.request" ||
         message.type === "resource.request" ||
         message.type === "pull-request.request" ||
         message.type === "upload.request" ||
@@ -363,7 +432,16 @@ export function registerProtocolEndpoint(
           void uploads
             .request(viewer.id, message, (event) => send(socket, event))
             .then((result) => send(socket, result));
-        else if (message.type === "schedule.request") send(socket, schedules.request(message));
+        else if (message.type === "supervisor.request") {
+          if (supervisor && supervisorClients.has(socket))
+            send(socket, supervisor.request(message));
+          else
+            send(socket, {
+              type: "supervisor.result",
+              requestId: message.requestId,
+              outcome: { status: "error", message: "Update Concors to use Supervisor" },
+            });
+        } else if (message.type === "schedule.request") send(socket, schedules.request(message));
         else if (message.type === "resource.request")
           void resources.request(message).then((result) => send(socket, result));
         else if (message.type === "pull-request.request")

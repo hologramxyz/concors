@@ -5,7 +5,7 @@ test.use({ actionTimeout: 15_000 });
 test("direct profile sheet follows workspace shape preferences without a cloud login", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?view=workspaces");
   await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
   for (const [name, radius] of [

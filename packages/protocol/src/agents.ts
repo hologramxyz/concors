@@ -1,3 +1,4 @@
+import { SupervisorSharingSchema } from "./supervisor.ts";
 import { AgentAccountActionSchema, AgentAccountSchema } from "./agent-accounts.ts";
 import { z } from "zod";
 import { AgentPlanUsageSchema } from "./agent-usage.ts";
@@ -224,6 +225,8 @@ const AgentPresentationSchema = z.object({
 });
 export type AgentPresentation = z.infer<typeof AgentPresentationSchema>;
 export const AgentInfoSchema = z.object({
+  supervisor: z.literal(true).optional(),
+  supervisorSharing: SupervisorSharingSchema.nullable().optional(),
   id: Id,
   projectId: Id,
   // Provider-specific conversations that can be restored in the same pane.
@@ -302,7 +305,9 @@ export const AgentInfoSchema = z.object({
     .default(null),
 });
 export type AgentInfo = z.infer<typeof AgentInfoSchema>;
+export const AgentOriginSchema = z.object({ supervisorId: Id, deliveryId: Id });
 export const AgentItemSchema = z.object({
+  origin: AgentOriginSchema.optional(),
   id: z.string(),
   sessionId: Id,
   turnId: z.string(),
@@ -425,6 +430,7 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("steer"),
+      origin: AgentOriginSchema.optional(),
       sessionId: Id,
       turnId: z.string().min(1),
       text: z.string().trim().max(16000),
@@ -435,6 +441,7 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("queue-add"),
+      origin: AgentOriginSchema.optional(),
       sessionId: Id,
       text: z.string().trim().max(16000),
       ...messageFiles,
@@ -512,6 +519,7 @@ export const AgentOperationSchema = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("send"),
+      origin: AgentOriginSchema.optional(),
       sessionId: Id,
       text: z.string().trim().max(16000),
       ...messageFiles,
@@ -533,6 +541,7 @@ export const AgentRequestSchema = z.object({
   type: z.literal("agent.request"),
   requestId: Id,
   operation: AgentOperationSchema,
+  sharing: SupervisorSharingSchema.optional(),
 });
 export type AgentRequest = z.infer<typeof AgentRequestSchema>;
 export const AgentResultSchema = z.object({

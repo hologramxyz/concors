@@ -118,7 +118,7 @@ test("mobile connects without cloud login and shares real daemon chat, panes and
       name: "Shared chat",
       profile: "chat",
     });
-    await page.goto("/");
+    await page.goto("/?view=workspaces");
     await expect(page.getByRole("textbox", { name: "Email", exact: true })).toHaveCount(0);
     await expect(page.getByText(/Live desktop connection/)).toBeVisible();
     await page.getByRole("button", { name: "Connect to desktop", exact: true }).click();

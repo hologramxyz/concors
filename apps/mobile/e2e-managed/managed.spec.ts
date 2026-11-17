@@ -34,7 +34,7 @@ test("phone and desktop discover a managed machine and share one real terminal",
     const desktopTerminal = desktop.locator(".concors-terminal");
     await expect(desktopTerminal).toBeVisible();
     // The preview starts with a session (see playwright.managed.config.mts).
-    await phone.goto("http://localhost:8088");
+    await phone.goto("http://localhost:8088/?view=workspaces");
     const ui = phone.frameLocator('iframe[title="Concors workspace"]');
     await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
     await ui.getByRole("combobox", { name: "Machine", exact: true }).click();

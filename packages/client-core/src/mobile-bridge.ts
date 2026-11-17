@@ -72,6 +72,7 @@ export const MobileApiCallSchema = z.discriminatedUnion("method", [
 ]);
 export type MobileApiCall = z.infer<typeof MobileApiCallSchema>;
 export const MobileTargetSchema = z.object({
+  view: z.enum(["supervisor", "workspaces"]).optional(),
   machineId: id.optional(),
   projectId: id.optional(),
   tabId: id.optional(),

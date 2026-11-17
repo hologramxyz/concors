@@ -10,7 +10,7 @@ type TestWindow = Window & {
 };
 
 async function enter(page: Page) {
-  await page.goto("/");
+  await page.goto("/?view=workspaces");
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
   await expect(ui.locator(".mobile-shell")).toBeVisible();

@@ -3,7 +3,7 @@ import { expect, test } from "@playwright/test";
 test("mobile keeps previews in the sidebar and process inspection in computer Resources", async ({
   page,
 }) => {
-  await page.goto("/");
+  await page.goto("/?view=workspaces");
   await page.getByRole("button", { name: "Explore demo" }).click();
   const ui = page.frameLocator('iframe[title="Concors workspace"]');
   await ui.locator("#mobile-sidebar-toggle").click();

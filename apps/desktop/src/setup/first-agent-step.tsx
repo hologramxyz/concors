@@ -49,6 +49,7 @@ export function FirstAgentStep({
   const [error, setError] = useState<string | null>(null);
   // The project shows behind setup, so its chat starts; a used chat gets a fresh one beside it.
   const opened = useRef<string | null>(null);
+  const revealed = useRef<string | null>(null);
   // Once the task is sent, its chat is no longer fresh; nothing replaces it on the way out.
   const sent = useRef(false);
   const projectId = target?.project.id;
@@ -58,8 +59,11 @@ export function FirstAgentStep({
     !target?.sessionId || !agent || isUntouchedChat(agent) || agent.status === "starting";
   useEffect(() => {
     if (!projectId || sent.current) return;
-    if (!selected) onSelectProject(projectId);
-    else if (target?.tab && !fresh && opened.current !== projectId) {
+    // The daemon can already select this project while the app is showing Supervisor.
+    if (!selected || revealed.current !== projectId) {
+      revealed.current = projectId;
+      onSelectProject(projectId);
+    } else if (target?.tab && !fresh && opened.current !== projectId) {
       opened.current = projectId;
       void onNewChat(projectId).catch((cause: unknown) =>
         setError(cause instanceof Error ? cause.message : "Could not open a chat"),
