@@ -39,6 +39,15 @@ async function setup() {
       return provider;
     },
     registry,
+    undefined,
+    // As the daemon wires it: Supervisor's own tool server is preapproved.
+    (info) =>
+      info.supervisor
+        ? {
+            mcp: { name: "concors-supervisor", type: "http", url: "http://127.0.0.1:9/mcp" },
+            preapproved: true,
+          }
+        : {},
   );
   const createManager = () =>
     new SupervisorManager(
@@ -421,6 +430,42 @@ it("steers a just-sent turn once it has started, and reports how the instruction
   expect(
     await f.control({ kind: "send", sessionId: target.id, text: "Summarize", whenBusy: "steer" }),
   ).toMatchObject({ delivered: "sent" });
+});
+it("lets Supervisor use its own tool without asking while its other tools still ask", async () => {
+  const f = await setup();
+  const changed = await f.request({
+    kind: "switch-provider",
+    sessionId: f.source.id,
+    provider: "claude",
+    model: null,
+    expectedRevision: f.store.agent(f.source.id).revision,
+  });
+  if (changed.outcome.status !== "ok") throw new Error("Could not switch to Claude Code");
+  const id = changed.outcome.conversation.agent.id;
+  await expect.poll(() => f.store.agent(id).status).toBe("idle");
+  await f.request({ kind: "send", sessionId: id, text: "hold while coordinating" });
+  await expect.poll(() => f.store.agent(id).turnId?.startsWith("pending:")).toBe(false);
+  const provider = f.providers.at(-1)!;
+  const ask = (reason: string) =>
+    provider.onRequest(
+      "item/commandExecution/requestApproval",
+      {
+        threadId: f.store.agent(id).threadId,
+        turnId: f.store.agent(id).turnId,
+        reason,
+        command: "{}",
+        availableDecisions: ["accept", "decline", "cancel"],
+      },
+      randomUUID(),
+    );
+  expect(await ask("mcp__concors-supervisor__concors_control")).toMatchObject({
+    decision: "accept",
+  });
+  expect(f.store.agent(id).pending).toEqual([]);
+  void ask("Bash").catch(() => undefined);
+  await expect
+    .poll(() => f.store.agent(id).pending.map((p) => p.summary))
+    .toEqual([expect.stringContaining("Bash")]);
 });
 it("authenticates the local bridge and refuses browser origins and oversized bodies", async () => {
   const f = await setup(),

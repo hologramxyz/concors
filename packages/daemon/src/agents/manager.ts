@@ -42,6 +42,7 @@ import {
 import type { WorkspaceStore } from "../workspace/store.ts";
 import { ProviderRegistry } from "./providers/registry.ts";
 import { elicitationQuestions, elicitationContent } from "./elicitation.ts";
+import { preapprovedTool } from "./preapproved.ts";
 import { mapCodexItem } from "./codex/items.ts";
 
 import {
@@ -2611,6 +2612,21 @@ export class AgentManager {
       !["item/commandExecution/requestApproval", "item/fileChange/requestApproval"].includes(method)
     )
       throw new Error(`Unsupported input request: ${method}`);
+    const tools = this.tools?.(info);
+    if (
+      tools?.preapproved &&
+      tools.mcp &&
+      preapprovedTool(info.engine ?? info.provider, tools.mcp.name, method, params)
+    ) {
+      if (elicitation) return Promise.resolve({ action: "accept", content: {} });
+      const { actions, values } = approvalActions(params);
+      const once = actions.find((action) => action.decision === "accept");
+      return Promise.resolve(
+        once
+          ? { decision: values.get(once.id) ?? "accept", actionId: once.id }
+          : { decision: "accept" },
+      );
+    }
     const pending: AgentPending = {
       id: randomUUID(),
       turnId: scope.turnId,
