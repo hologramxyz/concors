@@ -47,7 +47,10 @@ export function paneNames(workspace: WorkspaceSnapshot | null): Map<string, stri
  * The pane a sidebar entry stands for, so renaming the entry renames that pane: the one whose name
  * `paneNames` shows, or else the first pane holding the session.
  */
-export function agentPane(workspace: WorkspaceSnapshot | null, sessionId: string) {
+export function agentPane(
+  workspace: Pick<WorkspaceSnapshot, "projects"> | null,
+  sessionId: string,
+) {
   let found: {
     project: WorkspaceProject;
     tab: WorkspaceTab;

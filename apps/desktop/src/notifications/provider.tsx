@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Network } from "lucide-react";
 import type { DaemonConnection } from "@concors/daemon-client";
-import { isDefaultTabName, type ProjectIcon, type TerminalInfo } from "@concors/protocol";
+import type { ProjectIcon, TerminalInfo } from "@concors/protocol";
 import { NotificationContext } from "./context";
 import { AttentionEngine, type Notice } from "./engine";
 import { claimNotification, getNotificationPreferences } from "./preferences";
 import { countdown } from "./countdown";
+import { noticePlace } from "./place";
 import { desktopNotice, notificationAccess, openNotificationSettings } from "./platform";
 import { errorMessage, firstNotificationProblem, notificationProblem } from "./access";
 import { isMac } from "@/shortcuts/bindings";
@@ -13,7 +14,7 @@ import { isTauri } from "@/tauri";
 import { Button } from "@/components/ui/button";
 import { playAgentSound, unlockAudio } from "./sound";
 import { terminalAgentSound } from "./terminal";
-import { agentPane, paneNames } from "@/agents/visible-sessions";
+import { paneNames } from "@/agents/visible-sessions";
 import { forgetTerminalTurn, markFailureSeen, markTerminalTurnSeen } from "@/agents/seen-updates";
 import { ProjectImage } from "@/workspace/project-image";
 import { projectIconKey, projectIcons } from "@/workspace/project-icons";
@@ -164,21 +165,13 @@ export function NotificationProvider({
       if (event.type === "agent.item") return;
       const agents = event.type === "agent.list" ? event.agents : [event.agent];
       const names = paneNames(connection.workspace);
-      for (const agent of agents) {
-        const pane = agentPane(connection.workspace, agent.id);
+      for (const agent of agents)
         engine.observe(
           // Notifications name an agent the way its renamed pane and the sidebar do.
           { ...agent, name: names.get(agent.id) ?? agent.name },
           live,
-          {
-            projectId: agent.projectId,
-            workspace:
-              connection.workspace?.projects.find((p) => p.id === agent.projectId)?.name ?? "",
-            // A tab nobody named is called after its chat, which the body already says.
-            tab: pane && !isDefaultTabName(pane.tab.name) ? pane.tab.name : "",
-          },
+          noticePlace(connection.workspace, agent),
         );
-      }
       seen();
     });
     const offWorkspace = connection.subscribeWorkspace(() => {
@@ -398,6 +391,9 @@ function NoticeWorkspaceIcon({
     cache?.getSnapshot ?? noIcons,
   );
   const workspace = connection?.workspace;
+  // The Supervisor wears the mark its sidebar item has, not a workspace's initial.
+  if (workspace?.supervisor && workspace.supervisor.id === notice.place.projectId)
+    return <Network className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />;
   const project = workspace?.projects.find((p) => p.id === notice.place.projectId);
   const icon =
     project && workspace ? icons.get(projectIconKey(workspace.epoch, project)) : undefined;

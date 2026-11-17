@@ -270,3 +270,69 @@ test("the Supervisor's MCP servers open from its title bar, as a chat's do from 
   await page.getByRole("button", { name: "Schedules", exact: true }).click();
   await expect(page.getByRole("button", { name: "Supervisor actions" })).toHaveCount(0);
 });
+
+test("a notification from the Supervisor names it as the place, and opens it", async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.addInitScript(() => {
+    class TestNotification {
+      static permission = "granted";
+      static requestPermission = async () => "granted";
+      static records: TestNotification[] = [];
+      onclick: (() => void) | null = null;
+      constructor(public title: string) {
+        TestNotification.records.push(this);
+      }
+      close() {
+        return undefined;
+      }
+    }
+    Object.defineProperty(window, "Notification", { value: TestNotification });
+  });
+  const titles = () =>
+    page.evaluate(() =>
+      (Notification as unknown as { records: { title: string }[] }).records.map((r) => r.title),
+    );
+  const control = new DaemonConnection({
+    endpoint: describeDaemonEndpoint("ws://127.0.0.1:7429/ws"),
+    client: { kind: "test", name: "supervisor notifications", version: "0.0.0" },
+  });
+  const off = control.subscribeWorkspace(() => undefined);
+  try {
+    await control.connect();
+    await signedIn(page, undefined, undefined, { supervisorLanding: true });
+    await page.goto("/");
+    const supervisor = page.getByTestId("supervisor-page");
+    await expect(supervisor).toBeVisible();
+    await chooseProvider(page);
+    await expect(supervisor.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
+    const sessionId =
+      control.workspace?.supervisor?.tabs[0]?.nodes.find((node) => node.kind === "pane")
+        ?.sessionId ?? "";
+    expect(sessionId).not.toBe("");
+    await page.getByRole("button", { name: /^Account:/ }).click();
+    await page.getByRole("menuitem", { name: "Settings", exact: true }).click();
+    await page
+      .getByRole("navigation", { name: "Settings" })
+      .getByRole("button", { name: "Notifications", exact: true })
+      .click();
+    await page.getByLabel("Desktop notifications", { exact: true }).check();
+    await page.getByRole("button", { name: "Back to app", exact: true }).click();
+    await page.getByRole("button", { name: "Schedules", exact: true }).click();
+    const result = await control.requestAgent(
+      { kind: "send", sessionId, text: "report back when you are done" },
+      crypto.randomUUID(),
+    );
+    expect(result.outcome.status).toBe("ok");
+    await expect.poll(titles).toEqual(["Agent finished in Supervisor"]);
+    const card = page.getByRole("complementary", { name: "Agent notifications" });
+    await expect(card.locator("[data-notice-place]")).toHaveText("Supervisor");
+    await card.getByText("Open conversation", { exact: true }).click();
+    await expect(supervisor.getByRole("log")).toContainText("report back when you are done");
+    await expect
+      .poll(() => control.agents.find((agent) => agent.id === sessionId)?.attention?.seen)
+      .toBe(true);
+  } finally {
+    off();
+    control.disconnect();
+  }
+});
