@@ -236,11 +236,18 @@ it("does not replay uncertain mutations after restart", async () => {
   await f.control({ kind: "send", sessionId: target.id, text: "hold", whenBusy: "queue" });
   const requestId = randomUUID(),
     operation = { kind: "send", sessionId: target.id, text: "Never replay", whenBusy: "queue" };
+  const id = randomUUID();
+  // Handed to the target, with no result recorded: it may have been delivered.
   f.store.saveSupervisorRecord(`request:${f.source.id}:${requestId}`, {
     sessionId: f.source.id,
     request: { requestId, operation },
-    id: randomUUID(),
+    id,
     createdAt: new Date().toISOString(),
+    agentRequest: {
+      type: "agent.request",
+      requestId: id,
+      operation: { kind: "send", sessionId: target.id, text: "Never replay" },
+    },
   });
   f.restart();
   expect(f.manager.deliveries()[0]?.status).toBe("interrupted");
@@ -543,6 +550,27 @@ it("limits unfinished deliveries per conversation and bounds their history while
   await expect(
     f.control({ kind: "send", sessionId: target.id, text: "One too many", whenBusy: "queue" }),
   ).rejects.toThrow("Wait for existing delegated work");
+});
+it("runs again a send that stopped before anything left the daemon", async () => {
+  const f = await setup(),
+    target = await f.target(),
+    requestId = randomUUID(),
+    operation = { kind: "send", sessionId: target.id, text: "Retry me", whenBusy: "steer" };
+  // Stopped while waiting for a turn to start: the receipt has no request for the target yet.
+  f.store.saveSupervisorRecord(`request:${f.source.id}:${requestId}`, {
+    sessionId: f.source.id,
+    request: { requestId, operation },
+    id: randomUUID(),
+    createdAt: new Date().toISOString(),
+  });
+  f.restart();
+  expect(await f.manager.control(f.source.id, { requestId, operation })).toMatchObject({
+    delivered: "sent",
+  });
+  await expect.poll(() => f.store.agent(target.id).status).toBe("done");
+  expect(
+    f.providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
+  ).toHaveLength(1);
 });
 it("authenticates the local bridge and refuses browser origins and oversized bodies", async () => {
   const f = await setup(),

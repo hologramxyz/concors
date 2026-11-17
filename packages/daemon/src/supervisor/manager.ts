@@ -274,11 +274,14 @@ export class SupervisorManager {
     if (saved?.result !== undefined) return saved.result;
     const pending = this.pending.get(key);
     if (pending) return pending;
-    if (saved)
+    // A send records the request it hands to the target before handing it over, so one without
+    // that record (stopped while waiting for a turn to start, say) never left the daemon and can
+    // run again. Anything else may have taken effect; the user should look first.
+    if (saved && (saved.request.operation.kind !== "send" || saved.agentRequest))
       throw new Error(
         "This operation was interrupted before its result was recorded. Check status and the target chat before issuing a new instruction.",
       );
-    const receipt: Receipt = {
+    const receipt: Receipt = saved ?? {
       sessionId,
       request,
       id: randomUUID(),
