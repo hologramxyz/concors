@@ -1,4 +1,5 @@
 import { SupervisorPage } from "@/supervisor/page";
+import { SupervisorActions } from "@/supervisor/actions";
 import { X } from "lucide-react";
 import { SchedulesPage } from "@/schedules/page";
 import { PullRequestsPage } from "@/pull-requests/page";
@@ -601,6 +602,7 @@ function AppContent() {
                               </>
                             )}
                             <span className="flex-1" aria-hidden="true" />
+                            {view === "supervisor" && <SupervisorActions workspace={workspace} />}
                             <WindowControls />
                           </header>
                         )}
@@ -707,6 +709,7 @@ function AppContent() {
                                 connection.workspaceReady && connection.state.status === "ready"
                               }
                               onOpenAgent={openAgent}
+                              onOpenProject={selectProject}
                             />
                           ) : view === "schedules" ? (
                             <SchedulesPage

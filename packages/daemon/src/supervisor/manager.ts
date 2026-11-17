@@ -12,18 +12,37 @@ import {
 } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
 import type { AgentManager } from "../agents/manager.ts";
-import { SupervisorWatches, sessionReport } from "./watch.ts";
+import { SupervisorWatches, busy, permissionMode, sessionReport } from "./watch.ts";
 import type { ProviderRegistry } from "../agents/providers/registry.ts";
+import { randomUUID } from "node:crypto";
 
-const active = (agent: AgentInfo) =>
-  ["starting", "working", "needs_input"].includes(agent.status) ||
-  !!agent.pending.length ||
-  !!agent.queue?.length;
+const active = busy;
+/** Finished deliveries kept across restarts; status reports the newest 128 of all deliveries. */
+const DELIVERY_HISTORY = 256;
+const steerable = (agent: AgentInfo) =>
+  agent.status === "working" &&
+  !!agent.turnId &&
+  !agent.turnId.startsWith("pending:") &&
+  !!agent.controls?.steer;
+/** How long steering waits for a just-sent turn to start before queueing instead. */
+const STEER_WAIT_MS = 10000;
 const finished = (status: SupervisorDelivery["status"]) =>
   ["done", "failed", "interrupted", "cancelled"].includes(status);
+/** Operations that change something. Only these keep a receipt, so retrying one cannot repeat it. */
+const CHANGES: readonly SupervisorControl["operation"]["kind"][] = [
+  "send",
+  "start",
+  "workspace",
+  "interrupt",
+  "queue-remove",
+  "open-session",
+];
 interface Receipt {
   sessionId: string;
   request: SupervisorControl;
+  /** The daemon's own ID for what the operation creates or sends, never the model's request ID. */
+  id: string;
+  createdAt?: string;
   agentRequest?: AgentRequest;
   result?: unknown;
   error?: string;
@@ -56,13 +75,17 @@ export class SupervisorManager {
       agents,
       (id) => this.source(id),
       (id) => this.target(id),
+      (supervisorId, sessionId) =>
+        this.allDeliveries().some(
+          (d) =>
+            d.supervisorId === supervisorId && d.sessionId === sessionId && !finished(d.status),
+        ),
+      () => this.selected(),
     );
-    store.keepAgents(() =>
-      store
-        .agents()
-        .filter((a) => a.supervisor)
-        .map((a) => a.id),
-    );
+    // /clear leaves the previous conversation behind; like any closed chat, it may be retired to
+    // make room. The shown conversation and its other harnesses stay, so switching back works.
+    store.keepAgents(() => this.selected());
+    this.prune();
     // Recovery never repeats a prompt whose delivery was uncertain at shutdown.
     for (const delivery of this.deliveries()) {
       if (finished(delivery.status)) continue;
@@ -104,20 +127,93 @@ export class SupervisorManager {
     }
   }
 
-  deliveries(): SupervisorDelivery[] {
-    const all = this.store
+  /** The shown Supervisor session and the sessions of its other harnesses. */
+  private selected(): Set<string> {
+    const shown = new Set(
+      this.store
+        .snapshot()
+        .supervisor?.tabs.flatMap((tab) =>
+          tab.nodes.flatMap((node) =>
+            node.kind === "pane" && node.sessionId ? [node.sessionId] : [],
+          ),
+        ) ?? [],
+    );
+    const sessions = this.store.agents().filter((agent) => agent.supervisor);
+    const groups = new Set(
+      sessions
+        .filter((agent) => shown.has(agent.id))
+        .map((agent) => agent.providerGroupId ?? agent.id),
+    );
+    return new Set(
+      sessions
+        .filter((agent) => groups.has(agent.providerGroupId ?? agent.id))
+        .map((agent) => agent.id),
+    );
+  }
+
+  /**
+   * Every saved delivery, newest first. Agent events consult them constantly, and only this manager
+   * writes them, so they are read from the database once.
+   */
+  private saved?: SupervisorDelivery[];
+  private allDeliveries(): SupervisorDelivery[] {
+    this.saved ??= this.store
       .supervisorRecords("delivery:")
-      .map((row) => SupervisorDeliverySchema.parse(row));
+      .map((row) => SupervisorDeliverySchema.parse(row))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return this.saved;
+  }
+  deliveries(): SupervisorDelivery[] {
+    const all = this.allDeliveries();
     const active = all.filter((d) => !finished(d.status));
     return [...active, ...all.filter((d) => finished(d.status)).slice(0, 128 - active.length)].sort(
       (a, b) => b.createdAt.localeCompare(a.createdAt),
     );
   }
   private saveDelivery(delivery: SupervisorDelivery): void {
-    this.store.saveSupervisorRecord("delivery:" + delivery.id, {
-      ...delivery,
-      updatedAt: new Date().toISOString(),
-    });
+    const saved = { ...delivery, updatedAt: new Date().toISOString() };
+    this.store.saveSupervisorRecord("delivery:" + delivery.id, saved);
+    const all = this.allDeliveries();
+    // A new delivery is the newest; an update keeps its place.
+    const next = all.some((d) => d.id === delivery.id)
+      ? all.map((d) => (d.id === delivery.id ? saved : d))
+      : [saved, ...all];
+    // History stays bounded while the daemon runs, not only across restarts.
+    const history = next.filter((d) => finished(d.status)).slice(DELIVERY_HISTORY);
+    if (history.length) {
+      const old = new Set(history.map((d) => d.id));
+      this.store.deleteSupervisorRecords(history.map((d) => "delivery:" + d.id));
+      this.saved = next.filter((d) => !old.has(d.id));
+    } else this.saved = next;
+  }
+  /**
+   * Bounds what Supervisor keeps. A receipt only makes retrying a change safe, so a week is ample;
+   * status reports at most 128 deliveries; a stopped watch carries nothing worth keeping.
+   */
+  private prune(): void {
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const receipts = this.store
+      .supervisorRecordEntries("request:")
+      .filter(({ value }) => !(Date.parse((value as Receipt).createdAt ?? "") > weekAgo));
+    const deliveries = this.store.supervisorRecordEntries("delivery:").map((entry) => ({
+      key: entry.key,
+      delivery: SupervisorDeliverySchema.safeParse(entry.value).data,
+    }));
+    const history = deliveries
+      .flatMap(({ key, delivery }) =>
+        delivery && finished(delivery.status) ? [{ key, createdAt: delivery.createdAt }] : [],
+      )
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .slice(DELIVERY_HISTORY);
+    const stopped = this.store
+      .supervisorRecordEntries("watch:")
+      .filter(({ value }) => !(value as { enabled?: boolean }).enabled);
+    this.store.deleteSupervisorRecords([
+      ...receipts.map((entry) => entry.key),
+      ...deliveries.filter((entry) => !entry.delivery).map((entry) => entry.key),
+      ...history.map((entry) => entry.key),
+      ...stopped.map((entry) => entry.key),
+    ]);
   }
   private source(id: string): AgentInfo {
     const source = this.store.agent(id);
@@ -162,30 +258,37 @@ export class SupervisorManager {
   async control(sessionId: string, raw: unknown): Promise<unknown> {
     if (this.closed) throw new Error("Supervisor is shutting down");
     const request = SupervisorControlSchema.parse(raw);
-    this.source(sessionId);
-    const key = "request:" + request.requestId;
+    const source = this.source(sessionId);
+    // Models invent request IDs and reuse them, across turns and across conversations. Reads
+    // therefore always answer from current state, and a change's receipt belongs to the calling
+    // conversation alone; nothing the daemon creates is named after a request ID.
+    if (!request.requestId || !CHANGES.includes(request.operation.kind))
+      return this.execute(source, request, { sessionId, request, id: randomUUID() });
+    const key = `request:${sessionId}:${request.requestId}`;
     const saved = this.store.supervisorRecord(key) as Receipt | undefined;
-    if (
-      saved &&
-      (saved.sessionId !== sessionId || JSON.stringify(saved.request) !== JSON.stringify(request))
-    )
-      throw new Error("Request ID was already used for another operation.");
+    if (saved && JSON.stringify(saved.request) !== JSON.stringify(request))
+      throw new Error(
+        "Request ID was already used for another operation. Use a new requestId, or omit it.",
+      );
     if (saved?.error) throw new Error(saved.error);
     if (saved?.result !== undefined) return saved.result;
-    const pending = this.pending.get(request.requestId);
+    const pending = this.pending.get(key);
     if (pending) return pending;
-    if (
-      saved &&
-      ["send", "start", "workspace", "interrupt", "queue-remove", "open-session"].includes(
-        request.operation.kind,
-      )
-    )
+    // A send records the request it hands to the target before handing it over, so one without
+    // that record (stopped while waiting for a turn to start, say) never left the daemon and can
+    // run again. Anything else may have taken effect; the user should look first.
+    if (saved && (saved.request.operation.kind !== "send" || saved.agentRequest))
       throw new Error(
         "This operation was interrupted before its result was recorded. Check status and the target chat before issuing a new instruction.",
       );
-    const receipt = saved ?? { sessionId, request };
+    const receipt: Receipt = saved ?? {
+      sessionId,
+      request,
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+    };
     this.store.saveSupervisorRecord(key, receipt);
-    const work = this.execute(this.source(sessionId), request, receipt)
+    const work = this.execute(source, request, receipt, key)
       .then(
         (result) => {
           this.store.saveSupervisorRecord(key, { ...receipt, result });
@@ -199,8 +302,8 @@ export class SupervisorManager {
           throw error;
         },
       )
-      .finally(() => this.pending.delete(request.requestId));
-    this.pending.set(request.requestId, work);
+      .finally(() => this.pending.delete(key));
+    this.pending.set(key, work);
     return work;
   }
 
@@ -208,6 +311,7 @@ export class SupervisorManager {
     source: AgentInfo,
     request: SupervisorControl,
     receipt: Receipt,
+    key?: string,
   ): Promise<unknown> {
     const op = request.operation;
     const snapshot = this.store.snapshot();
@@ -225,7 +329,7 @@ export class SupervisorManager {
     }
     if (op.kind === "sessions") {
       const query = op.query?.trim().toLowerCase() ?? "";
-      const matches = query ? this.store.searchAgentText(query) : null;
+      const matches = query ? await this.store.searchAgentText(query) : null;
       const rows = this.store
         .agents()
         .filter((a) => !a.supervisor && (!op.projectId || a.projectId === op.projectId))
@@ -246,7 +350,7 @@ export class SupervisorManager {
           status: a.status,
           pending: a.pending.length,
           pendingRequests: sessionReport(this.store, a, false).pending,
-          permissions: a.settings?.mode ?? "default",
+          permissions: permissionMode(a),
           queued: a.queue?.length ?? 0,
           updatedAt: a.updatedAt,
           historyRevision: a.historyRevision ?? 0,
@@ -295,7 +399,7 @@ export class SupervisorManager {
     if (op.kind === "capabilities")
       return {
         machineId: snapshot.machineId,
-        permissions: source.settings?.mode ?? "default",
+        permissions: permissionMode(source),
         providers: this.providers.statuses(),
         note: "Your existing chat permission picker controls Supervisor. Targets retain their own permissions. Approval and question requests are reported here with links; only the user can answer them in the target chat.",
       };
@@ -304,7 +408,7 @@ export class SupervisorManager {
         this.watches.stop(source.id, op.sessionId);
         return { sessionId: op.sessionId, watching: false };
       }
-      this.watches.track(source.id, op.sessionId, request.requestId, true);
+      this.watches.track(source.id, op.sessionId, receipt.id, true, true);
       return {
         sessionId: op.sessionId,
         watching: true,
@@ -312,7 +416,7 @@ export class SupervisorManager {
       };
     }
     if (op.kind === "wait") {
-      for (const id of new Set(op.sessionIds)) this.watches.track(source.id, id, request.requestId);
+      for (const id of new Set(op.sessionIds)) this.watches.track(source.id, id, receipt.id);
       return this.watches.wait(source.id, [...new Set(op.sessionIds)], op.timeoutMs, op.on);
     }
     if (op.kind === "workspace") {
@@ -334,9 +438,8 @@ export class SupervisorManager {
     }
     if (op.kind === "start") {
       this.recipient(source, op.provider);
-      const id = request.requestId;
       const agent = await this.agents.startScheduled(
-        id,
+        receipt.id,
         op.projectId,
         op.provider,
         op.model ?? null,
@@ -346,20 +449,20 @@ export class SupervisorManager {
         const opened = await this.agents.request(
           {
             type: "agent.request",
-            requestId: request.requestId,
+            requestId: randomUUID(),
             operation: { kind: "open-session", sessionId: agent.id },
           },
           "supervisor:" + source.id,
         );
         if (opened.outcome.status === "error") throw new Error(opened.outcome.message);
       }
-      this.watches.track(source.id, agent.id, request.requestId);
+      this.watches.track(source.id, agent.id, receipt.id);
       return { sessionId: agent.id, projectId: agent.projectId, status: agent.status };
     }
     const target = this.target(op.sessionId);
     if (op.kind === "send") {
       this.recipient(source, target.provider);
-      this.watches.track(source.id, target.id, request.requestId);
+      this.watches.track(source.id, target.id, receipt.id);
     }
     if (!receipt.agentRequest) {
       if (op.kind === "send") {
@@ -369,27 +472,29 @@ export class SupervisorManager {
           );
         if (active(target) && op.whenBusy === "reject")
           throw new Error("The target is busy. Queue a follow-up or wait for it to finish.");
-        const origin = { supervisorId: source.id, deliveryId: request.requestId };
-        const operation =
-          active(target) && op.whenBusy === "steer"
-            ? {
-                kind: "steer" as const,
-                sessionId: target.id,
-                turnId: target.turnId ?? "",
-                text: op.text,
-                origin,
-              }
-            : {
-                kind: active(target) ? ("queue-add" as const) : ("send" as const),
-                sessionId: target.id,
-                text: op.text,
-                origin,
-              };
-        receipt.agentRequest = { type: "agent.request", requestId: request.requestId, operation };
-        if (this.deliveries().filter((d) => !finished(d.status)).length >= 64)
+        const origin = { supervisorId: source.id, deliveryId: receipt.id };
+        const current =
+          active(target) && op.whenBusy === "steer" ? await this.startedTurn(target.id) : target;
+        const turnId = op.whenBusy === "steer" && steerable(current) ? current.turnId : null;
+        const operation = turnId
+          ? { kind: "steer" as const, sessionId: target.id, turnId, text: op.text, origin }
+          : {
+              // A turn waiting for an approval, or one that cannot be steered, takes the
+              // instruction next; one that ended meanwhile takes it now.
+              kind: active(current) ? ("queue-add" as const) : ("send" as const),
+              sessionId: target.id,
+              text: op.text,
+              origin,
+            };
+        receipt.agentRequest = { type: "agent.request", requestId: receipt.id, operation };
+        // Per conversation, like watches: work left behind before /clear never blocks the next.
+        if (
+          this.allDeliveries().filter((d) => d.supervisorId === source.id && !finished(d.status))
+            .length >= 64
+        )
           throw new Error("Wait for existing delegated work to finish before starting more.");
         this.saveDelivery({
-          id: request.requestId,
+          id: receipt.id,
           supervisorId: source.id,
           sessionId: target.id,
           projectId: target.projectId,
@@ -401,32 +506,55 @@ export class SupervisorManager {
       } else
         receipt.agentRequest = {
           type: "agent.request",
-          requestId: request.requestId,
+          requestId: receipt.id,
           operation: op,
         };
-      this.store.saveSupervisorRecord("request:" + request.requestId, receipt);
+      if (key) this.store.saveSupervisorRecord(key, receipt);
     }
     const result = await this.agents.request(receipt.agentRequest, "supervisor:" + source.id);
     if (result.outcome.status === "error") {
-      const delivery = this.deliveries().find((d) => d.id === request.requestId);
+      const delivery = this.deliveries().find((d) => d.id === receipt.id);
       if (delivery)
         this.saveDelivery({ ...delivery, status: "failed", error: result.outcome.message });
       throw new Error(result.outcome.message);
     }
     this.observe({ type: "agent.state", agent: this.store.agent(target.id) });
+    const kind = receipt.agentRequest.operation.kind;
     return {
       sessionId: target.id,
       projectId: target.projectId,
-      delivery: this.deliveries().find((d) => d.id === request.requestId),
+      delivery: this.deliveries().find((d) => d.id === receipt.id),
       status: result.outcome.conversation?.agent.status,
+      ...(op.kind === "send"
+        ? { delivered: kind === "steer" ? "steered" : kind === "queue-add" ? "queued" : "sent" }
+        : {}),
     };
+  }
+
+  /**
+   * A turn takes its native ID once the provider has started it, and steering needs that ID.
+   * Right after a message was sent, wait briefly for it rather than steer a placeholder.
+   */
+  private async startedTurn(id: string): Promise<AgentInfo> {
+    for (let waited = 0; ; waited += 100) {
+      if (this.closed) throw new Error("Supervisor is shutting down");
+      const info = this.store.agent(id);
+      const starting =
+        info.status === "starting" ||
+        (info.status === "working" && !!info.turnId?.startsWith("pending:"));
+      if (!starting || waited >= STEER_WAIT_MS) return info;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
   }
 
   /** All adapters already normalize their native turn hooks into these events. */
   observe(event: AgentEvent): void {
     if (this.closed || (event.type !== "agent.state" && event.type !== "agent.item")) return;
     const sessionId = event.type === "agent.state" ? event.agent.id : event.item.sessionId;
-    for (const delivery of this.deliveries().filter(
+    // A delivery follows the target's state and the prompt it saves, never streamed reply text,
+    // which arrives many times a second.
+    const relevant = event.type === "agent.state" || event.item.kind === "user";
+    for (const delivery of (relevant ? this.allDeliveries() : []).filter(
       (d) => d.sessionId === sessionId && !finished(d.status),
     )) {
       const info = this.store.agent(sessionId);

@@ -4,7 +4,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import type { SupervisorControlSchema, AgentOperation } from "@concors/protocol";
+import type {
+  SupervisorControlSchema,
+  AgentOperation,
+  SupervisorDelivery,
+} from "@concors/protocol";
 import type { z } from "zod";
 import { WorkspaceStore } from "../workspace/store.ts";
 import { AgentManager } from "../agents/manager.ts";
@@ -12,6 +16,7 @@ import { ProviderRegistry } from "../agents/providers/registry.ts";
 import { TestAgentProvider } from "../agents/testing/provider.ts";
 import { SupervisorManager } from "./manager.ts";
 import { SupervisorTools } from "./tools.ts";
+import { WATCH_LIMIT } from "./watch.ts";
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -38,6 +43,15 @@ async function setup() {
       return provider;
     },
     registry,
+    undefined,
+    // As the daemon wires it: Supervisor's own tool server is preapproved.
+    (info) =>
+      info.supervisor
+        ? {
+            mcp: { name: "concors-supervisor", type: "http", url: "http://127.0.0.1:9/mcp" },
+            preapproved: true,
+          }
+        : {},
   );
   const createManager = () =>
     new SupervisorManager(
@@ -81,6 +95,7 @@ async function setup() {
     await rm(directory, { recursive: true, force: true });
   });
   return {
+    directory,
     store,
     registry,
     agents,
@@ -145,20 +160,28 @@ it("delivers once, attributes the message and follows completion without a conne
     text: "Review changes",
     whenBusy: "queue" as const,
   };
-  await Promise.all([f.control(operation, requestId), f.control(operation, requestId)]);
+  const [first, second] = (await Promise.all([
+    f.control(operation, requestId),
+    f.control(operation, requestId),
+  ])) as { delivery: { id: string } }[];
+  expect(second).toEqual(first);
+  const deliveryId = first!.delivery.id;
+  // The delivery is named by the daemon, not after the model's request ID.
+  expect(deliveryId).not.toBe(requestId);
   await expect.poll(() => f.manager.deliveries()[0]?.status).toBe("done");
   await f.control(operation, requestId);
   expect(
     f.providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
   ).toHaveLength(1);
-  expect(f.store.supervisorPrompt(target.id, requestId)?.origin).toEqual({
+  expect(f.store.supervisorPrompt(target.id, deliveryId)?.origin).toEqual({
     supervisorId: f.source.id,
-    deliveryId: requestId,
+    deliveryId,
   });
+  const watched = f.store.supervisorRecord(`watch:${f.source.id}:${target.id}`) as { id: string };
   expect(
     f.store
       .agentConversation(f.source.id)
-      .items.filter((i) => i.title === "Agent result" && i.origin?.deliveryId === requestId),
+      .items.filter((i) => i.title === "Agent result" && i.origin?.deliveryId === watched.id),
   ).toHaveLength(1);
   await expect(f.control({ ...operation, text: "different" }, requestId)).rejects.toThrow(
     "already used",
@@ -213,15 +236,359 @@ it("does not replay uncertain mutations after restart", async () => {
   await f.control({ kind: "send", sessionId: target.id, text: "hold", whenBusy: "queue" });
   const requestId = randomUUID(),
     operation = { kind: "send", sessionId: target.id, text: "Never replay", whenBusy: "queue" };
-  f.store.saveSupervisorRecord("request:" + requestId, {
+  const id = randomUUID();
+  // Handed to the target, with no result recorded: it may have been delivered.
+  f.store.saveSupervisorRecord(`request:${f.source.id}:${requestId}`, {
     sessionId: f.source.id,
     request: { requestId, operation },
+    id,
+    createdAt: new Date().toISOString(),
+    agentRequest: {
+      type: "agent.request",
+      requestId: id,
+      operation: { kind: "send", sessionId: target.id, text: "Never replay" },
+    },
   });
   f.restart();
   expect(f.manager.deliveries()[0]?.status).toBe("interrupted");
   await expect(f.manager.control(f.source.id, { requestId, operation })).rejects.toThrow(
     "interrupted",
   );
+  expect(
+    f.providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
+  ).toHaveLength(1);
+});
+it("never adopts an existing chat when the model reuses a session ID as its request ID", async () => {
+  const f = await setup(),
+    existing = await f.target();
+  const started = (await f.manager.control(f.source.id, {
+    requestId: existing.id,
+    operation: { kind: "start", projectId: f.projectId, provider: "claude", name: "Fresh" },
+  })) as { sessionId: string };
+  expect(started.sessionId).not.toBe(existing.id);
+  expect(f.store.agent(started.sessionId)).toMatchObject({ projectId: f.projectId, name: "Fresh" });
+  expect(f.store.agent(existing.id).name).toBe(existing.name);
+});
+it("answers reads from current state even when a request ID repeats, and needs no ID", async () => {
+  const f = await setup(),
+    target = await f.target(),
+    requestId = randomUUID();
+  expect(await f.control({ kind: "status" }, requestId)).toMatchObject({ watching: [] });
+  await f.control({ kind: "watch", sessionId: target.id, enabled: true });
+  expect(await f.control({ kind: "status" }, requestId)).toMatchObject({
+    watching: [{ sessionId: target.id }],
+  });
+  expect(
+    await f.manager.control(f.source.id, { operation: { kind: "sessions", offset: 0 } }),
+  ).toMatchObject({ sessions: [{ id: target.id }] });
+  // Without a request ID a change still happens, once per call.
+  await f.manager.control(f.source.id, {
+    operation: { kind: "send", sessionId: target.id, text: "First", whenBusy: "queue" },
+  });
+  await expect.poll(() => f.store.agent(target.id).status).toBe("done");
+  expect(f.store.supervisorRecords("request:")).toHaveLength(0);
+});
+it("limits watches per conversation, makes room from settled chats and lets /clear move on", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await expect.poll(() => f.store.agent(target.id).status).toBe("idle");
+  // Saved chats a Supervisor followed, without running a provider for each.
+  const followed = (
+    supervisorId: string,
+    count: number,
+    status: "done" | "working",
+    explicit = false,
+  ) =>
+    // One transaction: hundreds of separate writes take several seconds on Windows runners.
+    f.store.transaction(() =>
+      Array.from({ length: count }, (_, index) => {
+        const id = randomUUID();
+        f.store.createBackgroundAgent({
+          ...f.store.agent(target.id),
+          id,
+          status,
+          updatedAt: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
+        });
+        f.store.saveSupervisorRecord(`watch:${supervisorId}:${id}`, {
+          id: randomUUID(),
+          supervisorId,
+          sessionId: id,
+          enabled: true,
+          explicit,
+        });
+        return id;
+      }),
+    );
+  // Chats the user asked to watch are never dropped to make room, however long idle.
+  const asked = followed(f.source.id, 1, "done", true);
+  const old = followed(f.source.id, WATCH_LIMIT - 1, "done");
+  // At the limit, the chat idle longest makes room.
+  await f.control({ kind: "watch", sessionId: target.id, enabled: true });
+  expect(f.store.supervisorRecord(`watch:${f.source.id}:${old[0]}`)).toMatchObject({
+    enabled: false,
+  });
+  expect(f.store.supervisorRecord(`watch:${f.source.id}:${asked[0]}`)).toMatchObject({
+    enabled: true,
+  });
+  expect(f.store.keepsAgent(old[1]!)).toBe(false);
+  expect(f.store.keepsAgent(f.source.id)).toBe(true);
+  await f.request({ kind: "send", sessionId: f.source.id, text: "/clear" });
+  await expect.poll(() => f.store.agents().filter((a) => a.supervisor).length).toBe(2);
+  const pane = f.store.snapshot().supervisor!.tabs[0]!.nodes[0]!;
+  const next = pane.kind === "pane" ? pane.sessionId! : "";
+  // The cleared conversation is no longer kept, nor counts against the new one.
+  expect(f.store.keepsAgent(f.source.id)).toBe(false);
+  expect(f.store.keepsAgent(next)).toBe(true);
+  const busy = followed(next, WATCH_LIMIT - 1, "working");
+  const watched = followed(next, 1, "done", true);
+  expect(f.store.keepsAgent(busy[0]!)).toBe(true);
+  await expect(
+    f.manager.control(next, { operation: { kind: "watch", sessionId: target.id } }),
+  ).rejects.toThrow("Stop watching one first");
+  expect(f.store.supervisorRecord(`watch:${next}:${watched[0]}`)).toMatchObject({
+    enabled: true,
+  });
+});
+it("prunes old receipts and delivery history on restart and skips streamed text", async () => {
+  const f = await setup(),
+    target = await f.target();
+  const old = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+  f.store.saveSupervisorRecord(`request:${randomUUID()}`, { result: "unscoped, older daemon" });
+  f.store.saveSupervisorRecord(`request:${f.source.id}:${randomUUID()}`, { createdAt: old });
+  const fresh = `request:${f.source.id}:${randomUUID()}`;
+  f.store.saveSupervisorRecord(fresh, { createdAt: new Date().toISOString() });
+  f.store.saveSupervisorRecord(`watch:${f.source.id}:${randomUUID()}`, { enabled: false });
+  f.store.transaction(() => {
+    for (let index = 0; index < 300; index++) {
+      const id = randomUUID(),
+        at = new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString();
+      f.store.saveSupervisorRecord("delivery:" + id, {
+        id,
+        supervisorId: f.source.id,
+        sessionId: target.id,
+        projectId: f.projectId,
+        text: "Earlier work",
+        status: "done",
+        createdAt: at,
+        updatedAt: at,
+      });
+    }
+  });
+  f.restart();
+  expect(f.store.supervisorRecords("request:")).toHaveLength(1);
+  expect(f.store.supervisorRecord(fresh)).toBeDefined();
+  expect(f.store.supervisorRecords("watch:")).toHaveLength(0);
+  expect(f.store.supervisorRecords("delivery:")).toHaveLength(256);
+  expect(f.manager.deliveries()).toHaveLength(128);
+  // Streamed reply text reads neither deliveries nor the chat's saved state.
+  const item = {
+    ...f.store.agentConversation(target.id).items[0]!,
+    sessionId: target.id,
+    kind: "assistant" as const,
+  };
+  const reads = vi.spyOn(f.store, "supervisorRecords"),
+    agents = vi.spyOn(f.store, "agent");
+  f.manager.observe({ type: "agent.item", item });
+  expect(reads.mock.calls.filter(([prefix]) => prefix !== "watch:")).toEqual([]);
+  expect(agents).not.toHaveBeenCalled();
+  // Once a chat is known to be working, its streamed text reads nothing at all.
+  f.manager.observe({
+    type: "agent.state",
+    agent: { ...f.store.agent(target.id), status: "working" },
+  });
+  reads.mockClear();
+  agents.mockClear();
+  f.manager.observe({ type: "agent.item", item });
+  expect(reads).not.toHaveBeenCalled();
+  expect(agents).not.toHaveBeenCalled();
+});
+it("searches a history longer than one slice without blocking", async () => {
+  const f = await setup(),
+    target = await f.target(),
+    other = await f.target();
+  const item = (sessionId: string, index: number, text: string) =>
+    f.store.saveAgentItem({
+      id: `bulk:${index}`,
+      sessionId,
+      turnId: "bulk",
+      position: 0,
+      revision: 0,
+      kind: "assistant",
+      title: "",
+      text,
+      detail: "",
+      status: "completed",
+      createdAt: new Date().toISOString(),
+    });
+  // One transaction: saving 4,500 items one by one takes over a minute on Windows runners.
+  const database = new DatabaseSync(join(f.directory, "workspace.sqlite"));
+  database.exec("BEGIN");
+  const insert = database.prepare(
+    "INSERT INTO agent_items (session_id, item_id, item) VALUES (?, ?, ?)",
+  );
+  for (let index = 0; index < 4500; index++)
+    insert.run(
+      other.id,
+      `bulk:${index}`,
+      JSON.stringify({ kind: "assistant", text: "Unrelated progress " + index }),
+    );
+  // Retired chats leave positions unused: a gap of fifty million must not cost a slice per range.
+  database.exec("UPDATE sqlite_sequence SET seq = seq + 50000000 WHERE name = 'agent_items'");
+  database.exec("COMMIT");
+  database.close();
+  item(target.id, 4500, "The flaky Payment Webhook test");
+  const yields = vi.spyOn(globalThis, "setImmediate");
+  expect([...(await f.store.searchAgentText("payment webhook"))]).toEqual([target.id]);
+  expect(yields.mock.calls.length).toBeLessThanOrEqual(3);
+});
+it("reports the permission mode each chat runs in, including a harness's own", async () => {
+  const f = await setup(),
+    target = await f.target();
+  expect(await f.control({ kind: "capabilities" })).toMatchObject({ permissions: "default" });
+  f.store.saveAgent({
+    ...f.store.agent(f.source.id),
+    settings: { model: null, effort: null, mode: "full-access" },
+  });
+  const claude = f.store.agent(target.id);
+  f.store.saveAgent({
+    ...claude,
+    settings: { ...claude.settings!, mode: "default", nativeMode: "bypassPermissions" },
+    controls: {
+      ...claude.controls!,
+      modes: [{ id: "bypassPermissions", label: "Bypass permissions" }],
+    },
+  });
+  expect(await f.control({ kind: "capabilities" })).toMatchObject({
+    permissions: "full-access",
+  });
+  expect(await f.control({ kind: "sessions", offset: 0 })).toMatchObject({
+    sessions: [{ id: target.id, permissions: "Bypass permissions (bypassPermissions)" }],
+  });
+});
+it("steers a just-sent turn once it has started, and reports how the instruction went", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await f.request({ kind: "send", sessionId: target.id, text: "hold long essay" });
+  await expect.poll(() => f.store.agent(target.id).turnId?.startsWith("pending:")).toBe(false);
+  const started = f.store.agent(target.id);
+  // The moment between sending and the provider starting the turn.
+  f.store.saveAgent({ ...started, turnId: "pending:" + randomUUID() });
+  const requests = vi.spyOn(f.agents, "request");
+  const steering = f.control({
+    kind: "send",
+    sessionId: target.id,
+    text: "Make it about multiplication",
+    whenBusy: "steer",
+  });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  expect(requests.mock.calls.filter(([r]) => r.operation.kind === "steer")).toEqual([]);
+  f.store.saveAgent({ ...f.store.agent(target.id), turnId: started.turnId });
+  expect(await steering).toMatchObject({ delivered: "steered" });
+  expect(
+    requests.mock.calls.find(([r]) => r.operation.kind === "steer")?.[0].operation,
+  ).toMatchObject({ turnId: started.turnId });
+  f.providers.at(-1)!.finish();
+  await expect.poll(() => f.store.agent(target.id).status).toBe("done");
+  // With nothing left to steer, the instruction simply starts the next turn.
+  expect(
+    await f.control({ kind: "send", sessionId: target.id, text: "Summarize", whenBusy: "steer" }),
+  ).toMatchObject({ delivered: "sent" });
+});
+it("lets Supervisor use its own tool without asking while its other tools still ask", async () => {
+  const f = await setup();
+  const changed = await f.request({
+    kind: "switch-provider",
+    sessionId: f.source.id,
+    provider: "claude",
+    model: null,
+    expectedRevision: f.store.agent(f.source.id).revision,
+  });
+  if (changed.outcome.status !== "ok") throw new Error("Could not switch to Claude Code");
+  const id = changed.outcome.conversation.agent.id;
+  await expect.poll(() => f.store.agent(id).status).toBe("idle");
+  await f.request({ kind: "send", sessionId: id, text: "hold while coordinating" });
+  await expect.poll(() => f.store.agent(id).turnId?.startsWith("pending:")).toBe(false);
+  const provider = f.providers.at(-1)!;
+  const ask = (reason: string) =>
+    provider.onRequest(
+      "item/commandExecution/requestApproval",
+      {
+        threadId: f.store.agent(id).threadId,
+        turnId: f.store.agent(id).turnId,
+        reason,
+        command: "{}",
+        availableDecisions: ["accept", "decline", "cancel"],
+      },
+      randomUUID(),
+    );
+  expect(await ask("mcp__concors-supervisor__concors_control")).toMatchObject({
+    decision: "accept",
+  });
+  expect(f.store.agent(id).pending).toEqual([]);
+  void ask("Bash").catch(() => undefined);
+  await expect
+    .poll(() => f.store.agent(id).pending.map((p) => p.summary))
+    .toEqual([expect.stringContaining("Bash")]);
+});
+it("limits unfinished deliveries per conversation and bounds their history while running", async () => {
+  const f = await setup(),
+    target = await f.target();
+  // Deliveries as the manager records them while the daemon runs.
+  const record = (supervisorId: string, status: "queued" | "done", index: number) => {
+    const at = new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString();
+    (f.manager as unknown as { saveDelivery(d: SupervisorDelivery): void }).saveDelivery({
+      id: randomUUID(),
+      supervisorId,
+      sessionId: target.id,
+      projectId: f.projectId,
+      text: "Earlier work",
+      status,
+      createdAt: at,
+      updatedAt: at,
+    });
+  };
+  // A conversation cleared earlier left 64 deliveries unfinished.
+  const earlier = randomUUID();
+  // One transaction: hundreds of separate writes take several seconds on Windows runners.
+  f.store.transaction(() => {
+    for (let index = 0; index < 64; index++) record(earlier, "queued", index);
+    for (let index = 0; index < 300; index++) record(f.source.id, "done", 100 + index);
+  });
+  expect(
+    (f.store.supervisorRecords("delivery:") as { status: string }[]).filter(
+      (d) => d.status === "done",
+    ),
+  ).toHaveLength(256);
+  await f.control({
+    kind: "send",
+    sessionId: target.id,
+    text: "Still possible",
+    whenBusy: "queue",
+  });
+  f.store.transaction(() => {
+    for (let index = 0; index < 64; index++) record(f.source.id, "queued", 500 + index);
+  });
+  await expect(
+    f.control({ kind: "send", sessionId: target.id, text: "One too many", whenBusy: "queue" }),
+  ).rejects.toThrow("Wait for existing delegated work");
+});
+it("runs again a send that stopped before anything left the daemon", async () => {
+  const f = await setup(),
+    target = await f.target(),
+    requestId = randomUUID(),
+    operation = { kind: "send", sessionId: target.id, text: "Retry me", whenBusy: "steer" };
+  // Stopped while waiting for a turn to start: the receipt has no request for the target yet.
+  f.store.saveSupervisorRecord(`request:${f.source.id}:${requestId}`, {
+    sessionId: f.source.id,
+    request: { requestId, operation },
+    id: randomUUID(),
+    createdAt: new Date().toISOString(),
+  });
+  f.restart();
+  expect(await f.manager.control(f.source.id, { requestId, operation })).toMatchObject({
+    delivered: "sent",
+  });
+  await expect.poll(() => f.store.agent(target.id).status).toBe("done");
   expect(
     f.providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
   ).toHaveLength(1);
@@ -566,6 +933,8 @@ it("summarizes file approvals without copying generated source into the Supervis
   const f = await setup(),
     target = await f.target();
   await f.request({ kind: "send", sessionId: target.id, text: "hold game UI" });
+  // Inject the approval into the started turn, not the placeholder its start replaces.
+  await expect.poll(() => f.store.agent(target.id).turnId?.startsWith("pending:")).toBe(false);
   const info = f.store.agent(target.id);
   const pending = {
     id: randomUUID(),
@@ -612,6 +981,32 @@ it("lets the user stop watching a chat after its workspace was removed", async (
   expect(await f.control({ kind: "status" })).toMatchObject({ watching: [] });
   expect(await f.control({ kind: "watch", sessionId: target.id, enabled: false })).toMatchObject({
     watching: false,
+  });
+});
+
+it("keeps the daemon running when a waited-on chat's workspace is removed mid-wait", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await f.request({ kind: "send", sessionId: target.id, text: "hold long work" });
+  await expect.poll(() => f.store.agent(target.id).status).toBe("working");
+  const waiting = f.control({
+    kind: "wait",
+    sessionIds: [target.id],
+    timeoutMs: 5000,
+    on: "change",
+  });
+  const project = f.store.snapshot().projects[0]!;
+  f.store.execute({
+    type: "workspace.command",
+    commandId: randomUUID(),
+    epoch: f.store.snapshot().epoch,
+    operation: { kind: "project.remove", projectId: project.id, expectedVersion: project.version },
+  });
+  // The worker's next lifecycle event wakes the wait; it used to throw out of the event dispatch.
+  f.providers.at(-1)!.finish();
+  expect(await waiting).toMatchObject({
+    timedOut: false,
+    sessions: [{ sessionId: target.id, status: "unavailable" }],
   });
 });
 

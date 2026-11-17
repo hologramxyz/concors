@@ -703,6 +703,7 @@ function MobileWorkspaceContent({
                     <nav aria-label="Primary" className="mobile-sidebar-content">
                       <div className="space-y-0.5">
                         <SupervisorNav
+                          workspace={workspace}
                           selected={page?.kind === "supervisor"}
                           onClick={() => {
                             setPage({ kind: "supervisor" });
@@ -938,6 +939,7 @@ function MobileWorkspaceContent({
                                 workspace={workspace}
                                 connected={!!ready}
                                 onOpenAgent={openAgent}
+                                onOpenProject={selectProject}
                               />
                             ) : page?.kind === "schedules" ? (
                               <div className="h-full overflow-y-auto">

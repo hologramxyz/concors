@@ -57,7 +57,8 @@ export type SupervisorResult = z.infer<typeof SupervisorResultSchema>;
 
 /** One typed contract for MCP and the local command bridge. The calling session is authenticated separately. */
 export const SupervisorControlSchema = z.object({
-  requestId: Id,
+  /** Optional: names a change so that retrying it returns the first result instead of repeating it. */
+  requestId: Id.optional(),
   operation: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("workspaces") }),
     z.object({ kind: z.literal("layout"), projectId: Id }),

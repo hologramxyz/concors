@@ -10,6 +10,8 @@ export interface AgentToolContext {
   mcp?: McpServer;
   env?: NodeJS.ProcessEnv;
   instructions?: string;
+  /** Calls to `mcp` need no approval: see preapprovedTool. */
+  preapproved?: boolean;
 }
 export type AgentProviderFactory = (
   cwd: string,

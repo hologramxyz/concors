@@ -5,17 +5,22 @@ import { CompactLayoutContext } from "@/components/compact-layout";
 import { ChatPane } from "@/agents/chat";
 import { AgentStartedContext } from "@/agents/context";
 import { Button } from "@/components/ui/button";
+import { WorkspaceFileLinks } from "@/files/provider";
 import { SessionLinkContext } from "./session-link";
+import { supervisorPane } from "./pane";
 
 /** The ordinary unified chat, including its provider picker and native mobile composer. */
 export function SupervisorPage({
   workspace,
   connected,
   onOpenAgent,
+  onOpenProject,
 }: {
   workspace: WorkspaceSnapshot | null;
   connected: boolean;
   onOpenAgent: (id: string) => void;
+  /** Brings up a workspace, where a file the Supervisor links to opens. */
+  onOpenProject: (projectId: string) => void;
 }) {
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
@@ -42,8 +47,8 @@ export function SupervisorPage({
     };
   }, [connection, connected, supported, retry]);
   const project = workspace?.supervisor,
-    tab = project?.tabs[0];
-  const pane = tab?.nodes.find((node) => node.kind === "pane");
+    tab = project?.tabs[0],
+    pane = supervisorPane(workspace);
   return (
     <AgentStartedContext value={undefined}>
       <SessionLinkContext value={onOpenAgent}>
@@ -62,16 +67,25 @@ export function SupervisorPage({
             <p className="p-6 text-sm text-muted-foreground">
               Update the daemon on this machine to use Supervisor.
             </p>
-          ) : project && tab && pane?.kind === "pane" ? (
-            <ChatPane
-              key={project.id}
-              project={project}
-              tab={tab}
-              node={pane}
-              canEdit={connected}
-              // Keep the normal desktop new-chat layout and the phone's bottom composer.
-              start={compact ? undefined : <></>}
-            />
+          ) : project && tab && pane ? (
+            // A chat's keys (Escape stops its turn, the dictation shortcut) act only where focus
+            // is inside its pane, which the workspace marks with this attribute; so does this page.
+            <div data-pane-id={pane.id} className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <WorkspaceFileLinks
+                projects={workspace?.projects ?? []}
+                onShowProject={onOpenProject}
+              >
+                <ChatPane
+                  key={project.id}
+                  project={project}
+                  tab={tab}
+                  node={pane}
+                  canEdit={connected}
+                  // Keep the normal desktop new-chat layout and the phone's bottom composer.
+                  start={compact ? undefined : <></>}
+                />
+              </WorkspaceFileLinks>
+            </div>
           ) : (
             <p role="status" className="p-6 text-sm text-muted-foreground">
               {connected ? "Opening Supervisor…" : "Connect to this machine to use Supervisor."}

@@ -115,6 +115,7 @@ export function AppSidebar(props: AppSidebarProps) {
         <div className={cn("min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto px-2 py-3")}>
           <div className="space-y-0.5">
             <SupervisorNav
+              workspace={props.workspace}
               selected={props.view === "supervisor"}
               onClick={props.onOpenSupervisor}
             />

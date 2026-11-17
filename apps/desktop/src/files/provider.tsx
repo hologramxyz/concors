@@ -12,7 +12,7 @@ import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { useFileSidebar } from "./sidebar-state";
 import { FileDocument } from "./document";
 import { locateFileTarget } from "./locate";
-import { resolveFileLink, type FileLocation } from "./links";
+import { resolveFileLink, workspaceFileLink, type FileLocation } from "./links";
 import {
   FilesContext,
   FileLinkContext,
@@ -160,15 +160,62 @@ export function ProjectFileLinks({
   project: WorkspaceProject;
   children: ReactNode;
 }) {
+  return (
+    <FileLinks
+      resolve={(href, sourcePath) => {
+        const location = resolveFileLink(href, project.directory, sourcePath);
+        return location && { project, location };
+      }}
+    >
+      {children}
+    </FileLinks>
+  );
+}
+
+/**
+ * File links in a chat that belongs to no workspace, the Supervisor's: a path inside an open
+ * workspace opens there, as a link in that workspace's own chats does, after `onShowProject` has
+ * brought the workspace up. What no open workspace holds stays as the agent wrote it.
+ */
+export function WorkspaceFileLinks({
+  projects,
+  onShowProject,
+  children,
+}: {
+  projects: readonly WorkspaceProject[];
+  onShowProject: (projectId: string) => void;
+  children: ReactNode;
+}) {
+  return (
+    <FileLinks resolve={(href) => workspaceFileLink(href, projects)} onOpen={onShowProject}>
+      {children}
+    </FileLinks>
+  );
+}
+
+function FileLinks({
+  resolve,
+  onOpen,
+  children,
+}: {
+  resolve: (
+    href: string,
+    sourcePath?: string,
+  ) => { project: WorkspaceProject; location: FileLocation } | null;
+  onOpen?: (projectId: string) => void;
+  children: ReactNode;
+}) {
   const files = useFiles();
   const connection = useContext(TerminalConnectionContext);
   const epoch = connection?.workspace?.epoch;
   return (
     <FileLinkContext
       value={(href, sourcePath) => {
-        const location = resolveFileLink(href, project.directory, sourcePath);
-        if (!location) return null;
+        const found = resolve(href, sourcePath);
+        if (!found) return null;
+        const { project, location } = found;
         return () => {
+          onOpen?.(project.id);
           // A path an agent wrote may be relative to wherever it had moved to, so it is looked for.
           void (async () => {
             const { path } =
@@ -187,9 +234,14 @@ export function ProjectFileLinks({
     >
       <FileLinkTargetContext
         value={(href, sourcePath) => {
-          const location = resolveFileLink(href, project.directory, sourcePath);
-          return location && epoch
-            ? { projectId: project.id, epoch, directory: project.directory, path: location.path }
+          const found = resolve(href, sourcePath);
+          return found && epoch
+            ? {
+                projectId: found.project.id,
+                epoch,
+                directory: found.project.directory,
+                path: found.location.path,
+              }
             : null;
         }}
       >

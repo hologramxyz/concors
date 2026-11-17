@@ -7,10 +7,21 @@ interface Watch {
   supervisorId: string;
   sessionId: string;
   enabled: boolean;
+  /** Asked for with the watch operation, rather than started by sending or waiting. */
+  explicit?: boolean;
   pending?: { id: string; turnId: string; kind: AgentPending["kind"]; action: string }[];
 }
+/** Each Supervisor conversation may follow this many chats at once. */
+export const WATCH_LIMIT = 64;
 
-const terminal = (agent: AgentInfo) => ["done", "failed", "interrupted"].includes(agent.status);
+/** A turn's last state: what a finished turn's reply notice is posted for. */
+const ended = (status: AgentInfo["status"]) => ["done", "failed", "interrupted"].includes(status);
+const terminal = (agent: AgentInfo) => ended(agent.status);
+/** Running, waiting for an answer, or holding queued work: Supervisor and watches agree on this. */
+export const busy = (agent: AgentInfo) =>
+  ["starting", "working", "needs_input"].includes(agent.status) ||
+  !!agent.pending.length ||
+  !!agent.queue?.length;
 const quote = (text: string) =>
   text
     .split("\n")
@@ -46,6 +57,18 @@ const pendingSummary = (pending: AgentPending) => ({
   detail: pending.detail.slice(0, 2000),
 });
 
+/**
+ * The permission mode a chat runs in, as its picker shows it. Codex uses Concors's own modes;
+ * other harnesses pick a native one (Claude Code's "Bypass permissions"), which the generic mode
+ * does not reflect.
+ */
+export function permissionMode(agent: AgentInfo): string {
+  if ((agent.engine ?? agent.provider) === "codex") return agent.settings?.mode ?? "default";
+  const id = agent.settings?.nativeMode ?? agent.controls?.currentMode ?? "default";
+  const label = agent.controls?.modes.find((mode) => mode.id === id)?.label;
+  return label && label !== id ? `${label} (${id})` : id;
+}
+
 /** Local saved context only. This never launches or prompts an agent for progress. */
 export function sessionReport(store: WorkspaceStore, agent: AgentInfo, includeReply = true) {
   const snapshot = store.snapshot();
@@ -69,7 +92,7 @@ export function sessionReport(store: WorkspaceStore, agent: AgentInfo, includeRe
     queued: agent.queue?.length ?? 0,
     queuePaused: agent.queuePaused ?? false,
     pending: agent.pending.map(pendingSummary),
-    permissions: agent.settings?.mode ?? "default",
+    permissions: permissionMode(agent),
     error: agent.error,
     reply: reply
       ? { text: reply.text.slice(0, 12000), truncated: reply.text.length > 12000 }
@@ -81,30 +104,55 @@ export function sessionReport(store: WorkspaceStore, agent: AgentInfo, includeRe
 export class SupervisorWatches {
   private closed = false;
   private readonly waiters = new Set<{ ids: Set<string>; wake: () => void }>();
+  /** Each chat's status as of its latest state event, so streamed items need no database read. */
+  private readonly statuses = new Map<string, AgentInfo["status"]>();
   private readonly store: WorkspaceStore;
   private readonly agents: AgentManager;
   private readonly source: (id: string) => AgentInfo;
   private readonly target: (id: string) => AgentInfo;
+  private readonly delivering: (supervisorId: string, sessionId: string) => boolean;
+  private readonly selected: () => Set<string>;
   constructor(
     store: WorkspaceStore,
     agents: AgentManager,
     source: (id: string) => AgentInfo,
     target: (id: string) => AgentInfo,
+    /** Whether this Supervisor still has an unfinished delivery to the chat. */
+    delivering: (supervisorId: string, sessionId: string) => boolean,
+    /** The Supervisor sessions the user can still return to: the shown one and its other harnesses. */
+    selected: () => Set<string>,
   ) {
     this.store = store;
     this.agents = agents;
     this.source = source;
     this.target = target;
-    store.keepAgents(() => this.records().map((w) => w.sessionId));
+    this.delivering = delivering;
+    this.selected = selected;
+    // Only work still in flight for a Supervisor the user can return to keeps a chat from being
+    // retired. Finished or orphaned watches must not pin chats past the machine's chat limit.
+    store.keepAgents(() => {
+      const selected = this.selected();
+      return this.records()
+        .filter((watch) => selected.has(watch.supervisorId))
+        .flatMap((watch) => {
+          try {
+            return this.settled(watch, this.target(watch.sessionId)) ? [] : [watch.sessionId];
+          } catch {
+            return [];
+          }
+        });
+    });
   }
-  private records(): Watch[] {
-    return (this.store.supervisorRecords("watch:") as Watch[]).filter((watch) => {
-      if (!watch.enabled) return false;
+  /** Enabled watches whose chat and Supervisor still exist, optionally only those matching first. */
+  private records(match: (watch: Watch) => boolean = () => true): Watch[] {
+    return this.enabled().filter((watch) => {
+      if (!match(watch)) return false;
       try {
         this.target(watch.sessionId);
+        this.store.agent(watch.supervisorId);
         return true;
       } catch {
-        // Removed workspaces must not consume the bounded watch slots forever.
+        // A removed workspace or a retired Supervisor conversation leaves nothing to report to.
         this.store.saveSupervisorRecord(this.key(watch.supervisorId, watch.sessionId), {
           ...watch,
           enabled: false,
@@ -113,19 +161,60 @@ export class SupervisorWatches {
       }
     });
   }
+  /** The saved rows alone, without checking that their chats still exist. */
+  private enabled(): Watch[] {
+    return (this.store.supervisorRecords("watch:") as Watch[]).filter((watch) => watch.enabled);
+  }
   private key(source: string, target: string) {
     return `watch:${source}:${target}`;
   }
-  track(supervisorId: string, sessionId: string, id: string, publishCurrent = false): void {
+  /** Nothing is running, waiting, queued or still being delivered there for this Supervisor. */
+  private settled(watch: Watch, target: AgentInfo): boolean {
+    return !busy(target) && !this.delivering(watch.supervisorId, watch.sessionId);
+  }
+  /**
+   * The limit belongs to one Supervisor conversation, so chats followed before /clear never block
+   * the next one. At the limit, the settled chat idle longest that was only followed because work
+   * was sent there makes room. A chat the user asked to watch is never dropped silently: when
+   * every followed chat is busy or explicitly watched, this refuses.
+   */
+  private makeRoom(supervisorId: string): void {
+    const own = this.records().filter((watch) => watch.supervisorId === supervisorId);
+    if (own.length < WATCH_LIMIT) return;
+    const oldest = own
+      .flatMap((watch) => {
+        try {
+          const target = this.target(watch.sessionId);
+          return !watch.explicit && this.settled(watch, target) ? [{ watch, target }] : [];
+        } catch {
+          return [];
+        }
+      })
+      .sort((a, b) => a.target.updatedAt.localeCompare(b.target.updatedAt))[0];
+    if (!oldest)
+      throw new Error(
+        `Supervisor already follows ${WATCH_LIMIT} chats that are busy or that you asked to watch. Stop watching one first.`,
+      );
+    this.stop(supervisorId, oldest.watch.sessionId);
+  }
+  track(
+    supervisorId: string,
+    sessionId: string,
+    id: string,
+    publishCurrent = false,
+    explicit = false,
+  ): void {
     const target = this.target(sessionId);
     const key = this.key(supervisorId, sessionId);
     const existing = this.store.supervisorRecord(key) as Watch | undefined;
-    const watch: Watch = existing?.enabled
+    let watch: Watch = existing?.enabled
       ? existing
-      : { supervisorId, sessionId, id, enabled: true };
+      : { supervisorId, sessionId, id, enabled: true, ...(explicit ? { explicit } : {}) };
     if (!existing?.enabled) {
-      if (this.records().length >= 64)
-        throw new Error("Stop watching a chat before watching more.");
+      this.makeRoom(supervisorId);
+      this.store.saveSupervisorRecord(key, watch);
+    } else if (explicit && !existing.explicit) {
+      watch = { ...existing, explicit };
       this.store.saveSupervisorRecord(key, watch);
     }
     // Always show an existing blocker, even if the new instruction is only queued behind it.
@@ -159,7 +248,24 @@ export class SupervisorWatches {
       });
   }
   async wait(supervisorId: string, ids: string[], timeoutMs: number, on: "attention" | "change") {
-    const reports = () => ids.map((id) => sessionReport(this.store, this.target(id)));
+    // A chat can be deleted, or its workspace removed, while Supervisor waits on it. Report that
+    // chat as unavailable rather than throwing: wake runs inside the daemon's event dispatch.
+    const reports = () =>
+      ids.map((id) => {
+        try {
+          return sessionReport(this.store, this.target(id));
+        } catch (error) {
+          return {
+            sessionId: id,
+            status: "unavailable" as const,
+            turnId: null,
+            pending: [],
+            queued: 0,
+            queuePaused: false,
+            error: error instanceof Error ? error.message : "This chat is no longer available.",
+          };
+        }
+      });
     const initial = reports();
     const signature = (rows: typeof initial) =>
       JSON.stringify(rows.map((r) => [r.status, r.turnId, r.pending, r.queued, r.queuePaused]));
@@ -194,9 +300,35 @@ export class SupervisorWatches {
     return { sessions: reports(), timedOut };
   }
   observe(event: AgentEvent): void {
-    if (this.closed || (event.type !== "agent.state" && event.type !== "agent.item")) return;
+    if (this.closed) return;
+    if (event.type === "agent.list") {
+      // A list (after retirements, for example) replaces what earlier state events said.
+      this.statuses.clear();
+      for (const agent of event.agents) this.statuses.set(agent.id, agent.status);
+      return;
+    }
+    if (event.type !== "agent.state" && event.type !== "agent.item") return;
     const id = event.type === "agent.state" ? event.agent.id : event.item.sessionId;
-    for (const watch of this.records())
+    // Approvals, questions, queues and outcomes all arrive as state changes. Items matter only for
+    // a finished turn's reply saved after its state, not the text a working turn streams, which
+    // is dismissed here before any database read.
+    if (event.type === "agent.state") this.statuses.set(id, event.agent.status);
+    else {
+      if (event.item.kind !== "assistant") return;
+      let status = this.statuses.get(id);
+      if (status && !ended(status)) return;
+      if (!this.enabled().some((w) => w.sessionId === id)) return;
+      try {
+        status ??= this.store.agent(id).status;
+      } catch {
+        return;
+      }
+      if (!ended(status)) return;
+    }
+    // A Supervisor's own state change catches up notices withheld while it could not receive them.
+    for (const watch of this.records(
+      (w) => w.sessionId === id || (event.type === "agent.state" && w.supervisorId === id),
+    ))
       if (watch.sessionId === id || watch.supervisorId === id)
         this.notify(
           watch,
