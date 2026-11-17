@@ -247,3 +247,26 @@ test("the sidebar marks the Supervisor while it works, waits for an answer, or h
     control.disconnect();
   }
 });
+
+test("the Supervisor's MCP servers open from its title bar, as a chat's do from its pane", async ({
+  page,
+}) => {
+  await signedIn(page, undefined, undefined, { supervisorLanding: true });
+  await page.goto("/");
+  await expect(page.getByTestId("supervisor-page")).toBeVisible();
+  await chooseProvider(page);
+  await expect(page.getByRole("textbox", { name: "Message Codex", exact: true })).toBeEnabled();
+  await page.getByRole("button", { name: "Supervisor actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "MCP servers…" }).click();
+  const status = page.getByRole("list", { name: "MCP server status" });
+  await expect(status.getByRole("listitem")).toHaveText([
+    /Concors schedules \(built in\)\s*Connected/,
+    /github\s*Needs sign-in/,
+  ]);
+  await expect(status.getByRole("button", { name: "Sign in to github" })).toBeEnabled();
+  await page.keyboard.press("Escape");
+  await expect(status).toHaveCount(0);
+  // Elsewhere the title bar has no Supervisor menu.
+  await page.getByRole("button", { name: "Schedules", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Supervisor actions" })).toHaveCount(0);
+});
