@@ -63,15 +63,19 @@ export function SupervisorPage({
               Update the daemon on this machine to use Supervisor.
             </p>
           ) : project && tab && pane?.kind === "pane" ? (
-            <ChatPane
-              key={project.id}
-              project={project}
-              tab={tab}
-              node={pane}
-              canEdit={connected}
-              // Keep the normal desktop new-chat layout and the phone's bottom composer.
-              start={compact ? undefined : <></>}
-            />
+            // A chat's keys (Escape stops its turn, the dictation shortcut) act only where focus
+            // is inside its pane, which the workspace marks with this attribute; so does this page.
+            <div data-pane-id={pane.id} className="flex min-h-0 min-w-0 flex-1 flex-col">
+              <ChatPane
+                key={project.id}
+                project={project}
+                tab={tab}
+                node={pane}
+                canEdit={connected}
+                // Keep the normal desktop new-chat layout and the phone's bottom composer.
+                start={compact ? undefined : <></>}
+              />
+            </div>
           ) : (
             <p role="status" className="p-6 text-sm text-muted-foreground">
               {connected ? "Opening Supervisor…" : "Connect to this machine to use Supervisor."}
