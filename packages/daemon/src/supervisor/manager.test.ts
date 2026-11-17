@@ -95,6 +95,7 @@ async function setup() {
     await rm(directory, { recursive: true, force: true });
   });
   return {
+    directory,
     store,
     registry,
     agents,
@@ -408,8 +409,14 @@ it("searches a history longer than one slice without blocking", async () => {
       createdAt: new Date().toISOString(),
     });
   for (let index = 0; index < 4500; index++) item(other.id, index, "Unrelated progress " + index);
+  // Retired chats leave positions unused: a gap of fifty million must not cost a slice per range.
+  const database = new DatabaseSync(join(f.directory, "workspace.sqlite"));
+  database.exec("UPDATE sqlite_sequence SET seq = seq + 50000000 WHERE name = 'agent_items'");
+  database.close();
   item(target.id, 4500, "The flaky Payment Webhook test");
+  const yields = vi.spyOn(globalThis, "setImmediate");
   expect([...(await f.store.searchAgentText("payment webhook"))]).toEqual([target.id]);
+  expect(yields.mock.calls.length).toBeLessThanOrEqual(3);
 });
 it("reports the permission mode each chat runs in, including a harness's own", async () => {
   const f = await setup(),

@@ -214,22 +214,26 @@ export class WorkspaceStore {
   }
   /**
    * SQLite reads only: searching saved text must never launch any provider. A long history takes
-   * seconds to scan, so it is read in slices that yield in between, keeping the daemon responsive.
+   * seconds to scan, so it is read in slices of saved rows that yield in between, keeping the
+   * daemon responsive. Slices follow the rows that exist: retired chats leave long gaps between
+   * positions, which must not cost a slice each.
    */
   async searchAgentText(query: string): Promise<Set<string>> {
     const found = new Set<string>();
-    const last = Number(
-      this.#db.prepare("SELECT max(position) AS last FROM agent_items").get()?.["last"] ?? 0,
+    const boundary = this.#db.prepare(
+      "SELECT position FROM agent_items WHERE position > ? ORDER BY position LIMIT 1 OFFSET ?",
     );
     const slice = this.#db.prepare(
       "SELECT DISTINCT session_id FROM agent_items WHERE position > ? AND position <= ? AND instr(lower(json_extract(item, '$.text')), lower(?)) > 0",
     );
-    for (let start = 0; start < last; start += SEARCH_SLICE) {
-      for (const row of slice.all(start, start + SEARCH_SLICE, query))
-        found.add(String(row["session_id"]));
+    for (let after = 0; ;) {
+      const end = boundary.get(after, SEARCH_SLICE - 1)?.["position"];
+      const until = end === undefined ? Number.MAX_SAFE_INTEGER : Number(end);
+      for (const row of slice.all(after, until, query)) found.add(String(row["session_id"]));
+      if (end === undefined) return found;
+      after = until;
       await new Promise((resolve) => setImmediate(resolve));
     }
-    return found;
   }
 
   execute(
