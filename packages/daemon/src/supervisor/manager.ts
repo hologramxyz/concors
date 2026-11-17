@@ -12,14 +12,11 @@ import {
 } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
 import type { AgentManager } from "../agents/manager.ts";
-import { SupervisorWatches, permissionMode, sessionReport } from "./watch.ts";
+import { SupervisorWatches, busy, permissionMode, sessionReport } from "./watch.ts";
 import type { ProviderRegistry } from "../agents/providers/registry.ts";
 import { randomUUID } from "node:crypto";
 
-const active = (agent: AgentInfo) =>
-  ["starting", "working", "needs_input"].includes(agent.status) ||
-  !!agent.pending.length ||
-  !!agent.queue?.length;
+const active = busy;
 /** Finished deliveries kept across restarts; status reports the newest 128 of all deliveries. */
 const DELIVERY_HISTORY = 256;
 const steerable = (agent: AgentInfo) =>

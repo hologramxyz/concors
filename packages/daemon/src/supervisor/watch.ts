@@ -14,7 +14,14 @@ interface Watch {
 /** Each Supervisor conversation may follow this many chats at once. */
 export const WATCH_LIMIT = 64;
 
-const terminal = (agent: AgentInfo) => ["done", "failed", "interrupted"].includes(agent.status);
+/** A turn's last state: what a finished turn's reply notice is posted for. */
+const ended = (status: AgentInfo["status"]) => ["done", "failed", "interrupted"].includes(status);
+const terminal = (agent: AgentInfo) => ended(agent.status);
+/** Running, waiting for an answer, or holding queued work: Supervisor and watches agree on this. */
+export const busy = (agent: AgentInfo) =>
+  ["starting", "working", "needs_input"].includes(agent.status) ||
+  !!agent.pending.length ||
+  !!agent.queue?.length;
 const quote = (text: string) =>
   text
     .split("\n")
@@ -163,12 +170,7 @@ export class SupervisorWatches {
   }
   /** Nothing is running, waiting, queued or still being delivered there for this Supervisor. */
   private settled(watch: Watch, target: AgentInfo): boolean {
-    return (
-      !["starting", "working", "needs_input"].includes(target.status) &&
-      !target.pending.length &&
-      !target.queue?.length &&
-      !this.delivering(watch.supervisorId, watch.sessionId)
-    );
+    return !busy(target) && !this.delivering(watch.supervisorId, watch.sessionId);
   }
   /**
    * The limit belongs to one Supervisor conversation, so chats followed before /clear never block
@@ -298,21 +300,30 @@ export class SupervisorWatches {
     return { sessions: reports(), timedOut };
   }
   observe(event: AgentEvent): void {
-    if (this.closed || (event.type !== "agent.state" && event.type !== "agent.item")) return;
+    if (this.closed) return;
+    if (event.type === "agent.list") {
+      // A list (after retirements, for example) replaces what earlier state events said.
+      this.statuses.clear();
+      for (const agent of event.agents) this.statuses.set(agent.id, agent.status);
+      return;
+    }
+    if (event.type !== "agent.state" && event.type !== "agent.item") return;
     const id = event.type === "agent.state" ? event.agent.id : event.item.sessionId;
     // Approvals, questions, queues and outcomes all arrive as state changes. Items matter only for
-    // a finished turn's reply saved after its state, not the text a working turn streams.
+    // a finished turn's reply saved after its state, not the text a working turn streams, which
+    // is dismissed here before any database read.
     if (event.type === "agent.state") this.statuses.set(id, event.agent.status);
     else {
-      if (event.item.kind !== "assistant" || !this.enabled().some((w) => w.sessionId === id))
-        return;
+      if (event.item.kind !== "assistant") return;
       let status = this.statuses.get(id);
+      if (status && !ended(status)) return;
+      if (!this.enabled().some((w) => w.sessionId === id)) return;
       try {
         status ??= this.store.agent(id).status;
       } catch {
         return;
       }
-      if (!["done", "failed", "interrupted"].includes(status)) return;
+      if (!ended(status)) return;
     }
     // A Supervisor's own state change catches up notices withheld while it could not receive them.
     for (const watch of this.records(

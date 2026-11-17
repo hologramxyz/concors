@@ -368,11 +368,25 @@ it("prunes old receipts and delivery history on restart and skips streamed text"
   expect(f.store.supervisorRecords("delivery:")).toHaveLength(256);
   expect(f.manager.deliveries()).toHaveLength(128);
   // Streamed reply text reads neither deliveries nor the chat's saved state.
-  const item = { ...f.store.agentConversation(target.id).items[0]!, kind: "assistant" as const };
+  const item = {
+    ...f.store.agentConversation(target.id).items[0]!,
+    sessionId: target.id,
+    kind: "assistant" as const,
+  };
   const reads = vi.spyOn(f.store, "supervisorRecords"),
     agents = vi.spyOn(f.store, "agent");
   f.manager.observe({ type: "agent.item", item });
   expect(reads.mock.calls.filter(([prefix]) => prefix !== "watch:")).toEqual([]);
+  expect(agents).not.toHaveBeenCalled();
+  // Once a chat is known to be working, its streamed text reads nothing at all.
+  f.manager.observe({
+    type: "agent.state",
+    agent: { ...f.store.agent(target.id), status: "working" },
+  });
+  reads.mockClear();
+  agents.mockClear();
+  f.manager.observe({ type: "agent.item", item });
+  expect(reads).not.toHaveBeenCalled();
   expect(agents).not.toHaveBeenCalled();
 });
 it("searches a history longer than one slice without blocking", async () => {
