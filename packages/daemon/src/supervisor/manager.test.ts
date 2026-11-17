@@ -12,6 +12,7 @@ import { ProviderRegistry } from "../agents/providers/registry.ts";
 import { TestAgentProvider } from "../agents/testing/provider.ts";
 import { SupervisorManager } from "./manager.ts";
 import { SupervisorTools } from "./tools.ts";
+import { WATCH_LIMIT } from "./watch.ts";
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -264,6 +265,49 @@ it("answers reads from current state even when a request ID repeats, and needs n
   });
   await expect.poll(() => f.store.agent(target.id).status).toBe("done");
   expect(f.store.supervisorRecords("request:")).toHaveLength(0);
+});
+it("limits watches per conversation, makes room from settled chats and lets /clear move on", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await expect.poll(() => f.store.agent(target.id).status).toBe("idle");
+  // Saved chats a Supervisor followed, without running a provider for each.
+  const followed = (supervisorId: string, count: number, status: "done" | "working") =>
+    Array.from({ length: count }, (_, index) => {
+      const id = randomUUID();
+      f.store.createBackgroundAgent({
+        ...f.store.agent(target.id),
+        id,
+        status,
+        updatedAt: new Date(Date.UTC(2026, 0, 1, 0, index)).toISOString(),
+      });
+      f.store.saveSupervisorRecord(`watch:${supervisorId}:${id}`, {
+        id: randomUUID(),
+        supervisorId,
+        sessionId: id,
+        enabled: true,
+      });
+      return id;
+    });
+  const old = followed(f.source.id, WATCH_LIMIT, "done");
+  // At the limit, the chat idle longest makes room.
+  await f.control({ kind: "watch", sessionId: target.id, enabled: true });
+  expect(f.store.supervisorRecord(`watch:${f.source.id}:${old[0]}`)).toMatchObject({
+    enabled: false,
+  });
+  expect(f.store.keepsAgent(old[1]!)).toBe(false);
+  expect(f.store.keepsAgent(f.source.id)).toBe(true);
+  await f.request({ kind: "send", sessionId: f.source.id, text: "/clear" });
+  await expect.poll(() => f.store.agents().filter((a) => a.supervisor).length).toBe(2);
+  const pane = f.store.snapshot().supervisor!.tabs[0]!.nodes[0]!;
+  const next = pane.kind === "pane" ? pane.sessionId! : "";
+  // The cleared conversation is no longer kept, nor counts against the new one.
+  expect(f.store.keepsAgent(f.source.id)).toBe(false);
+  expect(f.store.keepsAgent(next)).toBe(true);
+  const busy = followed(next, WATCH_LIMIT, "working");
+  expect(f.store.keepsAgent(busy[0]!)).toBe(true);
+  await expect(
+    f.manager.control(next, { operation: { kind: "watch", sessionId: target.id } }),
+  ).rejects.toThrow("Stop watching one first");
 });
 it("authenticates the local bridge and refuses browser origins and oversized bodies", async () => {
   const f = await setup(),

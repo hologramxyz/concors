@@ -69,13 +69,16 @@ export class SupervisorManager {
       agents,
       (id) => this.source(id),
       (id) => this.target(id),
+      (supervisorId, sessionId) =>
+        this.deliveries().some(
+          (d) =>
+            d.supervisorId === supervisorId && d.sessionId === sessionId && !finished(d.status),
+        ),
+      () => this.selected(),
     );
-    store.keepAgents(() =>
-      store
-        .agents()
-        .filter((a) => a.supervisor)
-        .map((a) => a.id),
-    );
+    // /clear leaves the previous conversation behind; like any closed chat, it may be retired to
+    // make room. The shown conversation and its other harnesses stay, so switching back works.
+    store.keepAgents(() => this.selected());
     // Recovery never repeats a prompt whose delivery was uncertain at shutdown.
     for (const delivery of this.deliveries()) {
       if (finished(delivery.status)) continue;
@@ -115,6 +118,30 @@ export class SupervisorManager {
         },
       };
     }
+  }
+
+  /** The shown Supervisor session and the sessions of its other harnesses. */
+  private selected(): Set<string> {
+    const shown = new Set(
+      this.store
+        .snapshot()
+        .supervisor?.tabs.flatMap((tab) =>
+          tab.nodes.flatMap((node) =>
+            node.kind === "pane" && node.sessionId ? [node.sessionId] : [],
+          ),
+        ) ?? [],
+    );
+    const sessions = this.store.agents().filter((agent) => agent.supervisor);
+    const groups = new Set(
+      sessions
+        .filter((agent) => shown.has(agent.id))
+        .map((agent) => agent.providerGroupId ?? agent.id),
+    );
+    return new Set(
+      sessions
+        .filter((agent) => groups.has(agent.providerGroupId ?? agent.id))
+        .map((agent) => agent.id),
+    );
   }
 
   deliveries(): SupervisorDelivery[] {
@@ -322,7 +349,7 @@ export class SupervisorManager {
         this.watches.stop(source.id, op.sessionId);
         return { sessionId: op.sessionId, watching: false };
       }
-      this.watches.track(source.id, op.sessionId, receipt.id, true);
+      this.watches.track(source.id, op.sessionId, receipt.id, true, true);
       return {
         sessionId: op.sessionId,
         watching: true,

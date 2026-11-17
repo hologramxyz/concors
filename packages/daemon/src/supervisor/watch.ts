@@ -7,8 +7,12 @@ interface Watch {
   supervisorId: string;
   sessionId: string;
   enabled: boolean;
+  /** Asked for with the watch operation, rather than started by sending or waiting. */
+  explicit?: boolean;
   pending?: { id: string; turnId: string; kind: AgentPending["kind"]; action: string }[];
 }
+/** Each Supervisor conversation may follow this many chats at once. */
+export const WATCH_LIMIT = 64;
 
 const terminal = (agent: AgentInfo) => ["done", "failed", "interrupted"].includes(agent.status);
 const quote = (text: string) =>
@@ -85,26 +89,48 @@ export class SupervisorWatches {
   private readonly agents: AgentManager;
   private readonly source: (id: string) => AgentInfo;
   private readonly target: (id: string) => AgentInfo;
+  private readonly delivering: (supervisorId: string, sessionId: string) => boolean;
+  private readonly selected: () => Set<string>;
   constructor(
     store: WorkspaceStore,
     agents: AgentManager,
     source: (id: string) => AgentInfo,
     target: (id: string) => AgentInfo,
+    /** Whether this Supervisor still has an unfinished delivery to the chat. */
+    delivering: (supervisorId: string, sessionId: string) => boolean,
+    /** The Supervisor sessions the user can still return to: the shown one and its other harnesses. */
+    selected: () => Set<string>,
   ) {
     this.store = store;
     this.agents = agents;
     this.source = source;
     this.target = target;
-    store.keepAgents(() => this.records().map((w) => w.sessionId));
+    this.delivering = delivering;
+    this.selected = selected;
+    // Only work still in flight for a Supervisor the user can return to keeps a chat from being
+    // retired. Finished or orphaned watches must not pin chats past the machine's chat limit.
+    store.keepAgents(() => {
+      const selected = this.selected();
+      return this.records()
+        .filter((watch) => selected.has(watch.supervisorId))
+        .flatMap((watch) => {
+          try {
+            return this.settled(watch, this.target(watch.sessionId)) ? [] : [watch.sessionId];
+          } catch {
+            return [];
+          }
+        });
+    });
   }
   private records(): Watch[] {
     return (this.store.supervisorRecords("watch:") as Watch[]).filter((watch) => {
       if (!watch.enabled) return false;
       try {
         this.target(watch.sessionId);
+        this.store.agent(watch.supervisorId);
         return true;
       } catch {
-        // Removed workspaces must not consume the bounded watch slots forever.
+        // A removed workspace or a retired Supervisor conversation leaves nothing to report to.
         this.store.saveSupervisorRecord(this.key(watch.supervisorId, watch.sessionId), {
           ...watch,
           enabled: false,
@@ -116,16 +142,61 @@ export class SupervisorWatches {
   private key(source: string, target: string) {
     return `watch:${source}:${target}`;
   }
-  track(supervisorId: string, sessionId: string, id: string, publishCurrent = false): void {
+  /** Nothing is running, waiting, queued or still being delivered there for this Supervisor. */
+  private settled(watch: Watch, target: AgentInfo): boolean {
+    return (
+      !["starting", "working", "needs_input"].includes(target.status) &&
+      !target.pending.length &&
+      !target.queue?.length &&
+      !this.delivering(watch.supervisorId, watch.sessionId)
+    );
+  }
+  /**
+   * The limit belongs to one Supervisor conversation, so chats followed before /clear never block
+   * the next one. At the limit, the settled chat idle longest makes room, preferring one only
+   * followed because work was sent there; only when every followed chat is busy does this refuse.
+   */
+  private makeRoom(supervisorId: string): void {
+    const own = this.records().filter((watch) => watch.supervisorId === supervisorId);
+    if (own.length < WATCH_LIMIT) return;
+    const oldest = own
+      .flatMap((watch) => {
+        try {
+          const target = this.target(watch.sessionId);
+          return this.settled(watch, target) ? [{ watch, target }] : [];
+        } catch {
+          return [];
+        }
+      })
+      .sort(
+        (a, b) =>
+          Number(!!a.watch.explicit) - Number(!!b.watch.explicit) ||
+          a.target.updatedAt.localeCompare(b.target.updatedAt),
+      )[0];
+    if (!oldest)
+      throw new Error(
+        `Supervisor already follows ${WATCH_LIMIT} chats with work in progress. Stop watching one first.`,
+      );
+    this.stop(supervisorId, oldest.watch.sessionId);
+  }
+  track(
+    supervisorId: string,
+    sessionId: string,
+    id: string,
+    publishCurrent = false,
+    explicit = false,
+  ): void {
     const target = this.target(sessionId);
     const key = this.key(supervisorId, sessionId);
     const existing = this.store.supervisorRecord(key) as Watch | undefined;
-    const watch: Watch = existing?.enabled
+    let watch: Watch = existing?.enabled
       ? existing
-      : { supervisorId, sessionId, id, enabled: true };
+      : { supervisorId, sessionId, id, enabled: true, ...(explicit ? { explicit } : {}) };
     if (!existing?.enabled) {
-      if (this.records().length >= 64)
-        throw new Error("Stop watching a chat before watching more.");
+      this.makeRoom(supervisorId);
+      this.store.saveSupervisorRecord(key, watch);
+    } else if (explicit && !existing.explicit) {
+      watch = { ...existing, explicit };
       this.store.saveSupervisorRecord(key, watch);
     }
     // Always show an existing blocker, even if the new instruction is only queued behind it.

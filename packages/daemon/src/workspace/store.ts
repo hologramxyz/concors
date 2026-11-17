@@ -791,7 +791,7 @@ export class WorkspaceStore {
           !kept.has(agent.id) &&
           !queued.has(agent.id) &&
           !agent.pinned &&
-          !agent.supervisor &&
+          // The Supervisor keeps (keepAgents) the conversations it can still switch back to.
           !ACTIVE_AGENT.includes(agent.status) &&
           agent.pending.length === 0 &&
           !agent.queue?.length,
