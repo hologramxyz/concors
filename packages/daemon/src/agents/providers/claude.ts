@@ -95,6 +95,15 @@ type McpAuthQuery = Query & {
   mcpSubmitOAuthCallbackUrl?: (server: string, callbackUrl: string) => Promise<unknown>;
 };
 
+/**
+ * Claude Code's own replies, such as "You've hit your 5-hour limit", name their model
+ * `<synthetic>`. Taken as the chat's model it made every later turn ask for a model named
+ * "synthetic" and fail, leaving the chat unusable once a limit had passed.
+ */
+export function isPlaceholderModel(model: string): boolean {
+  return /^<[^<>]*>$/.test(model.trim());
+}
+
 export class ClaudeProvider extends EventProvider {
   private session: Query | undefined;
   private pending: SDKUserMessage[] = [];
@@ -518,7 +527,11 @@ export class ClaudeProvider extends EventProvider {
     if (method === "collaborationMode/list") return { data: [] };
     if (method === "thread/resume") await this.open(string(p["threadId"]));
     if (method === "thread/start" && this.resumed) await this.open();
-    if ((method === "thread/start" || method === "thread/resume") && p["model"]) {
+    if (
+      (method === "thread/start" || method === "thread/resume") &&
+      p["model"] &&
+      !isPlaceholderModel(string(p["model"]))
+    ) {
       await this.session?.setModel(string(p["model"]));
       this.currentModel = string(p["model"]);
     }
@@ -590,8 +603,12 @@ export class ClaudeProvider extends EventProvider {
         { type: "text", text: `/${string(p["name"])}${p["args"] ? ` ${string(p["args"])}` : ""}` },
       ];
     }
-    await session.setModel(typeof p["model"] === "string" ? p["model"] : undefined);
-    if (p["model"]) this.currentModel = string(p["model"]);
+    // A chat that took a placeholder before it was refused here (see `isPlaceholderModel`) goes
+    // back to the default model, and its next reply names the real one.
+    const model =
+      typeof p["model"] === "string" && !isPlaceholderModel(p["model"]) ? p["model"] : undefined;
+    await session.setModel(model);
+    if (model) this.currentModel = model;
     this.updateModelFeatures();
     if (object(p["sandboxPolicy"])["type"] === "dangerFullAccess")
       throw new Error("Claude Code uses its normal tool approvals in Concors");
@@ -965,7 +982,7 @@ export class ClaudeProvider extends EventProvider {
     });
   }
   private reportModel(model: string) {
-    if (!model) return;
+    if (!model || isPlaceholderModel(model)) return;
     this.currentModel = model;
     this.emit("session/model/updated", { model });
   }

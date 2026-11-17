@@ -10,7 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import type { query, Query, Options } from "@anthropic-ai/claude-agent-sdk";
-import { canBypassPermissions, ClaudeProvider } from "./claude.ts";
+import { canBypassPermissions, ClaudeProvider, isPlaceholderModel } from "./claude.ts";
 import { OpenCodeProvider, resumableOpenCodeSessions } from "./opencode.ts";
 import { PiProvider } from "./pi.ts";
 import { launch } from "./launch.ts";
@@ -1563,4 +1563,62 @@ it("signs in to Claude MCP servers through Claude Code's own sign-in calls", asy
     "callback figma",
     "reconnect claude.ai Gmail",
   ]);
+});
+
+it("never takes Claude Code's <synthetic> model for the chat's, and recovers a chat that did", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-claude-synthetic-"));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  await writeFile(join(directory, process.platform === "win32" ? "claude.cmd" : "claude"), "", {
+    mode: 0o755,
+  });
+  vi.stubEnv("PATH", directory);
+  let emit: (value: unknown) => void = () => undefined;
+  const models: (string | undefined)[] = [];
+  const createQuery = vi.fn(() => {
+    const messages = new PassThrough({ objectMode: true });
+    emit = (value) => messages.write(value);
+    return Object.assign(messages, {
+      initializationResult: async () => ({
+        models: [{ value: "default", displayName: "Default" }],
+      }),
+      getContextUsage: async () => ({ model: "claude-opus-5-5" }),
+      setModel: async (model?: string) => void models.push(model),
+      setPermissionMode: async () => undefined,
+      close: () => {
+        messages.end();
+      },
+    }) as unknown as Query;
+  });
+  const provider = new ClaudeProvider(directory, vi.fn(), createQuery);
+  const { notifications } = observe(provider);
+  await provider.initialize();
+  await provider.request("thread/start");
+  await provider.request("turn/start", turn);
+  // The limit message Claude Code writes itself.
+  emit({
+    type: "assistant",
+    error: "rate_limit",
+    message: {
+      id: "limit",
+      model: "<synthetic>",
+      content: [{ type: "text", text: "You've hit your 5-hour limit" }],
+    },
+  });
+  await expect.poll(() => notifications.some((n) => n.method === "item/completed")).toBe(true);
+  expect(
+    notifications.filter((n) => n.method === "session/model/updated").map((n) => n.params["model"]),
+  ).not.toContain("<synthetic>");
+  // A chat that took it before this fix sends it back: the default model is used instead.
+  emit({ type: "result", subtype: "success", result: "", modelUsage: {} });
+  await expect.poll(() => notifications.some((n) => n.method === "turn/completed")).toBe(true);
+  await provider.request("turn/start", { ...turn, model: "<synthetic>" });
+  expect(models.at(-1)).toBeUndefined();
+});
+
+it("recognises placeholder model names, and only those", () => {
+  expect(isPlaceholderModel("<synthetic>")).toBe(true);
+  expect(isPlaceholderModel(" <synthetic> ")).toBe(true);
+  expect(isPlaceholderModel("claude-opus-5-5")).toBe(false);
+  expect(isPlaceholderModel("opus")).toBe(false);
+  expect(isPlaceholderModel("claude-fable-5-1[1m]")).toBe(false);
 });
