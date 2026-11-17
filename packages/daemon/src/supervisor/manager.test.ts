@@ -615,6 +615,32 @@ it("lets the user stop watching a chat after its workspace was removed", async (
   });
 });
 
+it("keeps the daemon running when a waited-on chat's workspace is removed mid-wait", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await f.request({ kind: "send", sessionId: target.id, text: "hold long work" });
+  await expect.poll(() => f.store.agent(target.id).status).toBe("working");
+  const waiting = f.control({
+    kind: "wait",
+    sessionIds: [target.id],
+    timeoutMs: 5000,
+    on: "change",
+  });
+  const project = f.store.snapshot().projects[0]!;
+  f.store.execute({
+    type: "workspace.command",
+    commandId: randomUUID(),
+    epoch: f.store.snapshot().epoch,
+    operation: { kind: "project.remove", projectId: project.id, expectedVersion: project.version },
+  });
+  // The worker's next lifecycle event wakes the wait; it used to throw out of the event dispatch.
+  f.providers.at(-1)!.finish();
+  expect(await waiting).toMatchObject({
+    timedOut: false,
+    sessions: [{ sessionId: target.id, status: "unavailable" }],
+  });
+});
+
 it("clears the approval notice when the user answers and the worker resumes", async () => {
   const f = await setup(),
     target = await f.target();

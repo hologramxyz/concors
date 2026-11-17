@@ -203,7 +203,14 @@ export function registerProtocolEndpoint(
         schedules?.observe(event.agent);
         if (event.agent.supervisor) supervisorSessions.add(event.agent.id);
       }
-      queueMicrotask(() => supervisor?.observe(event));
+      // An exception here would be uncaught and end the daemon with every agent on the machine.
+      queueMicrotask(() => {
+        try {
+          supervisor?.observe(event);
+        } catch (error) {
+          app.log.error({ err: error }, "Supervisor could not follow an agent event");
+        }
+      });
       for (const target of subscribers) send(target, event);
     },
     () => {

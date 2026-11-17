@@ -159,7 +159,24 @@ export class SupervisorWatches {
       });
   }
   async wait(supervisorId: string, ids: string[], timeoutMs: number, on: "attention" | "change") {
-    const reports = () => ids.map((id) => sessionReport(this.store, this.target(id)));
+    // A chat can be deleted, or its workspace removed, while Supervisor waits on it. Report that
+    // chat as unavailable rather than throwing: wake runs inside the daemon's event dispatch.
+    const reports = () =>
+      ids.map((id) => {
+        try {
+          return sessionReport(this.store, this.target(id));
+        } catch (error) {
+          return {
+            sessionId: id,
+            status: "unavailable" as const,
+            turnId: null,
+            pending: [],
+            queued: 0,
+            queuePaused: false,
+            error: error instanceof Error ? error.message : "This chat is no longer available.",
+          };
+        }
+      });
     const initial = reports();
     const signature = (rows: typeof initial) =>
       JSON.stringify(rows.map((r) => [r.status, r.turnId, r.pending, r.queued, r.queuePaused]));
