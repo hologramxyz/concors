@@ -707,6 +707,7 @@ function AppContent() {
                                 connection.workspaceReady && connection.state.status === "ready"
                               }
                               onOpenAgent={openAgent}
+                              onOpenProject={selectProject}
                             />
                           ) : view === "schedules" ? (
                             <SchedulesPage

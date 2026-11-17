@@ -938,6 +938,7 @@ function MobileWorkspaceContent({
                                 workspace={workspace}
                                 connected={!!ready}
                                 onOpenAgent={openAgent}
+                                onOpenProject={selectProject}
                               />
                             ) : page?.kind === "schedules" ? (
                               <div className="h-full overflow-y-auto">

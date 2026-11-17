@@ -49,3 +49,26 @@ export function resolveFileLink(href: string, root: string, sourcePath = ""): Fi
   if (!parts.length) return null;
   return { path: parts.join("/"), ...(line && Number.isSafeInteger(line) ? { line } : {}) };
 }
+
+/** A path written from the filesystem's root, as a link or a plain-text mention may give one. */
+const ABSOLUTE_LINK = /^(?:file:\/\/|\/(?![/\\])|[a-z]:[\\/])/i;
+
+/**
+ * The open workspace whose folder holds an absolute link, and the file within it, for a chat that
+ * belongs to no workspace (the Supervisor). The innermost folder wins when workspaces nest. A
+ * relative link has no folder to be relative to there, so it names nothing.
+ */
+export function workspaceFileLink<Project extends { directory: string }>(
+  href: string,
+  projects: readonly Project[],
+): { project: Project; location: FileLocation } | null {
+  if (!ABSOLUTE_LINK.test(href)) return null;
+  let found: { project: Project; location: FileLocation } | null = null;
+  for (const project of projects) {
+    if (!project.directory) continue;
+    const location = resolveFileLink(href, project.directory);
+    if (location && (!found || project.directory.length > found.project.directory.length))
+      found = { project, location };
+  }
+  return found;
+}

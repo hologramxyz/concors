@@ -1,7 +1,11 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { chooseProvider } from "./support/agents.ts";
 import { mockDictation } from "./support/dictation.ts";
 import { reportNonMac } from "./support/platform.ts";
+import { seedProject } from "./support/projects.ts";
 
 test("Supervisor uses the unified chat and retains its selected harness after navigation and reload", async ({
   page,
@@ -93,5 +97,73 @@ test("Escape stops the Supervisor's running turn and the dictation shortcut work
   } finally {
     // The Supervisor outlives each spec's cleanup; a turn left holding would refuse the next one.
     if (await interrupt.count()) await interrupt.click();
+  }
+});
+
+test("a file the Supervisor names inside an open workspace opens in that workspace", async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const directory = await mkdtemp(join(tmpdir(), "concors-supervisor-files-"));
+  await mkdir(join(directory, "notes"));
+  await mkdir(join(directory, "src"));
+  await writeFile(join(directory, "notes", "plan.md"), "# Release plan\n");
+  await writeFile(join(directory, "src", "main.ts"), "export const answer = 42;\n");
+  // The fixture agent always says the same thing, so its reply is rewritten on the way in, both
+  // as it streams and as the chat reads it back when it is shown again.
+  const reply = `See [the plan](${directory}/notes/plan.md), then ${directory}/src/main.ts:1. Not [the readme](README.md) or /tmp/elsewhere.png.`;
+  const rewritten = new Set<string>();
+  let armed = false;
+  await page.routeWebSocket("ws://127.0.0.1:7429/ws", (socket) => {
+    const server = socket.connectToServer();
+    server.onMessage((raw) => {
+      const message = JSON.parse(String(raw));
+      const items: { id: string; kind: string; text: string }[] =
+        message.type === "agent.item"
+          ? [message.item]
+          : (message.outcome?.conversation?.items ?? []);
+      for (const item of items) {
+        if (armed && message.type === "agent.item" && item.kind === "assistant")
+          rewritten.add(item.id);
+        if (rewritten.has(item.id)) item.text = reply;
+      }
+      socket.send(JSON.stringify(message));
+    });
+  });
+  try {
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Supervisor files", directory);
+    await page.getByRole("button", { name: "Supervisor", exact: true }).click();
+    const supervisor = page.getByTestId("supervisor-page");
+    await chooseProvider(page);
+    armed = true;
+    const composer = supervisor.getByRole("textbox", { name: "Message Codex", exact: true });
+    await composer.fill("Where is the release plan?");
+    await composer.press("Enter");
+    const plan = supervisor.getByRole("link", { name: "the plan", exact: true });
+    await expect(plan).toBeVisible();
+    armed = false;
+    // Neither a relative link nor a path outside every workspace has anywhere to open.
+    await expect(supervisor.getByRole("link", { name: "the readme" })).toHaveCount(0);
+    await expect(supervisor.getByText("the readme", { exact: true })).toHaveAttribute(
+      "title",
+      "Outside this project: README.md",
+    );
+    await expect(supervisor.getByRole("link", { name: "/tmp/elsewhere.png" })).toHaveCount(0);
+    await plan.click();
+    await expect(supervisor).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "Supervisor files", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("region", { name: "File notes/plan.md" })).toContainText(
+      "Release plan",
+    );
+    // A path named in plain text opens the same way.
+    await page.getByRole("button", { name: "Supervisor", exact: true }).click();
+    await supervisor.getByRole("link", { name: `${directory}/src/main.ts:1`, exact: true }).click();
+    await expect(page.getByRole("textbox", { name: "Code editor: src/main.ts" })).toBeVisible();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });
