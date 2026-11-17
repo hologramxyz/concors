@@ -22,11 +22,15 @@ OpenCode or other configured harness and sign-in; Supervisor does not create ano
    is queued behind an approval. Completed replies arrive as bounded quoted text in this chat,
    without another user message or model turn. Follow the chat link for the full reply or to answer
    an approval; delegated prompts carry **From Supervisor**.
-5. Choose Supervisor's permissions with the existing composer picker. New targets keep normal
+5. Choose Supervisor's permissions with the existing composer picker. "Always ask", the default,
+   is enough: Supervisor's own `concors_control` calls need no approval, because the daemon enforces
+   their limits, while its shell and file tools still ask. Bypass permissions also lets those run
+   unchecked while Supervisor reads other chats' untrusted text. New targets keep normal
    permissions; Supervisor cannot expand another chat's permissions or answer its approval prompts.
    Ask “Which agents need my approval?” to inspect pending actions. While a target is busy, send
    another instruction. It queues by default. Explicitly ask to steer
-   or stop a turn when that is what you want. Tool approvals and questions remain in the target
+   or stop a turn when that is what you want; steering right after sending waits for the turn to
+   start, and the result says whether the instruction was sent, queued or steered. Tool approvals and questions remain in the target
    conversation for you to answer.
 6. Navigate away, reload, or disconnect your phone. Work continues on the daemon. Reopen Supervisor
    to see persisted history and delivery updates. Ask it to read the results for a combined summary.
@@ -56,7 +60,8 @@ saved message text, read bounded saved transcripts, create sessions, send/queue/
 change workspace layouts, remove queued instructions, explicitly interrupt turns, and read delivery
 status, inspect capabilities/permissions, watch/unwatch saved sessions, and wait up to 25 seconds for
 a lifecycle change. Wait returns current pending actions and replies without prompting workers;
-`on:change` can wait for an already reported approval to be resolved. Harnesses without native MCP use the same authenticated loopback JSON endpoint through
+`on:change` can wait for an already reported approval to be resolved, and a chat deleted or
+removed with its workspace during the wait is reported as unavailable. Harnesses without native MCP use the same authenticated loopback JSON endpoint through
 their shell. Gateway credentials are never passed to this endpoint. It checks a random session
 token, Host, Origin, input schema and request size. The scope is the existing daemon/machine access
 boundary, not a new multi-user authorization system.
@@ -67,8 +72,11 @@ permissions, execute terminal keystrokes, remove workspace folders, or change se
 Creating a chat opens its named tab without taking focus by default (`open:false` keeps it saved only). Sending work is a separate operation. Workspace edits use the existing epoch
 and version checks and preserve the user's selection when it still exists.
 
-Mutation receipts and prompt provenance are durable. Repeated request IDs return the original
-result; different payloads cannot reuse an ID. After restart, uncertain deliveries are marked
+Prompt provenance is durable. The daemon chooses the IDs of everything it creates; a model's
+`requestId` is optional and only names a change (send, start, workspace, open-session,
+queue-remove, interrupt) so that retrying it returns the original result. Its receipt belongs to
+the calling conversation and is kept for a week; different payloads cannot reuse an ID. Reads
+always answer from current state. After restart, uncertain deliveries are marked
 interrupted and uncertain mutations are not replayed. The user can inspect the target before
 issuing a new instruction. A completion describes the target turn's lifecycle, not proof that the
 requested code change was correct.
@@ -76,7 +84,10 @@ requested code change was correct.
 Claude, Codex and OpenCode already normalize native lifecycle events in their adapters. Supervisor
 observes these events for queued/working/input-needed/completed/failed/interrupted updates, without
 installing global CLI hooks or repeatedly asking models for progress. It posts durable approval and completion updates in the Supervisor timeline, including a bounded
-excerpt of the final reply. Watches persist across reconnects and restarts. Progress and results
+excerpt of the final reply. Watches persist across reconnects and restarts. Each Supervisor
+conversation follows at most 64 chats; at the limit, the settled chat idle longest stops being
+followed. Only work still in flight keeps a followed chat from retirement, and conversations left
+behind by `/clear` retire like any closed chat. Progress and results
 stay in the conversation; there is no separate delegation panel. A running Supervisor can wait and
 continue the requested multi-step workflow, while background notices do not schedule extra model
 turns for summarization.
