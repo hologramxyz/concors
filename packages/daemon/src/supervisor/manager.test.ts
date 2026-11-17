@@ -393,6 +393,35 @@ it("reports the permission mode each chat runs in, including a harness's own", a
     sessions: [{ id: target.id, permissions: "Bypass permissions (bypassPermissions)" }],
   });
 });
+it("steers a just-sent turn once it has started, and reports how the instruction went", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await f.request({ kind: "send", sessionId: target.id, text: "hold long essay" });
+  await expect.poll(() => f.store.agent(target.id).turnId?.startsWith("pending:")).toBe(false);
+  const started = f.store.agent(target.id);
+  // The moment between sending and the provider starting the turn.
+  f.store.saveAgent({ ...started, turnId: "pending:" + randomUUID() });
+  const requests = vi.spyOn(f.agents, "request");
+  const steering = f.control({
+    kind: "send",
+    sessionId: target.id,
+    text: "Make it about multiplication",
+    whenBusy: "steer",
+  });
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  expect(requests.mock.calls.filter(([r]) => r.operation.kind === "steer")).toEqual([]);
+  f.store.saveAgent({ ...f.store.agent(target.id), turnId: started.turnId });
+  expect(await steering).toMatchObject({ delivered: "steered" });
+  expect(
+    requests.mock.calls.find(([r]) => r.operation.kind === "steer")?.[0].operation,
+  ).toMatchObject({ turnId: started.turnId });
+  f.providers.at(-1)!.finish();
+  await expect.poll(() => f.store.agent(target.id).status).toBe("done");
+  // With nothing left to steer, the instruction simply starts the next turn.
+  expect(
+    await f.control({ kind: "send", sessionId: target.id, text: "Summarize", whenBusy: "steer" }),
+  ).toMatchObject({ delivered: "sent" });
+});
 it("authenticates the local bridge and refuses browser origins and oversized bodies", async () => {
   const f = await setup(),
     tools = new SupervisorTools();

@@ -22,6 +22,13 @@ const active = (agent: AgentInfo) =>
   !!agent.queue?.length;
 /** Finished deliveries kept across restarts; status reports the newest 128 of all deliveries. */
 const DELIVERY_HISTORY = 256;
+const steerable = (agent: AgentInfo) =>
+  agent.status === "working" &&
+  !!agent.turnId &&
+  !agent.turnId.startsWith("pending:") &&
+  !!agent.controls?.steer;
+/** How long steering waits for a just-sent turn to start before queueing instead. */
+const STEER_WAIT_MS = 10000;
 const finished = (status: SupervisorDelivery["status"]) =>
   ["done", "failed", "interrupted", "cancelled"].includes(status);
 /** Operations that change something. Only these keep a receipt, so retrying one cannot repeat it. */
@@ -457,21 +464,19 @@ export class SupervisorManager {
         if (active(target) && op.whenBusy === "reject")
           throw new Error("The target is busy. Queue a follow-up or wait for it to finish.");
         const origin = { supervisorId: source.id, deliveryId: receipt.id };
-        const operation =
-          active(target) && op.whenBusy === "steer"
-            ? {
-                kind: "steer" as const,
-                sessionId: target.id,
-                turnId: target.turnId ?? "",
-                text: op.text,
-                origin,
-              }
-            : {
-                kind: active(target) ? ("queue-add" as const) : ("send" as const),
-                sessionId: target.id,
-                text: op.text,
-                origin,
-              };
+        const current =
+          active(target) && op.whenBusy === "steer" ? await this.startedTurn(target.id) : target;
+        const turnId = op.whenBusy === "steer" && steerable(current) ? current.turnId : null;
+        const operation = turnId
+          ? { kind: "steer" as const, sessionId: target.id, turnId, text: op.text, origin }
+          : {
+              // A turn waiting for an approval, or one that cannot be steered, takes the
+              // instruction next; one that ended meanwhile takes it now.
+              kind: active(current) ? ("queue-add" as const) : ("send" as const),
+              sessionId: target.id,
+              text: op.text,
+              origin,
+            };
         receipt.agentRequest = { type: "agent.request", requestId: receipt.id, operation };
         if (this.deliveries().filter((d) => !finished(d.status)).length >= 64)
           throw new Error("Wait for existing delegated work to finish before starting more.");
@@ -501,12 +506,32 @@ export class SupervisorManager {
       throw new Error(result.outcome.message);
     }
     this.observe({ type: "agent.state", agent: this.store.agent(target.id) });
+    const kind = receipt.agentRequest.operation.kind;
     return {
       sessionId: target.id,
       projectId: target.projectId,
       delivery: this.deliveries().find((d) => d.id === receipt.id),
       status: result.outcome.conversation?.agent.status,
+      ...(op.kind === "send"
+        ? { delivered: kind === "steer" ? "steered" : kind === "queue-add" ? "queued" : "sent" }
+        : {}),
     };
+  }
+
+  /**
+   * A turn takes its native ID once the provider has started it, and steering needs that ID.
+   * Right after a message was sent, wait briefly for it rather than steer a placeholder.
+   */
+  private async startedTurn(id: string): Promise<AgentInfo> {
+    for (let waited = 0; ; waited += 100) {
+      if (this.closed) throw new Error("Supervisor is shutting down");
+      const info = this.store.agent(id);
+      const starting =
+        info.status === "starting" ||
+        (info.status === "working" && !!info.turnId?.startsWith("pending:"));
+      if (!starting || waited >= STEER_WAIT_MS) return info;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
   }
 
   /** All adapters already normalize their native turn hooks into these events. */
