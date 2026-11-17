@@ -14,6 +14,7 @@ import type { WorkspaceStore } from "../workspace/store.ts";
 import type { AgentManager } from "../agents/manager.ts";
 import { SupervisorWatches, sessionReport } from "./watch.ts";
 import type { ProviderRegistry } from "../agents/providers/registry.ts";
+import { randomUUID } from "node:crypto";
 
 const active = (agent: AgentInfo) =>
   ["starting", "working", "needs_input"].includes(agent.status) ||
@@ -21,9 +22,21 @@ const active = (agent: AgentInfo) =>
   !!agent.queue?.length;
 const finished = (status: SupervisorDelivery["status"]) =>
   ["done", "failed", "interrupted", "cancelled"].includes(status);
+/** Operations that change something. Only these keep a receipt, so retrying one cannot repeat it. */
+const CHANGES: readonly SupervisorControl["operation"]["kind"][] = [
+  "send",
+  "start",
+  "workspace",
+  "interrupt",
+  "queue-remove",
+  "open-session",
+];
 interface Receipt {
   sessionId: string;
   request: SupervisorControl;
+  /** The daemon's own ID for what the operation creates or sends, never the model's request ID. */
+  id: string;
+  createdAt?: string;
   agentRequest?: AgentRequest;
   result?: unknown;
   error?: string;
@@ -162,30 +175,34 @@ export class SupervisorManager {
   async control(sessionId: string, raw: unknown): Promise<unknown> {
     if (this.closed) throw new Error("Supervisor is shutting down");
     const request = SupervisorControlSchema.parse(raw);
-    this.source(sessionId);
-    const key = "request:" + request.requestId;
+    const source = this.source(sessionId);
+    // Models invent request IDs and reuse them, across turns and across conversations. Reads
+    // therefore always answer from current state, and a change's receipt belongs to the calling
+    // conversation alone; nothing the daemon creates is named after a request ID.
+    if (!request.requestId || !CHANGES.includes(request.operation.kind))
+      return this.execute(source, request, { sessionId, request, id: randomUUID() });
+    const key = `request:${sessionId}:${request.requestId}`;
     const saved = this.store.supervisorRecord(key) as Receipt | undefined;
-    if (
-      saved &&
-      (saved.sessionId !== sessionId || JSON.stringify(saved.request) !== JSON.stringify(request))
-    )
-      throw new Error("Request ID was already used for another operation.");
+    if (saved && JSON.stringify(saved.request) !== JSON.stringify(request))
+      throw new Error(
+        "Request ID was already used for another operation. Use a new requestId, or omit it.",
+      );
     if (saved?.error) throw new Error(saved.error);
     if (saved?.result !== undefined) return saved.result;
-    const pending = this.pending.get(request.requestId);
+    const pending = this.pending.get(key);
     if (pending) return pending;
-    if (
-      saved &&
-      ["send", "start", "workspace", "interrupt", "queue-remove", "open-session"].includes(
-        request.operation.kind,
-      )
-    )
+    if (saved)
       throw new Error(
         "This operation was interrupted before its result was recorded. Check status and the target chat before issuing a new instruction.",
       );
-    const receipt = saved ?? { sessionId, request };
+    const receipt: Receipt = {
+      sessionId,
+      request,
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+    };
     this.store.saveSupervisorRecord(key, receipt);
-    const work = this.execute(this.source(sessionId), request, receipt)
+    const work = this.execute(source, request, receipt, key)
       .then(
         (result) => {
           this.store.saveSupervisorRecord(key, { ...receipt, result });
@@ -199,8 +216,8 @@ export class SupervisorManager {
           throw error;
         },
       )
-      .finally(() => this.pending.delete(request.requestId));
-    this.pending.set(request.requestId, work);
+      .finally(() => this.pending.delete(key));
+    this.pending.set(key, work);
     return work;
   }
 
@@ -208,6 +225,7 @@ export class SupervisorManager {
     source: AgentInfo,
     request: SupervisorControl,
     receipt: Receipt,
+    key?: string,
   ): Promise<unknown> {
     const op = request.operation;
     const snapshot = this.store.snapshot();
@@ -304,7 +322,7 @@ export class SupervisorManager {
         this.watches.stop(source.id, op.sessionId);
         return { sessionId: op.sessionId, watching: false };
       }
-      this.watches.track(source.id, op.sessionId, request.requestId, true);
+      this.watches.track(source.id, op.sessionId, receipt.id, true);
       return {
         sessionId: op.sessionId,
         watching: true,
@@ -312,7 +330,7 @@ export class SupervisorManager {
       };
     }
     if (op.kind === "wait") {
-      for (const id of new Set(op.sessionIds)) this.watches.track(source.id, id, request.requestId);
+      for (const id of new Set(op.sessionIds)) this.watches.track(source.id, id, receipt.id);
       return this.watches.wait(source.id, [...new Set(op.sessionIds)], op.timeoutMs, op.on);
     }
     if (op.kind === "workspace") {
@@ -334,9 +352,8 @@ export class SupervisorManager {
     }
     if (op.kind === "start") {
       this.recipient(source, op.provider);
-      const id = request.requestId;
       const agent = await this.agents.startScheduled(
-        id,
+        receipt.id,
         op.projectId,
         op.provider,
         op.model ?? null,
@@ -346,20 +363,20 @@ export class SupervisorManager {
         const opened = await this.agents.request(
           {
             type: "agent.request",
-            requestId: request.requestId,
+            requestId: randomUUID(),
             operation: { kind: "open-session", sessionId: agent.id },
           },
           "supervisor:" + source.id,
         );
         if (opened.outcome.status === "error") throw new Error(opened.outcome.message);
       }
-      this.watches.track(source.id, agent.id, request.requestId);
+      this.watches.track(source.id, agent.id, receipt.id);
       return { sessionId: agent.id, projectId: agent.projectId, status: agent.status };
     }
     const target = this.target(op.sessionId);
     if (op.kind === "send") {
       this.recipient(source, target.provider);
-      this.watches.track(source.id, target.id, request.requestId);
+      this.watches.track(source.id, target.id, receipt.id);
     }
     if (!receipt.agentRequest) {
       if (op.kind === "send") {
@@ -369,7 +386,7 @@ export class SupervisorManager {
           );
         if (active(target) && op.whenBusy === "reject")
           throw new Error("The target is busy. Queue a follow-up or wait for it to finish.");
-        const origin = { supervisorId: source.id, deliveryId: request.requestId };
+        const origin = { supervisorId: source.id, deliveryId: receipt.id };
         const operation =
           active(target) && op.whenBusy === "steer"
             ? {
@@ -385,11 +402,11 @@ export class SupervisorManager {
                 text: op.text,
                 origin,
               };
-        receipt.agentRequest = { type: "agent.request", requestId: request.requestId, operation };
+        receipt.agentRequest = { type: "agent.request", requestId: receipt.id, operation };
         if (this.deliveries().filter((d) => !finished(d.status)).length >= 64)
           throw new Error("Wait for existing delegated work to finish before starting more.");
         this.saveDelivery({
-          id: request.requestId,
+          id: receipt.id,
           supervisorId: source.id,
           sessionId: target.id,
           projectId: target.projectId,
@@ -401,14 +418,14 @@ export class SupervisorManager {
       } else
         receipt.agentRequest = {
           type: "agent.request",
-          requestId: request.requestId,
+          requestId: receipt.id,
           operation: op,
         };
-      this.store.saveSupervisorRecord("request:" + request.requestId, receipt);
+      if (key) this.store.saveSupervisorRecord(key, receipt);
     }
     const result = await this.agents.request(receipt.agentRequest, "supervisor:" + source.id);
     if (result.outcome.status === "error") {
-      const delivery = this.deliveries().find((d) => d.id === request.requestId);
+      const delivery = this.deliveries().find((d) => d.id === receipt.id);
       if (delivery)
         this.saveDelivery({ ...delivery, status: "failed", error: result.outcome.message });
       throw new Error(result.outcome.message);
@@ -417,7 +434,7 @@ export class SupervisorManager {
     return {
       sessionId: target.id,
       projectId: target.projectId,
-      delivery: this.deliveries().find((d) => d.id === request.requestId),
+      delivery: this.deliveries().find((d) => d.id === receipt.id),
       status: result.outcome.conversation?.agent.status,
     };
   }

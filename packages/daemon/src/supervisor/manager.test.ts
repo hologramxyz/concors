@@ -145,20 +145,28 @@ it("delivers once, attributes the message and follows completion without a conne
     text: "Review changes",
     whenBusy: "queue" as const,
   };
-  await Promise.all([f.control(operation, requestId), f.control(operation, requestId)]);
+  const [first, second] = (await Promise.all([
+    f.control(operation, requestId),
+    f.control(operation, requestId),
+  ])) as { delivery: { id: string } }[];
+  expect(second).toEqual(first);
+  const deliveryId = first!.delivery.id;
+  // The delivery is named by the daemon, not after the model's request ID.
+  expect(deliveryId).not.toBe(requestId);
   await expect.poll(() => f.manager.deliveries()[0]?.status).toBe("done");
   await f.control(operation, requestId);
   expect(
     f.providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
   ).toHaveLength(1);
-  expect(f.store.supervisorPrompt(target.id, requestId)?.origin).toEqual({
+  expect(f.store.supervisorPrompt(target.id, deliveryId)?.origin).toEqual({
     supervisorId: f.source.id,
-    deliveryId: requestId,
+    deliveryId,
   });
+  const watched = f.store.supervisorRecord(`watch:${f.source.id}:${target.id}`) as { id: string };
   expect(
     f.store
       .agentConversation(f.source.id)
-      .items.filter((i) => i.title === "Agent result" && i.origin?.deliveryId === requestId),
+      .items.filter((i) => i.title === "Agent result" && i.origin?.deliveryId === watched.id),
   ).toHaveLength(1);
   await expect(f.control({ ...operation, text: "different" }, requestId)).rejects.toThrow(
     "already used",
@@ -213,9 +221,10 @@ it("does not replay uncertain mutations after restart", async () => {
   await f.control({ kind: "send", sessionId: target.id, text: "hold", whenBusy: "queue" });
   const requestId = randomUUID(),
     operation = { kind: "send", sessionId: target.id, text: "Never replay", whenBusy: "queue" };
-  f.store.saveSupervisorRecord("request:" + requestId, {
+  f.store.saveSupervisorRecord(`request:${f.source.id}:${requestId}`, {
     sessionId: f.source.id,
     request: { requestId, operation },
+    id: randomUUID(),
   });
   f.restart();
   expect(f.manager.deliveries()[0]?.status).toBe("interrupted");
@@ -225,6 +234,36 @@ it("does not replay uncertain mutations after restart", async () => {
   expect(
     f.providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
   ).toHaveLength(1);
+});
+it("never adopts an existing chat when the model reuses a session ID as its request ID", async () => {
+  const f = await setup(),
+    existing = await f.target();
+  const started = (await f.manager.control(f.source.id, {
+    requestId: existing.id,
+    operation: { kind: "start", projectId: f.projectId, provider: "claude", name: "Fresh" },
+  })) as { sessionId: string };
+  expect(started.sessionId).not.toBe(existing.id);
+  expect(f.store.agent(started.sessionId)).toMatchObject({ projectId: f.projectId, name: "Fresh" });
+  expect(f.store.agent(existing.id).name).toBe(existing.name);
+});
+it("answers reads from current state even when a request ID repeats, and needs no ID", async () => {
+  const f = await setup(),
+    target = await f.target(),
+    requestId = randomUUID();
+  expect(await f.control({ kind: "status" }, requestId)).toMatchObject({ watching: [] });
+  await f.control({ kind: "watch", sessionId: target.id, enabled: true });
+  expect(await f.control({ kind: "status" }, requestId)).toMatchObject({
+    watching: [{ sessionId: target.id }],
+  });
+  expect(
+    await f.manager.control(f.source.id, { operation: { kind: "sessions", offset: 0 } }),
+  ).toMatchObject({ sessions: [{ id: target.id }] });
+  // Without a request ID a change still happens, once per call.
+  await f.manager.control(f.source.id, {
+    operation: { kind: "send", sessionId: target.id, text: "First", whenBusy: "queue" },
+  });
+  await expect.poll(() => f.store.agent(target.id).status).toBe("done");
+  expect(f.store.supervisorRecords("request:")).toHaveLength(0);
 });
 it("authenticates the local bridge and refuses browser origins and oversized bodies", async () => {
   const f = await setup(),
