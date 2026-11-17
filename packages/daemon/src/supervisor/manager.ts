@@ -79,7 +79,7 @@ export class SupervisorManager {
       (id) => this.source(id),
       (id) => this.target(id),
       (supervisorId, sessionId) =>
-        this.deliveries().some(
+        this.allDeliveries().some(
           (d) =>
             d.supervisorId === supervisorId && d.sessionId === sessionId && !finished(d.status),
         ),
@@ -176,9 +176,18 @@ export class SupervisorManager {
   private saveDelivery(delivery: SupervisorDelivery): void {
     const saved = { ...delivery, updatedAt: new Date().toISOString() };
     this.store.saveSupervisorRecord("delivery:" + delivery.id, saved);
-    this.saved = [saved, ...this.allDeliveries().filter((d) => d.id !== delivery.id)].sort((a, b) =>
-      b.createdAt.localeCompare(a.createdAt),
-    );
+    const all = this.allDeliveries();
+    // A new delivery is the newest; an update keeps its place.
+    const next = all.some((d) => d.id === delivery.id)
+      ? all.map((d) => (d.id === delivery.id ? saved : d))
+      : [saved, ...all];
+    // History stays bounded while the daemon runs, not only across restarts.
+    const history = next.filter((d) => finished(d.status)).slice(DELIVERY_HISTORY);
+    if (history.length) {
+      const old = new Set(history.map((d) => d.id));
+      this.store.deleteSupervisorRecords(history.map((d) => "delivery:" + d.id));
+      this.saved = next.filter((d) => !old.has(d.id));
+    } else this.saved = next;
   }
   /**
    * Bounds what Supervisor keeps. A receipt only makes retrying a change safe, so a week is ample;
@@ -478,7 +487,11 @@ export class SupervisorManager {
               origin,
             };
         receipt.agentRequest = { type: "agent.request", requestId: receipt.id, operation };
-        if (this.deliveries().filter((d) => !finished(d.status)).length >= 64)
+        // Per conversation, like watches: work left behind before /clear never blocks the next.
+        if (
+          this.allDeliveries().filter((d) => d.supervisorId === source.id && !finished(d.status))
+            .length >= 64
+        )
           throw new Error("Wait for existing delegated work to finish before starting more.");
         this.saveDelivery({
           id: receipt.id,

@@ -4,7 +4,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
-import type { SupervisorControlSchema, AgentOperation } from "@concors/protocol";
+import type {
+  SupervisorControlSchema,
+  AgentOperation,
+  SupervisorDelivery,
+} from "@concors/protocol";
 import type { z } from "zod";
 import { WorkspaceStore } from "../workspace/store.ts";
 import { AgentManager } from "../agents/manager.ts";
@@ -466,6 +470,43 @@ it("lets Supervisor use its own tool without asking while its other tools still 
   await expect
     .poll(() => f.store.agent(id).pending.map((p) => p.summary))
     .toEqual([expect.stringContaining("Bash")]);
+});
+it("limits unfinished deliveries per conversation and bounds their history while running", async () => {
+  const f = await setup(),
+    target = await f.target();
+  // Deliveries as the manager records them while the daemon runs.
+  const record = (supervisorId: string, status: "queued" | "done", index: number) => {
+    const at = new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString();
+    (f.manager as unknown as { saveDelivery(d: SupervisorDelivery): void }).saveDelivery({
+      id: randomUUID(),
+      supervisorId,
+      sessionId: target.id,
+      projectId: f.projectId,
+      text: "Earlier work",
+      status,
+      createdAt: at,
+      updatedAt: at,
+    });
+  };
+  // A conversation cleared earlier left 64 deliveries unfinished.
+  const earlier = randomUUID();
+  for (let index = 0; index < 64; index++) record(earlier, "queued", index);
+  for (let index = 0; index < 300; index++) record(f.source.id, "done", 100 + index);
+  expect(
+    (f.store.supervisorRecords("delivery:") as { status: string }[]).filter(
+      (d) => d.status === "done",
+    ),
+  ).toHaveLength(256);
+  await f.control({
+    kind: "send",
+    sessionId: target.id,
+    text: "Still possible",
+    whenBusy: "queue",
+  });
+  for (let index = 0; index < 64; index++) record(f.source.id, "queued", 500 + index);
+  await expect(
+    f.control({ kind: "send", sessionId: target.id, text: "One too many", whenBusy: "queue" }),
+  ).rejects.toThrow("Wait for existing delegated work");
 });
 it("authenticates the local bridge and refuses browser origins and oversized bodies", async () => {
   const f = await setup(),
