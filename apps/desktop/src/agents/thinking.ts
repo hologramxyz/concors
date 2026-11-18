@@ -1,4 +1,8 @@
 import type { AgentItem } from "@concors/protocol";
+import { toolGroupKey } from "./tool-label";
+
+/** A timeline row: one item, or a run of similar tool calls folded under the first one's id. */
+export type TimelineEntry = AgentItem & { group?: AgentItem[] };
 
 /**
  * Codex summaries are bold headings, one per part. Older daemons glued the parts together
@@ -57,22 +61,36 @@ function replayedPrompts(items: readonly AgentItem[], hidden: Set<string>) {
   }
 }
 
+/** A folded run is running while any call in it is, and failed once any call has. */
+function groupStatus(group: readonly AgentItem[]): AgentItem["status"] {
+  if (group.some((item) => item.status === "running")) return "running";
+  if (group.some((item) => item.status === "failed")) return "failed";
+  return group.at(-1)?.status ?? "completed";
+}
+
 /**
  * What the timeline renders: items minus the redundant ones, with each run of adjacent reasoning
- * steps folded into one row, since Codex reports a separate item per short heading.
+ * steps folded into one row, since Codex reports a separate item per short heading, and each run
+ * of the same tool called back to back (Supervisor polling its chats, a dozen file reads) folded
+ * into one row that opens to the calls. The row keeps its first call's id, so it does not remount
+ * as the run grows.
  */
 export function timelineView(
   items: readonly AgentItem[],
   hidden: ReadonlySet<string> = new Set(),
-): AgentItem[] {
+): TimelineEntry[] {
   const skip = new Set(hidden);
   redundantThinking(items, skip);
   replayedPrompts(items, skip);
-  const view: AgentItem[] = [];
+  const view: TimelineEntry[] = [];
   for (const item of items) {
     if (skip.has(item.id)) continue;
     const last = view.at(-1);
-    if (
+    const key = toolGroupKey(item);
+    if (key && last && toolGroupKey(last.group?.[0] ?? last) === key) {
+      const group = [...(last.group ?? [last]), item];
+      view[view.length - 1] = { ...(last.group?.[0] ?? last), group, status: groupStatus(group) };
+    } else if (
       item.presentation?.type === "thinking" &&
       last?.presentation?.type === "thinking" &&
       last.turnId === item.turnId
