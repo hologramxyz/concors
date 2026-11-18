@@ -1,3 +1,5 @@
+import { SupervisorReferencePicker } from "@/supervisor/references";
+import { SupervisorReferences } from "@/supervisor/reference-context";
 import { AgentDraftScopeContext, useAgentDraft, type InputDraft as Draft } from "./draft";
 import { NO_RECALL, recallStep, type PromptRecall } from "./prompt-history";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -121,6 +123,7 @@ export function AgentComposer({
   /** The prompts sent in this chat, oldest first, which Up and Down bring back. */
   history?: readonly string[];
 }) {
+  const references = useContext(SupervisorReferences);
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
   const visible = useContext(TabVisibility);
@@ -1478,6 +1481,18 @@ export function AgentComposer({
                       <Plus className="size-4" />
                     </button>
                   </ControlTooltip>
+                  {references.length > 0 && (
+                    <SupervisorReferencePicker
+                      references={references}
+                      disabled={!connected || busy || uncertain || !!deferred}
+                      onSelect={(reference) =>
+                        setDraft(
+                          (text) =>
+                            `${text.trimEnd()}${text.trim() ? " " : ""}@${reference.label}${reference.workspace ? ` (${reference.workspace})` : ""} `,
+                        )
+                      }
+                    />
+                  )}
                   {compact && clipboardImage && (
                     <button
                       type="button"

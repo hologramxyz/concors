@@ -1,3 +1,4 @@
+import { SupervisorActivityButton } from "@/supervisor/activity";
 import { SupervisorPage } from "@/supervisor/page";
 import { SupervisorActions } from "@/supervisor/actions";
 import { X } from "lucide-react";
@@ -101,6 +102,7 @@ export function App() {
 }
 function AppContent() {
   const windowChrome = useWindowChrome();
+  const [supervisorActivity, setSupervisorActivity] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const toggleSidebar = (collapsed: boolean) => {
     setSidebarCollapsed(collapsed);
@@ -602,7 +604,15 @@ function AppContent() {
                               </>
                             )}
                             <span className="flex-1" aria-hidden="true" />
-                            {view === "supervisor" && <SupervisorActions workspace={workspace} />}
+                            {view === "supervisor" && (
+                              <>
+                                <SupervisorActivityButton
+                                  open={supervisorActivity}
+                                  onClick={() => setSupervisorActivity(!supervisorActivity)}
+                                />
+                                <SupervisorActions workspace={workspace} />
+                              </>
+                            )}
                             <WindowControls />
                           </header>
                         )}
@@ -709,6 +719,8 @@ function AppContent() {
                                 connection.workspaceReady && connection.state.status === "ready"
                               }
                               onOpenAgent={openAgent}
+                              activityOpen={supervisorActivity}
+                              onCloseActivity={() => setSupervisorActivity(false)}
                               onOpenProject={selectProject}
                             />
                           ) : view === "schedules" ? (
