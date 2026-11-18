@@ -48,6 +48,16 @@ test("chat presents native forms, plan review, file content and durable attachme
     await expect(
       page.getByText("export const previewWorks = true;", { exact: true }),
     ).toBeVisible();
+    await send("primitive-tool-run");
+    await expect(page.getByRole("button", { name: /^Tool search/ })).toBeVisible();
+    const run = page.getByRole("article", { name: "Tool calls", exact: true });
+    await expect(run).toHaveCount(1);
+    await expect(run).toContainText("Concors control");
+    await expect(run).toContainText("3 calls");
+    await expect(run).not.toContainText("mcp__");
+    await run.getByRole("button").first().click();
+    await expect(run.getByRole("article", { name: "Tool call", exact: true })).toHaveCount(3);
+    await expect(run).toContainText("workspaces");
     await page.locator('input[type="file"]').setInputFiles({
       name: "notes.md",
       mimeType: "text/markdown",

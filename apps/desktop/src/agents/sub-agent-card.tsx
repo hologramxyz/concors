@@ -8,6 +8,7 @@ import { stepCount, subAgentLabel } from "./running-sub-agents";
 import { LIVE_SUB_AGENT, SubAgentViewContext } from "./sub-agent-context";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { useElapsed } from "./use-elapsed";
+import { toolDisplayName } from "./tool-label";
 
 const LIVE = LIVE_SUB_AGENT;
 
@@ -92,9 +93,9 @@ export function SubAgentCard({
               <span
                 data-sub-agent-current
                 className="truncate text-xs text-muted-foreground"
-                title={`${current.title} ${current.text}`}
+                title={`${toolDisplayName(current.title)} ${current.text}`}
               >
-                {current.title}
+                {toolDisplayName(current.title)}
                 {current.text ? ` ${current.text}` : ""}
               </span>
             )}
@@ -171,7 +172,7 @@ export function Steps({ steps }: { steps: readonly AgentActivityStep[] }) {
               <Check className="size-3 text-muted-foreground" aria-label="Done" />
             )}
           </span>
-          <span className="w-28 shrink-0 truncate font-medium">{step.title}</span>
+          <span className="w-28 shrink-0 truncate font-medium">{toolDisplayName(step.title)}</span>
           <span className="min-w-0 flex-1 truncate font-mono text-muted-foreground">
             {step.text}
           </span>

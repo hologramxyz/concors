@@ -292,6 +292,25 @@ export class TestAgentProvider implements AgentProvider {
       )
         .then(() => this.finish())
         .catch(() => undefined);
+    } else if (text === "primitive-tool-run") {
+      // What Claude Code reports when Supervisor polls its chats: one tool, called back to back.
+      const call = (id: string, tool: string, args: unknown) =>
+        this.emit("item/completed", {
+          item: {
+            id: `${id}-${this.turnId}`,
+            type: "mcpToolCall",
+            status: "completed",
+            tool,
+            arguments: args,
+            result: "ok",
+          },
+        });
+      call("tool-search", "ToolSearch", { query: "select:concors_control" });
+      for (const kind of ["workspaces", "sessions", "status"])
+        call(`control-${kind}`, "mcp__concors-supervisor__concors_control", {
+          operation: { kind },
+        });
+      this.finish();
     } else if (text === "primitive-read") {
       this.emit("item/completed", {
         item: {
