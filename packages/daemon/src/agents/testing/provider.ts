@@ -307,7 +307,7 @@ export class TestAgentProvider implements AgentProvider {
         item: {
           id: `tool-${this.turnId}`,
           type: "commandExecution",
-          command: "echo test",
+          command: text === "Please approve the test command" ? "pnpm test" : "echo test",
           status: "inProgress",
         },
       });
@@ -317,7 +317,7 @@ export class TestAgentProvider implements AgentProvider {
           threadId: this.threadId,
           turnId: this.turnId,
           itemId: `tool-${this.turnId}`,
-          command: "echo test",
+          command: text === "Please approve the test command" ? "pnpm test" : "echo test",
         },
         "approval-1",
       )
@@ -555,7 +555,15 @@ export class TestAgentProvider implements AgentProvider {
       if (!text.includes("hold"))
         setTimeout(() => {
           this.emit("item/completed", {
-            item: { id: `message-${this.turnId}`, type: "agentMessage", text: "Hello from Codex" },
+            item: {
+              id: `message-${this.turnId}`,
+              type: "agentMessage",
+              text:
+                text ===
+                "Check the game and the release notes. Tell me when anything needs my approval."
+                  ? "**Game QA** needs approval to run `pnpm test` in Star Catcher. **HUD polish** is still working, and the **Release editor** has finished.\n\nI’ll keep watching and let you know when there’s an update."
+                  : "Hello from Codex",
+            },
           });
           this.finish();
         }, 150);
