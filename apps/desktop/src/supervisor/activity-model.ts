@@ -1,69 +1,77 @@
 import type { AgentInfo, SupervisorDelivery } from "@concors/protocol";
+import { approvalSummary } from "@/agents/approval-summary";
+import { chatState } from "@/workspace/sidebar-rows";
 
-export type ActivityGroup = "Needs you" | "Working" | "Queued" | "Stopped" | "Finished" | "Ready";
-export const activityGroups: readonly ActivityGroup[] = [
-  "Needs you",
-  "Working",
-  "Queued",
-  "Stopped",
-  "Finished",
-  "Ready",
-];
-
-const deliveryGroup: Record<SupervisorDelivery["status"], ActivityGroup> = {
-  pending: "Queued",
-  queued: "Queued",
-  working: "Working",
-  needs_input: "Needs you",
-  done: "Finished",
-  failed: "Stopped",
-  interrupted: "Stopped",
-  cancelled: "Stopped",
-};
+/**
+ * Activity lists agents, not tasks: one row each, under the group a person acts on. A question,
+ * approval or unseen failure needs you; a reply in progress or queued work is working; the rest of
+ * what Supervisor delegated, and any finish not yet seen, is done. Idle chats Supervisor never
+ * touched stay out, so the panel is a status summary rather than a second chat list.
+ */
+export type ActivityGroup = "Needs you" | "Working" | "Done";
+export const activityGroups: readonly ActivityGroup[] = ["Needs you", "Working", "Done"];
+/** Done is history: only the most recent rows are worth a glance beside the chat. */
+export const DONE_LIMIT = 8;
 
 export interface ActivityRow {
-  id: string;
   agent: AgentInfo;
   group: ActivityGroup;
-  task?: string;
+  /** The one line under the name: what it asks, what it was asked, or how it ended. */
+  detail: string;
+  /** A finish or failure the user has not opened yet, marked as the sidebar marks it. */
+  unseen: boolean;
   updatedAt: string;
 }
 
-export function activityRows(agents: AgentInfo[], deliveries: readonly SupervisorDelivery[]) {
-  const byId = new Map(agents.map((agent) => [agent.id, agent]));
-  const rows = deliveries.flatMap<ActivityRow>((delivery) => {
-    const agent = byId.get(delivery.sessionId);
-    if (!agent) return [];
+const firstLine = (text: string) => text.trim().split("\n")[0]?.slice(0, 180) ?? "";
+
+export function activityRows(
+  agents: readonly AgentInfo[],
+  deliveries: readonly SupervisorDelivery[],
+): ActivityRow[] {
+  // Deliveries arrive newest first; the latest one says what the agent was last asked.
+  const asked = new Map<string, SupervisorDelivery>();
+  for (const delivery of deliveries)
+    if (!asked.has(delivery.sessionId)) asked.set(delivery.sessionId, delivery);
+  const rows = agents.flatMap<ActivityRow>((agent) => {
+    if (agent.supervisor) return [];
+    const state = chatState(agent);
+    const delivery = asked.get(agent.id);
+    const queued = agent.queue?.length ?? 0;
+    const group: ActivityGroup | null =
+      agent.pending.length || state === "attention"
+        ? "Needs you"
+        : state === "working" || queued
+          ? "Working"
+          : delivery || state === "done"
+            ? "Done"
+            : null;
+    if (!group) return [];
+    const pending = agent.pending[0];
+    const task = delivery ? firstLine(delivery.text) : "";
+    const detail =
+      group === "Needs you"
+        ? pending
+          ? approvalSummary(pending) || pending.title
+          : agent.status === "failed"
+            ? firstLine(agent.error ?? "") || "Failed"
+            : task
+        : group === "Working"
+          ? [task, queued ? `${queued} queued` : ""].filter(Boolean).join(" · ")
+          : agent.status === "failed" || agent.status === "interrupted"
+            ? [agent.status === "failed" ? "Failed" : "Stopped", task].filter(Boolean).join(" · ")
+            : task || "Finished";
     return [
       {
-        id: delivery.id,
         agent,
-        group: deliveryGroup[delivery.status],
-        task: delivery.text.trim().split("\n")[0]?.slice(0, 180) ?? "",
-        updatedAt: delivery.updatedAt,
+        group,
+        detail: firstLine(detail),
+        unseen: state === "done",
+        updatedAt: agent.updatedAt,
       },
     ];
   });
-  const activeSessions = new Set(
-    rows.filter((row) => ["Needs you", "Working"].includes(row.group)).map((row) => row.agent.id),
-  );
-  const recentFinished = new Set(
-    rows.filter((row) => row.group === "Finished").map((row) => row.agent.id),
-  );
-  for (const agent of agents) {
-    const group: ActivityGroup =
-      agent.pending.length || agent.status === "needs_input"
-        ? "Needs you"
-        : agent.status === "working" || agent.status === "starting"
-          ? "Working"
-          : agent.status === "failed" || agent.status === "interrupted"
-            ? "Stopped"
-            : agent.status === "done"
-              ? "Finished"
-              : "Ready";
-    if (activeSessions.has(agent.id) || (group === "Finished" && recentFinished.has(agent.id)))
-      continue;
-    rows.push({ id: agent.id, agent, group, updatedAt: agent.updatedAt });
-  }
-  return rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const done = rows.filter((row) => row.group === "Done").slice(DONE_LIMIT);
+  return rows.filter((row) => !done.includes(row));
 }
