@@ -17,6 +17,8 @@ import type { ToolCallDetail } from "./paseo/agent-types";
 import { hasMeaningfulToolCallDetail } from "./paseo/tool-call-detail-state";
 import { thinkingExpandable, thinkingPreview, thinkingText } from "./thinking";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
+import type { TimelineEntry } from "./thinking";
+import { toolDisplayName, toolSummary } from "./tool-label";
 
 /** Memoized: merges keep unchanged items' identity, so a streamed delta re-renders one row
  * instead of re-parsing every message's Markdown while the user scrolls. */
@@ -26,7 +28,7 @@ export const TimelineItem = memo(function TimelineItem({
   live,
   onFork,
 }: {
-  item: AgentItem;
+  item: TimelineEntry;
   workedFor?: string | undefined;
   /** Whether the item's turn is still in progress; a finished turn has nothing left running. */
   live: boolean;
@@ -37,6 +39,7 @@ export const TimelineItem = memo(function TimelineItem({
   const [open, setOpen] = useState(false);
   const data = item.presentation;
   const running = live && item.status === "running";
+  if (item.group) return <ToolGroup first={item} items={item.group} live={live} />;
   if (item.kind === "user" || item.kind === "assistant")
     return (
       <article
@@ -110,7 +113,7 @@ export const TimelineItem = memo(function TimelineItem({
         : { type: "edit", filePath: data.files?.[0]?.path ?? "Files", unifiedDiff: item.detail };
   if (data?.type === "search") detail = { type: "search", query: item.text };
   const display = buildToolCallDisplayModel({
-    name: item.title,
+    name: toolDisplayName(item.title),
     status:
       item.status === "interrupted"
         ? "canceled"
@@ -164,7 +167,7 @@ export const TimelineItem = memo(function TimelineItem({
         <span
           className={`min-w-0 flex-1 truncate text-sm text-muted-foreground ${running ? "agent-shimmer" : ""}`}
         >
-          {display.summary ?? item.text}
+          {display.summary ?? toolSummary(item)}
         </span>
         {item.status === "failed" || item.status === "interrupted" ? (
           <span className="text-xs text-muted-foreground">{item.status}</span>
@@ -259,6 +262,65 @@ export const TimelineItem = memo(function TimelineItem({
     </article>
   );
 });
+
+/**
+ * A run of the same tool called back to back, as one row: its name, how many calls, and the
+ * latest one's summary. Opening it lists the calls, each its usual row.
+ */
+function ToolGroup({
+  first,
+  items,
+  live,
+}: {
+  first: AgentItem;
+  items: AgentItem[];
+  live: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const latest = items.at(-1) ?? first;
+  const running = live && items.some((item) => item.status === "running");
+  const failed = items.filter((item) => item.status === "failed").length;
+  const read = first.presentation?.type === "files";
+  const Icon = first.presentation?.type === "search" ? Search : read ? Eye : Wrench;
+  return (
+    <article
+      aria-label="Tool calls"
+      aria-busy={running}
+      className="overflow-hidden rounded-xl border border-transparent bg-muted/50"
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left"
+      >
+        {running ? <BrailleSpinner /> : <Icon className="size-4 shrink-0 text-muted-foreground" />}
+        <span className={`shrink-0 text-sm font-medium ${running ? "agent-shimmer" : ""}`}>
+          {read ? "Read" : toolDisplayName(first.title)}
+        </span>
+        <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
+          {items.length} {read ? "files" : "calls"}
+        </span>
+        <span
+          className={`min-w-0 flex-1 truncate text-sm text-muted-foreground ${running ? "agent-shimmer" : ""}`}
+        >
+          {open || !toolSummary(latest) ? "" : `· ${toolSummary(latest)}`}
+        </span>
+        {failed > 0 && <span className="text-xs text-muted-foreground">{failed} failed</span>}
+        <ChevronRight
+          className={`size-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+        />
+      </button>
+      {open && (
+        <div className="space-y-1.5 border-t p-1.5">
+          {items.map((item) => (
+            <TimelineItem key={item.id} item={item} live={live} />
+          ))}
+        </div>
+      )}
+    </article>
+  );
+}
 
 /** Reasoning is context, not output: one quiet line that opens to the full summary. */
 function Thinking({ item, running }: { item: AgentItem; running: boolean }) {
