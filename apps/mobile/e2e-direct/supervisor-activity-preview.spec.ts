@@ -2,7 +2,7 @@ import { test, expect } from "./fixtures";
 import { mobileDesktopSocket } from "../../../e2e/support/mobile-direct-ports.cjs";
 import { seedSupervisorActivity } from "../../../e2e/support/supervisor-activity-preview.ts";
 
-test("capture mobile Supervisor activity drawer and mentions", async ({ page }) => {
+test("phone Supervisor activity drawer and @ mentions", async ({ page }) => {
   test.setTimeout(180_000);
   const cleanup = await seedSupervisorActivity(mobileDesktopSocket);
   try {
@@ -17,35 +17,27 @@ test("capture mobile Supervisor activity drawer and mentions", async ({ page }) 
     await expect(drawer).toHaveAttribute("data-mobile-drawer", "true");
     await expect(drawer.getByRole("region", { name: "Needs you" })).toContainText("Game QA");
     await expect(drawer.getByRole("region", { name: "Working" })).toContainText("HUD polish");
-    await expect(drawer.getByRole("region", { name: "Finished" })).toContainText("Release editor");
+    await expect(drawer.getByRole("region", { name: "Done" })).toContainText("Release editor");
     await page.screenshot({
       path: test.info().outputPath("mobile-activity.png"),
       animations: "disabled",
     });
-    await drawer.getByRole("button", { name: /Game QA/ }).click();
-    await expect(drawer.getByText("Request details")).toBeVisible();
+    await drawer.getByRole("button", { name: "Ask Supervisor" }).click();
+    await expect(drawer).toHaveCount(0);
+    const composer = ui.getByRole("textbox", { name: "Message Codex", exact: true });
+    await expect(composer).toHaveValue("Should I approve @Game QA’s request “pnpm test”?");
     await page.screenshot({
-      path: test.info().outputPath("mobile-approval.png"),
+      path: test.info().outputPath("mobile-ask.png"),
       animations: "disabled",
     });
-    await drawer.getByRole("button", { name: "Close", exact: true }).click();
-    const composer = ui.getByRole("textbox", { name: "Message Codex", exact: true });
-    await composer.fill("Ask ");
-    await ui.getByRole("button", { name: "Mention a workspace or agent" }).click();
-    const picker = ui.getByRole("dialog", { name: "Mention" });
-    await expect(picker).toHaveAttribute("data-mobile-drawer", "true");
-    await expect(picker.getByRole("region", { name: "Agents" })).toContainText("Game QA");
+    await composer.fill("Ask @ga");
+    await expect(ui.getByRole("listbox", { name: "Mention" })).toContainText("Game QA");
     await page.screenshot({
       path: test.info().outputPath("mobile-mentions.png"),
       animations: "disabled",
     });
-    await picker.getByRole("button", { name: /Game QA/ }).click();
-    await expect(composer).toHaveValue("Ask ");
-    await expect(ui.getByRole("button", { name: "Remove reference Game QA" })).toBeVisible();
-    await page.screenshot({
-      path: test.info().outputPath("mobile-reference.png"),
-      animations: "disabled",
-    });
+    await ui.getByRole("option", { name: /Game QA/ }).click();
+    await expect(composer).toHaveValue("Ask @Game QA ");
   } finally {
     await cleanup();
   }

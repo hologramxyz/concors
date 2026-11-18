@@ -249,7 +249,7 @@ export class TestAgentProvider implements AgentProvider {
     }
     if (
       this.tools?.env?.CONCORS_CONTROL_URL &&
-      text.startsWith("Can you explain the pending approval") &&
+      text.startsWith("Should I approve @") &&
       text.includes("Concors references (resolve by ID):")
     ) {
       const turnId = this.turnId;
