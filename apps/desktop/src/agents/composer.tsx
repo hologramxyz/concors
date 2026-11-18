@@ -1,6 +1,15 @@
-import { splitSupervisorReferences } from "@/supervisor/reference-text";
-import { MAX_SUPERVISOR_REFERENCES, withSupervisorReferences } from "@/supervisor/reference-text";
+import {
+  MAX_SUPERVISOR_REFERENCES,
+  insertMention,
+  matchReferences,
+  mentionQuery,
+  mentionedReferences,
+  splitSupervisorReferences,
+  withSupervisorReferences,
+  type SupervisorReference,
+} from "@/supervisor/reference-text";
 import { SupervisorReferencePicker } from "@/supervisor/references";
+import { MentionMenu } from "@/supervisor/mention-menu";
 import { SupervisorReferences } from "@/supervisor/reference-context";
 import { AgentDraftScopeContext, useAgentDraft, type InputDraft as Draft } from "./draft";
 import { NO_RECALL, recallStep, type PromptRecall } from "./prompt-history";
@@ -305,20 +314,28 @@ export function AgentComposer({
     }
   }, [dictation.active, visible, connected, busy, uncertain, agent.threadId]);
   useComposerMotion(form, compact && !native, expanded);
-  const mentionPicker = references.length > 0 && (
+  // A mention is written into the message as `@Name`; its reference keeps the ID, so it still
+  // resolves after a rename. Only references whose `@Name` is still in the text are sent.
+  const remember = (reference: SupervisorReference) => {
+    if (selectedReferences?.some((ref) => ref.kind === reference.kind && ref.id === reference.id))
+      return true;
+    if ((selectedReferences?.length ?? 0) >= MAX_SUPERVISOR_REFERENCES) {
+      setError("Mention up to eight agents or workspaces per message.");
+      return false;
+    }
+    setReferences((refs) => [...refs, reference]);
+    return true;
+  };
+  // The phone app's native field cannot open a menu as `@` is typed, so it gets a button instead.
+  const mentionPicker = native && references.length > 0 && (
     <SupervisorReferencePicker
       references={references}
       disabled={!connected || busy || uncertain || !!deferred}
       onSelect={(reference) => {
-        if (
-          selectedReferences?.some((ref) => ref.kind === reference.kind && ref.id === reference.id)
-        )
-          return;
-        if ((selectedReferences?.length ?? 0) >= MAX_SUPERVISOR_REFERENCES) {
-          setError("Add up to eight references per message.");
-          return;
-        }
-        setReferences((refs) => [...refs, reference]);
+        if (remember(reference))
+          setDraft(
+            (text) => `${text && !/\s$/.test(text) ? `${text} ` : text}@${reference.label} `,
+          );
       }}
     />
   );
@@ -458,10 +475,13 @@ export function AgentComposer({
     }
     const message =
       agent.supervisor && input.message.trim() && !input.message.trimStart().startsWith("/")
-        ? withSupervisorReferences(input.message, selectedReferences ?? [])
+        ? withSupervisorReferences(
+            input.message,
+            mentionedReferences(input.message, selectedReferences ?? []),
+          )
         : input.message;
     if (message.length > 16000) {
-      setError("Shorten your message or remove a reference before sending.");
+      setError("Shorten your message or mention fewer agents before sending.");
       return Promise.resolve(undefined);
     }
     return submit(
@@ -497,6 +517,29 @@ export function AgentComposer({
       ? []
       : matchCommands(agent.controls?.commands ?? [], slashTyped);
   const slashIndex = Math.min(slashActive, slashCommands.length - 1);
+  // `@` opens the mention list as `/` opens commands; Escape hides it for that exact draft.
+  const [caret, setCaret] = useState(0);
+  const [mentionDismissed, setMentionDismissed] = useState<string | null>(null);
+  const [mentionActive, setMentionActive] = useState(0);
+  const mentionTyped =
+    references.length && !native && !dictation.active && mentionDismissed !== draft
+      ? mentionQuery(draft, caret)
+      : null;
+  const mentionMatches = mentionTyped ? matchReferences(references, mentionTyped.query) : [];
+  const mentionIndex = Math.min(mentionActive, mentionMatches.length - 1);
+  const chooseMention = (reference: SupervisorReference) => {
+    if (!mentionTyped || !remember(reference)) return;
+    const next = insertMention(draft, mentionTyped.start, caret, reference.label);
+    setDraft(next.text);
+    setCaret(next.caret);
+    setMentionActive(0);
+    // The finished `@Name ` would match itself; the list returns once something else is typed.
+    setMentionDismissed(next.text);
+    requestAnimationFrame(() => {
+      textarea.current?.focus();
+      textarea.current?.setSelectionRange(next.caret, next.caret);
+    });
+  };
   const chooseCommand = (command: AgentCommand, complete = false) => {
     setSlashActive(0);
     if (complete || needsArguments(command)) {
@@ -1340,31 +1383,9 @@ export function AgentComposer({
               ))}
             </div>
           )}
-          {((selectedReferences?.length ?? 0) > 0 || (native && mentionPicker)) && (
-            <div
-              aria-label="Message references"
-              className="flex flex-wrap items-center gap-1.5 px-2 pb-2"
-              data-composer-attachments
-            >
-              {native && mentionPicker}
-              {selectedReferences?.map((ref) => (
-                <button
-                  type="button"
-                  key={ref.kind + ref.id}
-                  aria-label={`Remove reference ${ref.label}`}
-                  title={ref.workspace ? `${ref.workspace} / ${ref.label}` : ref.label}
-                  disabled={busy || uncertain || !!deferred}
-                  onClick={() =>
-                    setReferences((refs) =>
-                      refs.filter((entry) => entry.kind !== ref.kind || entry.id !== ref.id),
-                    )
-                  }
-                  className="flex max-w-full items-center gap-1 rounded-md border bg-muted px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-                >
-                  <span className="truncate">@{ref.label}</span>
-                  <span aria-hidden>×</span>
-                </button>
-              ))}
+          {mentionPicker && (
+            <div className="flex items-center px-2 pb-2" data-composer-attachments>
+              {mentionPicker}
             </div>
           )}
           {dictation.active ? (
@@ -1401,9 +1422,12 @@ export function AgentComposer({
                 readOnly={!!deferred}
                 onChange={(e) => {
                   setDraft(e.target.value);
+                  setCaret(e.target.selectionStart);
                   setSlashActive(0);
+                  setMentionActive(0);
                   dictation.dismissError();
                 }}
+                onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
                 onPaste={(e) => {
                   if (deferred) return;
                   if (e.clipboardData.files.length) {
@@ -1420,6 +1444,29 @@ export function AgentComposer({
                       setDeferred(null);
                     } else if (e.key === "Enter") e.preventDefault();
                     return;
+                  }
+                  const mention = mentionMatches[mentionIndex];
+                  if (mention && !e.nativeEvent.isComposing) {
+                    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                      e.preventDefault();
+                      // Like commands, the list stacks upward from the best match.
+                      const step = e.key === "ArrowUp" ? 1 : -1;
+                      setMentionActive(
+                        (mentionIndex + step + mentionMatches.length) % mentionMatches.length,
+                      );
+                      return;
+                    }
+                    if ((e.key === "Enter" && !e.shiftKey) || (e.key === "Tab" && !e.shiftKey)) {
+                      e.preventDefault();
+                      chooseMention(mention);
+                      return;
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setMentionDismissed(draft);
+                      return;
+                    }
                   }
                   const command = slashCommands[slashIndex];
                   if (command && !e.nativeEvent.isComposing) {
@@ -1544,7 +1591,6 @@ export function AgentComposer({
                       <Plus className="size-4" />
                     </button>
                   </ControlTooltip>
-                  {mentionPicker}
                   {compact && clipboardImage && (
                     <button
                       type="button"
@@ -1680,6 +1726,15 @@ export function AgentComposer({
           onActive={setSlashActive}
           onChoose={(command) => chooseCommand(command)}
           onDismiss={() => setSlashDismissed(draft)}
+        />
+        <MentionMenu
+          anchor={form}
+          matches={mentionMatches}
+          active={mentionIndex}
+          surface={owner}
+          onActive={setMentionActive}
+          onChoose={chooseMention}
+          onDismiss={() => setMentionDismissed(draft)}
         />
         {compact && expanded && keyboardHelp && dictationHelp && (
           <p role="status" className="px-2 text-xs text-muted-foreground">

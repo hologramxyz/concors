@@ -1,4 +1,4 @@
-import { splitSupervisorReferences } from "@/supervisor/reference-text";
+import { mentionSegments, splitSupervisorReferences } from "@/supervisor/reference-text";
 import { MessageAttachments } from "./attachment-preview";
 import { memo, useContext } from "react";
 import { FileLinkContext } from "@/files/context";
@@ -57,22 +57,18 @@ export const TimelineItem = memo(function TimelineItem({
         {item.kind === "user" && <MessageAttachments item={item} className="mb-2" />}
         <div className="chat-markdown break-words">
           {item.kind === "user" ? (
-            <>
-              <p className="whitespace-pre-wrap">{message?.text}</p>
-              {!!message?.references.length && (
-                <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Message references">
-                  {message.references.map((ref) => (
-                    <span
-                      className="rounded-md border bg-muted px-2 py-1 text-xs"
-                      key={ref.kind + ref.id}
-                      title={ref.workspace}
-                    >
-                      @{ref.label}
-                    </span>
-                  ))}
-                </div>
+            <p className="whitespace-pre-wrap">
+              {/* Mentions read as written, set off by weight; their IDs travel with the message. */}
+              {mentionSegments(message?.text ?? "", message?.references ?? []).map((part, index) =>
+                part.mention ? (
+                  <span key={index} className="font-medium" data-mention>
+                    {part.text}
+                  </span>
+                ) : (
+                  part.text
+                ),
               )}
-            </>
+            </p>
           ) : (
             <AgentMarkdown item={item}>{item.text}</AgentMarkdown>
           )}

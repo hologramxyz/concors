@@ -22,6 +22,7 @@ import {
   type SupervisorReference,
 } from "./reference-context";
 import { supervisorPane } from "./pane";
+import { approvalSummary } from "@/agents/approval-summary";
 
 /** The ordinary unified chat, including its provider picker and native mobile composer. */
 export function SupervisorPage({
@@ -98,12 +99,15 @@ export function SupervisorPage({
     workspace?.machineId,
   );
   const canAsk = !!agent?.threadId && connected && !draft.busy && !draft.uncertain;
-  const ask = (worker: AgentInfo, pending: AgentPending, workplace: string) => {
+  // Asking about an approval drafts a question that mentions the agent, for the person to send.
+  // The answer is still given in the agent's own chat.
+  const ask = (worker: AgentInfo, pending: AgentPending) => {
+    const label = supervisorAgentName(worker);
     const reference = {
       id: worker.id,
       kind: "Agent" as const,
-      label: supervisorAgentName(worker),
-      workspace: workplace,
+      label,
+      workspace: names.get(worker.projectId) ?? "",
       pendingId: pending.id,
     };
     draft.setReferences((refs) => [
@@ -112,16 +116,15 @@ export function SupervisorPage({
         .slice(0, MAX_SUPERVISOR_REFERENCES - 1),
       reference,
     ]);
-    draft.setDraft((text) => {
-      const question =
-        "Can you explain the pending approval for this agent and recommend what I should do?";
-      return text.trim()
-        ? `${text.trimEnd()}
-
-${question}`
-        : question;
-    });
-    onCloseActivity();
+    const action = approvalSummary(pending).split("\n")[0]?.slice(0, 120);
+    const question = action
+      ? `Should I approve @${label}’s request “${action}”?`
+      : `What should I do about @${label}’s pending request?`;
+    draft.setDraft((text) => (text.trim() ? `${text.trimEnd()}\n\n${question}` : question));
+    if (compact) onCloseActivity();
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLTextAreaElement>(`[data-pane-id="${pane?.id}"] textarea`)?.focus(),
+    );
   };
   return (
     <AgentStartedContext value={undefined}>
