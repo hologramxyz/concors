@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { ListChecks, MessageCircle, X } from "lucide-react";
 import type { AgentInfo, AgentPending, WorkspaceSnapshot } from "@concors/protocol";
 import { cn } from "cn";
@@ -87,6 +88,7 @@ export function SupervisorActivity({
   supervisorId,
   canAsk,
   onAsk,
+  focusComposer,
 }: {
   workspace: WorkspaceSnapshot | null;
   compact: boolean;
@@ -94,8 +96,18 @@ export function SupervisorActivity({
   onOpenAgent: (sessionId: string) => void;
   supervisorId: string | null;
   canAsk: boolean;
+  /** Drafts a question about the request in the Supervisor's message. */
   onAsk: (agent: AgentInfo, request: AgentPending) => void;
+  focusComposer: () => void;
 }) {
+  // A phone's drawer returns focus to its button as it closes; after asking, the message takes it.
+  const asked = useRef(false);
+  const ask = (agent: AgentInfo, request: AgentPending) => {
+    onAsk(agent, request);
+    if (!compact) return requestAnimationFrame(focusComposer);
+    asked.current = true;
+    onClose();
+  };
   const agents = useAgents();
   const { deliveries, warning } = useSupervisorDeliveries(supervisorId);
   const projects = [...(workspace?.projects ?? []), ...(workspace?.closedProjects ?? [])];
@@ -143,7 +155,7 @@ export function SupervisorActivity({
                       row.agent.pending[0]?.kind === "approval"
                         ? () => {
                             const request = row.agent.pending[0];
-                            if (request) onAsk(row.agent, request);
+                            if (request) ask(row.agent, request);
                           }
                         : undefined
                     }
@@ -161,7 +173,14 @@ export function SupervisorActivity({
   if (compact)
     return (
       <Dialog open onOpenChange={(next) => !next && onClose()}>
-        <DialogContent className="gap-3">
+        <DialogContent
+          className="gap-3"
+          onCloseAutoFocus={(event) => {
+            if (!asked.current) return;
+            event.preventDefault();
+            focusComposer();
+          }}
+        >
           <DialogHeader>
             <DialogTitle>Activity</DialogTitle>
             <DialogDescription className="sr-only">Your agents by status</DialogDescription>

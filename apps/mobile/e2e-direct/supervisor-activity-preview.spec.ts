@@ -26,6 +26,8 @@ test("phone Supervisor activity drawer and @ mentions", async ({ page }) => {
     await expect(drawer).toHaveCount(0);
     const composer = ui.getByRole("textbox", { name: "Message Codex", exact: true });
     await expect(composer).toHaveValue("Should I approve @Game QA’s request “pnpm test”?");
+    // The drawer hands focus to the message, which opens to show the whole question.
+    await expect(composer).toBeFocused();
     await page.screenshot({
       path: test.info().outputPath("mobile-ask.png"),
       animations: "disabled",

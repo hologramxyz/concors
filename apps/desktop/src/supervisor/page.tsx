@@ -121,11 +121,14 @@ export function SupervisorPage({
       ? `Should I approve @${label}’s request “${action}”?`
       : `What should I do about @${label}’s pending request?`;
     draft.setDraft((text) => (text.trim() ? `${text.trimEnd()}\n\n${question}` : question));
-    if (compact) onCloseActivity();
-    requestAnimationFrame(() =>
-      document.querySelector<HTMLTextAreaElement>(`[data-pane-id="${pane?.id}"] textarea`)?.focus(),
-    );
   };
+  // The phone app's native field has no textarea here; it is focused natively.
+  const focusComposer = () =>
+    document
+      .querySelector<HTMLTextAreaElement>(
+        `[data-pane-id="${pane?.id}"] textarea[data-agent-composer]`,
+      )
+      ?.focus();
   return (
     <AgentStartedContext value={undefined}>
       <SessionLinkContext value={onOpenAgent}>
@@ -172,6 +175,7 @@ export function SupervisorPage({
                   supervisorId={supervisorId}
                   canAsk={canAsk}
                   onAsk={ask}
+                  focusComposer={focusComposer}
                   compact={compact}
                   onClose={onCloseActivity}
                   onOpenAgent={onOpenAgent}
