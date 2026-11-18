@@ -102,35 +102,17 @@ export class SupervisorManager {
       if (request.operation.kind === "open") {
         this.store.ensureSupervisor();
         this.changed();
-      } else if (request.operation.kind === "watch") {
-        const { supervisorId, sessionId, enabled } = request.operation;
-        if (!this.selected().has(supervisorId))
-          throw new Error("Open this Supervisor conversation before changing what it watches.");
-        if (enabled) {
-          this.source(supervisorId);
-          this.watches.track(supervisorId, sessionId, request.requestId, true, true);
-        } else this.watches.stop(supervisorId, sessionId);
       } else if (request.operation.kind === "revoke-sharing") {
         for (const info of this.store.agents().filter((a) => a.supervisor))
           this.store.saveAgent({ ...info, supervisorSharing: null });
       }
-      const snapshot = this.store.snapshot();
-      const activeSupervisor = snapshot.supervisor?.tabs
-        .flatMap((tab) => tab.nodes)
-        .find((node) => node.kind === "pane" && node.sessionId);
-      const activeId = activeSupervisor?.kind === "pane" ? activeSupervisor.sessionId : null;
       return {
         type: "supervisor.result",
         requestId: request.requestId,
         outcome: {
           status: "ok",
-          project: snapshot.supervisor,
+          project: this.store.snapshot().supervisor,
           deliveries: this.deliveries(),
-          ...(request.operation.kind === "open"
-            ? {}
-            : {
-                watching: activeId ? this.watches.sessionIds(activeId) : [],
-              }),
         },
       };
     } catch (error) {

@@ -133,7 +133,6 @@ export async function seedSupervisorActivity(url: string) {
     expect(activity.outcome.deliveries.map((item) => item.status)).toEqual(
       expect.arrayContaining(["queued", "needs_input", "working", "done"]),
     );
-    expect(activity.outcome.watching).toEqual(expect.arrayContaining([tests, ui, notes]));
     ids = { supervisor, tests, ui, notes };
   } finally {
     off();

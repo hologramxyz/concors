@@ -225,11 +225,6 @@ export class SupervisorWatches {
     const watch = this.store.supervisorRecord(key) as Watch | undefined;
     if (watch) this.store.saveSupervisorRecord(key, { ...watch, enabled: false });
   }
-  sessionIds(supervisorId: string): string[] {
-    return this.records()
-      .filter((watch) => watch.supervisorId === supervisorId)
-      .map((watch) => watch.sessionId);
-  }
   status(supervisorId: string) {
     return this.records()
       .filter((w) => w.supervisorId === supervisorId)

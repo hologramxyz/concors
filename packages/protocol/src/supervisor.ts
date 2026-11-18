@@ -2,7 +2,6 @@ import { z } from "zod";
 import { WorkspaceCommandSchema, WorkspaceProjectSchema } from "./workspace.ts";
 
 const Id = z.string().uuid();
-export const SUPERVISOR_ACTIVITY_CAPABILITY = "supervisor-activity-v1";
 /** The native iOS host supplies the recipients it actually disclosed, never the model. */
 export const SupervisorSharingSchema = z.object({
   revision: z.number().int().nonnegative(),
@@ -37,12 +36,6 @@ export const SupervisorRequestSchema = z.object({
   operation: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("open") }),
     z.object({ kind: z.literal("status") }),
-    z.object({
-      kind: z.literal("watch"),
-      supervisorId: Id,
-      sessionId: Id,
-      enabled: z.boolean(),
-    }),
     z.object({ kind: z.literal("revoke-sharing") }),
   ]),
 });
@@ -56,7 +49,6 @@ export const SupervisorResultSchema = z.object({
       status: z.literal("ok"),
       project: WorkspaceProjectSchema.optional(),
       deliveries: z.array(SupervisorDeliverySchema).max(128),
-      watching: z.array(Id).max(64).optional(),
     }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),

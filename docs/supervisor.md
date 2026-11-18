@@ -38,12 +38,12 @@ OpenCode or other configured harness and sign-in; Supervisor does not create ano
    their results, send dependent follow-ups, and have another agent review the final work. New
    agents open in named tabs without changing your focus. Its event-driven wait can continue after
    you resolve a target approval. Ask it to stop watching a chat when you no longer need updates.
-8. Open **Activity** in the header to see work by status, or filter it to one workspace. Desktop
-   keeps Activity beside the chat. On a phone it opens in a drawer. Pick a row to review its task,
-   open the original chat, or watch that chat. **Ask Supervisor** drafts a question about the
-   specific pending approval. Send it when ready, then decide in the original chat.
-9. Use **@** in the composer to select an agent or workspace. The chip shows its name and the
-   message carries its stable ID, so similar names and renames don't change what it refers to.
+8. Open **Activity** in the header to see your agents by status: **Needs you**, **Working** and
+   **Done**, one row each, marked like the sidebar. Desktop keeps it beside the chat; a phone opens
+   it in a drawer. A row opens that agent's chat. An approval row offers **Ask Supervisor**, which
+   drafts a question about that request; send it when ready, then decide in the agent's chat.
+9. Type **@** in the message to mention an agent or workspace, as **/** lists commands. The
+   message reads `@Name`, and carries the agent's ID, so a rename doesn't change what it refers to.
 10. Change the harness, then switch back. Each harness's conversation returns in the same chat UI.
 
 The mobile browser acceptance test runs the real shared UI through the native protocol relay.
@@ -93,8 +93,9 @@ installing global CLI hooks or repeatedly asking models for progress. It posts d
 excerpt of the final reply. Watches persist across reconnects and restarts. Each Supervisor
 conversation follows at most 64 chats; at the limit, the settled chat idle longest stops being
 followed. Only work still in flight keeps a followed chat from retirement, and conversations left
-behind by `/clear` retire like any closed chat. Progress and results stay in the conversation. Activity
-shows saved deliveries alongside the live status of other chats and uses the same watch records. A running Supervisor can wait and
+behind by `/clear` retire like any closed chat. Progress and results stay in the conversation;
+Activity summarizes them from the delivery records and each chat's live status, which every
+Supervisor daemon already reports. A running Supervisor can wait and
 continue the requested multi-step workflow, while background notices do not schedule extra model
 turns for summarization.
 
