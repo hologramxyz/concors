@@ -18,6 +18,7 @@ export async function seedSupervisorActivity(url: string) {
     client: { kind: "test", name: "activity preview", version: "0.0.0" },
   });
   const off = transport.subscribeWorkspace(() => undefined);
+  let ids: { supervisor: string; tests: string; ui: string; notes: string };
   try {
     await transport.connect();
     await expect.poll(() => transport.workspace).not.toBeNull();
@@ -107,9 +108,6 @@ export async function seedSupervisorActivity(url: string) {
     const tests = await startWorker(game, "Game QA");
     const ui = await startWorker(game, "HUD polish");
     const notes = await startWorker(docs, "Release editor");
-    await send(tests, "Please approve the test command", "needs_input");
-    await send(ui, "hold while I review the HUD", "working");
-    await send(notes, "Check the release notes", "done");
     const opened = await transport.requestSupervisor({ kind: "open" }, crypto.randomUUID());
     if (opened.outcome.status !== "ok" || !opened.outcome.project)
       throw new Error("Supervisor fixture did not open");
@@ -121,9 +119,25 @@ export async function seedSupervisorActivity(url: string) {
     if (!tab || !pane) throw new Error("Supervisor fixture has no pane");
     const supervisor = await start(project.id, tab.id, pane.id);
     await send(supervisor, activityPrompt, "done");
+    await expect
+      .poll(() => transport.agents.find((agent) => agent.id === tests)?.status)
+      .toBe("needs_input");
+    await expect
+      .poll(() => transport.agents.find((agent) => agent.id === ui)?.status)
+      .toBe("working");
+    await expect
+      .poll(() => transport.agents.find((agent) => agent.id === notes)?.status)
+      .toBe("done");
+    const activity = await transport.requestSupervisor({ kind: "status" }, crypto.randomUUID());
+    if (activity.outcome.status !== "ok") throw new Error(activity.outcome.message);
+    expect(activity.outcome.deliveries.map((item) => item.status)).toEqual(
+      expect.arrayContaining(["queued", "needs_input", "working", "done"]),
+    );
+    expect(activity.outcome.watching).toEqual(expect.arrayContaining([tests, ui, notes]));
+    ids = { supervisor, tests, ui, notes };
   } finally {
     off();
     transport.disconnect();
   }
-  return () => rm(directory, { recursive: true, force: true });
+  return Object.assign(() => rm(directory, { recursive: true, force: true }), ids);
 }

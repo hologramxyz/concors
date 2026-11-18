@@ -17,6 +17,9 @@ test("capture desktop Supervisor activity, request and mentions", async ({ page 
     const activity = page.getByRole("complementary", { name: "Activity" });
     await expect(activity.getByRole("region", { name: "Needs you" })).toContainText("Game QA");
     await expect(activity.getByRole("region", { name: "Working" })).toContainText("HUD polish");
+    await expect(activity.getByRole("region", { name: "Queued" })).toContainText(
+      "Check touch targets after the HUD review",
+    );
     await expect(activity.getByRole("region", { name: "Finished" })).toContainText(
       "Release editor",
     );
@@ -36,6 +39,11 @@ test("capture desktop Supervisor activity, request and mentions", async ({ page 
       path: test.info().outputPath("desktop-approval.png"),
       animations: "disabled",
     });
+    await expect(activity.getByRole("button", { name: "Stop watching" })).toBeVisible();
+    await activity.getByRole("button", { name: "Stop watching" }).click();
+    await expect(activity.getByRole("button", { name: "Watch chat", exact: true })).toBeVisible();
+    await activity.getByRole("button", { name: "Watch chat", exact: true }).click();
+    await expect(activity.getByRole("button", { name: "Stop watching" })).toBeVisible();
     await activity.getByRole("button", { name: "Close activity" }).click();
     const composer = page.getByRole("textbox", { name: "Message Codex", exact: true });
     await composer.fill("Ask ");
@@ -50,7 +58,25 @@ test("capture desktop Supervisor activity, request and mentions", async ({ page 
     await picker.getByRole("textbox").fill("qa");
     await expect(picker.getByRole("button", { name: /HUD polish/ })).toHaveCount(0);
     await picker.getByRole("button", { name: /Game QA/ }).click();
-    await expect(composer).toHaveValue("Ask @Game QA (Star Catcher) ");
+    await expect(composer).toHaveValue("Ask ");
+    await expect(page.getByRole("button", { name: "Remove reference Game QA" })).toBeVisible();
+    await page.screenshot({
+      path: test.info().outputPath("desktop-reference.png"),
+      animations: "disabled",
+    });
+    await composer.fill("");
+    await page.getByRole("button", { name: "Remove reference Game QA" }).click();
+    await page.getByRole("button", { name: "Activity, 1 need you" }).click();
+    await activity.getByRole("button", { name: /Game QA/ }).click();
+    await activity.getByRole("button", { name: "Ask Supervisor" }).click();
+    await expect(composer).toHaveValue(/explain the pending approval/);
+    await expect(page.getByRole("button", { name: "Remove reference Game QA" })).toBeVisible();
+    await composer.press("Enter");
+    await expect(page.getByRole("log")).toContainText("The request is still waiting for you.");
+    await page.screenshot({
+      path: test.info().outputPath("desktop-advice.png"),
+      animations: "disabled",
+    });
     await page.getByRole("button", { name: "Activity, 1 need you" }).click();
     await activity.getByRole("button", { name: /Game QA/ }).click();
     await activity.getByRole("button", { name: "Open agent chat" }).click();
@@ -58,7 +84,10 @@ test("capture desktop Supervisor activity, request and mentions", async ({ page 
     await expect(page.getByRole("log").getByText("Please approve the test command")).toBeVisible();
     await page.getByRole("button", { name: "Allow once", exact: true }).click();
     await page.getByRole("button", { name: "Supervisor", exact: true }).click();
-    await page.getByRole("button", { name: "Activity", exact: true }).click();
+    await expect(page.getByRole("log")).toContainText(
+      "The fixture test suite finished. All checks passed.",
+    );
+    await page.getByRole("button", { name: /^Activity(, \d+ finished)?$/ }).click();
     await expect(activity.getByRole("region", { name: "Needs you" })).toHaveCount(0);
     await expect(activity.getByRole("region", { name: "Finished" })).toContainText("Game QA");
   } finally {

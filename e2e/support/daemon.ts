@@ -37,8 +37,8 @@ const server = createDaemonServer(loadDaemonConfig({ port, logLevel: "warn" }, {
   claudeHome: join(directory, "claude-home"),
   accountBackendFactory: (info) => new TestAccountBackend(info),
   gitHub: fixtureGitHub,
-  agentProviderFactory: (cwd, handler, provider) => {
-    const agent = new TestAgentProvider(handler, provider);
+  agentProviderFactory: (cwd, handler, provider, tools) => {
+    const agent = new TestAgentProvider(handler, provider, tools);
     agent.cwd = cwd;
     return agent;
   },

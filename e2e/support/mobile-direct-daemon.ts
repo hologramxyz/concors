@@ -31,8 +31,8 @@ const server = createDaemonServer(
   loadDaemonConfig({ port: mobileDirectPort, logLevel: "warn" }, {}),
   {
     workspacePath: join(directory, "workspace.sqlite"),
-    agentProviderFactory: (cwd, handler, provider) => {
-      const agent = new TestAgentProvider(handler, provider);
+    agentProviderFactory: (cwd, handler, provider, tools) => {
+      const agent = new TestAgentProvider(handler, provider, tools);
       agent.cwd = cwd;
       return agent;
     },

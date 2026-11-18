@@ -19,8 +19,14 @@ export class TestAgentProvider implements AgentProvider {
   private childReads = 0;
   private mcpSignedIn = false;
   readonly provider: AgentProviderId;
-  constructor(onRequest: Parameters<AgentProviderFactory>[1], provider: AgentProviderId = "codex") {
+  private readonly tools?: Parameters<AgentProviderFactory>[3] | undefined;
+  constructor(
+    onRequest: Parameters<AgentProviderFactory>[1],
+    provider: AgentProviderId = "codex",
+    tools?: Parameters<AgentProviderFactory>[3],
+  ) {
     this.provider = provider;
+    this.tools = tools;
     this.onRequest = onRequest;
   }
   async initialize(): Promise<void> {
@@ -39,6 +45,18 @@ export class TestAgentProvider implements AgentProvider {
     if (!this.closed)
       for (const listener of this.listeners)
         listener(method, { threadId: this.threadId, turnId: this.turnId, ...params });
+  }
+  private async supervisorControl(operation: Record<string, unknown>) {
+    const url = this.tools?.env?.CONCORS_CONTROL_URL;
+    const token = this.tools?.env?.CONCORS_CONTROL_TOKEN;
+    if (!url || !token) throw new Error("Fixture Supervisor tools unavailable");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ operation }),
+    });
+    if (!response.ok) throw new Error("Fixture Supervisor control failed");
+    return response.json();
   }
   async request(method: string, params: unknown = {}): Promise<unknown> {
     this.requests.push({ method, params });
@@ -221,6 +239,23 @@ export class TestAgentProvider implements AgentProvider {
       /^<concors-tools>[\s\S]*?<\/concors-tools>\n\n/,
       "",
     );
+    if (
+      this.tools?.env?.CONCORS_CONTROL_URL &&
+      text === "Check the game and the release notes. Tell me when anything needs my approval."
+    ) {
+      const turnId = this.turnId;
+      void this.supervisorActivityFixture(turnId).catch(() => this.finish("failed", turnId));
+      return { turn: { id: turnId, status: "inProgress", items: [] } };
+    }
+    if (
+      this.tools?.env?.CONCORS_CONTROL_URL &&
+      text.startsWith("Can you explain the pending approval") &&
+      text.includes("Concors references (resolve by ID):")
+    ) {
+      const turnId = this.turnId;
+      void this.supervisorApprovalFixture(text, turnId).catch(() => this.finish("failed", turnId));
+      return { turn: { id: turnId, status: "inProgress", items: [] } };
+    }
     if (text === "primitive-usage-limit") {
       // The account ran out: how Codex fails a turn when the plan's limit is reached.
       const turnId = this.turnId;
@@ -350,7 +385,9 @@ export class TestAgentProvider implements AgentProvider {
               status: "completed",
             },
           });
-          this.finish();
+          if (text === "Please approve the test command") {
+            this.reply(this.turnId, "The fixture test suite finished. All checks passed.");
+          } else this.finish();
         })
         .catch(() => undefined);
     } else if (text.includes("question")) {
@@ -577,17 +614,63 @@ export class TestAgentProvider implements AgentProvider {
             item: {
               id: `message-${this.turnId}`,
               type: "agentMessage",
-              text:
-                text ===
-                "Check the game and the release notes. Tell me when anything needs my approval."
-                  ? "**Game QA** needs approval to run `pnpm test` in Star Catcher. **HUD polish** is still working, and the **Release editor** has finished.\n\nI’ll keep watching and let you know when there’s an update."
-                  : "Hello from Codex",
+              text: "Hello from Codex",
             },
           });
           this.finish();
         }, 150);
     }
     return { turn: { id: this.turnId, status: "inProgress", items: [] } };
+  }
+  private async supervisorActivityFixture(turnId: string) {
+    const { sessions } = (await this.supervisorControl({ kind: "sessions" })) as {
+      sessions: { id: string; name: string }[];
+    };
+    const messages = [
+      { name: "Game QA", text: "Please approve the test command" },
+      { name: "HUD polish", text: "Review the HUD and hold for feedback" },
+      { name: "Release editor", text: "Check the release notes" },
+    ];
+    for (const task of messages) {
+      const target = sessions.find((session) => session.name === task.name);
+      if (!target) throw new Error("Fixture worker not found");
+      await this.supervisorControl({ kind: "send", sessionId: target.id, text: task.text });
+      if (task.name === "HUD polish")
+        await this.supervisorControl({
+          kind: "send",
+          sessionId: target.id,
+          text: "Check touch targets after the HUD review",
+        });
+    }
+    this.reply(
+      turnId,
+      "I sent work to **Game QA**, **HUD polish**, and the **Release editor**. I’ll bring blockers and results back here.",
+    );
+  }
+  private async supervisorApprovalFixture(text: string, turnId: string) {
+    const [, metadata] = text.split("\n\nConcors references (resolve by ID):\n");
+    const reference = metadata
+      ?.split("\n")
+      .map((line) => JSON.parse(line) as { id: string; pendingId?: string })
+      .find((value) => value.pendingId);
+    if (!reference) throw new Error("Fixture approval reference missing");
+    const report = (await this.supervisorControl({ kind: "read", sessionId: reference.id })) as {
+      pending: { id: string; action: string }[];
+    };
+    const pending = report.pending.find((item) => item.id === reference.pendingId);
+    this.reply(
+      turnId,
+      pending
+        ? "Game QA is asking to run the project’s test script. If you recognize the script and want that check, choose **Allow once** in the agent’s chat. The request is still waiting for you."
+        : "That approval is no longer pending. Open the agent’s chat for the current state.",
+    );
+  }
+  private reply(turnId: string, text: string) {
+    if (this.turnId !== turnId || this.closed) return;
+    this.emit("item/completed", {
+      item: { id: `message-${turnId}`, type: "agentMessage", text },
+    });
+    this.finish("completed", turnId);
   }
   finish(status = "completed", turnId = this.turnId) {
     this.emit("turn/completed", {

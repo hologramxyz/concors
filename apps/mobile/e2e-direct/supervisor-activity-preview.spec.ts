@@ -40,7 +40,12 @@ test("capture mobile Supervisor activity drawer and mentions", async ({ page }) 
       animations: "disabled",
     });
     await picker.getByRole("button", { name: /Game QA/ }).click();
-    await expect(composer).toHaveValue("Ask @Game QA (Star Catcher) ");
+    await expect(composer).toHaveValue("Ask ");
+    await expect(ui.getByRole("button", { name: "Remove reference Game QA" })).toBeVisible();
+    await page.screenshot({
+      path: test.info().outputPath("mobile-reference.png"),
+      animations: "disabled",
+    });
   } finally {
     await cleanup();
   }
