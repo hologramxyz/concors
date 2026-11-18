@@ -1,3 +1,5 @@
+import { splitSupervisorReferences } from "@/supervisor/reference-text";
+import { MAX_SUPERVISOR_REFERENCES, withSupervisorReferences } from "@/supervisor/reference-text";
 import { SupervisorReferencePicker } from "@/supervisor/references";
 import { SupervisorReferences } from "@/supervisor/reference-context";
 import { AgentDraftScopeContext, useAgentDraft, type InputDraft as Draft } from "./draft";
@@ -141,6 +143,8 @@ export function AgentComposer({
   const {
     draft,
     setDraft,
+    references: selectedReferences,
+    setReferences,
     attachments,
     setAttachments,
     queue,
@@ -301,6 +305,23 @@ export function AgentComposer({
     }
   }, [dictation.active, visible, connected, busy, uncertain, agent.threadId]);
   useComposerMotion(form, compact && !native, expanded);
+  const mentionPicker = references.length > 0 && (
+    <SupervisorReferencePicker
+      references={references}
+      disabled={!connected || busy || uncertain || !!deferred}
+      onSelect={(reference) => {
+        if (
+          selectedReferences?.some((ref) => ref.kind === reference.kind && ref.id === reference.id)
+        )
+          return;
+        if ((selectedReferences?.length ?? 0) >= MAX_SUPERVISOR_REFERENCES) {
+          setError("Add up to eight references per message.");
+          return;
+        }
+        setReferences((refs) => [...refs, reference]);
+      }}
+    />
+  );
   const configure = async (next: AgentSettings) => {
     if (!connection || !advanced) return;
     setConfiguring(true);
@@ -395,12 +416,14 @@ export function AgentComposer({
         queueMessage: (value) => {
           setQueue((q) => [...q, value]);
           setDraft("");
+          setReferences([]);
           setAttachments([]);
         },
         submitMessage: () => send(input, steering),
         clearDraft: () => {
           if (!queued) {
             setDraft("");
+            setReferences([]);
             setAttachments([]);
           }
         },
@@ -433,8 +456,16 @@ export function AgentComposer({
       setDeferred({ alternate });
       return Promise.resolve(undefined);
     }
+    const message =
+      agent.supervisor && input.message.trim() && !input.message.trimStart().startsWith("/")
+        ? withSupervisorReferences(input.message, selectedReferences ?? [])
+        : input.message;
+    if (message.length > 16000) {
+      setError("Shorten your message or remove a reference before sending.");
+      return Promise.resolve(undefined);
+    }
     return submit(
-      input,
+      { ...input, message },
       false,
       active &&
         (followUps === "steer") !== alternate &&
@@ -1064,7 +1095,8 @@ export function AgentComposer({
     >
       <span className="text-muted-foreground">Queued</span>
       <span className="min-w-0 flex-1 truncate">
-        {entry.text || entry.attachments.map((a) => a.name).join(", ")}
+        {splitSupervisorReferences(entry.text).text ||
+          entry.attachments.map((a) => a.name).join(", ")}
       </span>
       {compact && <QueuePosition index={i} count={all.length} />}
       {queueSteer && canSteer(entry.text, entry.attachments.length) && (
@@ -1146,7 +1178,8 @@ export function AgentComposer({
               >
                 <span className="text-muted-foreground">Queued</span>
                 <span className="min-w-0 flex-1 truncate">
-                  {entry.message || entry.attachments.map((a) => a.name).join(", ")}
+                  {splitSupervisorReferences(entry.message).text ||
+                    entry.attachments.map((a) => a.name).join(", ")}
                 </span>
                 {compact && <QueuePosition index={i} count={queue.length} />}
                 {!active && !busy && !uncertain && (
@@ -1307,6 +1340,33 @@ export function AgentComposer({
               ))}
             </div>
           )}
+          {((selectedReferences?.length ?? 0) > 0 || (native && mentionPicker)) && (
+            <div
+              aria-label="Message references"
+              className="flex flex-wrap items-center gap-1.5 px-2 pb-2"
+              data-composer-attachments
+            >
+              {native && mentionPicker}
+              {selectedReferences?.map((ref) => (
+                <button
+                  type="button"
+                  key={ref.kind + ref.id}
+                  aria-label={`Remove reference ${ref.label}`}
+                  title={ref.workspace ? `${ref.workspace} / ${ref.label}` : ref.label}
+                  disabled={busy || uncertain || !!deferred}
+                  onClick={() =>
+                    setReferences((refs) =>
+                      refs.filter((entry) => entry.kind !== ref.kind || entry.id !== ref.id),
+                    )
+                  }
+                  className="flex max-w-full items-center gap-1 rounded-md border bg-muted px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <span className="truncate">@{ref.label}</span>
+                  <span aria-hidden>×</span>
+                </button>
+              ))}
+            </div>
+          )}
           {dictation.active ? (
             <DictationRecording
               state={dictation}
@@ -1406,7 +1466,10 @@ export function AgentComposer({
                       e.preventDefault();
                       setRecall(step.recall);
                       // Replacing a text box's value puts the caret at its end, as a shell does.
-                      setDraft(step.draft);
+                      const recalled = splitSupervisorReferences(step.draft);
+                      setDraft(recalled.text);
+                      if (agent.supervisor && recalled.references.length)
+                        setReferences(recalled.references);
                       return;
                     }
                   }
@@ -1481,18 +1544,7 @@ export function AgentComposer({
                       <Plus className="size-4" />
                     </button>
                   </ControlTooltip>
-                  {references.length > 0 && (
-                    <SupervisorReferencePicker
-                      references={references}
-                      disabled={!connected || busy || uncertain || !!deferred}
-                      onSelect={(reference) =>
-                        setDraft(
-                          (text) =>
-                            `${text.trimEnd()}${text.trim() ? " " : ""}@${reference.label}${reference.workspace ? ` (${reference.workspace})` : ""} `,
-                        )
-                      }
-                    />
-                  )}
+                  {mentionPicker}
                   {compact && clipboardImage && (
                     <button
                       type="button"

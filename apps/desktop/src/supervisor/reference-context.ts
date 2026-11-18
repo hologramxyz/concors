@@ -1,12 +1,8 @@
 import { createContext } from "react";
 import type { AgentInfo } from "@concors/protocol";
 
-export interface SupervisorReference {
-  id: string;
-  kind: "Workspace" | "Agent";
-  label: string;
-  workspace?: string;
-}
+import type { SupervisorReference } from "./reference-text";
+export type { SupervisorReference } from "./reference-text";
 
 export const SupervisorReferences = createContext<readonly SupervisorReference[]>([]);
 

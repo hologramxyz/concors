@@ -1,5 +1,10 @@
 import { useContext, useEffect, useState } from "react";
-import { SUPERVISOR_CAPABILITY, type WorkspaceSnapshot } from "@concors/protocol";
+import {
+  SUPERVISOR_CAPABILITY,
+  type AgentInfo,
+  type AgentPending,
+  type WorkspaceSnapshot,
+} from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { ChatPane } from "@/agents/chat";
@@ -7,6 +12,8 @@ import { AgentStartedContext } from "@/agents/context";
 import { Button } from "@/components/ui/button";
 import { WorkspaceFileLinks } from "@/files/provider";
 import { SessionLinkContext } from "./session-link";
+import { AgentDraftScopeContext, useAgentDraft } from "@/agents/draft";
+import { MAX_SUPERVISOR_REFERENCES } from "./reference-text";
 import { useAgents } from "@/agents/context";
 import { SupervisorActivity } from "./activity";
 import {
@@ -33,15 +40,16 @@ export function SupervisorPage({
   /** Brings up a workspace, where a file the Supervisor links to opens. */
   onOpenProject: (projectId: string) => void;
 }) {
-  const projects = workspace?.projects ?? [];
+  const projects = [...(workspace?.projects ?? []), ...(workspace?.closedProjects ?? [])];
   const names = new Map(projects.map((project) => [project.id, project.name]));
+  const agents = useAgents();
   const references: SupervisorReference[] = [
     ...projects.map((project) => ({
       id: project.id,
       kind: "Workspace" as const,
       label: project.name,
     })),
-    ...useAgents().flatMap((agent) => {
+    ...agents.flatMap((agent) => {
       const label = names.get(agent.projectId);
       return !agent.supervisor && label
         ? [
@@ -82,6 +90,39 @@ export function SupervisorPage({
   const project = workspace?.supervisor,
     tab = project?.tabs[0],
     pane = supervisorPane(workspace);
+  const supervisorId = pane?.sessionId ?? null;
+  const agent = agents.find((value) => value.id === supervisorId);
+  const draft = useAgentDraft(
+    useContext(AgentDraftScopeContext) ?? connection,
+    supervisorId ?? "",
+    workspace?.machineId,
+  );
+  const canAsk = !!agent?.threadId && connected && !draft.busy && !draft.uncertain;
+  const ask = (worker: AgentInfo, pending: AgentPending, workplace: string) => {
+    const reference = {
+      id: worker.id,
+      kind: "Agent" as const,
+      label: supervisorAgentName(worker),
+      workspace: workplace,
+      pendingId: pending.id,
+    };
+    draft.setReferences((refs) => [
+      ...refs
+        .filter((ref) => ref.kind !== reference.kind || ref.id !== reference.id)
+        .slice(0, MAX_SUPERVISOR_REFERENCES - 1),
+      reference,
+    ]);
+    draft.setDraft((text) => {
+      const question =
+        "Can you explain the pending approval for this agent and recommend what I should do?";
+      return text.trim()
+        ? `${text.trimEnd()}
+
+${question}`
+        : question;
+    });
+    onCloseActivity();
+  };
   return (
     <AgentStartedContext value={undefined}>
       <SessionLinkContext value={onOpenAgent}>
@@ -125,6 +166,9 @@ export function SupervisorPage({
               {activityOpen && (
                 <SupervisorActivity
                   workspace={workspace}
+                  supervisorId={supervisorId}
+                  canAsk={canAsk}
+                  onAsk={ask}
                   compact={compact}
                   onClose={onCloseActivity}
                   onOpenAgent={onOpenAgent}
