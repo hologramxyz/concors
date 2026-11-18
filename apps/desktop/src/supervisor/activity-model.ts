@@ -16,8 +16,10 @@ export const DONE_LIMIT = 8;
 export interface ActivityRow {
   agent: AgentInfo;
   group: ActivityGroup;
-  /** The one line under the name: what it asks, what it was asked, or how it ended. */
+  /** The one line under the name: what it asks, what it is doing, or how it ended. */
   detail: string;
+  /** Follow-ups waiting behind the current turn, shown beside the detail rather than in it. */
+  queued: number;
   /** A finish or failure the user has not opened yet, marked as the sidebar marks it. */
   unseen: boolean;
   updatedAt: string;
@@ -29,10 +31,14 @@ export function activityRows(
   agents: readonly AgentInfo[],
   deliveries: readonly SupervisorDelivery[],
 ): ActivityRow[] {
-  // Deliveries arrive newest first; the latest one says what the agent was last asked.
+  // Deliveries arrive newest first. The one in progress says what the agent is doing; queued ones
+  // are only counted. Without one in progress, the latest says what it was last asked.
   const asked = new Map<string, SupervisorDelivery>();
-  for (const delivery of deliveries)
-    if (!asked.has(delivery.sessionId)) asked.set(delivery.sessionId, delivery);
+  const current = (d: SupervisorDelivery) => d.status === "working" || d.status === "needs_input";
+  for (const delivery of deliveries) {
+    const known = asked.get(delivery.sessionId);
+    if (!known || (!current(known) && current(delivery))) asked.set(delivery.sessionId, delivery);
+  }
   const rows = agents.flatMap<ActivityRow>((agent) => {
     if (agent.supervisor) return [];
     const state = chatState(agent);
@@ -57,7 +63,7 @@ export function activityRows(
             ? firstLine(agent.error ?? "") || "Failed"
             : task
         : group === "Working"
-          ? [task, queued ? `${queued} queued` : ""].filter(Boolean).join(" · ")
+          ? task || (queued ? "" : "Working")
           : agent.status === "failed" || agent.status === "interrupted"
             ? [agent.status === "failed" ? "Failed" : "Stopped", task].filter(Boolean).join(" · ")
             : task || "Finished";
@@ -66,6 +72,7 @@ export function activityRows(
         agent,
         group,
         detail: firstLine(detail),
+        queued,
         unseen: state === "done",
         updatedAt: agent.updatedAt,
       },

@@ -188,7 +188,7 @@ export function SupervisorActivity({
           <X />
         </Button>
       </div>
-      <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-1.5 pb-3">{list}</div>
+      <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-1.5 pt-1 pb-3">{list}</div>
     </aside>
   );
 }
@@ -233,8 +233,11 @@ function ActivityItem({
               {shortAge(row.updatedAt, now)}
             </span>
           </span>
-          <span className="block truncate text-xs text-muted-foreground">
-            {[workspace, row.detail].filter(Boolean).join(" · ")}
+          <span className="flex min-w-0 gap-1 text-xs text-muted-foreground">
+            <span className="min-w-0 truncate">
+              {[workspace, row.detail].filter(Boolean).join(" · ")}
+            </span>
+            {row.queued > 0 && <span className="shrink-0">· {row.queued} queued</span>}
           </span>
         </span>
       </button>
@@ -243,7 +246,7 @@ function ActivityItem({
           type="button"
           disabled={!canAsk}
           onClick={onAsk}
-          className="mb-1 ml-[30px] flex items-center gap-1 rounded px-0.5 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          className="mb-1 ml-7 flex items-center gap-1 rounded px-0.5 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
         >
           <MessageCircle className="size-3" />
           Ask Supervisor

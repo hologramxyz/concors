@@ -45,7 +45,14 @@ it("lists each agent once, under what it needs from you, with one line of detail
   const hud = agent("HUD polish", {
     status: "working",
     turnId: "turn-2",
-    queue: [{ id: id(), text: "Check touch targets", attachments: [] }] as AgentInfo["queue"],
+    queue: [
+      {
+        id: id(),
+        text: "Check touch targets",
+        attachments: [],
+        queuedAt: "2026-11-18T10:00:00.000Z",
+      },
+    ],
   });
   const notes = agent("Release editor", { status: "done" });
   const idle = agent("Scratch");
@@ -57,10 +64,10 @@ it("lists each agent once, under what it needs from you, with one line of detail
       delivered(notes, "Check the release notes\nThen summarize", "done"),
     ],
   );
-  expect(rows.map((row) => [row.agent.name, row.group, row.detail])).toEqual([
-    ["Game QA", "Needs you", "pnpm test"],
-    ["HUD polish", "Working", "Check touch targets · 1 queued"],
-    ["Release editor", "Done", "Check the release notes"],
+  expect(rows.map((row) => [row.agent.name, row.group, row.detail, row.queued])).toEqual([
+    ["Game QA", "Needs you", "pnpm test", 0],
+    ["HUD polish", "Working", "Review the HUD", 1],
+    ["Release editor", "Done", "Check the release notes", 0],
   ]);
 });
 
