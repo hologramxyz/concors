@@ -31,7 +31,7 @@ import {
 import { resolveTerminalCommand } from "../../terminal/profiles.ts";
 import { withPath } from "../../terminal/environment.ts";
 import { killTree } from "../../host/kill-tree.ts";
-import { shareClaudeHome } from "./claude-home.ts";
+import { restoreClaudeTranscript, shareClaudeHome } from "./claude-home.ts";
 import type { launch } from "./launch.ts";
 import { ProviderVersions, type VersionTarget } from "./versions.ts";
 
@@ -282,6 +282,38 @@ export class ProviderRegistry {
   private shareClaudeHome(home: string | undefined) {
     if (home && dirname(home) === join(dirname(this.directory), "accounts", "claude"))
       shareClaudeHome(home, this.claudeHome);
+  }
+  /**
+   * Brings a Claude conversation into the directory its chat runs under when it is only in
+   * another Claude directory on this machine: the machine's own, another account's, or a history
+   * set aside while two were merged. Best effort; a conversation found nowhere is left to the
+   * caller, which starts a new session.
+   */
+  restoreClaudeConversation(providerId: string, threadId: string | null | undefined): void {
+    if (!threadId) return;
+    const config = this.config(providerId);
+    if (config.engine !== "claude") return;
+    const current =
+      this.credentialDir(config) ?? config.env?.["CLAUDE_CONFIG_DIR"] ?? this.claudeHome;
+    const homes = new Set<string>([this.claudeHome]);
+    for (const candidate of this.configs())
+      if (candidate.engine === "claude") {
+        const home = this.credentialDir(candidate) ?? candidate.env?.["CLAUDE_CONFIG_DIR"];
+        if (home) homes.add(home);
+        if (candidate.subscription) homes.add(this.credentialHome(candidate));
+      }
+    // Accounts removed since keep their history in their directories.
+    const accounts = join(dirname(this.directory), "accounts", "claude");
+    try {
+      for (const name of readdirSync(accounts)) homes.add(join(accounts, name));
+    } catch {
+      /* No accounts yet. */
+    }
+    try {
+      restoreClaudeTranscript(current, [...homes], threadId);
+    } catch {
+      /* Left to the caller's recovery. */
+    }
   }
   /** The credential home this configuration's conversations effectively run under. */
   credentialDir(config: ProviderConfig): string | undefined {

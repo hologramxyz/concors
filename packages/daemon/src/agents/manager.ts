@@ -528,6 +528,8 @@ export class AgentManager {
     const info = this.#store.agent(id);
     const tools = this.tools?.(info);
     const conversationEnv = this.registry.conversationEnvironment(info.provider, info.threadId);
+    // A Claude conversation kept under another account's directory is brought into this one.
+    this.registry.restoreClaudeConversation(info.provider, info.threadId);
     const provider = this.#factory(
       info.directory,
       (method, params, requestId) => this.approval(id, method, params, requestId),
