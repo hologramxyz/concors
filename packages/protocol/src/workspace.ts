@@ -9,6 +9,11 @@ import {
 export const CHAT_MOVE_CAPABILITY = "chat-move";
 /** The daemon accepts `pane.transfer`, which moves a pane into another tab of its workspace. */
 export const PANE_TRANSFER_CAPABILITY = "pane-transfer";
+/**
+ * The daemon's `pane.transfer` also takes `targetProjectId` and `newTab`: a chat pane moves into a
+ * tab of another workspace, or out into a tab of its own in any workspace.
+ */
+export const PANE_TRANSFER_WORKSPACE_CAPABILITY = "pane-transfer-workspace";
 /** The daemon accepts `pane.rename` and keeps pane names. */
 export const PANE_RENAME_CAPABILITY = "pane-rename";
 /** The daemon accepts `project.rename` and stops a renamed workspace following its shell's folder. */
@@ -168,8 +173,12 @@ export const WorkspaceOperationSchema = z.discriminatedUnion("kind", [
     kind: z.literal("pane.transfer"),
     ...TabTarget,
     paneId: Id,
+    /** The tab it joins, or with `newTab` the ID of the tab it gets to itself. */
     targetTabId: Id,
     splitId: Id,
+    /** Another workspace to move it to; only chats can leave theirs. */
+    targetProjectId: Id.optional(),
+    newTab: z.boolean().optional(),
   }),
   z.object({
     kind: z.literal("pane.resize"),

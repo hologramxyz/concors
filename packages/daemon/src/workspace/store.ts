@@ -313,6 +313,18 @@ export class WorkspaceStore {
             ? snapshot.projects.find((project) => project.id === op.projectId)
             : undefined;
         if (opened) moved = this.#adoptChats(snapshot, opened);
+        if (
+          op.kind === "pane.transfer" &&
+          op.targetProjectId &&
+          op.targetProjectId !== op.projectId
+        ) {
+          const pane = current.projects
+            .find((project) => project.id === op.projectId)
+            ?.tabs.find((item) => item.id === op.tabId)
+            ?.nodes.find((node) => node.id === op.paneId);
+          if (pane?.kind === "pane" && pane.sessionId)
+            moved = this.#moveChats([pane.sessionId], op.targetProjectId);
+        }
         if (op.kind === "tab.transfer") {
           const tab = current.projects
             .find((project) => project.id === op.projectId)

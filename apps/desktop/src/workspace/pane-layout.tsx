@@ -16,6 +16,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -37,11 +38,22 @@ import { AgentPaneIcon, AgentStatusIcon } from "@/agents/activity";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { isLiveTerminalAgent, terminalAgentStatus } from "@/agents/agent-status";
 import { useAgents } from "@/agents/context";
-import { ArrowRightLeft, Columns2, Rows2, Ellipsis, Pencil, Plug, Terminal, X } from "lucide-react";
+import {
+  ArrowRightLeft,
+  Columns2,
+  Rows2,
+  Ellipsis,
+  FolderInput,
+  Pencil,
+  Plug,
+  Terminal,
+  X,
+} from "lucide-react";
 import { McpStatusDialog } from "@/agents/mcp-status-dialog";
 import {
   PANE_RENAME_CAPABILITY,
   PANE_TRANSFER_CAPABILITY,
+  PANE_TRANSFER_WORKSPACE_CAPABILITY,
   type LayoutNode,
   type WorkspaceOperation,
   type WorkspaceProject,
@@ -56,6 +68,8 @@ import {
   type PaneDropTarget,
 } from "./pane-drop";
 import { typingOutsidePanes } from "./typing-outside-panes";
+import { paneTransfer, sidebarTransferTarget, type PaneTransferTarget } from "./pane-transfer";
+import { useSchedules } from "@/schedules/use-schedules";
 import { defaultPaneTitle, PROFILE_LABELS, tabTitle } from "./tab-title";
 
 interface Props {
@@ -81,6 +95,9 @@ export function PaneLayout(props: Props) {
   const [draggedPaneId, setDraggedPaneId] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ target: PaneDropTarget; area: PaneArea } | null>(null);
   const stopDrag = useRef<(() => void) | null>(null);
+  const { schedules } = useSchedules();
+  // Every schedule, enabled or not: each is tied to its chat's workspace, so a chat with one stays.
+  const scheduledChats = new Set(schedules?.map((schedule) => schedule.sessionId));
   // The ratio a dropped pane's new split is about to get, shown from the moment the split arrives:
   // the move and its resize are two commands, and between them the pane would jump to half.
   const [arriving, setArriving] = useState<{ splitId: string; ratio: number } | null>(null);
@@ -351,6 +368,7 @@ export function PaneLayout(props: Props) {
         {...props}
         node={node}
         dragged={draggedPaneId === id}
+        scheduled={scheduledChats.has(node.sessionId ?? "")}
         onHeaderPress={(event) => startDrag(event, id)}
       />
     );
@@ -369,12 +387,25 @@ export function PaneLayout(props: Props) {
     let plan: PaneDropPlan | null = null;
     // Another tab in the bar, where the pane would join that tab instead of moving within this one.
     let overTab: HTMLElement | null = null;
-    const hoverTab = (element: HTMLElement | null) => {
-      if (element === overTab) return;
-      overTab?.removeAttribute("data-pane-drop-tab");
-      element?.setAttribute("data-pane-drop-tab", "");
-      overTab = element;
+    // A tab or workspace in the sidebar, and the move that dropping there would make.
+    let sidebarMove: WorkspaceOperation | null = null;
+    let highlighted: { element: HTMLElement; attribute: string } | null = null;
+    const highlight = (element: HTMLElement | null, attribute = "data-pane-drop-tab") => {
+      if (element === highlighted?.element && attribute === highlighted.attribute) return;
+      highlighted?.element.removeAttribute(highlighted.attribute);
+      element?.setAttribute(attribute, "");
+      highlighted = element && { element, attribute };
     };
+    const hoverTab = (element: HTMLElement | null) => {
+      overTab = element;
+      highlight(element);
+    };
+    const pane = tab.nodes.find((node) => node.id === paneId);
+    const acrossWorkspaces =
+      connection?.state.status === "ready" &&
+      !!connection.state.daemon.capabilities?.includes(PANE_TRANSFER_WORKSPACE_CAPABILITY);
+    const transferIds = { splitId: crypto.randomUUID(), tabId: crypto.randomUUID() };
+
     const canTransfer =
       connection?.state.status === "ready" &&
       !!connection.state.daemon.capabilities?.includes(PANE_TRANSFER_CAPABILITY);
@@ -389,18 +420,29 @@ export function PaneLayout(props: Props) {
         document.documentElement.dataset["paneDragging"] = "";
         setDraggedPaneId(paneId);
       }
-      const hoveredTab = canTransfer
-        ? document
-            .elementFromPoint(moved.clientX, moved.clientY)
-            ?.closest<HTMLElement>("[data-tab-id]")
-        : null;
+      const under = document.elementFromPoint(moved.clientX, moved.clientY);
+      const hoveredTab = canTransfer ? under?.closest<HTMLElement>("[data-tab-id]") : null;
       const otherTab =
         hoveredTab?.dataset["tabId"] !== tab.id &&
         project.tabs.some((item) => item.id === hoveredTab?.dataset["tabId"])
           ? (hoveredTab ?? null)
           : null;
-      hoverTab(otherTab);
-      if (otherTab) {
+      // The sidebar: another tab of any workspace to join, or a workspace to open a tab in.
+      const sidebar =
+        !otherTab && canTransfer && pane?.kind === "pane" ? sidebarTransferTarget(under) : null;
+      sidebarMove =
+        sidebar && pane?.kind === "pane"
+          ? paneTransfer({ project, tab, pane }, sidebar.target, {
+              acrossWorkspaces,
+              scheduled: scheduledChats.has(pane.sessionId ?? ""),
+              ids: transferIds,
+            })
+          : null;
+      if (sidebarMove && sidebar) {
+        overTab = null;
+        highlight(sidebar.element, "data-drop-target");
+      } else hoverTab(otherTab);
+      if (otherTab || sidebarMove) {
         target = null;
         plan = null;
         setDrop(null);
@@ -430,7 +472,12 @@ export function PaneLayout(props: Props) {
       if (released.pointerId !== pointerId) return;
       const dropped = plan;
       const targetTabId = overTab?.dataset["tabId"];
+      const transfer = sidebarMove;
       stop();
+      if (transfer) {
+        onCommand(transfer);
+        return;
+      }
       if (targetTabId) {
         onCommand({
           kind: "pane.transfer",
@@ -464,6 +511,7 @@ export function PaneLayout(props: Props) {
       window.removeEventListener("blur", stop);
       if (header.hasPointerCapture(pointerId)) header.releasePointerCapture(pointerId);
       hoverTab(null);
+      highlight(null);
       delete document.documentElement.dataset["paneDragging"];
       stopDrag.current = null;
       setDraggedPaneId(null);
@@ -512,10 +560,13 @@ function Pane({
   canEdit,
   onCommand,
   dragged,
+  scheduled,
   onHeaderPress,
 }: Props & {
   node: Extract<LayoutNode, { kind: "pane" }>;
   dragged: boolean;
+  /** A schedule runs prompts in this pane's chat, which keeps it in its workspace. */
+  scheduled: boolean;
   onHeaderPress: (event: ReactPointerEvent<HTMLElement>) => void;
 }) {
   const connection = useContext(TerminalConnectionContext);
@@ -535,8 +586,27 @@ function Pane({
     connection?.state.status === "ready" &&
     !!connection.state.daemon.capabilities?.includes(PANE_TRANSFER_CAPABILITY) &&
     otherTabs.length > 0;
-  // A lone pane has nowhere to go within its tab, but it can still join another.
-  const movable = canDrag && (tab.nodes.length > 1 || canTransfer) && renaming === null;
+  const acrossWorkspaces =
+    canEdit &&
+    connection?.state.status === "ready" &&
+    !!connection.state.daemon.capabilities?.includes(PANE_TRANSFER_WORKSPACE_CAPABILITY);
+  // Where the menu can send it, by the same rules as dropping it on the sidebar.
+  const transfer = (destination: PaneTransferTarget) =>
+    paneTransfer({ project, tab, pane: node }, destination, {
+      acrossWorkspaces,
+      scheduled,
+      ids: { splitId: crypto.randomUUID(), tabId: crypto.randomUUID() },
+    });
+  const ownTab = !!transfer({ projectId: project.id });
+  // Asked of a workspace that is not this one: whether it may leave at all.
+  const otherWorkspaces = transfer({ projectId: "elsewhere" })
+    ? (connection?.workspace?.projects ?? []).filter((item) => item.id !== project.id)
+    : [];
+  // A lone pane has nowhere to go within its tab, but it can still join another, or leave.
+  const movable =
+    canDrag &&
+    (tab.nodes.length > 1 || canTransfer || otherWorkspaces.length > 0) &&
+    renaming === null;
   const renameRef = useRef<string | null>(null);
   const renameInput = useRef<HTMLInputElement>(null);
   const setRename = (value: string | null) => {
@@ -672,13 +742,24 @@ function Pane({
                 <Plug /> <span className="whitespace-nowrap">MCP servers…</span>
               </DropdownMenuItem>
             )}
-            {canTransfer && (
+            {(canTransfer || ownTab) && (
               // Dragging has no keyboard or touch equivalent; this is the same move.
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>
                   <ArrowRightLeft /> <span className="whitespace-nowrap">Move to tab</span>
                 </DropdownMenuSubTrigger>
                 <DropdownMenuSubContent className="max-h-80 max-w-72 overflow-y-auto">
+                  {ownTab && (
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        const move = transfer({ projectId: project.id });
+                        if (move) onCommand(move);
+                      }}
+                    >
+                      New tab
+                    </DropdownMenuItem>
+                  )}
+                  {ownTab && otherTabs.length > 0 && <DropdownMenuSeparator />}
                   {otherTabs.map((item) => (
                     <DropdownMenuItem
                       key={item.id}
@@ -693,6 +774,39 @@ function Pane({
                     >
                       <span className="truncate">{tabTitle(item, agents, terminals)}</span>
                     </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            )}
+            {otherWorkspaces.length > 0 && (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <FolderInput /> <span className="whitespace-nowrap">Move to workspace</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="max-h-80 max-w-72 overflow-y-auto">
+                  {otherWorkspaces.map((workspace, index) => (
+                    // One level, grouped by workspace: a submenu inside a submenu is hard to hit.
+                    <DropdownMenuGroup key={workspace.id} aria-label={workspace.name}>
+                      {index > 0 && <DropdownMenuSeparator />}
+                      <DropdownMenuLabel className="truncate">{workspace.name}</DropdownMenuLabel>
+                      {[
+                        { id: undefined, label: "New tab" },
+                        ...workspace.tabs.map((item) => ({
+                          id: item.id,
+                          label: tabTitle(item, agents, terminals),
+                        })),
+                      ].map((item) => (
+                        <DropdownMenuItem
+                          key={item.id ?? "new"}
+                          onSelect={() => {
+                            const move = transfer({ projectId: workspace.id, tabId: item.id });
+                            if (move) onCommand(move);
+                          }}
+                        >
+                          <span className="truncate">{item.label}</span>
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuGroup>
                   ))}
                 </DropdownMenuSubContent>
               </DropdownMenuSub>

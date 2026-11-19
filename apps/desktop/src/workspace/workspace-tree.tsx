@@ -10,6 +10,7 @@ import {
   isDefaultTabName,
   CHAT_MOVE_CAPABILITY,
   PANE_RENAME_CAPABILITY,
+  PANE_TRANSFER_WORKSPACE_CAPABILITY,
   PROJECT_CLOSE_CAPABILITY,
   type AgentInfo,
   type WorkspaceOperation,
@@ -44,6 +45,7 @@ import {
   type SidebarRow,
 } from "./sidebar-rows";
 import { defaultPaneTitle, mainPane } from "./tab-title";
+import { paneTransfer } from "./pane-transfer";
 
 export interface WorkspaceTreeProps {
   workspace: WorkspaceSnapshot | null;
@@ -249,6 +251,31 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
       });
     };
   };
+  /**
+   * Puts a row's chat into another tab, of its workspace or another, beside that tab's panes. Only
+   * a tab holding one chat can: dropping a split on a tab would have to merge two layouts.
+   */
+  const joinRow = (project: WorkspaceProject, row: SidebarRow) => {
+    if (!props.canEdit || row.kind !== "tab") return undefined;
+    const tab = project.tabs.find((item) => item.id === row.tabId);
+    const pane = tab?.nodes.length === 1 ? tab.nodes[0] : undefined;
+    // Chats only: a terminal's row stays put, as it cannot leave its workspace either.
+    if (!tab || pane?.kind !== "pane" || pane.profile !== "chat") return undefined;
+    const acrossWorkspaces =
+      connection?.state.status === "ready" &&
+      !!connection.state.daemon.capabilities?.includes(PANE_TRANSFER_WORKSPACE_CAPABILITY);
+    return (target: { projectId: string; tabId: string }) => {
+      const move = paneTransfer({ project, tab, pane }, target, {
+        acrossWorkspaces,
+        scheduled: !!hasSchedule(pane.sessionId ?? undefined),
+        ids: { splitId: crypto.randomUUID(), tabId: crypto.randomUUID() },
+      });
+      if (!move) return false;
+      setWorkspaceExpanded(target.projectId, true);
+      props.onCommand(move);
+      return true;
+    };
+  };
   // The row being dragged, and the workspace it would land in if dropped now.
   const moveTargets = (projectId: string) =>
     (props.workspace?.projects ?? [])
@@ -256,15 +283,38 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
       .map(({ id, name }) => ({ id, name }));
   const [moving, setMoving] = useState<{
     projectId: string;
-    move: (projectId: string) => void;
+    tabId: string | undefined;
+    move: ((projectId: string) => void) | undefined;
+    join: ((target: { projectId: string; tabId: string }) => boolean) | undefined;
   } | null>(null);
   const [dropWorkspace, setDropWorkspace] = useState<string | null>(null);
+  // A tab row the dragged row would join instead; highlighted directly, like the pane drag does.
+  const dropTab = useRef<{ element: HTMLElement; projectId: string; tabId: string } | null>(null);
+  const setDropTab = (next: typeof dropTab.current) => {
+    if (next?.element === dropTab.current?.element) return;
+    dropTab.current?.element.removeAttribute("data-drop-target");
+    next?.element.setAttribute("data-drop-target", "");
+    dropTab.current = next;
+  };
   const endMove = () => {
     setMoving(null);
     setDropWorkspace(null);
+    setDropTab(null);
   };
   const overWorkspace = (event: ReactDragEvent<HTMLUListElement>) => {
     if (!moving) return;
+    const row = (event.target as Element).closest<HTMLElement>("[data-drop-tab]");
+    const rowTab = row?.dataset["dropTab"];
+    const rowProject = row?.closest<HTMLElement>("[data-drop-workspace]")?.dataset["dropWorkspace"];
+    if (moving.join && row && rowTab && rowProject && rowTab !== moving.tabId) {
+      setDropTab({ element: row, projectId: rowProject, tabId: rowTab });
+      setDropWorkspace(null);
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      return;
+    }
+    setDropTab(null);
+    if (!moving.move) return;
     const element = (event.target as Element).closest<HTMLElement>("[data-drop-workspace]");
     const id = element?.dataset["dropWorkspace"];
     const target = id && id !== moving.projectId ? id : null;
@@ -303,13 +353,20 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
           onDragEnter={overWorkspace}
           onDragOver={overWorkspace}
           onDragLeave={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
               setDropWorkspace(null);
+              setDropTab(null);
+            }
           }}
           onDrop={(event) => {
-            if (!moving || !dropWorkspace) return;
-            event.preventDefault();
-            moving.move(dropWorkspace);
+            const tab = dropTab.current;
+            if (moving?.join && tab) {
+              event.preventDefault();
+              moving.join(tab);
+            } else if (moving?.move && dropWorkspace) {
+              event.preventDefault();
+              moving.move(dropWorkspace);
+            }
             endMove();
           }}
         >
@@ -366,14 +423,24 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                       <ul aria-label={`${project.name} tabs`} className="space-y-0.5">
                         {listed.map((row) => {
                           const move = moveRow(project, row);
+                          const join = joinRow(project, row);
                           return (
                             <SidebarTabRow
                               key={row.key}
                               row={row}
                               moveTargets={moveTargets(project.id)}
                               onMove={move}
+                              draggable={!!move || !!join}
                               onMoveDragStart={
-                                move ? () => setMoving({ projectId: project.id, move }) : undefined
+                                move || join
+                                  ? () =>
+                                      setMoving({
+                                        projectId: project.id,
+                                        tabId: row.kind === "tab" ? row.tabId : undefined,
+                                        move,
+                                        join,
+                                      })
+                                  : undefined
                               }
                               onMoveDragEnd={endMove}
                               now={now}

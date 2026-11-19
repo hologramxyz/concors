@@ -105,6 +105,7 @@ export function SidebarTabRow({
   onDelete,
   moveTargets = [],
   onMove,
+  draggable,
   onMoveDragStart,
   onMoveDragEnd,
 }: {
@@ -126,6 +127,8 @@ export function SidebarTabRow({
   moveTargets?: readonly { id: string; name: string }[];
   /** Moves the row to a workspace; absent when it cannot move. */
   onMove?: ((projectId: string) => void) | undefined;
+  /** Whether it can be dragged at all: to a workspace, or onto another tab's row. */
+  draggable?: boolean | undefined;
   onMoveDragStart?: (() => void) | undefined;
   onMoveDragEnd?: (() => void) | undefined;
 }) {
@@ -201,7 +204,9 @@ export function SidebarTabRow({
   return (
     <li
       data-sidebar-row={row.key}
-      draggable={canMove && renaming === null}
+      // Where a dragged pane or chat row can join this tab.
+      data-drop-tab={row.kind === "tab" ? row.tabId : undefined}
+      draggable={(draggable ?? canMove) && renaming === null}
       onDragStart={(event) => {
         event.dataTransfer.effectAllowed = "move";
         // Firefox starts no drag without data, and the row's name is what it is if dropped elsewhere.

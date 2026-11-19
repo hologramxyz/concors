@@ -141,3 +141,143 @@ test("a terminal's row stays put: it has no drag and no move in its menu", async
     await rm(to, { recursive: true, force: true });
   }
 });
+
+const visiblePanes = (page: Page) => page.locator("[data-pane-id]").filter({ visible: true });
+/** Splits the chat in view, so its tab holds it and a second pane. Returns the chat's pane. */
+async function splitChat(page: Page) {
+  const chat = visiblePanes(page).first();
+  const id = await chat.getAttribute("data-pane-id");
+  if (!id) throw new Error("Pane ID missing");
+  await chat.getByRole("button", { name: "Pane actions" }).click();
+  await page.getByRole("menuitem", { name: "Split horizontally" }).click();
+  await expect(visiblePanes(page)).toHaveCount(2);
+  return page.locator(`[data-pane-id="${id}"]`);
+}
+/** Holds a pane by its header over `target`, leaving the button down. */
+async function holdPaneOver(
+  page: Page,
+  pane: ReturnType<Page["locator"]>,
+  target: ReturnType<Page["locator"]>,
+) {
+  const header = await pane.locator("header").boundingBox();
+  const box = await target.boundingBox();
+  if (!header || !box) throw new Error("Pane header or target missing");
+  await page.mouse.move(header.x + 60, header.y + header.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 8 });
+}
+
+test("a chat dragged out of a split joins another workspace's tab beside what it holds", async ({
+  page,
+}) => {
+  const from = await mkdtemp(join(tmpdir(), "concors-pane-move-from-"));
+  const to = await mkdtemp(join(tmpdir(), "concors-pane-move-to-"));
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  try {
+    await setup(page, from, to);
+    const chat = await splitChat(page);
+    const chatId = await chat.getAttribute("data-pane-id");
+    // Destination's own tab, a terminal: a chat can join it, whatever it holds.
+    const target = rows(page, "Destination").locator('li[data-sidebar-row^="tab:"]').first();
+    const tabId = await target.getAttribute("data-drop-tab");
+
+    await holdPaneOver(page, chat, target);
+    await expect(target).toHaveAttribute("data-drop-target", "");
+    await page.screenshot({ path: test.info().outputPath("pane-over-workspace-tab.png") });
+    await page.mouse.up();
+    await expect(target).not.toHaveAttribute("data-drop-target");
+
+    // The view goes with it: the destination tab now shows its terminal and the chat, intact.
+    await expect(visiblePanes(page)).toHaveCount(2);
+    await expect(page.locator(`[data-pane-id="${chatId}"]`)).toBeVisible();
+    await expect(page.getByRole("log", { name: "Chat timeline" }).first()).toContainText(
+      "first message",
+    );
+    await expect(rows(page, "Destination").locator(`li[data-drop-tab="${tabId}"]`)).toHaveCount(1);
+    // The tab it left kept its other pane, and the chat is listed where it went.
+    await rows(page, "Origin")
+      .locator('li[data-sidebar-row^="tab:"]')
+      .last()
+      .locator("button")
+      .first()
+      .click();
+    await expect(visiblePanes(page)).toHaveCount(1);
+    await expect(page.locator(`[data-pane-id="${chatId}"]`).filter({ visible: true })).toHaveCount(
+      0,
+    );
+
+    // The daemon's layout: after a reload the chat is still in the destination's tab.
+    await page.reload();
+    await rows(page, "Destination").locator(`li[data-drop-tab="${tabId}"] button`).first().click();
+    await expect(page.locator(`[data-pane-id="${chatId}"]`).filter({ visible: true })).toHaveCount(
+      1,
+    );
+    expect(errors).toEqual([]);
+  } finally {
+    await rm(from, { recursive: true, force: true });
+    await rm(to, { recursive: true, force: true });
+  }
+});
+
+test("dropped on a workspace, or sent from its menu, a chat opens in a tab of its own there", async ({
+  page,
+}) => {
+  const from = await mkdtemp(join(tmpdir(), "concors-pane-new-tab-from-"));
+  const to = await mkdtemp(join(tmpdir(), "concors-pane-new-tab-to-"));
+  try {
+    await setup(page, from, to);
+    const chat = await splitChat(page);
+    const chatId = await chat.getAttribute("data-pane-id");
+    const destinationTabs = rows(page, "Destination").locator('li[data-sidebar-row^="tab:"]');
+    const before = await destinationTabs.count();
+    const destination = workspaceRow(page, "Destination");
+    await holdPaneOver(page, chat, destination);
+    await expect(destination).toHaveAttribute("data-drop-target", "");
+    await page.mouse.up();
+    await expect(destinationTabs).toHaveCount(before + 1);
+    await expect(visiblePanes(page)).toHaveCount(1);
+    await expect(page.locator(`[data-pane-id="${chatId}"]`)).toBeVisible();
+
+    // And back, from the pane's menu, into Origin's tab it came from, beside the pane it left.
+    await chat.getByRole("button", { name: "Pane actions" }).click();
+    await page.getByRole("menuitem", { name: "Move to workspace" }).click();
+    const originTabs = page
+      .getByRole("group", { name: "Origin", exact: true })
+      .getByRole("menuitem");
+    await expect(originTabs.first()).toHaveText("New tab");
+    await originTabs.last().click();
+    await expect(destinationTabs).toHaveCount(before);
+    await expect(visiblePanes(page)).toHaveCount(2);
+    await expect(page.locator(`[data-pane-id="${chatId}"]`)).toBeVisible();
+  } finally {
+    await rm(from, { recursive: true, force: true });
+    await rm(to, { recursive: true, force: true });
+  }
+});
+
+test("a chat's row dropped on another workspace's tab row joins that tab", async ({ page }) => {
+  const from = await mkdtemp(join(tmpdir(), "concors-row-join-from-"));
+  const to = await mkdtemp(join(tmpdir(), "concors-row-join-to-"));
+  try {
+    await setup(page, from, to);
+    const row = chatRow(page, "Origin");
+    const target = rows(page, "Destination").locator('li[data-sidebar-row^="tab:"]').first();
+    await row.hover();
+    await page.mouse.down();
+    const box = await target.boundingBox();
+    if (!box) throw new Error("Tab row missing");
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 6 });
+    await page.mouse.move(box.x + box.width / 2 + 1, box.y + box.height / 2);
+    await expect(target).toHaveAttribute("data-drop-target", "");
+    await page.mouse.up();
+    await expect(chatRow(page, "Origin")).toHaveCount(0);
+    await expect(visiblePanes(page)).toHaveCount(2);
+    await expect(page.getByRole("log", { name: "Chat timeline" }).first()).toContainText(
+      "first message",
+    );
+  } finally {
+    await rm(from, { recursive: true, force: true });
+    await rm(to, { recursive: true, force: true });
+  }
+});
