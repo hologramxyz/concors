@@ -244,16 +244,7 @@ export class TestAgentProvider implements AgentProvider {
       text === "Check the game and the release notes. Tell me when anything needs my approval."
     ) {
       const turnId = this.turnId;
-      void this.supervisorActivityFixture(turnId).catch(() => this.finish("failed", turnId));
-      return { turn: { id: turnId, status: "inProgress", items: [] } };
-    }
-    if (
-      this.tools?.env?.CONCORS_CONTROL_URL &&
-      text.startsWith("Should I approve @") &&
-      text.includes("Concors references (resolve by ID):")
-    ) {
-      const turnId = this.turnId;
-      void this.supervisorApprovalFixture(text, turnId).catch(() => this.finish("failed", turnId));
+      void this.supervisorDelegationFixture(turnId).catch(() => this.finish("failed", turnId));
       return { turn: { id: turnId, status: "inProgress", items: [] } };
     }
     if (text === "primitive-usage-limit") {
@@ -622,7 +613,7 @@ export class TestAgentProvider implements AgentProvider {
     }
     return { turn: { id: this.turnId, status: "inProgress", items: [] } };
   }
-  private async supervisorActivityFixture(turnId: string) {
+  private async supervisorDelegationFixture(turnId: string) {
     const { sessions } = (await this.supervisorControl({ kind: "sessions" })) as {
       sessions: { id: string; name: string }[];
     };
@@ -645,24 +636,6 @@ export class TestAgentProvider implements AgentProvider {
     this.reply(
       turnId,
       "I sent work to **Game QA**, **HUD polish**, and the **Release editor**. I’ll bring blockers and results back here.",
-    );
-  }
-  private async supervisorApprovalFixture(text: string, turnId: string) {
-    const [, metadata] = text.split("\n\nConcors references (resolve by ID):\n");
-    const reference = metadata
-      ?.split("\n")
-      .map((line) => JSON.parse(line) as { id: string; pendingId?: string })
-      .find((value) => value.pendingId);
-    if (!reference) throw new Error("Fixture approval reference missing");
-    const report = (await this.supervisorControl({ kind: "read", sessionId: reference.id })) as {
-      pending: { id: string; action: string }[];
-    };
-    const pending = report.pending.find((item) => item.id === reference.pendingId);
-    this.reply(
-      turnId,
-      pending
-        ? "Game QA is asking to run the project’s test script. If you recognize the script and want that check, choose **Allow once** in the agent’s chat. The request is still waiting for you."
-        : "That approval is no longer pending. Open the agent’s chat for the current state.",
     );
   }
   private reply(turnId: string, text: string) {

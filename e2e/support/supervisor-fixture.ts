@@ -8,11 +8,16 @@ import {
 } from "../../packages/daemon-client/src/index.ts";
 import type { LayoutNode } from "../../packages/protocol/src/index.ts";
 
-export const activityPrompt =
+export const delegationPrompt =
   "Check the game and the release notes. Tell me when anything needs my approval.";
 
-export async function seedSupervisorActivity(url: string) {
-  const directory = await mkdtemp(join(tmpdir(), "concors-activity-preview-"));
+/**
+ * Two workspaces with three agents, and a started Supervisor. With `delegate`, Supervisor also
+ * sends them work, leaving one waiting for approval, one working and one done; without it, the
+ * Supervisor conversation stays empty, as specs that share its daemon expect.
+ */
+export async function seedSupervisorWorkspaces(url: string, { delegate = true } = {}) {
+  const directory = await mkdtemp(join(tmpdir(), "concors-supervisor-fixture-"));
   const transport = new DaemonConnection({
     endpoint: describeDaemonEndpoint(url),
     client: { kind: "test", name: "activity preview", version: "0.0.0" },
@@ -118,7 +123,9 @@ export async function seedSupervisorActivity(url: string) {
     );
     if (!tab || !pane) throw new Error("Supervisor fixture has no pane");
     const supervisor = await start(project.id, tab.id, pane.id);
-    await send(supervisor, activityPrompt, "done");
+    ids = { supervisor, tests, ui, notes };
+    if (!delegate) return Object.assign(() => rm(directory, { recursive: true, force: true }), ids);
+    await send(supervisor, delegationPrompt, "done");
     await expect
       .poll(() => transport.agents.find((agent) => agent.id === tests)?.status)
       .toBe("needs_input");
@@ -133,7 +140,6 @@ export async function seedSupervisorActivity(url: string) {
     expect(activity.outcome.deliveries.map((item) => item.status)).toEqual(
       expect.arrayContaining(["queued", "needs_input", "working", "done"]),
     );
-    ids = { supervisor, tests, ui, notes };
   } finally {
     off();
     transport.disconnect();

@@ -1,4 +1,3 @@
-import { SupervisorActivityButton } from "@/supervisor/activity";
 import { SupervisorNav } from "@/supervisor/nav";
 import { SupervisorPage } from "@/supervisor/page";
 import { SchedulesNav } from "@/schedules/nav";
@@ -155,7 +154,6 @@ function MobileWorkspaceContent({
   connection: DaemonConnection | null;
 }) {
   const files = useFiles();
-  const [supervisorActivity, setSupervisorActivity] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** A full-height page over the workspace; Pull requests may show one workspace. */
@@ -854,15 +852,6 @@ function MobileWorkspaceContent({
                               Workspace
                             </h1>
                           )}
-                          {page?.kind === "supervisor" && (
-                            <div className="pointer-events-auto relative z-30">
-                              <SupervisorActivityButton
-                                compact
-                                open={supervisorActivity}
-                                onClick={() => setSupervisorActivity(!supervisorActivity)}
-                              />
-                            </div>
-                          )}
                           <NativeHeaderButton
                             icon="files"
                             id="mobile-files-toggle"
@@ -950,8 +939,6 @@ function MobileWorkspaceContent({
                                 workspace={workspace}
                                 connected={!!ready}
                                 onOpenAgent={openAgent}
-                                activityOpen={supervisorActivity}
-                                onCloseActivity={() => setSupervisorActivity(false)}
                                 onOpenProject={selectProject}
                               />
                             ) : page?.kind === "schedules" ? (

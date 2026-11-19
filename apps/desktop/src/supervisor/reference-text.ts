@@ -6,7 +6,6 @@ export const SupervisorReferenceSchema = z.object({
   kind: z.enum(["Workspace", "Agent"]),
   label: z.string().min(1).max(200),
   workspace: z.string().max(200).optional(),
-  pendingId: z.string().uuid().optional(),
 });
 export type SupervisorReference = z.infer<typeof SupervisorReferenceSchema>;
 export const MAX_SUPERVISOR_REFERENCES = 8;
