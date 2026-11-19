@@ -82,6 +82,17 @@ export function argumentsSummary(input: string | undefined): string {
   return found.join(" · ");
 }
 
+/**
+ * A command without the `cd <folder> &&` agents put in front of nearly every one: on a row of
+ * commands it repeats the same folder, and pushes what actually ran past the end of the line. The
+ * full command stays in the expanded row. A bare `cd` is left alone, since then it is the command.
+ */
+export function commandSummary(command: string): string {
+  const trimmed = command.trim();
+  const rest = trimmed.replace(/^cd\s+(?:"[^"]*"|'[^']*'|[^\s;&|]+)\s*(?:&&|;)\s*/, "");
+  return rest || trimmed;
+}
+
 /** The line beside a tool's name: what it ran on, never its own name again. */
 export function toolSummary(item: AgentItem): string {
   const { tool, server } = parseToolTitle(item.title);

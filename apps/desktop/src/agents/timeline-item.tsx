@@ -18,7 +18,7 @@ import { hasMeaningfulToolCallDetail } from "./paseo/tool-call-detail-state";
 import { thinkingExpandable, thinkingPreview, thinkingText } from "./thinking";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import type { TimelineEntry } from "./thinking";
-import { toolDisplayName, toolSummary } from "./tool-label";
+import { commandSummary, toolDisplayName, toolSummary } from "./tool-label";
 
 /** Memoized: merges keep unchanged items' identity, so a streamed delta re-renders one row
  * instead of re-parsing every message's Markdown while the user scrolls. */
@@ -167,7 +167,9 @@ export const TimelineItem = memo(function TimelineItem({
         <span
           className={`min-w-0 flex-1 truncate text-sm text-muted-foreground ${running ? "agent-shimmer" : ""}`}
         >
-          {display.summary ?? toolSummary(item)}
+          {detail.type === "shell"
+            ? commandSummary(detail.command)
+            : (display.summary ?? toolSummary(item))}
         </span>
         {item.status === "failed" || item.status === "interrupted" ? (
           <span className="text-xs text-muted-foreground">{item.status}</span>
