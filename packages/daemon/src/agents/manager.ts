@@ -715,6 +715,15 @@ export class AgentManager {
         if (runtime) runtime.reloadWhenIdle = true;
         continue;
       }
+      // New credentials answer an error the old ones caused, such as an expired token, so it
+      // should not stay above the composer until the chat is reopened. A failed chat is ready
+      // again; its next prompt starts a session with the new account.
+      if (resetEmptyThreads && (current.error || current.status === "failed"))
+        this.update(current.id, {
+          error: null,
+          ...(current.status === "failed" ? { status: "idle" as const } : {}),
+          updatedAt: current.updatedAt,
+        });
       const runtime = this.#runtimes.get(current.id);
       if (!runtime) continue;
       runtime.closed = true;

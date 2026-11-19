@@ -1331,6 +1331,58 @@ it.each(["sign-in", "restart"])(
   },
 );
 
+it.each(["turn", "session"])(
+  "clears a %s failure once the account signs in again, without reopening the chat",
+  async (failure) => {
+    const { a, id } = await setup();
+    if (failure === "turn") {
+      // What an expired token looks like: the turn fails, and the CLI stays up.
+      await action(a, { kind: "send", sessionId: id, text: "please fail" });
+      await expect.poll(() => a.agents[0]?.error).toBe("Fixture failure");
+    } else {
+      // The CLI cannot even resume the chat, which leaves no running session to restart.
+      await action(a, { kind: "send", sessionId: id, text: "first message" });
+      await expect.poll(() => a.agents[0]?.status).toBe("done");
+      const request = TestAgentProvider.prototype.request;
+      providers[0]!.emit("session/disconnected", {});
+      const spy = vi
+        .spyOn(TestAgentProvider.prototype, "request")
+        .mockImplementation(async function (this: TestAgentProvider, method, params) {
+          if (method === "thread/resume") throw new Error("OAuth token has expired");
+          return request.call(this, method, params);
+        });
+      try {
+        await action(a, { kind: "read", sessionId: id });
+        await expect.poll(() => a.agents[0]?.status).toBe("failed");
+      } finally {
+        spy.mockRestore();
+      }
+      expect(a.agents[0]?.error).toBe("OAuth token has expired");
+    }
+    const flow = await action(a, {
+      kind: "account",
+      sessionId: id,
+      action: { type: "start", methodId: "fixture" },
+    });
+    if (flow.outcome.status !== "ok" || !flow.outcome.account?.challenge)
+      throw new Error("Missing challenge");
+    await action(a, {
+      kind: "account",
+      sessionId: id,
+      action: {
+        type: "complete",
+        flowId: flow.outcome.account.challenge.flowId,
+        value: "test-credential",
+      },
+    });
+    await expect.poll(() => a.agents[0]?.error).toBeNull();
+    expect(a.agents[0]?.status).not.toBe("failed");
+    await action(a, { kind: "send", sessionId: id, text: "after signing in" });
+    await expect.poll(() => a.agents[0]?.status).toBe("done");
+    expect(a.agents[0]?.error).toBeNull();
+  },
+);
+
 it("preserves a signed-in conversation that already has provider history", async () => {
   const { a, id } = await setup();
   await action(a, { kind: "send", sessionId: id, text: "first message" });
