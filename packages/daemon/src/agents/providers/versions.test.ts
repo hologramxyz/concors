@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import {
+  allowInstallScripts,
   compareVersions,
   parseVersion,
   ProviderVersions,
@@ -52,6 +53,7 @@ it("only offers an update command scoped to the install that owns the CLI", () =
     "--no-audit",
     "--no-fund",
     "--save-exact",
+    "--ignore-scripts=false",
     "@openai/codex@latest",
   ]);
   expect(
@@ -71,6 +73,7 @@ it("only offers an update command scoped to the install that owns the CLI", () =
     "/home/me/.local/share/mise/installs/node/24.1.0",
     "--no-audit",
     "--no-fund",
+    "--allow-scripts=@openai/codex",
     "@openai/codex@latest",
   ]);
   // Backend-qualified mise tools have encoded directory names `mise upgrade` rejects.
@@ -240,7 +243,31 @@ it("updates Concors-installed CLIs on its own once nothing is using them", async
   expect(changed).toHaveBeenCalledWith(["codex"]);
   expect(versions.get("codex")).toMatchObject({ installed: "1.1.0", updateAvailable: false });
   expect(versions.pending("codex")).toBeUndefined();
+  // npm 12 would otherwise skip the postinstall that puts the CLI's binary in place.
+  expect(JSON.parse(await readFile(join(codex.prefix, "package.json"), "utf8"))).toEqual({
+    allowScripts: { "@openai/codex": true },
+  });
   versions.close();
+});
+
+it("allows install scripts for the CLI in its prefix, keeping what npm wrote", async () => {
+  const prefix = await mkdtemp(join(tmpdir(), "concors-allow-scripts-"));
+  directories.push(prefix);
+  const manifest = join(prefix, "package.json");
+  allowInstallScripts(prefix, "@anthropic-ai/claude-code");
+  await writeFile(
+    manifest,
+    JSON.stringify({
+      dependencies: { "@anthropic-ai/claude-code": "2.1.328" },
+      allowScripts: { "@anthropic-ai/claude-code": true },
+    }),
+  );
+  allowInstallScripts(prefix, "@anthropic-ai/claude-code");
+  allowInstallScripts(prefix, "cline@3.0.46");
+  expect(JSON.parse(await readFile(manifest, "utf8"))).toEqual({
+    dependencies: { "@anthropic-ai/claude-code": "2.1.328" },
+    allowScripts: { "@anthropic-ai/claude-code": true, cline: true },
+  });
 });
 
 it("tries each release once and leaves installs it does not own to the user", async () => {

@@ -33,7 +33,7 @@ import { withPath } from "../../terminal/environment.ts";
 import { killTree } from "../../host/kill-tree.ts";
 import { restoreClaudeTranscript, shareClaudeHome } from "./claude-home.ts";
 import type { launch } from "./launch.ts";
-import { ProviderVersions, type VersionTarget } from "./versions.ts";
+import { allowInstallScripts, ProviderVersions, type VersionTarget } from "./versions.ts";
 
 /**
  * Appends the daemon's own runtime directory to a PATH. A packaged daemon ships node and npm
@@ -665,9 +665,19 @@ export class ProviderRegistry {
     // `--save-exact` records the version that was actually installed.
     const spec =
       preset.install.kind === "npm" ? `${preset.install.package}@latest` : preset.install.package;
+    allowInstallScripts(prefix, preset.install.package);
     const child = spawn(
       process.platform === "win32" ? "npm" : npm.command,
-      ["install", "--prefix", prefix, "--no-audit", "--no-fund", "--save-exact", spec],
+      [
+        "install",
+        "--prefix",
+        prefix,
+        "--no-audit",
+        "--no-fund",
+        "--save-exact",
+        "--ignore-scripts=false",
+        spec,
+      ],
       { env, cwd: prefix, stdio: "pipe", windowsHide: true },
     );
     const job = {
