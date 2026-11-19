@@ -1467,6 +1467,19 @@ export class WorkspaceStore {
       )
       .get(sessionId, text);
   }
+  /** A chat's latest messages, oldest first: what the user and agent said, no tool calls. */
+  agentMessages(sessionId: string, limit = 400): Pick<AgentItem, "kind" | "text">[] {
+    return this.#db
+      .prepare(
+        "SELECT json_extract(item, '$.kind') AS kind, json_extract(item, '$.text') AS text FROM agent_items WHERE session_id = ? AND json_extract(item, '$.kind') IN ('user', 'assistant') ORDER BY position DESC LIMIT ?",
+      )
+      .all(sessionId, limit)
+      .reverse()
+      .map((row) => ({
+        kind: row["kind"] === "user" ? ("user" as const) : ("assistant" as const),
+        text: String(row["text"] ?? ""),
+      }));
+  }
   hasAgentProviderHistory(sessionId: string): boolean {
     // Check all history, not just the most recent page. Pending user prompts are reserved
     // locally before reaching a provider; every other item is evidence of provider activity.

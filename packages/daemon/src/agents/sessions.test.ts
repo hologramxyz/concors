@@ -1443,6 +1443,52 @@ it("replaces an empty Claude conversation that was never saved after restart", a
   ).toEqual(["thread/resume", "thread/start"]);
 });
 
+it("goes on in a new session, given the messages so far, when Claude Code no longer has a chat", async () => {
+  vi.spyOn(ProviderRegistry.prototype, "installed").mockReturnValue(true);
+  const { a, b, id } = await setup();
+  const switched = await action(a, {
+    kind: "switch-provider",
+    sessionId: id,
+    provider: "claude",
+    model: null,
+    expectedRevision: a.agents[0]!.revision,
+  });
+  if (switched.outcome.status !== "ok") throw new Error("Switch failed");
+  const claude = switched.outcome.conversation.agent.id;
+  await expect.poll(() => a.agents.find((agent) => agent.id === claude)?.status).toBe("idle");
+  await action(a, { kind: "send", sessionId: claude, text: "plan the launch" });
+  await expect.poll(() => a.agents.find((agent) => agent.id === claude)?.status).toBe("done");
+  const oldThread = a.agents.find((agent) => agent.id === claude)!.threadId;
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  providers.length = 0;
+  // A month later Claude Code has deleted the transcript.
+  const c = await open(await boot("missing"));
+  const agent = () => c.agents.find((item) => item.id === claude);
+  await action(c, { kind: "send", sessionId: claude, text: "and the follow-up?" });
+  await expect.poll(() => agent()?.status).toBe("done");
+  expect(agent()!.error).toBeNull();
+  expect(agent()!.threadId).not.toBe(oldThread);
+  const turns = () =>
+    providers[0]!.requests
+      .filter((r) => r.method === "turn/start")
+      .map((r) => (r.params as { input: { text: string }[] }).input[0]!.text);
+  expect(turns()).toHaveLength(1);
+  expect(turns()[0]).toMatch(
+    /^<earlier-conversation>[\s\S]*User: plan the launch[\s\S]*<\/earlier-conversation>\n\nand the follow-up\?$/,
+  );
+  const read = await action(c, { kind: "read", sessionId: claude });
+  if (read.outcome.status !== "ok") throw new Error("Read failed");
+  expect(read.outcome.conversation.items.find((i) => i.title === "New session")?.text).toMatch(
+    /no longer had this conversation/,
+  );
+  // Given once: the new session has it from here on.
+  await action(c, { kind: "send", sessionId: claude, text: "thanks" });
+  await expect.poll(() => turns()).toHaveLength(2);
+  expect(turns()[1]).toBe("thanks");
+});
+
 it("does not replace a missing Codex thread that has provider history", async () => {
   const { a, b, id } = await setup();
   await action(a, { kind: "send", sessionId: id, text: "first message" });
