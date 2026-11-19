@@ -9,6 +9,7 @@ import {
   rowStatusLabel,
   sidebarRows,
   stableOrder,
+  surfacesRow,
 } from "./sidebar-rows";
 
 const workspace: Pick<WorkspaceSnapshot, "projects"> = {
@@ -258,7 +259,7 @@ it("marks a split tab's row with the most urgent dot among its panes", () => {
   expect(rowState(row)).toBe("done");
 });
 
-it("never folds open tabs, and folds closed ones after three unless a dot surfaces them", () => {
+it("keeps open tabs, pins and closed chats that need attention listed, and folds the other closed ones", () => {
   const tabs = Array.from({ length: 7 }, (_, n) => ({
     id: `tab-${n}`,
     name: `Tab ${n}`,
@@ -275,29 +276,43 @@ it("never folds open tabs, and folds closed ones after three unless a dot surfac
   };
   const rows = sidebarRows(
     seven,
-    [dated(0), dated(1), dated(2), dated(3), dated(4, unread), dated(5, { pinned: true })],
+    [
+      dated(0),
+      dated(1),
+      dated(2),
+      dated(3),
+      dated(4, unread),
+      dated(5, { pinned: true }),
+      dated(6, { status: "working" }),
+    ],
     [],
   ).rows.get("p")!;
   const keys = (list: readonly { key: string }[]) => list.map((row) => row.key);
 
   // Everything open is listed in tab order, then the closed rows, newest first.
-  const surfacedNow = new Set(rows.filter((r) => r.kind !== "tab" && rowDot(r)).map((r) => r.key));
+  const surfacedNow = new Set(rows.filter(surfacesRow).map((r) => r.key));
+  expect([...surfacedNow].sort()).toEqual(["closed:c4", "closed:c6"]);
   const { listed, folded } = foldRows(rows, surfacedNow);
   expect(keys(listed)).toEqual([
     "closed:c5",
     ...tabs.map((tab) => `tab:${tab.id}`),
-    "closed:c0",
-    "closed:c1",
-    "closed:c2",
     "closed:c4",
+    "closed:c6",
   ]);
-  expect(keys(folded)).toEqual(["closed:c3"]);
-  expect(folded.map(rowDot)).toEqual([undefined]);
+  expect(keys(folded)).toEqual(["closed:c0", "closed:c1", "closed:c2", "closed:c3"]);
+  expect(folded.map(rowDot)).toEqual([undefined, undefined, undefined, undefined]);
 
   // While the list is held still, a row that just got its dot stays folded and speaks through it.
   const held = foldRows(rows, new Set());
-  expect(keys(held.folded)).toEqual(["closed:c3", "closed:c4"]);
-  expect(held.folded.map(rowDot)).toEqual([undefined, "done"]);
+  expect(keys(held.folded)).toEqual([
+    "closed:c0",
+    "closed:c1",
+    "closed:c2",
+    "closed:c3",
+    "closed:c4",
+    "closed:c6",
+  ]);
+  expect(held.folded.map(rowDot)[4]).toBe("done");
 });
 
 it("labels a row's tooltip only while something is happening", () => {

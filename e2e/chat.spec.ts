@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { chooseProvider } from "./support/agents.ts";
+import { showClosedChats } from "./support/closed-chats.ts";
 
 test("shared chat streams, handles approvals and removes detached sidebar entries", async ({
   page,
@@ -155,15 +156,17 @@ test("shared chat streams, handles approvals and removes detached sidebar entrie
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitemradio", { name: "Terminal", exact: true }).click();
     await expect(page.locator(".xterm").filter({ visible: true })).toBeVisible();
-    // The chat leaves its tab but stays under its workspace, muted, to come back from there.
+    // The chat leaves its tab but stays under its workspace, in "Closed chats", to come back.
     const open = "button[data-agent-id]:not([data-agent-closed])";
     const closed = "button[data-agent-closed]";
     await expect(agentList.locator(open)).toHaveCount(0);
+    await showClosedChats(page, "Chat acceptance");
     await expect(agentList.locator(closed)).toHaveCount(1);
     const remoteAgents = second.getByRole("list", { name: "Chat acceptance tabs", exact: true });
     await expect(remoteAgents.locator(open)).toHaveCount(0);
     await second.reload();
     await expect(remoteAgents.locator(open)).toHaveCount(0);
+    await showClosedChats(second, "Chat acceptance");
     await expect(remoteAgents.locator(closed)).toHaveCount(1);
     await page.getByRole("button", { name: "Pane actions" }).click();
     await page.getByRole("menuitemradio", { name: "New chat", exact: true }).click();

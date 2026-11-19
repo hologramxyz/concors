@@ -135,6 +135,8 @@ export class ClaudeProvider extends EventProvider {
   private launcher: typeof launch;
   private mcp: McpServer[];
   private transcriptStore: SessionStore | undefined;
+  /** The end of what the running Claude Code printed to stderr, which says why it exited. */
+  private stderr = "";
   private readonly createQuery: typeof query;
   constructor(
     cwd: string,
@@ -195,7 +197,13 @@ export class ClaudeProvider extends EventProvider {
         if (signal.aborted) abort();
         else signal.addEventListener("abort", abort, { once: true });
         child.once("close", () => signal.removeEventListener("abort", abort));
-        child.stderr.resume();
+        // Read, so the pipe never fills, and kept: the SDK reports only "exited with code 1",
+        // and the reason ("No conversation found with session ID: …") is here.
+        this.stderr = "";
+        child.stderr.setEncoding("utf8");
+        child.stderr.on("data", (chunk: string) => {
+          if (generation === this.generation) this.stderr = (this.stderr + chunk).slice(-4000);
+        });
         return child;
       },
       includePartialMessages: true,
@@ -341,11 +349,13 @@ export class ClaudeProvider extends EventProvider {
         );
         if (initialized && generation === this.generation && !this.closed) {
           if (this.interrupted) this.finish();
-          else this.fail(error);
+          else this.fail(this.explain(error));
         }
       }
     })();
-    const initial = await session.initializationResult();
+    const initial = await session.initializationResult().catch((error: unknown) => {
+      throw this.explain(error);
+    });
     this.models = completeClaudeModels(initial.models ?? []);
     this.currentModel = string(object(initial)["model"]);
     // Modern initialize responses contain models but no selected model. Read the CLI's
@@ -690,6 +700,10 @@ export class ClaudeProvider extends EventProvider {
     const url = string(result["authUrl"]);
     if (!url) throw new Error(`${server} did not offer a page to sign in on.`);
     return { url, callback: result["callbackExpected"] === true };
+  }
+  /** The SDK's "process exited with code 1", with the reason Claude Code gave on stderr. */
+  private explain(error: unknown): unknown {
+    return explainExit(error, this.stderr);
   }
   /** Message content from Concors input items; images go as images to models that read them. */
   private async content(input: unknown[]): Promise<SDKUserMessage["message"]["content"]> {
@@ -1058,4 +1072,18 @@ export class ClaudeProvider extends EventProvider {
     this.wake?.();
     this.session?.close();
   }
+}
+
+/**
+ * Adds Claude Code's own last word to the SDK's bare exit error. Kept as Claude Code wrote it,
+ * because callers recognise some reasons, such as a conversation it no longer has.
+ */
+export function explainExit(error: unknown, stderr: string): unknown {
+  if (!(error instanceof Error) || !/process exited with code/i.test(error.message)) return error;
+  const reason = stderr
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .at(-1);
+  return reason ? new Error(`${error.message}: ${reason.slice(0, 500)}`) : error;
 }

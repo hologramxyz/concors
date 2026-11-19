@@ -11,8 +11,19 @@ export async function showNativeNotification(
     body: body.slice(0, 240),
   });
 }
-export async function playNativeSound(kind: "done" | "needs_input"): Promise<void> {
-  await invoke("play_agent_sound", { kind });
+/**
+ * Plays a built-in sound by name, or a picked file's bytes, through the system's player. The
+ * bytes go as the raw request body, since a JSON array of a megabyte of numbers is slow to send.
+ */
+export async function playNativeSound(
+  sound: string | { extension: string; bytes: ArrayBuffer },
+  volume: number,
+): Promise<void> {
+  if (typeof sound === "string") await invoke("play_agent_sound", { sound, volume });
+  else
+    await invoke("play_custom_sound", new Uint8Array(sound.bytes), {
+      headers: { "x-sound-extension": sound.extension, "x-sound-volume": String(volume) },
+    });
 }
 export async function dismissNativeNotification(token: string): Promise<void> {
   await invoke("dismiss_agent_notification", { token });

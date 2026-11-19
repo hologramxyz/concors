@@ -6,6 +6,7 @@ import {
   type WorkspaceTab,
 } from "./workspace.ts";
 import { DEFAULT_TERMINAL_PROFILES, terminalProfileKind } from "./terminal-profiles.ts";
+import { nextWorkspaceTabName } from "./tab-names.ts";
 
 export class WorkspaceOperationError extends Error {
   override readonly name = "WorkspaceOperationError";
@@ -316,16 +317,43 @@ export function applyWorkspaceOperation(
               tab.nodes.find((n) => n.id === op.paneId),
               "Source pane",
             );
-            const destination = requireValue(
-              project.tabs.find((t) => t.id === op.targetTabId),
-              "Target tab",
-            );
-            if (pane.kind !== "pane" || destination.id === tab.id)
+            const target = op.targetProjectId
+              ? requireValue(
+                  state.projects.find((p) => p.id === op.targetProjectId),
+                  "Workspace",
+                )
+              : project;
+            if (pane.kind !== "pane")
+              throw new WorkspaceOperationError("INVALID_OPERATION", "Choose a pane");
+            const crossing = target.id !== project.id;
+            // A terminal's session is tied to its workspace, which stops it when it closes.
+            if (crossing && pane.profile !== "chat")
               throw new WorkspaceOperationError(
                 "INVALID_OPERATION",
-                "Choose a pane and a different tab",
+                "Only chats can move to another workspace",
               );
-            claim(op.splitId);
+            let destination: WorkspaceTab | undefined;
+            if (op.newTab) {
+              // Its own tab: a pane alone in this one already has it, unless it changes workspace.
+              if (!crossing && tab.root === pane.id)
+                throw new WorkspaceOperationError("INVALID_OPERATION", "Choose another workspace");
+              if (target.tabs.length >= 32)
+                throw new WorkspaceOperationError("LIMIT_EXCEEDED", "That workspace has 32 tabs");
+              claim(op.targetTabId);
+            } else {
+              destination = requireValue(
+                target.tabs.find((t) => t.id === op.targetTabId),
+                "Target tab",
+              );
+              if (destination.id === tab.id)
+                throw new WorkspaceOperationError(
+                  "INVALID_OPERATION",
+                  "Choose a pane and a different tab",
+                );
+              if (destination.nodes.length >= 62)
+                throw new WorkspaceOperationError("LIMIT_EXCEEDED", "That tab is full");
+              claim(op.splitId);
+            }
             // The node itself moves, so its session stays bound and nothing restarts. A tab left
             // with no panes has nothing more to show.
             if (tab.root === pane.id) closeTab(state, project.id, tab.id);
@@ -347,17 +375,35 @@ export function applyWorkspaceOperation(
                 }
               tab.nodes = tab.nodes.filter((n) => n.id !== parent.id && n.id !== pane.id);
             }
-            destination.nodes.push(pane, {
-              id: op.splitId,
-              kind: "split",
-              axis: "horizontal",
-              ratio: 0.5,
-              first: destination.root,
-              second: pane.id,
-            });
-            destination.root = op.splitId;
+            if (crossing) {
+              // As with a whole tab: a CLI ties a conversation to its folder, so one under way
+              // stays in its own; one not yet started starts where it now is.
+              pane.directory = pane.sessionId
+                ? (pane.directory ?? project.directory)
+                : target.directory;
+              target.version++;
+            }
+            if (!destination) {
+              destination = {
+                id: op.targetTabId,
+                name: nextWorkspaceTabName(target.tabs),
+                root: pane.id,
+                nodes: [pane],
+              };
+              target.tabs.push(destination);
+            } else {
+              destination.nodes.push(pane, {
+                id: op.splitId,
+                kind: "split",
+                axis: "horizontal",
+                ratio: 0.5,
+                first: destination.root,
+                second: pane.id,
+              });
+              destination.root = op.splitId;
+            }
             // Whoever moved it is looking at it, so it stays in view, where it landed.
-            state.selection = { projectId: project.id, tabId: destination.id };
+            state.selection = { projectId: target.id, tabId: destination.id };
             break;
           }
           case "pane.rename": {

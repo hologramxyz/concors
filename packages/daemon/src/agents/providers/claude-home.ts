@@ -1,5 +1,6 @@
 import {
   appendFileSync,
+  existsSync,
   cpSync,
   linkSync,
   lstatSync,
@@ -13,7 +14,7 @@ import {
   unlinkSync,
   type Stats,
 } from "node:fs";
-import { join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 
 /**
  * Claude Code keeps everything under one directory, `CLAUDE_CONFIG_DIR`: the sign-in, but also
@@ -181,4 +182,64 @@ function attempt(step: () => void) {
   } catch {
     // Best effort: an entry that cannot be shared stays the account's own, which still works.
   }
+}
+
+/** Where a conversation's transcript is under a Claude directory's projects, if anywhere. */
+function findTranscript(home: string, sessionId: string): string | undefined {
+  const projects = join(home, "projects");
+  let keys: string[];
+  try {
+    keys = readdirSync(projects);
+  } catch {
+    return undefined;
+  }
+  for (const key of keys) {
+    const file = join(projects, key, `${sessionId}.jsonl`);
+    if (existsSync(file)) return file;
+  }
+  return undefined;
+}
+
+/**
+ * Claude Code resumes a conversation only from its own directory. One started under another
+ * account (before its history was shared, or when sharing failed there) or set aside when two
+ * histories merged is still on disk, so it is copied in, with its sub-agents' transcripts, under
+ * the same project key; the original stays where it was. `candidates` are the other Claude
+ * directories; each one's set-aside folders are searched too. Returns the transcript restored.
+ */
+export function restoreClaudeTranscript(
+  current: string,
+  candidates: readonly string[],
+  sessionId: string,
+): string | undefined {
+  if (!/^[\w-]+$/.test(sessionId) || findTranscript(current, sessionId)) return undefined;
+  const homes = candidates.filter((home) => resolve(home) !== resolve(current));
+  for (const home of homes) {
+    let asides: string[] = [];
+    try {
+      asides = readdirSync(join(home, UNSHARED_DIRECTORY)).map((run) =>
+        join(home, UNSHARED_DIRECTORY, run),
+      );
+    } catch {
+      /* No histories were set aside here. */
+    }
+    for (const place of [home, ...asides]) {
+      const found = findTranscript(place, sessionId);
+      if (!found) continue;
+      const project = join(current, "projects", basename(dirname(found)));
+      mkdirSync(project, { recursive: true, mode: 0o700 });
+      const target = join(project, `${sessionId}.jsonl`);
+      cpSync(found, target, { preserveTimestamps: true, force: false, errorOnExist: false });
+      const subagents = join(dirname(found), sessionId);
+      if (existsSync(subagents))
+        cpSync(subagents, join(project, sessionId), {
+          recursive: true,
+          preserveTimestamps: true,
+          force: false,
+          errorOnExist: false,
+        });
+      return target;
+    }
+  }
+  return undefined;
 }

@@ -144,7 +144,7 @@ test("seven open tabs never fold, and the seventh's dot moves from folder to row
   }
 });
 
-test("closed tabs fold after three, surface with a dot, and Show more carries one while held", async ({
+test("closed chats fold apart, one that needs attention surfaces, and the group carries its dot while held", async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -171,36 +171,45 @@ test("closed tabs fold after three, surface with a dot, and Show more carries on
     await page.mouse.move(700, 400);
 
     const closed = list.locator("button[data-agent-closed]");
-    const more = list.getByRole("button", { name: "Show more" });
-    await expect(closed).toHaveCount(3);
-    await expect(more).toBeVisible();
-    // Open rows come first.
+    const group = list.getByRole("button", { name: /^Closed chats/ });
+    // Closed chats are kept apart, folded: the open tabs are all the list shows.
+    await expect(closed).toHaveCount(0);
+    await expect(group).toHaveAttribute("aria-expanded", "false");
+    await expect(group).toContainText("5");
     await expect(list.locator("> li").first().locator("button[data-sidebar-tab-id]")).toHaveCount(
       1,
     );
-    await expect(more.locator("[data-show-more-dot] span")).toHaveCount(0);
+    await expect(group.locator("[data-show-more-dot] span")).toHaveCount(0);
 
-    // Oldest of the closed, so it is folded. Hovering holds the list still: the row stays folded
-    // and Show more speaks for it, then it surfaces when the pointer leaves.
+    // A question to the oldest. Hovering holds the list still: the row stays folded and the group
+    // speaks for it, then it surfaces among the open rows when the pointer leaves.
     const oldest = opened[0];
     assert(oldest);
-    await more.hover();
+    await group.hover();
     await send(control, oldest, "question");
     await expect(
-      more.locator('[data-show-more-dot="attention"] span.bg-destructive'),
+      group.locator('[data-show-more-dot="attention"] span.bg-destructive'),
     ).toBeVisible();
-    await expect(closed).toHaveCount(3);
+    await expect(closed).toHaveCount(0);
     await page.mouse.move(700, 400);
     const surfaced = list.locator(`button[data-agent-id="${oldest}"]`);
     await expect(surfaced.locator('[data-row-state="attention"]')).toBeVisible();
-    // Its new question also made it the newest, so it now leads the three that are listed.
-    await expect(closed).toHaveCount(3);
-    await expect(closed.first()).toHaveAttribute("data-agent-id", oldest);
-    await expect(more.locator("[data-show-more-dot] span")).toHaveCount(0);
+    await expect(closed).toHaveCount(1);
+    await expect(group).toContainText("4");
+    await expect(group.locator("[data-show-more-dot] span")).toHaveCount(0);
 
-    // Show more reveals the rest and clears nothing.
-    await more.click();
+    // The group opens to the rest, set apart under it, and folds again; it clears nothing.
+    await group.click();
+    await expect(group).toHaveAttribute("aria-expanded", "true");
+    await expect(
+      list
+        .getByRole("list", { name: "Closed tabs closed chats" })
+        .locator("button[data-agent-closed]"),
+    ).toHaveCount(4);
     await expect(closed).toHaveCount(5);
+    await page.screenshot({ path: test.info().outputPath("closed-chats-open.png") });
+    await group.click();
+    await expect(closed).toHaveCount(1);
     await expect(surfaced.locator('[data-row-state="attention"]')).toBeVisible();
 
     // Opening it and closing it again leaves the question unanswered, so the dot stays.

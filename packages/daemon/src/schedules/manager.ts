@@ -61,6 +61,13 @@ export class ScheduleManager {
           ...(schedule.target.kind === "session" ? [schedule.target.sessionId] : []),
         ]),
     );
+    // A schedule names its chat's workspace, so when the chat moves to another, it goes too. The
+    // agent manager listens first and tells clients about the chats; this then updates schedules.
+    const moved = workspace.onAgentsMoved;
+    workspace.onAgentsMoved = (agents) => {
+      moved?.(agents);
+      this.followChats(agents);
+    };
     // A crash can occur after delivery but before the receipt is updated. Never replay it.
     for (const schedule of store.list()) {
       let interrupted = false;
@@ -85,6 +92,24 @@ export class ScheduleManager {
     this.timer ??= setInterval(() => this.tick(), 5000);
     this.timer.unref();
     this.tick();
+  }
+  /** Moves the schedules of chats that changed workspace into the workspace each is in now. */
+  private followChats(agents: readonly AgentInfo[]) {
+    if (this.closed) return;
+    const projects = new Map(agents.map((agent) => [agent.id, agent.projectId]));
+    let changed = false;
+    for (const schedule of this.store.list()) {
+      const projectId = [
+        schedule.sessionId,
+        schedule.target.kind === "session" ? schedule.target.sessionId : null,
+      ]
+        .map((id) => (id ? projects.get(id) : undefined))
+        .find(Boolean);
+      if (!projectId || projectId === schedule.projectId) continue;
+      this.save({ ...schedule, projectId });
+      changed = true;
+    }
+    if (changed) this.publish();
   }
   private save(schedule: AgentSchedule) {
     this.store.save({

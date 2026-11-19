@@ -1622,3 +1622,18 @@ it("recognises placeholder model names, and only those", () => {
   expect(isPlaceholderModel("opus")).toBe(false);
   expect(isPlaceholderModel("claude-fable-5-1[1m]")).toBe(false);
 });
+
+it("puts the reason Claude Code gave on stderr into its bare exit error", async () => {
+  const { explainExit } = await import("./claude.ts");
+  const exit = new Error("Claude Code process exited with code 1");
+  const explained = explainExit(
+    exit,
+    "warning: something minor\nNo conversation found with session ID: abc\n\n",
+  ) as Error;
+  expect(explained.message).toBe(
+    "Claude Code process exited with code 1: No conversation found with session ID: abc",
+  );
+  expect(explainExit(exit, "")).toBe(exit);
+  const other = new Error("Prompt is too long");
+  expect(explainExit(other, "ignored")).toBe(other);
+});

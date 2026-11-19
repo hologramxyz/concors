@@ -230,6 +230,39 @@ describe("moving chats between workspaces", () => {
     }
   });
 
+  it("lists a chat dragged out of its tab under the workspace it lands in", () => {
+    const { store, run, from, to, chat, moved, cleanup } = setup();
+    try {
+      const [id, other] = [randomUUID(), randomUUID()] as [string, string];
+      chat(id);
+      chat(other);
+      open(store, id);
+      const project = store.snapshot().projects.find((item) => item.id === from);
+      const tab = project?.tabs[0];
+      const pane = tab?.nodes.find((node) => node.kind === "pane");
+      if (!project || !tab || !pane) throw new Error("Pane missing");
+      const { result } = run({
+        kind: "pane.transfer",
+        projectId: from,
+        expectedVersion: project.version,
+        tabId: tab.id,
+        paneId: pane.id,
+        targetTabId: randomUUID(),
+        targetProjectId: to,
+        newTab: true,
+        splitId: randomUUID(),
+      });
+      expect(result.outcome.status).toBe("accepted");
+      expect(store.agent(id).projectId).toBe(to);
+      expect(store.agent(other).projectId).toBe(from);
+      expect(store.fileDirectory(to, "/projects/from")).toBe("/projects/from");
+      return vi.waitFor(() => expect(moved).toEqual([id])).finally(cleanup);
+    } catch (error) {
+      cleanup();
+      throw error;
+    }
+  });
+
   it("leaves everything as it was when the move is refused", () => {
     const { store, run, from, to, chat, moved, cleanup } = setup();
     try {

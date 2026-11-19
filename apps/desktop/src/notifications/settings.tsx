@@ -1,5 +1,15 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { useNotificationPreferences, setNotificationPreferences } from "./preferences";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Play } from "lucide-react";
+import {
+  BUILT_IN_SOUNDS,
+  getNotificationPreferences,
+  useNotificationPreferences,
+  setNotificationPreferences,
+  type SoundChoice,
+  type SoundEvent,
+} from "./preferences";
+import { saveCustomSound, CUSTOM_SOUND_EXTENSIONS } from "./custom-sounds";
+import { SettingsChoice } from "@/settings/settings-choice";
 import {
   desktopNotice,
   notificationAccess,
@@ -9,7 +19,7 @@ import {
 import { accessHint, errorMessage, type NotificationAccess } from "./access";
 import { isTauri } from "@/tauri";
 import { playAgentSound, unlockAudio } from "./sound";
-import { Section, SettingsCard } from "@/views/settings-primitives";
+import { Row, Section, SettingsCard } from "@/views/settings-primitives";
 import { Button } from "@/components/ui/button";
 
 export function NotificationSettings({
@@ -75,40 +85,50 @@ export function NotificationSettings({
                 void run(async () => {
                   if (sound) await unlockAudio();
                   await onSetSound?.(sound);
-                  setNotificationPreferences({ ...preferences, sound });
+                  setNotificationPreferences({ sound });
                 });
               }}
             />
           </label>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Button
-              size="sm"
-              disabled={busy}
-              variant="outline"
-              onClick={() =>
-                void run(async () => {
-                  await unlockAudio();
-                  await playAgentSound("done");
-                })
-              }
-            >
-              Test completion sound
-            </Button>
-            <Button
-              size="sm"
-              disabled={busy}
-              variant="outline"
-              onClick={() =>
-                void run(async () => {
-                  await unlockAudio();
-                  await playAgentSound("needs_input");
-                })
-              }
-            >
-              Test input sound
-            </Button>
-          </div>
         </div>
+        {preferences.sound && (
+          <>
+            <SoundRow event="done" label="Agent finished" ownFile={!native} run={run} busy={busy} />
+            <SoundRow
+              event="needs_input"
+              label="Needs your input"
+              ownFile={!native}
+              run={run}
+              busy={busy}
+            />
+            <Row label="Volume">
+              <label className="flex items-center gap-3">
+                <input
+                  type="range"
+                  aria-label="Sound volume"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={Math.round(preferences.volume * 100)}
+                  className="w-40 accent-primary"
+                  onChange={(event) =>
+                    setNotificationPreferences({ volume: Number(event.target.value) / 100 })
+                  }
+                  // Previewing on release, not on every step of the drag.
+                  onPointerUp={() =>
+                    void run(async () => {
+                      await unlockAudio();
+                      await playAgentSound("done");
+                    })
+                  }
+                />
+                <span className="w-9 text-right text-xs tabular-nums">
+                  {Math.round(preferences.volume * 100)}%
+                </span>
+              </label>
+            </Row>
+          </>
+        )}
         {!native && (
           <div className="p-4">
             <label className="flex items-center justify-between gap-6">
@@ -129,7 +149,7 @@ export function NotificationSettings({
                     // Keep the choice even when the system says no: the status below explains
                     // how to allow it, and banners start once it does.
                     if (desktop && access === "not_asked") await requestNotificationAccess();
-                    setNotificationPreferences({ ...preferences, desktop });
+                    setNotificationPreferences({ desktop });
                   });
                 }}
               />
@@ -200,4 +220,101 @@ export function NotificationSettings({
       {notice && <p className="mt-2 text-xs text-muted-foreground">{notice}</p>}
     </Section>
   );
+}
+
+/**
+ * One event's sound: a built-in one, the person's own file, or none. Picking plays the sound, so
+ * choosing by ear needs no extra click; the play button repeats it.
+ */
+function SoundRow({
+  event,
+  label,
+  ownFile,
+  run,
+  busy,
+}: {
+  event: SoundEvent;
+  label: string;
+  /** The phone's web view has no lasting storage for a file, so it offers the built-in ones. */
+  ownFile: boolean;
+  run(action: () => Promise<void>): Promise<void>;
+  busy: boolean;
+}) {
+  const preferences = useNotificationPreferences();
+  const file = useRef<HTMLInputElement>(null);
+  const value = preferences.sounds[event];
+  const name = preferences.customNames[event];
+  const play = (choice: SoundChoice) =>
+    run(async () => {
+      await unlockAudio();
+      await playAgentSound(event, { choice });
+    });
+  const choose = (choice: SoundChoice) => {
+    const current = getNotificationPreferences();
+    setNotificationPreferences({ sounds: { ...current.sounds, [event]: choice } });
+  };
+  const options: { value: SoundChoice | "choose-file"; label: string }[] = [
+    ...BUILT_IN_SOUNDS.map((sound) => ({ value: sound.id, label: sound.label })),
+    ...(name && (ownFile || value === "custom")
+      ? [{ value: "custom" as const, label: shortName(name) }]
+      : []),
+    ...(ownFile
+      ? [{ value: "choose-file" as const, label: name ? "Choose another file…" : "Your own file…" }]
+      : []),
+    { value: "none", label: "None" },
+  ];
+  return (
+    <Row label={label}>
+      <div className="flex items-center gap-2">
+        <SettingsChoice
+          label={`${label} sound`}
+          value={value}
+          options={options}
+          disabled={busy}
+          onChange={(choice) => {
+            // The file is stored before it is chosen, so cancelling the picker changes nothing.
+            if (choice === "choose-file") return file.current?.click();
+            choose(choice);
+            if (choice !== "none") void play(choice);
+          }}
+        />
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          aria-label={`Play ${label.toLowerCase()} sound`}
+          disabled={busy || value === "none"}
+          onClick={() => void play(value)}
+        >
+          <Play aria-hidden="true" />
+        </Button>
+        <input
+          ref={file}
+          type="file"
+          hidden
+          aria-label={`${label} sound file`}
+          accept={`audio/*,${CUSTOM_SOUND_EXTENSIONS.map((extension) => `.${extension}`).join(",")}`}
+          onChange={(change) => {
+            const picked = change.target.files?.[0];
+            change.target.value = "";
+            if (!picked) return;
+            void run(async () => {
+              await saveCustomSound(event, picked);
+              const current = getNotificationPreferences();
+              setNotificationPreferences({
+                sounds: { ...current.sounds, [event]: "custom" },
+                customNames: { ...current.customNames, [event]: picked.name },
+              });
+              await unlockAudio();
+              await playAgentSound(event, { choice: "custom" });
+            });
+          }}
+        />
+      </div>
+    </Row>
+  );
+}
+
+/** Keeps a long file name from stretching the picker, while its extension still shows. */
+function shortName(name: string): string {
+  return name.length <= 24 ? name : `${name.slice(0, 15)}…${name.slice(-8)}`;
 }

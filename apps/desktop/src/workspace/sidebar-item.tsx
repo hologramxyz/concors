@@ -192,6 +192,7 @@ export function WorkspaceSidebarItem({
   return (
     <li
       data-drop-workspace={project.id}
+      data-workspace-row={project.id}
       data-drop-target={dropTarget || undefined}
       className={cn(
         // Keyboard focus shows, but a clicked row does not stay filled once selection moves on.

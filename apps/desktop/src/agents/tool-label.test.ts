@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { AgentItem } from "@concors/protocol";
-import { argumentsSummary, parseToolTitle, toolDisplayName, toolSummary } from "./tool-label";
+import {
+  argumentsSummary,
+  commandSummary,
+  parseToolTitle,
+  toolDisplayName,
+  toolSummary,
+} from "./tool-label";
 import { timelineView } from "./thinking";
 
 const item = (id: string, extra: Partial<AgentItem> = {}): AgentItem => ({
@@ -37,6 +43,33 @@ describe("tool labels", () => {
     expect(argumentsSummary('{"query":"select:Read","max_results":5}')).toBe("select:Read");
     expect(argumentsSummary('{"operation":{"kind":"read","sessionId":"s1"}}')).toBe("read · s1");
     expect(toolSummary(item("b", { presentation: { type: "mcp" } }))).toBe("Concors supervisor");
+  });
+});
+
+describe("rows from Claude Code's own tools", () => {
+  // As 0.18.2 showed them: "· listagents  ListAgents", "· sendmessage  SendMessage".
+  it("say each name once", () => {
+    const claude = (name: string, input?: string) =>
+      item(name, {
+        title: ` · ${name}`,
+        text: name,
+        presentation: { type: "mcp", ...(input ? { input } : {}) },
+      });
+    expect(toolDisplayName(" · ListAgents")).toBe("List agents");
+    expect(toolSummary(claude("ListAgents", "{}"))).toBe("");
+    expect(toolDisplayName(" · SendMessage")).toBe("Send message");
+    expect(toolSummary(claude("SendMessage", '{"to":"reviewer","message":"Ship it"}'))).toBe(
+      "reviewer · Ship it",
+    );
+  });
+
+  it("show what a command ran, not the folder it changed into first", () => {
+    expect(commandSummary("cd ~/work/router-superset-app && git log --oneline")).toBe(
+      "git log --oneline",
+    );
+    expect(commandSummary("cd '/tmp/my app'; date -u +%T")).toBe("date -u +%T");
+    expect(commandSummary("cd ~/work/router-superset-app")).toBe("cd ~/work/router-superset-app");
+    expect(commandSummary("pnpm test && cd docs")).toBe("pnpm test && cd docs");
   });
 });
 

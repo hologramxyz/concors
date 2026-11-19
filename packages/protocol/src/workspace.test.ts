@@ -628,7 +628,7 @@ describe("pane.transfer", () => {
         targetTabId: otherTabId,
         splitId: id(),
       }),
-    ).toThrow("different tab");
+    ).toThrow("Choose a pane");
     expect(() =>
       applyWorkspaceOperation(next, {
         ...base,
@@ -638,6 +638,176 @@ describe("pane.transfer", () => {
         splitId: id(),
       }),
     ).toThrow("another client");
+  });
+});
+
+describe("pane.transfer to another workspace", () => {
+  /**
+   * "Concors" has one tab split between a terminal and a chat under way; "Other" has a tab
+   * holding one chat.
+   */
+  function setup() {
+    const { state, projectId, tabId, paneId } = fixture();
+    const chatPaneId = id(),
+      targetId = id(),
+      reviewTabId = id(),
+      reviewPaneId = id();
+    let next = applyWorkspaceOperation(state, {
+      kind: "pane.split",
+      projectId,
+      expectedVersion: 1,
+      tabId,
+      paneId,
+      splitId: id(),
+      newPaneId: chatPaneId,
+      axis: "horizontal",
+      profile: "chat",
+    });
+    next = applyWorkspaceOperation(next, {
+      kind: "project.add",
+      projectId: targetId,
+      name: "Other",
+      directory: "/projects/other",
+    });
+    next = applyWorkspaceOperation(next, {
+      kind: "tab.create",
+      projectId: targetId,
+      expectedVersion: 0,
+      tabId: reviewTabId,
+      paneId: reviewPaneId,
+      name: "Review",
+      profile: "chat",
+    });
+    const sessionId = id();
+    const bound = JSON.parse(JSON.stringify(next)) as WorkspaceSnapshot;
+    const chat = bound.projects[0]!.tabs[0]!.nodes.find((node) => node.id === chatPaneId);
+    if (chat?.kind === "pane") chat.sessionId = sessionId;
+    const base = { kind: "pane.transfer", projectId, expectedVersion: 2, tabId } as const;
+    return {
+      state: bound,
+      base,
+      projectId,
+      tabId,
+      paneId,
+      chatPaneId,
+      sessionId,
+      targetId,
+      reviewTabId,
+      reviewPaneId,
+    };
+  }
+
+  it("joins a tab of another workspace beside its chats, staying in its own folder", () => {
+    const t = setup();
+    const splitId = id();
+    const moved = applyWorkspaceOperation(t.state, {
+      ...t.base,
+      paneId: t.chatPaneId,
+      targetTabId: t.reviewTabId,
+      targetProjectId: t.targetId,
+      splitId,
+    });
+    const source = moved.projects[0]!.tabs[0]!;
+    expect(source.root).toBe(t.paneId);
+    expect(source.nodes.map((node) => node.id)).toEqual([t.paneId]);
+    const review = moved.projects[1]!.tabs[0]!;
+    validateLayout(review);
+    expect(review.root).toBe(splitId);
+    expect(review.nodes.find((node) => node.id === t.chatPaneId)).toMatchObject({
+      sessionId: t.sessionId,
+      directory: "/projects/concors",
+    });
+    expect(review.nodes.some((node) => node.id === t.reviewPaneId)).toBe(true);
+    expect(moved.projects[0]!.version).toBe(3);
+    expect(moved.projects[1]!.version).toBe(2);
+    expect(moved.selection).toEqual({ projectId: t.targetId, tabId: t.reviewTabId });
+  });
+
+  it("opens in a tab of its own, in another workspace or its own", () => {
+    const t = setup();
+    const newTabId = id();
+    const elsewhere = applyWorkspaceOperation(t.state, {
+      ...t.base,
+      paneId: t.chatPaneId,
+      targetTabId: newTabId,
+      targetProjectId: t.targetId,
+      newTab: true,
+      splitId: id(),
+    });
+    expect(elsewhere.projects[1]!.tabs.map((tab) => [tab.id, tab.name, tab.root])).toEqual([
+      [t.reviewTabId, "Review", t.reviewPaneId],
+      [newTabId, "Tab 2", t.chatPaneId],
+    ]);
+    expect(elsewhere.selection).toEqual({ projectId: t.targetId, tabId: newTabId });
+    const here = applyWorkspaceOperation(t.state, {
+      ...t.base,
+      paneId: t.chatPaneId,
+      targetTabId: newTabId,
+      newTab: true,
+      splitId: id(),
+    });
+    expect(here.projects[0]!.tabs.map((tab) => tab.root)).toEqual([t.paneId, t.chatPaneId]);
+    expect(here.projects[0]!.tabs[1]!.name).toBe("Tab 2");
+  });
+
+  it("starts a chat that has not begun in the workspace it moved to", () => {
+    const t = setup();
+    const unbound = JSON.parse(JSON.stringify(t.state)) as WorkspaceSnapshot;
+    const chat = unbound.projects[0]!.tabs[0]!.nodes.find((node) => node.id === t.chatPaneId);
+    if (chat?.kind === "pane") chat.sessionId = null;
+    const moved = applyWorkspaceOperation(unbound, {
+      ...t.base,
+      paneId: t.chatPaneId,
+      targetTabId: t.reviewTabId,
+      targetProjectId: t.targetId,
+      splitId: id(),
+    });
+    expect(
+      moved.projects[1]!.tabs[0]!.nodes.find((node) => node.id === t.chatPaneId),
+    ).toMatchObject({ directory: "/projects/other" });
+  });
+
+  it("refuses terminals, a lone pane's own tab again, and an ID in use", () => {
+    const t = setup();
+    expect(() =>
+      applyWorkspaceOperation(t.state, {
+        ...t.base,
+        paneId: t.paneId,
+        targetTabId: t.reviewTabId,
+        targetProjectId: t.targetId,
+        splitId: id(),
+      }),
+    ).toThrow("Only chats");
+    const alone = applyWorkspaceOperation(t.state, {
+      ...t.base,
+      paneId: t.chatPaneId,
+      targetTabId: id(),
+      newTab: true,
+      splitId: id(),
+    });
+    const own = alone.projects[0]!.tabs[1]!;
+    expect(() =>
+      applyWorkspaceOperation(alone, {
+        kind: "pane.transfer",
+        projectId: t.projectId,
+        expectedVersion: 3,
+        tabId: own.id,
+        paneId: t.chatPaneId,
+        targetTabId: id(),
+        newTab: true,
+        splitId: id(),
+      }),
+    ).toThrow("another workspace");
+    expect(() =>
+      applyWorkspaceOperation(t.state, {
+        ...t.base,
+        paneId: t.chatPaneId,
+        targetTabId: t.reviewTabId,
+        targetProjectId: t.targetId,
+        newTab: true,
+        splitId: id(),
+      }),
+    ).toThrow("ID already exists");
   });
 });
 
