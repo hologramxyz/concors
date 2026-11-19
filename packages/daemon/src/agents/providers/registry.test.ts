@@ -147,7 +147,7 @@ it("installs an agent CLI's newest release and an npx adapter's audited version"
     );
     return JSON.parse(await readFile(join(providers, id, "npm-args.json"), "utf8")) as string[];
   };
-  const flags = ["--no-audit", "--no-fund", "--save-exact"];
+  const flags = ["--no-audit", "--no-fund", "--save-exact", "--ignore-scripts=false"];
   expect(await install("codex")).toEqual([
     "install",
     "--prefix",
@@ -162,6 +162,10 @@ it("installs an agent CLI's newest release and an npx adapter's audited version"
     ...flags,
     "@google/gemini-cli@0.52.0",
   ]);
+  // npm 12 runs the CLI's own postinstall (which puts its binary in place) only when allowed.
+  expect(JSON.parse(await readFile(join(providers, "acp-gemini", "package.json"), "utf8"))).toEqual(
+    { allowScripts: { "@google/gemini-cli": true } },
+  );
 });
 it("preserves argv boundaries and credentials for a configured executable", async () => {
   const root = await mkdtemp(join(tmpdir(), "concors-provider-argv-"));
