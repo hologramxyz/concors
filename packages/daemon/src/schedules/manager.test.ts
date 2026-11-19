@@ -158,6 +158,59 @@ it("runs without clients, selects the model, reuses the session and resumes it a
   expect(f.workspace.agents()).toHaveLength(1);
 });
 
+it("moves a schedule with its chat to another workspace, and runs it there", async () => {
+  const f = await setup();
+  const changed = vi.fn();
+  f.create();
+  f.setNow("2026-09-16T13:00:00Z");
+  f.manager.tick();
+  await expect.poll(() => f.workspace.agents()[0]?.status).toBe("done");
+  await expect.poll(() => f.manager.list()[0]?.sessionId).toBeTruthy();
+  const session = f.manager.list()[0]!.sessionId!;
+  const other = randomUUID();
+  const folder = join(f.directory, "other");
+  await mkdir(folder);
+  f.workspace.execute({
+    type: "workspace.command",
+    commandId: randomUUID(),
+    epoch: f.workspace.snapshot().epoch,
+    operation: { kind: "project.add", projectId: other, name: "Other", directory: folder },
+  });
+  const revision = f.manager.list()[0]!.revision;
+  const publish = vi.spyOn(f.manager as unknown as { publish(): void }, "publish");
+  publish.mockImplementation(changed);
+  f.workspace.moveClosedChat(session, other);
+  expect(f.workspace.agent(session).projectId).toBe(other);
+  expect(f.manager.list()[0]).toMatchObject({ projectId: other, revision: revision + 1 });
+  expect(changed).toHaveBeenCalledOnce();
+  publish.mockRestore();
+  // Still valid where it is now: it can be edited, and its next run reuses the same chat.
+  const schedule = f.manager.list()[0]!;
+  const { id, revision: current, runs: _runs, ...rest } = schedule;
+  const edit = f.request({
+    kind: "update",
+    id,
+    expectedRevision: current,
+    schedule: {
+      name: rest.name,
+      projectId: rest.projectId,
+      prompt: "Review again",
+      target: rest.target,
+      cadence: rest.cadence,
+      enabled: true,
+    },
+  });
+  expect(edit.outcome.status).toBe("ok");
+  f.setNow("2026-09-16T14:00:00Z");
+  f.manager.tick();
+  await expect.poll(() => f.manager.list()[0]?.runs[0]?.turnId).toBeTruthy();
+  expect(f.manager.list()[0]?.runs).toHaveLength(2);
+  await expect.poll(() => f.workspace.agent(session).status).toBe("done");
+  // A run's result is recorded on the next tick.
+  f.manager.tick();
+  expect(f.manager.list()[0]?.runs[0]).toMatchObject({ status: "done", sessionId: session });
+});
+
 it("keeps native tool approvals and does not stack runs while waiting for input", async () => {
   const f = await setup();
   const schedule = f.create({ prompt: "approve this command" });

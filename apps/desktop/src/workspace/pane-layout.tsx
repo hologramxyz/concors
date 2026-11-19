@@ -54,6 +54,7 @@ import {
   PANE_RENAME_CAPABILITY,
   PANE_TRANSFER_CAPABILITY,
   PANE_TRANSFER_WORKSPACE_CAPABILITY,
+  SCHEDULE_FOLLOWS_CHAT_CAPABILITY,
   type LayoutNode,
   type WorkspaceOperation,
   type WorkspaceProject,
@@ -95,9 +96,15 @@ export function PaneLayout(props: Props) {
   const [draggedPaneId, setDraggedPaneId] = useState<string | null>(null);
   const [drop, setDrop] = useState<{ target: PaneDropTarget; area: PaneArea } | null>(null);
   const stopDrag = useRef<(() => void) | null>(null);
-  const { schedules } = useSchedules();
-  // Every schedule, enabled or not: each is tied to its chat's workspace, so a chat with one stays.
-  const scheduledChats = new Set(schedules?.map((schedule) => schedule.sessionId));
+  const { schedules, connection: daemon } = useSchedules();
+  // Every schedule, enabled or not, is tied to its chat's workspace: a chat with one stays, unless
+  // the daemon moves schedules along with their chat.
+  const schedulesFollow =
+    daemon?.state.status === "ready" &&
+    !!daemon.state.daemon.capabilities?.includes(SCHEDULE_FOLLOWS_CHAT_CAPABILITY);
+  const scheduledChats = new Set(
+    schedulesFollow ? [] : schedules?.map((schedule) => schedule.sessionId),
+  );
   // The ratio a dropped pane's new split is about to get, shown from the moment the split arrives:
   // the move and its resize are two commands, and between them the pane would jump to half.
   const [arriving, setArriving] = useState<{ splitId: string; ratio: number } | null>(null);

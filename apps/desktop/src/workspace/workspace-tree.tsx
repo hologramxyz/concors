@@ -11,6 +11,7 @@ import {
   CHAT_MOVE_CAPABILITY,
   PANE_RENAME_CAPABILITY,
   PANE_TRANSFER_WORKSPACE_CAPABILITY,
+  SCHEDULE_FOLLOWS_CHAT_CAPABILITY,
   PROJECT_CLOSE_CAPABILITY,
   type AgentInfo,
   type WorkspaceOperation,
@@ -217,12 +218,21 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     props.canEdit &&
     connection?.state.status === "ready" &&
     !!connection.state.daemon.capabilities?.includes(CHAT_MOVE_CAPABILITY);
+  const acrossWorkspaces =
+    connection?.state.status === "ready" &&
+    !!connection.state.daemon.capabilities?.includes(PANE_TRANSFER_WORKSPACE_CAPABILITY);
+  // Newer daemons move a chat's schedules with it; older ones would leave them behind.
+  const schedulesFollow =
+    connection?.state.status === "ready" &&
+    !!connection.state.daemon.capabilities?.includes(SCHEDULE_FOLLOWS_CHAT_CAPABILITY);
+  const staysForSchedule = (id: string | null | undefined) =>
+    !schedulesFollow && !!hasSchedule(id ?? undefined);
   /** Sends a row's chat to another workspace: an open one with its tab, a closed one by itself. */
   const moveRow = (project: WorkspaceProject, row: SidebarRow) => {
     if (!canMoveChats) return undefined;
     if (row.kind === "closed") {
       const { agent } = row.chat;
-      if (hasSchedule(agent.id) || !chatActions) return undefined;
+      if (staysForSchedule(agent.id) || !chatActions) return undefined;
       return (projectId: string) => {
         setWorkspaceExpanded(projectId, true);
         void chatActions
@@ -231,15 +241,29 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
       };
     }
     if (row.kind !== "tab") return undefined;
-    const panes = project.tabs.find((tab) => tab.id === row.tabId)?.nodes;
-    if (
-      panes?.some(
-        (node) =>
-          node.kind === "pane" &&
-          (node.profile !== "chat" || hasSchedule(node.sessionId ?? undefined)),
-      )
-    )
-      return undefined;
+    const tab = project.tabs.find((item) => item.id === row.tabId);
+    if (!tab) return undefined;
+    const panes = tab.nodes.filter((node) => node.kind === "pane");
+    // A tab holding a terminal cannot leave its workspace, but the chat it is named after can,
+    // into a tab of its own there; the terminal stays.
+    if (panes.some((node) => node.profile !== "chat" || staysForSchedule(node.sessionId))) {
+      const main = mainPane(tab);
+      if (main?.profile !== "chat" || staysForSchedule(main.sessionId)) return undefined;
+      return (projectId: string) => {
+        const move = paneTransfer(
+          { project, tab, pane: main },
+          { projectId },
+          {
+            acrossWorkspaces,
+            scheduled: false,
+            ids: { splitId: crypto.randomUUID(), tabId: crypto.randomUUID() },
+          },
+        );
+        if (!move) return;
+        setWorkspaceExpanded(projectId, true);
+        props.onCommand(move);
+      };
+    }
     return (projectId: string) => {
       setWorkspaceExpanded(projectId, true);
       props.onCommand({
@@ -261,13 +285,10 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     const pane = tab?.nodes.length === 1 ? tab.nodes[0] : undefined;
     // Chats only: a terminal's row stays put, as it cannot leave its workspace either.
     if (!tab || pane?.kind !== "pane" || pane.profile !== "chat") return undefined;
-    const acrossWorkspaces =
-      connection?.state.status === "ready" &&
-      !!connection.state.daemon.capabilities?.includes(PANE_TRANSFER_WORKSPACE_CAPABILITY);
     return (target: { projectId: string; tabId: string }) => {
       const move = paneTransfer({ project, tab, pane }, target, {
         acrossWorkspaces,
-        scheduled: !!hasSchedule(pane.sessionId ?? undefined),
+        scheduled: staysForSchedule(pane.sessionId),
         ids: { splitId: crypto.randomUUID(), tabId: crypto.randomUUID() },
       });
       if (!move) return false;

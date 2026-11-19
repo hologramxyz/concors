@@ -6,6 +6,7 @@ import { test, expect, signedIn } from "./signed-in.ts";
 import { chooseProvider } from "./support/agents.ts";
 import { seedProject } from "./support/projects.ts";
 import { showClosedChats } from "./support/closed-chats.ts";
+import { DaemonConnection, describeDaemonEndpoint } from "../packages/daemon-client/src/index.ts";
 
 /** Two workspaces on their own folders, and a chat with a reply in the second one seeded. */
 async function setup(page: Page, from: string, to: string) {
@@ -280,6 +281,75 @@ test("a chat's row dropped on another workspace's tab row joins that tab", async
       "first message",
     );
   } finally {
+    await rm(from, { recursive: true, force: true });
+    await rm(to, { recursive: true, force: true });
+  }
+});
+
+test("a chat beside a terminal, or with a schedule, still moves, and its schedule goes with it", async ({
+  page,
+}) => {
+  const from = await mkdtemp(join(tmpdir(), "concors-mixed-move-from-"));
+  const to = await mkdtemp(join(tmpdir(), "concors-mixed-move-to-"));
+  const control = new DaemonConnection({
+    endpoint: describeDaemonEndpoint("ws://127.0.0.1:7429/ws"),
+    client: { kind: "test", name: "mixed move", version: "0.0.0" },
+  });
+  try {
+    control.subscribeWorkspace(() => undefined);
+    await control.connect();
+    await setup(page, from, to);
+    // The chat's tab gets a terminal beside it.
+    const chat = await splitChat(page);
+    const chatId = await chat.getAttribute("data-pane-id");
+    const other = visiblePanes(page).last();
+    await other.getByRole("button", { name: "Pane actions" }).click();
+    await page.getByRole("menuitemradio", { name: "Terminal", exact: true }).click();
+    await expect(page.locator(".xterm").filter({ visible: true })).toBeVisible();
+    // And a schedule, paused, which older daemons would have kept in this workspace.
+    const origin = () => control.workspace?.projects.find((p) => p.directory === from);
+    const destination = () => control.workspace?.projects.find((p) => p.directory === to);
+    await expect.poll(() => origin()?.id).toBeTruthy();
+    const originId = origin()?.id;
+    const session = control.agents.find((agent) => agent.projectId === originId);
+    if (!originId || !session) throw new Error("Chat missing");
+    const created = await control.requestSchedule(
+      {
+        kind: "create",
+        schedule: {
+          name: "Nightly",
+          projectId: originId,
+          prompt: "Summarize the day",
+          target: { kind: "session", sessionId: session.id },
+          cadence: { kind: "interval", minutes: 60 },
+          enabled: false,
+        },
+      },
+      crypto.randomUUID(),
+    );
+    expect(created.outcome.status).toBe("ok");
+
+    const row = chatRow(page, "Origin");
+    await row.hover();
+    await row.getByRole("button", { name: /^Actions for / }).click();
+    await page.getByRole("menuitem", { name: "Move to workspace" }).click();
+    await page.getByRole("menuitem", { name: "Destination", exact: true }).click();
+
+    // The chat has a tab of its own there; the terminal stayed, in the tab it was in.
+    await expect(chatRow(page, "Destination")).toHaveCount(1);
+    await expect(chatRow(page, "Origin")).toHaveCount(0);
+    await expect(page.locator(`[data-pane-id="${chatId}"]`).filter({ visible: true })).toHaveCount(
+      1,
+    );
+    await expect(rows(page, "Origin").locator('li[data-sidebar-row^="tab:"]')).toHaveCount(2);
+    await expect
+      .poll(async () => {
+        const list = await control.requestSchedule({ kind: "list" }, crypto.randomUUID());
+        return list.outcome.status === "ok" ? list.outcome.schedules?.[0]?.projectId : undefined;
+      })
+      .toBe(destination()?.id);
+  } finally {
+    control.disconnect();
     await rm(from, { recursive: true, force: true });
     await rm(to, { recursive: true, force: true });
   }

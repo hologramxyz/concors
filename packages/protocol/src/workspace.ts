@@ -7,6 +7,8 @@ import {
 
 /** The daemon moves chats between workspaces: `tab.transfer`, and the agent operation `move`. */
 export const CHAT_MOVE_CAPABILITY = "chat-move";
+/** A chat's schedules move with it to another workspace, so a scheduled chat can move too. */
+export const SCHEDULE_FOLLOWS_CHAT_CAPABILITY = "schedule-follows-chat";
 /** The daemon accepts `pane.transfer`, which moves a pane into another tab of its workspace. */
 export const PANE_TRANSFER_CAPABILITY = "pane-transfer";
 /**
