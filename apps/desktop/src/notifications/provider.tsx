@@ -77,8 +77,8 @@ export function NotificationProvider({
         // output; only a browser needs a click before it may play audio.
         setProblem({
           message: isTauri()
-            ? `The agent sound could not play (${errorMessage(cause, "unknown error")}). Check your sound output, then use Test completion sound in Settings → Notifications.`
-            : "Sound could not play. Use Test completion sound in Settings → Notifications to enable audio.",
+            ? `The agent sound could not play (${errorMessage(cause, "unknown error")}). Check your sound output, then press Play beside Agent finished in Settings → Notifications.`
+            : "Sound could not play. Press Play beside Agent finished in Settings → Notifications to enable audio.",
         });
       });
     };
