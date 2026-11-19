@@ -1952,7 +1952,7 @@ test("the sidebar lists each workspace's tabs under it, as desktop does", async 
   await expect(workspaces).toHaveCount(2);
   await expect(workspaces.nth(0)).toContainText(/Concors\s*alex/);
   await expect(workspaces.nth(1)).toContainText(/Concors\s*forks/);
-  // Pins first, then open tabs in the tab bar's order, then what closed, newest first.
+  // Pins first, then open tabs in the tab bar's order, then what closed, folded apart.
   const first = sidebar.getByRole("list", { name: "Concors tabs" }).first();
   await expect(first.getByRole("listitem")).toHaveText([
     /^Roadmap/,
@@ -1961,10 +1961,14 @@ test("the sidebar lists each workspace's tabs under it, as desktop does", async 
     /^Fix sign-in/,
     /^Flaky upload test/,
     /^pnpm dev/,
-    /^Old onboarding copy/,
+    /^Closed chats\s*1$/,
   ]);
   await expect(row(treeIds.pinnedTab).getByLabel("Pinned")).toBeVisible();
+  const closedChats = first.getByRole("button", { name: /^Closed chats/ });
+  expect((await closedChats.boundingBox())?.height).toBeGreaterThanOrEqual(44);
+  await closedChats.click();
   await expect(row(treeIds.closed).locator("[data-agent-closed]")).toBeVisible();
+  await expect(row(treeIds.closed)).toContainText("Old onboarding copy");
   // Each status as desktop shows it: a spinner while replying, red for a question or a failure,
   // the accent once finished, grey for a terminal running with its tab closed.
   await expect(state(treeIds.workingTab)).toHaveAttribute("data-row-state", "working");
@@ -2000,8 +2004,10 @@ test("the sidebar lists each workspace's tabs under it, as desktop does", async 
   await row(treeIds.forkTab).locator("> button").first().click();
   await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
   await expect(currentTab(ui)).toContainText("Try the new parser");
-  // A closed chat opens again from its row.
+  // A closed chat opens again from its row. The phone keeps no storage for the open group, so
+  // after the demo was entered again it starts folded.
   await ui.getByRole("button", { name: "Open sidebar", exact: true }).click();
+  if ((await closedChats.getAttribute("aria-expanded")) !== "true") await closedChats.click();
   await row(treeIds.closed).locator("> button").first().click();
   await expect(ui.locator(".mobile-shell")).toHaveAttribute("data-sidebar-open", "false");
   await expect(ui.getByRole("log", { name: "Chat timeline" })).toContainText(

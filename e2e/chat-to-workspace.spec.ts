@@ -5,6 +5,7 @@ import type { Page } from "@playwright/test";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { chooseProvider } from "./support/agents.ts";
 import { seedProject } from "./support/projects.ts";
+import { showClosedChats } from "./support/closed-chats.ts";
 
 /** Two workspaces on their own folders, and a chat with a reply in the second one seeded. */
 async function setup(page: Page, from: string, to: string) {
@@ -95,6 +96,7 @@ test("a closed chat moves from its menu, and opens in the workspace it moved to"
       .getByRole("button", { name: /^Close .* tab$/ })
       .last()
       .click();
+    await showClosedChats(page, "Origin");
     const closed = rows(page, "Origin").locator('li[data-sidebar-row^="closed:"]');
     await expect(closed).toHaveCount(1);
 
@@ -102,6 +104,7 @@ test("a closed chat moves from its menu, and opens in the workspace it moved to"
     await closed.getByRole("button", { name: /^Actions for / }).click();
     await page.getByRole("menuitem", { name: "Move to workspace" }).click();
     await page.getByRole("menuitem", { name: "Destination", exact: true }).click();
+    await showClosedChats(page, "Destination");
     const moved = rows(page, "Destination").locator('li[data-sidebar-row^="closed:"]');
     await expect(moved).toHaveCount(1);
     await expect(closed).toHaveCount(0);

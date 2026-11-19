@@ -6,6 +6,7 @@ import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { chooseProvider } from "./support/agents.ts";
 import { closeTab, tab, tabs } from "./support/tabs.ts";
+import { showClosedChats } from "./support/closed-chats.ts";
 
 test("chats are pinned to the top of their workspace, and deleted after a confirmation", async ({
   page,
@@ -17,7 +18,9 @@ test("chats are pinned to the top of their workspace, and deleted after a confir
     await page.goto("/");
     await seedProject(page, "Pinned chats", directory);
     const sidebar = page.getByRole("navigation", { name: "Primary" });
-    const rows = sidebar.getByRole("list", { name: "Pinned chats tabs" }).locator("> li");
+    const rows = sidebar
+      .getByRole("list", { name: "Pinned chats tabs" })
+      .locator("li[data-sidebar-row]");
 
     for (const message of ["hello there", "hello again"]) {
       await page.getByRole("button", { name: "New tab", exact: true }).click();
@@ -34,6 +37,7 @@ test("chats are pinned to the top of their workspace, and deleted after a confir
     await pane.getByRole("textbox", { name: "Pane name", exact: true }).fill("Release notes");
     await page.keyboard.press("Enter");
     await closeTab(page, 2).click();
+    await showClosedChats(page, "Pinned chats");
     const closed = rows.filter({ hasText: "Release notes" });
     await expect(closed.locator("button[data-agent-closed]")).toBeVisible();
     await expect(rows.first()).not.toContainText("Release notes");
@@ -107,7 +111,7 @@ async function startChats(page: Page, workspace: string, directory: string, mess
   return page
     .getByRole("navigation", { name: "Primary" })
     .getByRole("list", { name: `${workspace} tabs` })
-    .locator("> li");
+    .locator("li[data-sidebar-row]");
 }
 
 async function send(page: Page, message: string) {
@@ -244,6 +248,7 @@ test("deleting a chat the machine already deleted finishes quietly", async ({ pa
   try {
     const rows = await startChats(page, "Deleting twice", directory, ["first", "second"]);
     await closeTab(page, 2).click();
+    await showClosedChats(page, "Deleting twice");
     const closed = rows.filter({ has: page.locator("button[data-agent-closed]") });
     await expect(closed).toHaveCount(1);
     const dialog = await askToDelete(page, closed);
@@ -287,6 +292,7 @@ test("a delete that cannot reach the machine says so in one line, and works once
   try {
     const rows = await startChats(page, "Deleting unreachable", directory, ["first", "second"]);
     await closeTab(page, 2).click();
+    await showClosedChats(page, "Deleting unreachable");
     const closed = rows.filter({ has: page.locator("button[data-agent-closed]") });
     await expect(closed).toHaveCount(1);
     const dialog = await askToDelete(page, closed);
@@ -403,6 +409,7 @@ test("only the chat whose dialog was confirmed is deleted, whatever changed mean
     await expect(tabs(page)).toHaveCount(3);
     await closeTab(page, 1).click();
     await expect(tabs(page)).toHaveCount(2);
+    await showClosedChats(page, "Right chat");
     const closed = rows.filter({ has: page.locator("button[data-agent-closed]") });
     await expect(closed).toHaveCount(2);
     const ids = await page

@@ -30,15 +30,18 @@ import { BackgroundTerminalsContext } from "@/terminal/background-terminals";
 import { useClosedTerminalNames } from "@/terminal/closed-names";
 import { useSchedules } from "@/schedules/use-schedules";
 import { setWorkspaceExpanded, useCollapsedWorkspaces } from "./collapsed-workspaces";
+import { setClosedChatsOpen, useOpenClosedChats } from "./open-closed-chats";
 import { WorkspaceSidebarItem } from "./sidebar-item";
 import { clashingWorkspaceParents } from "./workspace-parents";
 import { useProjectIcons } from "./use-project-icons";
 import { projectIconKey } from "./project-icons";
+import { ChevronRight } from "lucide-react";
 import { SidebarDot, SidebarTabRow, UnavailableChats } from "./sidebar-tabs";
 import {
   foldRows,
   rowDot,
   sidebarRows,
+  surfacesRow,
   stableOrder,
   useMinuteClock,
   type OpenTabRow,
@@ -140,7 +143,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
     setWorkspaceExpanded(id, true);
     props.onSelectProject(id);
   };
-  const [more, setMore] = useState<ReadonlySet<string>>(new Set());
+  const openClosedChats = useOpenClosedChats();
   // The order rows were last shown in. It follows every change except while the pointer is over
   // the list: rows then keep their places and new ones go after them. Hovering itself changes no
   // state, so it never repaints anything; only a change that arrives meanwhile is held back. The
@@ -152,10 +155,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
   // Closed rows whose dot keeps them out of the fold, held still with the order.
   const [shownSurfaced, setShownSurfaced] = useState<ReadonlyMap<string, string[]>>(new Map());
   const surfaced = JSON.stringify(
-    [...rows].map(([id, list]) => [
-      id,
-      list.filter((row) => row.kind !== "tab" && rowDot(row)).map((row) => row.key),
-    ]),
+    [...rows].map(([id, list]) => [id, list.filter(surfacesRow).map((row) => row.key)]),
   );
   const followRows = () => {
     setShownOrder((previous) => followOrder(previous, order));
@@ -376,14 +376,63 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
             const selectedRow = ordered.find(
               (row) => row.kind === "tab" && row.tabId === selectedTabId,
             );
-            const fold = more.has(project.id)
-              ? { listed: ordered, folded: [] }
-              : foldRows(ordered, new Set(shownSurfaced.get(project.id)));
+            const fold = foldRows(ordered, new Set(shownSurfaced.get(project.id)));
+            const closedOpen = openClosedChats.has(project.id);
             // Rendered while collapsed too, so the list can ease open and shut.
             const listed = props.collapsed ? [] : fold.listed;
+            const folded = props.collapsed ? [] : fold.folded;
             const foldedDot = strongestDot(fold.folded.map(rowDot));
-            const shown = expanded ? listed : [];
+            const shown = expanded ? [...listed, ...(closedOpen ? folded : [])] : [];
             const current = currentProjectId === project.id;
+            const renderRow = (row: SidebarRow) => {
+              const move = moveRow(project, row);
+              const join = joinRow(project, row);
+              return (
+                <SidebarTabRow
+                  key={row.key}
+                  row={row}
+                  moveTargets={moveTargets(project.id)}
+                  onMove={move}
+                  draggable={!!move || !!join}
+                  onMoveDragStart={
+                    move || join
+                      ? () =>
+                          setMoving({
+                            projectId: project.id,
+                            tabId: row.kind === "tab" ? row.tabId : undefined,
+                            move,
+                            join,
+                          })
+                      : undefined
+                  }
+                  onMoveDragEnd={endMove}
+                  now={now}
+                  selected={row === selectedRow && current}
+                  scheduled={scheduledChats.has(rowChatId(row) ?? "")}
+                  onOpen={() => {
+                    // A background terminal comes back into a new tab.
+                    if (row.kind === "terminal") {
+                      background?.reopen(row.terminal);
+                      return;
+                    }
+                    // Opening a session focuses its pane, as the tab bar does;
+                    // a pane that has not started yet just has its tab selected.
+                    const session =
+                      row.kind === "tab" ? (row.chat?.id ?? row.terminal?.id) : row.chat.agent.id;
+                    if (session) props.onSelectAgent(session);
+                    else if (row.kind === "tab") props.onSelectTab(row.projectId, row.tabId);
+                  }}
+                  onRename={row.kind === "tab" ? rename(project, row) : undefined}
+                  onFork={
+                    row.kind === "terminal"
+                      ? undefined
+                      : fork(row.kind === "tab" ? row.chat : row.chat.agent)
+                  }
+                  onPin={pin(rowChat(row))}
+                  onDelete={remove(rowChat(row))}
+                />
+              );
+            };
             return (
               <Fragment key={project.id}>
                 <WorkspaceSidebarItem
@@ -413,7 +462,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                   execute={props.execute}
                   onCommand={props.onCommand}
                 />
-                {listed.length > 0 && (
+                {listed.length + folded.length > 0 && (
                   <li
                     data-drop-workspace={project.id}
                     className="sidebar-collapse"
@@ -421,75 +470,40 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                   >
                     <div>
                       <ul aria-label={`${project.name} tabs`} className="space-y-0.5">
-                        {listed.map((row) => {
-                          const move = moveRow(project, row);
-                          const join = joinRow(project, row);
-                          return (
-                            <SidebarTabRow
-                              key={row.key}
-                              row={row}
-                              moveTargets={moveTargets(project.id)}
-                              onMove={move}
-                              draggable={!!move || !!join}
-                              onMoveDragStart={
-                                move || join
-                                  ? () =>
-                                      setMoving({
-                                        projectId: project.id,
-                                        tabId: row.kind === "tab" ? row.tabId : undefined,
-                                        move,
-                                        join,
-                                      })
-                                  : undefined
-                              }
-                              onMoveDragEnd={endMove}
-                              now={now}
-                              selected={row === selectedRow && current}
-                              scheduled={scheduledChats.has(rowChatId(row) ?? "")}
-                              onOpen={() => {
-                                // A background terminal comes back into a new tab.
-                                if (row.kind === "terminal") {
-                                  background?.reopen(row.terminal);
-                                  return;
-                                }
-                                // Opening a session focuses its pane, as the tab bar does;
-                                // a pane that has not started yet just has its tab selected.
-                                const session =
-                                  row.kind === "tab"
-                                    ? (row.chat?.id ?? row.terminal?.id)
-                                    : row.chat.agent.id;
-                                if (session) props.onSelectAgent(session);
-                                else if (row.kind === "tab")
-                                  props.onSelectTab(row.projectId, row.tabId);
-                              }}
-                              onRename={row.kind === "tab" ? rename(project, row) : undefined}
-                              onFork={
-                                row.kind === "terminal"
-                                  ? undefined
-                                  : fork(row.kind === "tab" ? row.chat : row.chat.agent)
-                              }
-                              onPin={pin(rowChat(row))}
-                              onDelete={remove(rowChat(row))}
-                            />
-                          );
-                        })}
-                        {fold.folded.length > 0 && (
+                        {listed.map(renderRow)}
+                        {folded.length > 0 && (
+                          // Closed chats, apart and folded: they are history, not work in hand.
                           <li>
                             <button
                               type="button"
-                              onClick={() =>
-                                setMore((previous) => new Set(previous).add(project.id))
-                              }
-                              className="flex h-8 w-full items-center gap-2 rounded-md pr-2 pl-2 text-left text-ui text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
+                              aria-expanded={closedOpen}
+                              onClick={() => setClosedChatsOpen(project.id, !closedOpen)}
+                              className="flex h-7 w-full items-center gap-2 rounded-md pr-2 pl-2 text-left text-xs text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
                             >
                               <span
-                                data-show-more-dot={foldedDot}
+                                data-show-more-dot={closedOpen ? undefined : foldedDot}
                                 className="flex size-[20px] shrink-0 items-center justify-center"
                               >
-                                {foldedDot && <SidebarDot dot={foldedDot} />}
+                                {!closedOpen && foldedDot ? (
+                                  <SidebarDot dot={foldedDot} />
+                                ) : (
+                                  <ChevronRight
+                                    aria-hidden="true"
+                                    className={`size-3.5 transition-transform motion-reduce:transition-none ${closedOpen ? "rotate-90" : ""}`}
+                                  />
+                                )}
                               </span>
-                              Show more
+                              <span className="flex-1">Closed chats</span>
+                              <span className="tabular-nums">{folded.length}</span>
                             </button>
+                            {closedOpen && (
+                              <ul
+                                aria-label={`${project.name} closed chats`}
+                                className="mt-0.5 ml-[17px] space-y-0.5 border-l border-sidebar-border pl-1"
+                              >
+                                {folded.map(renderRow)}
+                              </ul>
+                            )}
                           </li>
                         )}
                       </ul>
