@@ -218,9 +218,12 @@ starts once someone is signed in. With no identity configured the daemon uses th
 base directory exactly as before, which is what managed VPS machines and `--ephemeral` test runs
 rely on.
 
-The key is a partition key, not a credential. The local gateway binds to loopback and
-authenticates nothing, so anything able to reach it already has the access that forging a key
-would grant.
+The key is a partition key, not a credential. The credential is a separate token: the app makes a
+fresh one each time it starts the gateway and passes it in `CONCORS_LOCAL_TOKEN`, which the gateway
+reads and removes from its environment before starting anything. It accepts a WebSocket only with
+that token (as `concors.bearer.<token>`), so other accounts on the computer, which can reach
+loopback too, cannot connect. A gateway started by hand without the variable accepts any local
+client, as before, for development.
 
 The first account to sign in adopts an existing unpartitioned installation, so upgrading keeps
 its projects and history instead of presenting an empty machine. Adoption stops the running

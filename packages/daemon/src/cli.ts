@@ -122,6 +122,9 @@ async function serve(cli: ParsedCli): Promise<number> {
   // Only after adoption, which still needs the base directory to find an unpartitioned install.
   applyResolvedDataDir(dataDir);
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  // Read once and removed, so the session host, terminals and agents never inherit it.
+  const localToken = process.env["CONCORS_LOCAL_TOKEN"] || undefined;
+  delete process.env["CONCORS_LOCAL_TOKEN"];
   const server = cli.ephemeral
     ? createDaemonServer(config, { workspacePath: join(dataDir, "workspace.sqlite") })
     : createPersistentGateway(
@@ -144,6 +147,7 @@ async function serve(cli: ParsedCli): Promise<number> {
               logger,
             }
           : undefined,
+        managedConfig ? undefined : localToken,
       );
 
   const url = await server.listen();

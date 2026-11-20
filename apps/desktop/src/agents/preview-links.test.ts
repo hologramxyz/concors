@@ -32,6 +32,16 @@ it("moves the page onto the preview address without touching its access fragment
   expect(previewLinkUrl(link, "http://127.0.0.1:5173/")).toBe(
     "http://127.0.0.1:5173/pricing?plan=free",
   );
+  // Through the gateway's login page, the page to open travels in the fragment.
+  const login = new URL(
+    previewLinkUrl(link, "https://5173.m-1.concors.app/__concors/preview-auth#access_token=abc"),
+  );
+  expect(login.pathname).toBe("/__concors/preview-auth");
+  expect(login.search).toBe("");
+  expect(Object.fromEntries(new URLSearchParams(login.hash.slice(1)))).toEqual({
+    access_token: "abc",
+    path: "/pricing?plan=free",
+  });
 });
 
 it("tells file references from web links", () => {

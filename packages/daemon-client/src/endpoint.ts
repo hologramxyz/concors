@@ -2,8 +2,8 @@ import { DEFAULT_LOCAL_DAEMON_PORT, WS_PATH } from "@concors/protocol";
 
 /**
  * Where a daemon lives. The protocol spoken over the connection is identical for both kinds; the
- * distinction only matters for UX (labels, trust indicators) and, later, for authentication —
- * remote endpoints will carry credentials, local ones will not.
+ * distinction matters for UX (labels, trust indicators); credentials go with the connection for
+ * remote endpoints, and in `token` for a local gateway the desktop app started.
  */
 export interface DaemonEndpoint {
   /** Full WebSocket URL, e.g. `ws://127.0.0.1:7420/ws` or `wss://daemon.example.com/ws`. */
@@ -12,6 +12,8 @@ export interface DaemonEndpoint {
   readonly kind: "local" | "remote";
   /** Optional human-readable name shown in the UI. */
   readonly label?: string;
+  /** Secret a local gateway was started with; connections present it. Kept in memory only. */
+  readonly token?: string;
 }
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
@@ -60,6 +62,10 @@ export function describeDaemonEndpoint(rawUrl: string, label?: string): DaemonEn
 }
 
 /** Endpoint of a daemon running on the same machine as the client. */
-export function localDaemonEndpoint(port: number = DEFAULT_LOCAL_DAEMON_PORT): DaemonEndpoint {
-  return describeDaemonEndpoint(`ws://127.0.0.1:${port}${WS_PATH}`, "Local daemon");
+export function localDaemonEndpoint(
+  port: number = DEFAULT_LOCAL_DAEMON_PORT,
+  token?: string,
+): DaemonEndpoint {
+  const endpoint = describeDaemonEndpoint(`ws://127.0.0.1:${port}${WS_PATH}`, "Local daemon");
+  return token ? { ...endpoint, token } : endpoint;
 }

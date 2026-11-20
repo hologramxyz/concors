@@ -235,6 +235,65 @@ it("shares a real PTY, transfers control, replays its screen, rebinds and record
   await expect(request(after.connection, { ...recover, epoch: randomUUID() })).rejects.toThrow();
 }, 15000);
 
+it.skipIf(process.platform === "win32")(
+  "kills a terminal that ignores the hang-up, without holding up anyone else's requests",
+  async () => {
+    vi.stubEnv("SHELL", "/bin/sh");
+    const directory = mkdtempSync(join(tmpdir(), "concors-terminal-"));
+    directories.push(directory);
+    const config = loadDaemonConfig({ port: 0, logLevel: "silent" }, {});
+    server = createDaemonServer(config, { workspacePath: join(directory, "workspace.sqlite") });
+    const url = await server.listen();
+    const { connection, events } = await open(url);
+    const other = await open(url);
+    const projectId = randomUUID(),
+      tabId = randomUUID(),
+      paneId = randomUUID();
+    await edit(connection, { kind: "project.add", projectId, name: "Stubborn", directory });
+    await edit(connection, {
+      kind: "tab.create",
+      projectId,
+      tabId,
+      paneId,
+      expectedVersion: 0,
+      name: "Shell",
+      profile: "shell",
+    });
+    const [session] = await request(connection, {
+      kind: "start",
+      epoch: connection.workspace!.epoch,
+      projectId,
+      tabId,
+      paneId,
+      expectedVersion: 1,
+      expectedSessionId: null,
+      cols: 80,
+      rows: 24,
+    });
+    const sessionId = session!.id;
+    await request(connection, { kind: "attach", sessionId });
+    await request(connection, { kind: "claim", sessionId, cols: 80, rows: 24 });
+    connection.sendTerminalInput(sessionId, "trap '' HUP; echo hangup-ignored-$((6*7))\r");
+    await expect
+      .poll(() =>
+        events
+          .filter((e) => e.type === "terminal.output")
+          .map((e) => e.data)
+          .join(""),
+      )
+      .toContain("hangup-ignored-42");
+    const started = Date.now();
+    const stopped = request(connection, { kind: "stop", sessionId });
+    // Another client's request answers while the stop is still waiting on the shell.
+    await request(other.connection, { kind: "list" });
+    expect(Date.now() - started).toBeLessThan(1000);
+    const [after] = await stopped;
+    expect(after?.status).toBe("exited");
+    expect(Date.now() - started).toBeLessThan(5000);
+  },
+  15_000,
+);
+
 it("rejects network exposure before starting a terminal-enabled daemon", () => {
   expect(() => createDaemonServer(loadDaemonConfig({ host: "0.0.0.0" }, {}))).toThrow("loopback");
 });

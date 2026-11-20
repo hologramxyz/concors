@@ -71,7 +71,8 @@ if (typeof window !== "undefined") {
 }
 
 function connectionKey(endpoint: DaemonEndpoint | null, machineId: string, scope: string) {
-  return `${scope}:${machineId}:${endpoint?.url}`;
+  // A restarted local gateway may get the same port with a new token.
+  return `${scope}:${machineId}:${endpoint?.url}:${endpoint?.token ?? ""}`;
 }
 
 function acquire(

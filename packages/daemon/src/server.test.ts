@@ -145,6 +145,7 @@ describe("WebSocket handshake", () => {
           "host-usage",
           "machine-resources",
           "preview-names",
+          "preview-login-path",
           "terminal-profiles",
           "color-themes",
           "project-files",

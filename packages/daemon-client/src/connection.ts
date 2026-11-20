@@ -14,6 +14,7 @@ import {
 } from "@concors/protocol";
 import { ThemeRequestSchema, type ThemeResult } from "@concors/protocol";
 import { AUTH_REFRESH_CAPABILITY } from "@concors/protocol";
+import { PREVIEW_LOGIN_CAPABILITY, PREVIEW_LOGIN_PATH } from "@concors/protocol";
 import {
   HEARTBEAT_CAPABILITY,
   HEARTBEAT_INTERVAL_MS,
@@ -663,7 +664,10 @@ export class DaemonConnection {
     this.#protocolVersion = options.protocolVersion ?? PROTOCOL_VERSION;
     this.#handshakeTimeoutMs = options.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS;
     this.#protocols =
-      typeof options.protocols === "string" ? options.protocols : options.protocols?.slice();
+      typeof options.protocols === "string"
+        ? options.protocols
+        : (options.protocols?.slice() ??
+          (options.endpoint.token ? [`concors.bearer.${options.endpoint.token}`] : undefined));
     this.#previewUrl = options.previewUrl;
     this.#createSocket = options.webSocketFactory ?? defaultWebSocketFactory;
   }
@@ -680,6 +684,13 @@ export class DaemonConnection {
     if (!bearer) return null;
     const label = preview.protocol === "https" ? `https-${preview.port}` : String(preview.port);
     const url = new URL(`https://${label}.${daemon.hostname}/`);
+    // A daemon that reserves the login path opens the app only after taking access out of the
+    // address; on others the app's own page would load with it still there.
+    if (
+      this.#state.status === "ready" &&
+      this.#state.daemon.capabilities?.includes(PREVIEW_LOGIN_CAPABILITY)
+    )
+      url.pathname = PREVIEW_LOGIN_PATH;
     url.hash = new URLSearchParams({
       access_token: bearer.slice("concors.bearer.".length),
     }).toString();

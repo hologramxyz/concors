@@ -25,8 +25,11 @@ describe("local startup", () => {
   it("uses the native runtime's assigned port even with a browser override", async () => {
     mocks.native = true;
     mocks.env.daemonUrl = "wss://example.com/ws";
-    mocks.start.mockResolvedValue({ state: "running", pid: 123, port: 49123 });
-    expect((await resolveStartupEndpoint(IDENTITY)).url).toBe("ws://127.0.0.1:49123/ws");
+    mocks.start.mockResolvedValue({ state: "running", pid: 123, port: 49123, token: "secret" });
+    const endpoint = await resolveStartupEndpoint(IDENTITY);
+    expect(endpoint.url).toBe("ws://127.0.0.1:49123/ws");
+    // The gateway refuses connections without the token it was started with.
+    expect(endpoint.token).toBe("secret");
   });
   it("preserves startup failures instead of connecting to an unrelated daemon", async () => {
     mocks.native = true;
@@ -41,7 +44,7 @@ describe("local startup", () => {
   });
   it("starts the bundled runtime for the signed-in account's partition", async () => {
     mocks.native = true;
-    mocks.start.mockResolvedValue({ state: "running", pid: 1, port: 49123 });
+    mocks.start.mockResolvedValue({ state: "running", pid: 1, port: 49123, token: "secret" });
     await resolveStartupEndpoint(IDENTITY);
     // Without the identity the runtime cannot pick a data partition and would share one database.
     expect(mocks.start).toHaveBeenCalledWith(IDENTITY);
