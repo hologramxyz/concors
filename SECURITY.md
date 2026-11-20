@@ -25,9 +25,11 @@ and will credit you in the fix unless you prefer otherwise.
 
 ## Scope notes for this stage of the project
 
-- The daemon binds to `127.0.0.1` by default and has **no authentication yet**. Exposing it on a
-  public interface is not supported and is not a vulnerability in itself; VPS authentication is
-  planned before remote use is documented as supported.
+- The daemon binds to `127.0.0.1` by default. The desktop app starts its gateway with a fresh
+  token each time and the gateway refuses connections without it, so other accounts on the same
+  computer cannot connect. A daemon started by hand (`concors-daemon serve`) only does so when
+  given `CONCORS_LOCAL_TOKEN`. Exposing it on a public interface is not supported and is not a
+  vulnerability in itself; managed machines authenticate every connection.
 - The desktop frontend receives only public `VITE_*` configuration. Anything found in the bundle is
   intentionally public.
 - Tauri capabilities are kept to `core:default` plus the app's own commands. Reports about

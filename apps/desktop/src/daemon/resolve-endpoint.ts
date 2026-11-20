@@ -16,7 +16,7 @@ import { isTauri, localDaemon, type DaemonIdentity } from "../tauri/index.ts";
 export async function resolveStartupEndpoint(identity: DaemonIdentity): Promise<DaemonEndpoint> {
   if (isTauri()) {
     const status = await localDaemon.start(identity);
-    if (status.state === "running") return localDaemonEndpoint(status.port);
+    if (status.state === "running") return localDaemonEndpoint(status.port, status.token);
     if (import.meta.env.DEV) return localDaemonEndpoint();
     throw new Error(
       "This desktop build is missing its local runtime. Install a complete Concors desktop package.",

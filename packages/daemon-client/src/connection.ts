@@ -664,7 +664,10 @@ export class DaemonConnection {
     this.#protocolVersion = options.protocolVersion ?? PROTOCOL_VERSION;
     this.#handshakeTimeoutMs = options.handshakeTimeoutMs ?? DEFAULT_HANDSHAKE_TIMEOUT_MS;
     this.#protocols =
-      typeof options.protocols === "string" ? options.protocols : options.protocols?.slice();
+      typeof options.protocols === "string"
+        ? options.protocols
+        : (options.protocols?.slice() ??
+          (options.endpoint.token ? [`concors.bearer.${options.endpoint.token}`] : undefined));
     this.#previewUrl = options.previewUrl;
     this.#createSocket = options.webSocketFactory ?? defaultWebSocketFactory;
   }

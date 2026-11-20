@@ -6,6 +6,7 @@ import {
 } from "node:http";
 import { createServer as createTlsServer } from "node:https";
 import type { Duplex } from "node:stream";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { tokenFromRequest, type Principal, type TokenVerifier } from "../managed/auth.ts";
 import type { ManagedConfig, TlsMaterial } from "../managed/config.ts";
 import type { Logger } from "../managed/log.ts";
@@ -50,6 +51,11 @@ export function createPersistentGateway(
   directory: string,
   launch: HostLaunch,
   managed?: ManagedGatewayOptions,
+  /**
+   * A loopback gateway is reachable by every account on the computer. Given a token (the desktop
+   * app makes one each time it starts its gateway), only clients presenting it may connect.
+   */
+  localToken?: string,
 ) {
   if (!managed && !["127.0.0.1", "localhost", "::1"].includes(config.host))
     throw new Error(
@@ -277,6 +283,9 @@ export function createPersistentGateway(
         rejectUpgrade(downstream, 403);
         return;
       }
+    } else if (localToken && !sameSecret(tokenFromRequest(req), localToken)) {
+      rejectUpgrade(downstream, 401);
+      return;
     }
     if (
       (managed ? new URL(req.url ?? "/", "http://daemon").pathname !== "/ws" : req.url !== "/ws") ||
@@ -436,4 +445,11 @@ function rejectUpgrade(socket: Duplex, status: 401 | 403) {
   const timer = setTimeout(() => socket.destroy(), 1000);
   timer.unref();
   socket.once("close", () => clearTimeout(timer));
+}
+
+/** Compares secrets in constant time; digests first, so their lengths do not leak either. */
+function sameSecret(presented: string | null, expected: string): boolean {
+  if (!presented) return false;
+  const digest = (value: string) => createHash("sha256").update(value).digest();
+  return timingSafeEqual(digest(presented), digest(expected));
 }

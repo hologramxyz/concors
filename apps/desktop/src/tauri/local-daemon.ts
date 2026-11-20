@@ -11,7 +11,13 @@ const LocalDaemonStatusSchema = z.discriminatedUnion("state", [
   /** This build has no bundled daemon (development). Run `pnpm daemon:dev` instead. */
   z.object({ state: z.literal("notBundled") }),
   z.object({ state: z.literal("stopped") }),
-  z.object({ state: z.literal("running"), pid: z.number().int(), port: z.number().int() }),
+  z.object({
+    state: z.literal("running"),
+    pid: z.number().int(),
+    port: z.number().int(),
+    /** The secret the gateway was started with; it refuses connections without it. */
+    token: z.string().min(1),
+  }),
 ]);
 export type LocalDaemonStatus = z.infer<typeof LocalDaemonStatusSchema>;
 
