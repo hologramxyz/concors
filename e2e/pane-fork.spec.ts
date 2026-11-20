@@ -6,7 +6,9 @@ import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { chooseProvider } from "./support/agents.ts";
 
-test("a chat pane's menu forks the whole chat", async ({ page }) => {
+test("a chat pane's menu forks the whole chat; a sidebar row only forks a tab of one chat", async ({
+  page,
+}) => {
   const directory = await mkdtemp(join(tmpdir(), "concors-pane-fork-"));
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -53,6 +55,21 @@ test("a chat pane's menu forks the whole chat", async ({ page }) => {
     await expect.poll(() => forks).toHaveLength(1);
     expect(forks[0]).toMatchObject({ kind: "fork-session", sessionId: expect.any(String) });
     expect(forks[0]).not.toHaveProperty("turnId");
+
+    // The sidebar row forks its tab's chat while the tab holds just the one.
+    const rowActions = page.getByRole("button", { name: /^Actions for Something worth forking/ });
+    await rowActions.click();
+    await expect(page.getByRole("menuitem", { name: "Fork chat", exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    // Split, the tab holds two chats: the row cannot tell which, so each pane's menu does it.
+    await page.getByRole("button", { name: "Pane actions", exact: true }).first().click();
+    await page.getByRole("menuitem", { name: "Split horizontally", exact: true }).click();
+    await expect(page.locator("[data-pane-id]").filter({ visible: true })).toHaveCount(2);
+    await rowActions.click();
+    await expect(page.getByRole("menuitem", { name: "Pin", exact: true })).toBeVisible();
+    await expect(page.getByRole("menuitem", { name: "Fork chat", exact: true })).toHaveCount(0);
+    await page.screenshot({ path: test.info().outputPath("split-row-menu.png") });
+    await page.keyboard.press("Escape");
     expect(errors).toEqual([]);
   } finally {
     await rm(directory, { recursive: true, force: true });

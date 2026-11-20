@@ -447,7 +447,12 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                   onFork={
                     row.kind === "terminal"
                       ? undefined
-                      : fork(row.kind === "tab" ? row.chat : row.chat.agent)
+                      : row.kind === "closed"
+                        ? fork(row.chat.agent)
+                        : // A tab of several chats would fork just the first; each pane forks its own.
+                          row.chats === 1
+                          ? fork(row.chat)
+                          : undefined
                   }
                   onPin={pin(rowChat(row))}
                   onDelete={remove(rowChat(row))}
