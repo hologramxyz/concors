@@ -1,3 +1,4 @@
+import { approvalSummary } from "./approval-summary";
 import { useState } from "react";
 import { Check, MessageCircleQuestionMark, ShieldAlert } from "lucide-react";
 import type { AgentPending } from "@concors/protocol";
@@ -26,6 +27,7 @@ export function PendingInput({
   const Icon = pending.kind === "approval" ? ShieldAlert : MessageCircleQuestionMark;
   // A lone question needs no "Question 1" label; several are numbered so answers can be matched.
   const numbered = pending.questions.length > 1;
+  const summary = approvalSummary(pending);
   return (
     <section
       aria-label={pending.title}
@@ -38,9 +40,9 @@ export function PendingInput({
         </span>
         <div className="min-w-0 space-y-0.5">
           <h3 className="text-[length:var(--text-ui)] leading-6 font-medium">{pending.title}</h3>
-          {pending.summary && (
+          {summary && (
             <p className="text-xs break-words whitespace-pre-wrap text-muted-foreground">
-              {pending.summary}
+              {summary}
             </p>
           )}
         </div>

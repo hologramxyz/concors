@@ -4,6 +4,7 @@ import {
   type AgentInfo,
   type AgentRequest,
   type AgentEvent,
+  type SupervisorBrief,
   type SupervisorControl,
   type SupervisorDelivery,
   type SupervisorRequest,
@@ -12,7 +13,7 @@ import {
 } from "@concors/protocol";
 import type { WorkspaceStore } from "../workspace/store.ts";
 import type { AgentManager } from "../agents/manager.ts";
-import { SupervisorWatches, busy, permissionMode, sessionReport } from "./watch.ts";
+import { SupervisorWatches, busy, latestReply, permissionMode, sessionReport } from "./watch.ts";
 import type { ProviderRegistry } from "../agents/providers/registry.ts";
 import { randomUUID } from "node:crypto";
 
@@ -99,6 +100,34 @@ export class SupervisorManager {
 
   request(request: SupervisorRequest): SupervisorResult {
     try {
+      if (request.operation.kind === "briefs") {
+        // For the person's own Overview, polled while sessions work: saved replies only, nothing
+        // reaches a model, and none of the Supervisor state the other operations return.
+        const briefs = request.operation.sessionIds.flatMap<SupervisorBrief>((sessionId) => {
+          try {
+            const agent = this.store.agent(sessionId);
+            if (agent.supervisor) return [];
+            const items = agent.turnId ? this.store.agentTurnItems(sessionId, agent.turnId) : [];
+            const prompt = items.find((item) => item.kind === "user")?.text ?? "";
+            const reply = latestReply(this.store, agent, items)?.text ?? "";
+            return [
+              {
+                sessionId,
+                turnId: agent.turnId,
+                prompt: prompt.slice(0, 600),
+                reply: reply.slice(0, 1200),
+              },
+            ];
+          } catch {
+            return [];
+          }
+        });
+        return {
+          type: "supervisor.result",
+          requestId: request.requestId,
+          outcome: { status: "ok", deliveries: [], briefs },
+        };
+      }
       if (request.operation.kind === "open") {
         this.store.ensureSupervisor();
         this.changed();

@@ -34,6 +34,7 @@ import {
   TERMINAL_BIND_NEW_TAB_CAPABILITY,
   SCHEDULE_FILES_CAPABILITY,
   SUPERVISOR_CAPABILITY,
+  SUPERVISOR_BRIEFS_CAPABILITY,
 } from "@concors/protocol";
 
 import { DAEMON_VERSION } from "./version.ts";
@@ -69,6 +70,7 @@ export class DaemonState {
         "agent-schedules-v1",
         SCHEDULE_FILES_CAPABILITY,
         SUPERVISOR_CAPABILITY,
+        SUPERVISOR_BRIEFS_CAPABILITY,
         HOST_USAGE_CAPABILITY,
         RESOURCES_CAPABILITY,
         PREVIEW_NAMES_CAPABILITY,

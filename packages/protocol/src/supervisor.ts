@@ -2,6 +2,24 @@ import { z } from "zod";
 import { WorkspaceCommandSchema, WorkspaceProjectSchema } from "./workspace.ts";
 
 const Id = z.string().uuid();
+/** Daemons that answer "briefs": each session's latest reply, which Overview summarizes. */
+export const SUPERVISOR_BRIEFS_CAPABILITY = "supervisor-briefs-v1";
+/**
+ * The start of a session's latest turn: what it was asked and the last thing it replied, enough
+ * for a line each, never the transcript.
+ */
+export const SupervisorBriefSchema = z.object({
+  sessionId: Id,
+  turnId: z.string().nullable(),
+  prompt: z.string().max(600).default(""),
+  reply: z.string().max(1200),
+});
+export type SupervisorBrief = z.infer<typeof SupervisorBriefSchema>;
+/**
+ * Where a message to Supervisor ends and the agents and workspaces it @-mentions begin, one JSON
+ * line each. What follows is for the model to resolve, so previews of the message stop here.
+ */
+export const SUPERVISOR_REFERENCES_MARKER = "\n\nConcors references (resolve by ID):\n";
 /** The native iOS host supplies the recipients it actually disclosed, never the model. */
 export const SupervisorSharingSchema = z.object({
   revision: z.number().int().nonnegative(),
@@ -36,6 +54,7 @@ export const SupervisorRequestSchema = z.object({
   operation: z.discriminatedUnion("kind", [
     z.object({ kind: z.literal("open") }),
     z.object({ kind: z.literal("status") }),
+    z.object({ kind: z.literal("briefs"), sessionIds: z.array(Id).max(64) }),
     z.object({ kind: z.literal("revoke-sharing") }),
   ]),
 });
@@ -49,6 +68,7 @@ export const SupervisorResultSchema = z.object({
       status: z.literal("ok"),
       project: WorkspaceProjectSchema.optional(),
       deliveries: z.array(SupervisorDeliverySchema).max(128),
+      briefs: z.array(SupervisorBriefSchema).max(64).optional(),
     }),
     z.object({ status: z.literal("error"), message: z.string() }),
   ]),

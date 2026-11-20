@@ -1,3 +1,4 @@
+import { SupervisorReferencesSchema } from "@/supervisor/reference-text";
 import { z } from "zod";
 import {
   AgentAttachmentSchema,
@@ -28,7 +29,11 @@ const input = z.object({
 const saved = z.object({
   version: z.literal(1),
   updatedAt: z.number(),
-  draft: input.extend({ queue: z.array(input).max(20) }),
+  draft: input.extend({
+    queue: z.array(input).max(20),
+    // A reference that no longer fits drops its mentions, never the message typed around them.
+    references: SupervisorReferencesSchema.optional().catch(undefined),
+  }),
   attempt: z
     .object({ id: z.string().uuid(), draft: input, operation: AgentOperationSchema })
     .nullable(),
@@ -68,6 +73,7 @@ export function writeDraft(storage: DraftStorage, key: string, value: SavedDraft
     if (
       !value.draft.message &&
       !value.draft.attachments.length &&
+      !value.draft.references?.length &&
       !value.draft.queue.length &&
       !value.attempt
     )

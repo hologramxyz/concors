@@ -1,3 +1,16 @@
+import {
+  MAX_SUPERVISOR_REFERENCES,
+  insertMention,
+  matchReferences,
+  mentionQuery,
+  mentionedReferences,
+  splitSupervisorReferences,
+  withSupervisorReferences,
+  type SupervisorReference,
+} from "@/supervisor/reference-text";
+import { SupervisorReferencePicker } from "@/supervisor/references";
+import { MentionMenu } from "@/supervisor/mention-menu";
+import { SupervisorReferences } from "@/supervisor/reference-context";
 import { AgentDraftScopeContext, useAgentDraft, type InputDraft as Draft } from "./draft";
 import { NO_RECALL, recallStep, type PromptRecall } from "./prompt-history";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -121,6 +134,7 @@ export function AgentComposer({
   /** The prompts sent in this chat, oldest first, which Up and Down bring back. */
   history?: readonly string[];
 }) {
+  const references = useContext(SupervisorReferences);
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
   const visible = useContext(TabVisibility);
@@ -138,6 +152,8 @@ export function AgentComposer({
   const {
     draft,
     setDraft,
+    references: selectedReferences,
+    setReferences,
     attachments,
     setAttachments,
     queue,
@@ -298,6 +314,31 @@ export function AgentComposer({
     }
   }, [dictation.active, visible, connected, busy, uncertain, agent.threadId]);
   useComposerMotion(form, compact && !native, expanded);
+  // A mention is written into the message as `@Name`; its reference keeps the ID, so it still
+  // resolves after a rename. Only references whose `@Name` is still in the text are sent.
+  const remember = (reference: SupervisorReference) => {
+    if (selectedReferences?.some((ref) => ref.kind === reference.kind && ref.id === reference.id))
+      return true;
+    if ((selectedReferences?.length ?? 0) >= MAX_SUPERVISOR_REFERENCES) {
+      setError("Mention up to eight agents or workspaces per message.");
+      return false;
+    }
+    setReferences((refs) => [...refs, reference]);
+    return true;
+  };
+  // The phone app's native field cannot open a menu as `@` is typed, so it gets a button instead.
+  const mentionPicker = native && references.length > 0 && (
+    <SupervisorReferencePicker
+      references={references}
+      disabled={!connected || busy || uncertain || !!deferred}
+      onSelect={(reference) => {
+        if (remember(reference))
+          setDraft(
+            (text) => `${text && !/\s$/.test(text) ? `${text} ` : text}@${reference.label} `,
+          );
+      }}
+    />
+  );
   const configure = async (next: AgentSettings) => {
     if (!connection || !advanced) return;
     setConfiguring(true);
@@ -392,12 +433,14 @@ export function AgentComposer({
         queueMessage: (value) => {
           setQueue((q) => [...q, value]);
           setDraft("");
+          setReferences([]);
           setAttachments([]);
         },
         submitMessage: () => send(input, steering),
         clearDraft: () => {
           if (!queued) {
             setDraft("");
+            setReferences([]);
             setAttachments([]);
           }
         },
@@ -430,8 +473,21 @@ export function AgentComposer({
       setDeferred({ alternate });
       return Promise.resolve(undefined);
     }
+    const message =
+      agent.supervisor && input.message.trim() && !input.message.trimStart().startsWith("/")
+        ? withSupervisorReferences(
+            input.message,
+            mentionedReferences(input.message, selectedReferences ?? []),
+          )
+        : input.message;
+    // Mentions add their references after the text, which can take a message past the daemon's
+    // limit, measured as it measures it: trimmed.
+    if (message !== input.message && message.trim().length > 16000) {
+      setError("Shorten your message or mention fewer agents before sending.");
+      return Promise.resolve(undefined);
+    }
     return submit(
-      input,
+      { ...input, message },
       false,
       active &&
         (followUps === "steer") !== alternate &&
@@ -463,6 +519,29 @@ export function AgentComposer({
       ? []
       : matchCommands(agent.controls?.commands ?? [], slashTyped);
   const slashIndex = Math.min(slashActive, slashCommands.length - 1);
+  // `@` opens the mention list as `/` opens commands; Escape hides it for that exact draft.
+  const [caret, setCaret] = useState(0);
+  const [mentionDismissed, setMentionDismissed] = useState<string | null>(null);
+  const [mentionActive, setMentionActive] = useState(0);
+  const mentionTyped =
+    references.length && !native && !dictation.active && mentionDismissed !== draft
+      ? mentionQuery(draft, caret)
+      : null;
+  const mentionMatches = mentionTyped ? matchReferences(references, mentionTyped.query) : [];
+  const mentionIndex = Math.min(mentionActive, mentionMatches.length - 1);
+  const chooseMention = (reference: SupervisorReference) => {
+    if (!mentionTyped || !remember(reference)) return;
+    const next = insertMention(draft, mentionTyped.start, caret, reference.label);
+    setDraft(next.text);
+    setCaret(next.caret);
+    setMentionActive(0);
+    // The finished `@Name ` would match itself; the list returns once something else is typed.
+    setMentionDismissed(next.text);
+    requestAnimationFrame(() => {
+      textarea.current?.focus();
+      textarea.current?.setSelectionRange(next.caret, next.caret);
+    });
+  };
   const chooseCommand = (command: AgentCommand, complete = false) => {
     setSlashActive(0);
     if (complete || needsArguments(command)) {
@@ -1061,7 +1140,8 @@ export function AgentComposer({
     >
       <span className="text-muted-foreground">Queued</span>
       <span className="min-w-0 flex-1 truncate">
-        {entry.text || entry.attachments.map((a) => a.name).join(", ")}
+        {splitSupervisorReferences(entry.text).text ||
+          entry.attachments.map((a) => a.name).join(", ")}
       </span>
       {compact && <QueuePosition index={i} count={all.length} />}
       {queueSteer && canSteer(entry.text, entry.attachments.length) && (
@@ -1143,7 +1223,8 @@ export function AgentComposer({
               >
                 <span className="text-muted-foreground">Queued</span>
                 <span className="min-w-0 flex-1 truncate">
-                  {entry.message || entry.attachments.map((a) => a.name).join(", ")}
+                  {splitSupervisorReferences(entry.message).text ||
+                    entry.attachments.map((a) => a.name).join(", ")}
                 </span>
                 {compact && <QueuePosition index={i} count={queue.length} />}
                 {!active && !busy && !uncertain && (
@@ -1304,6 +1385,11 @@ export function AgentComposer({
               ))}
             </div>
           )}
+          {mentionPicker && (
+            <div className="flex items-center px-2 pb-2" data-composer-attachments>
+              {mentionPicker}
+            </div>
+          )}
           {dictation.active ? (
             <DictationRecording
               state={dictation}
@@ -1338,9 +1424,12 @@ export function AgentComposer({
                 readOnly={!!deferred}
                 onChange={(e) => {
                   setDraft(e.target.value);
+                  setCaret(e.target.selectionStart);
                   setSlashActive(0);
+                  setMentionActive(0);
                   dictation.dismissError();
                 }}
+                onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
                 onPaste={(e) => {
                   if (deferred) return;
                   if (e.clipboardData.files.length) {
@@ -1357,6 +1446,29 @@ export function AgentComposer({
                       setDeferred(null);
                     } else if (e.key === "Enter") e.preventDefault();
                     return;
+                  }
+                  const mention = mentionMatches[mentionIndex];
+                  if (mention && !e.nativeEvent.isComposing) {
+                    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                      e.preventDefault();
+                      // Like commands, the list stacks upward from the best match.
+                      const step = e.key === "ArrowUp" ? 1 : -1;
+                      setMentionActive(
+                        (mentionIndex + step + mentionMatches.length) % mentionMatches.length,
+                      );
+                      return;
+                    }
+                    if ((e.key === "Enter" && !e.shiftKey) || (e.key === "Tab" && !e.shiftKey)) {
+                      e.preventDefault();
+                      chooseMention(mention);
+                      return;
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setMentionDismissed(draft);
+                      return;
+                    }
                   }
                   const command = slashCommands[slashIndex];
                   if (command && !e.nativeEvent.isComposing) {
@@ -1403,7 +1515,10 @@ export function AgentComposer({
                       e.preventDefault();
                       setRecall(step.recall);
                       // Replacing a text box's value puts the caret at its end, as a shell does.
-                      setDraft(step.draft);
+                      const recalled = splitSupervisorReferences(step.draft);
+                      setDraft(recalled.text);
+                      if (agent.supervisor && recalled.references.length)
+                        setReferences(recalled.references);
                       return;
                     }
                   }
@@ -1613,6 +1728,15 @@ export function AgentComposer({
           onActive={setSlashActive}
           onChoose={(command) => chooseCommand(command)}
           onDismiss={() => setSlashDismissed(draft)}
+        />
+        <MentionMenu
+          anchor={form}
+          matches={mentionMatches}
+          active={mentionIndex}
+          surface={owner}
+          onActive={setMentionActive}
+          onChoose={chooseMention}
+          onDismiss={() => setMentionDismissed(draft)}
         />
         {compact && expanded && keyboardHelp && dictationHelp && (
           <p role="status" className="px-2 text-xs text-muted-foreground">

@@ -69,18 +69,25 @@ export function permissionMode(agent: AgentInfo): string {
   return label && label !== id ? `${label} (${id})` : id;
 }
 
+/** The latest turn's last reply, read from saved history; thinking is not a reply. */
+export function latestReply(
+  store: WorkspaceStore,
+  agent: AgentInfo,
+  /** The turn's items, when the caller has already read them. */
+  items = agent.turnId ? store.agentTurnItems(agent.id, agent.turnId) : [],
+) {
+  return items.findLast(
+    (item) => item.kind === "assistant" && item.presentation?.type !== "thinking",
+  );
+}
+
 /** Local saved context only. This never launches or prompts an agent for progress. */
 export function sessionReport(store: WorkspaceStore, agent: AgentInfo, includeReply = true) {
   const snapshot = store.snapshot();
   const project = [...snapshot.projects, ...(snapshot.closedProjects ?? [])].find(
     (p) => p.id === agent.projectId,
   );
-  const reply =
-    includeReply && agent.turnId
-      ? store
-          .agentTurnItems(agent.id, agent.turnId)
-          .findLast((item) => item.kind === "assistant" && item.presentation?.type !== "thinking")
-      : undefined;
+  const reply = includeReply ? latestReply(store, agent) : undefined;
   return {
     sessionId: agent.id,
     projectId: agent.projectId,

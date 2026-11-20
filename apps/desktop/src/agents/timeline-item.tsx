@@ -1,3 +1,4 @@
+import { mentionSegments, splitSupervisorReferences } from "@/supervisor/reference-text";
 import { MessageAttachments } from "./attachment-preview";
 import { memo, useContext } from "react";
 import { FileLinkContext } from "@/files/context";
@@ -40,7 +41,8 @@ export const TimelineItem = memo(function TimelineItem({
   const data = item.presentation;
   const running = live && item.status === "running";
   if (item.group) return <ToolGroup first={item} items={item.group} live={live} />;
-  if (item.kind === "user" || item.kind === "assistant")
+  if (item.kind === "user" || item.kind === "assistant") {
+    const message = item.kind === "user" ? splitSupervisorReferences(item.text) : null;
     return (
       <article
         className={
@@ -55,7 +57,18 @@ export const TimelineItem = memo(function TimelineItem({
         {item.kind === "user" && <MessageAttachments item={item} className="mb-2" />}
         <div className="chat-markdown break-words">
           {item.kind === "user" ? (
-            <p className="whitespace-pre-wrap">{item.text}</p>
+            <p className="whitespace-pre-wrap">
+              {/* Mentions read as written, set off by weight; their IDs travel with the message. */}
+              {mentionSegments(message?.text ?? "", message?.references ?? []).map((part, index) =>
+                part.mention ? (
+                  <span key={index} className="font-medium" data-mention>
+                    {part.text}
+                  </span>
+                ) : (
+                  part.text
+                ),
+              )}
+            </p>
           ) : (
             <AgentMarkdown item={item}>{item.text}</AgentMarkdown>
           )}
@@ -82,6 +95,7 @@ export const TimelineItem = memo(function TimelineItem({
         )}
       </article>
     );
+  }
   if (data?.type === "plan" || item.kind === "plan") return <PlanProgress item={item} />;
   if (data?.type === "thinking") return <Thinking item={item} running={running} />;
   if (data?.type === "sub_agent") return <SubAgentCard item={item} running={running} />;

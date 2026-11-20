@@ -43,3 +43,12 @@ it("previews attachment-only prompts and bounds multiline text without markup in
   );
   expect(messageEntry(item("long", 3, "x".repeat(300))).preview).toHaveLength(240);
 });
+
+it("previews a message to Supervisor without the references it carries", () => {
+  const text = `Ask @Docs\n\nConcors references (resolve by ID):\n${JSON.stringify({
+    id: "00000000-0000-4000-8000-000000000001",
+    kind: "Agent",
+    label: "Docs",
+  })}`;
+  expect(messageEntry(item("mention", 3, text)).preview).toBe("Ask @Docs");
+});

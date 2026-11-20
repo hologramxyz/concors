@@ -1,5 +1,6 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import type { AgentItem, AgentMessageIndex } from "@concors/protocol";
+import { splitSupervisorReferences } from "@/supervisor/reference-text";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 
 export type MessageEntry = AgentMessageIndex["messages"][number];
@@ -7,11 +8,13 @@ export function messageEntry(item: AgentItem): MessageEntry {
   return {
     id: item.id,
     position: item.position,
-    preview: (
-      item.text.replace(/\s+/g, " ").trim() ||
-      item.attachments?.[0]?.name ||
-      "Attachment"
-    ).slice(0, 240),
+    preview:
+      // A message to Supervisor is previewed without the references it carries for the model.
+      (
+        splitSupervisorReferences(item.text).text.replace(/\s+/g, " ").trim() ||
+        item.attachments?.[0]?.name ||
+        "Attachment"
+      ).slice(0, 240),
   };
 }
 

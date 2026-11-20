@@ -331,7 +331,12 @@ function unavailableChats(
   const projects = new Set(workspace.projects.map((project) => project.id));
   const latest = new Map<string, AgentInfo>();
   for (const chat of chats) {
-    if (projects.has(chat.projectId) || (chat.turnId === null && !chat.nativeImport)) continue;
+    if (
+      chat.supervisor ||
+      projects.has(chat.projectId) ||
+      (chat.turnId === null && !chat.nativeImport)
+    )
+      continue;
     const key = chat.providerGroupId ?? chat.id;
     const seen = latest.get(key);
     if (!seen || chat.updatedAt > seen.updatedAt) latest.set(key, chat);

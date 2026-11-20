@@ -1,3 +1,4 @@
+import type { SupervisorReference } from "@/supervisor/reference-text";
 import {
   createContext,
   useCallback,
@@ -24,6 +25,7 @@ export interface ComposerAttempt {
   operation: Extract<AgentOperation, { kind: "send" | "queue-add" | "steer" }>;
 }
 interface Draft extends InputDraft {
+  references?: SupervisorReference[] | undefined;
   queue: InputDraft[];
   uncertain: boolean;
   busy: boolean;
@@ -55,6 +57,7 @@ function save(store: DraftStore, id: string, storageKey: string | null, draft: D
   if (
     !draft.message &&
     !draft.attachments.length &&
+    !draft.references?.length &&
     !draft.queue.length &&
     !draft.uncertain &&
     !draft.busy
@@ -67,7 +70,11 @@ function save(store: DraftStore, id: string, storageKey: string | null, draft: D
       writeDraft(localStorage, storageKey, {
         version: 1,
         updatedAt: Date.now(),
-        draft: { ...saveable(draft), queue: draft.queue.map(saveable) },
+        draft: {
+          ...saveable(draft),
+          queue: draft.queue.map(saveable),
+          references: draft.references,
+        },
         attempt: attempt ? { ...attempt, draft: saveable(attempt.draft) } : null,
       });
     } catch {
@@ -90,10 +97,16 @@ export function moveAgentDraft(
   const key = (id: string) => (machineId ? draftStorageKey(machineId, id) : null);
   const source = store.values.get(from);
   const target = store.values.get(to) ?? empty;
-  if (!source || (!source.message && !source.attachments.length)) return;
-  if (target.message || target.attachments.length) return;
-  save(store, to, key(to), { ...target, message: source.message, attachments: source.attachments });
-  save(store, from, key(from), { ...source, message: "", attachments: [] });
+  if (!source || (!source.message && !source.attachments.length && !source.references?.length))
+    return;
+  if (target.message || target.attachments.length || target.references?.length) return;
+  save(store, to, key(to), {
+    ...target,
+    message: source.message,
+    attachments: source.attachments,
+    references: source.references,
+  });
+  save(store, from, key(from), { ...source, message: "", attachments: [], references: [] });
   for (const listener of store.listeners) listener();
 }
 /** Drafts are scoped to a machine/session; storage restores uncertain request IDs without resending. */
@@ -162,6 +175,7 @@ export function useAgentDraft(connection: object | null, id: string, machineId?:
   return {
     draft: value.message,
     attachments: value.attachments,
+    references: value.references,
     queue: value.queue,
     uncertain: value.uncertain,
     busy: value.busy,
@@ -170,6 +184,11 @@ export function useAgentDraft(connection: object | null, id: string, machineId?:
       update((prior) => ({
         ...prior,
         message: typeof next === "function" ? next(prior.message) : next,
+      })),
+    setReferences: (next: SetStateAction<SupervisorReference[]>) =>
+      update((prior) => ({
+        ...prior,
+        references: typeof next === "function" ? next(prior.references ?? []) : next,
       })),
     setAttachments: (next: SetStateAction<DraftAttachment[]>) =>
       update((prior) => ({

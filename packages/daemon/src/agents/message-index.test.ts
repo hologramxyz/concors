@@ -4,7 +4,12 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import { expect, it } from "vitest";
-import { AgentInfoSchema, AgentMessageIndexSchema, type AgentItem } from "@concors/protocol";
+import {
+  AgentInfoSchema,
+  AgentMessageIndexSchema,
+  SUPERVISOR_REFERENCES_MARKER,
+  type AgentItem,
+} from "@concors/protocol";
 import { WorkspaceStore } from "../workspace/store.ts";
 
 it("indexes only sent messages across pages, isolates sessions, bounds previews and includes attachments", () => {
@@ -58,6 +63,12 @@ it("indexes only sent messages across pages, isolates sessions, bounds previews 
       }
     });
     save("foreign", "user", "Other session", randomUUID());
+    // The references a message to Supervisor carries are for the model, not its preview.
+    save(
+      "mention",
+      "user",
+      `Ask @Docs to check the build${SUPERVISOR_REFERENCES_MARKER}{"id":"${randomUUID()}","kind":"Agent","label":"Docs"}`,
+    );
     const attachment = save("attachment", "user", "");
     store.saveAgentItem({
       ...attachment,
@@ -67,12 +78,13 @@ it("indexes only sent messages across pages, isolates sessions, bounds previews 
     expect(page.messages).toHaveLength(200);
     expect(page.hasMore).toBe(true);
     expect(page.messages.at(-1)?.preview).toBe("notes.md");
+    expect(page.messages.at(-2)?.preview).toBe("Ask @Docs to check the build");
     expect(page.messages[0]?.preview).toHaveLength(240);
     const older = store.agentMessageIndex(sessionId, page.messages[0]!.position);
-    expect(older.messages).toHaveLength(6);
+    expect(older.messages).toHaveLength(7);
     expect(older.hasMore).toBe(false);
     const all = [...older.messages, ...page.messages];
-    expect(new Set(all.map((m) => m.id)).size).toBe(206);
+    expect(new Set(all.map((m) => m.id)).size).toBe(207);
     expect(all[0]?.id).toBe("prompt:0");
     expect(JSON.stringify(all)).not.toContain("private tool details");
     expect(all.some((m) => m.id === "foreign")).toBe(false);

@@ -593,6 +593,29 @@ it("runs again a send that stopped before anything left the daemon", async () =>
     f.providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
   ).toHaveLength(1);
 });
+it("briefs each session's latest reply for Overview without reaching a model", async () => {
+  const f = await setup(),
+    target = await f.target();
+  await f.request({ kind: "send", sessionId: target.id, text: "Summarize the release" });
+  await expect.poll(() => f.store.agent(target.id).status).toBe("done");
+  const calls = f.providers.flatMap((p) => p.requests).length;
+  const result = f.manager.request({
+    type: "supervisor.request",
+    requestId: randomUUID(),
+    operation: { kind: "briefs", sessionIds: [target.id, f.source.id, randomUUID()] },
+  });
+  if (result.outcome.status !== "ok") throw new Error(result.outcome.message);
+  // Supervisor's own conversation and unknown sessions are left out.
+  expect(result.outcome.briefs).toEqual([
+    {
+      sessionId: target.id,
+      turnId: f.store.agent(target.id).turnId,
+      prompt: "Summarize the release",
+      reply: expect.stringMatching(/\S/),
+    },
+  ]);
+  expect(f.providers.flatMap((p) => p.requests)).toHaveLength(calls);
+});
 it("authenticates the local bridge and refuses browser origins and oversized bodies", async () => {
   const f = await setup(),
     tools = new SupervisorTools();
