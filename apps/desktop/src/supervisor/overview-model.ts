@@ -25,12 +25,13 @@ export interface OverviewRow {
   needs: { action: string; text: string; code?: boolean } | null;
   /** The gist of its latest reply: progress while it works, the outcome once it is done. */
   update: string;
-  /** What the turn was asked: Supervisor's instruction, else the turn's own prompt. */
+  /**
+   * What the current turn was asked. Supervisor's latest instruction stands in until the turn's
+   * brief arrives, or on a daemon without briefs, though it may belong to an earlier turn.
+   */
   task: string;
   /** Follow-ups waiting behind the current turn. */
   queued: number;
-  /** A finish or failure the user has not opened yet, marked as the sidebar marks it. */
-  unseen: boolean;
   updatedAt: string;
 }
 
@@ -103,9 +104,8 @@ export function overviewRows(
         group,
         needs: group === "Needs you" ? needs(agent) : null,
         update: turn ? briefLine(turn.reply) : "",
-        task: firstLine(delivery?.text ?? "") || firstLine(turn?.prompt ?? ""),
+        task: firstLine(turn?.prompt ?? "") || firstLine(delivery?.text ?? ""),
         queued,
-        unseen: state === "done",
         updatedAt: agent.updatedAt,
       },
     ];

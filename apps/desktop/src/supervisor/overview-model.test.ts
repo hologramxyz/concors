@@ -183,3 +183,17 @@ it("names a file approval by its verb and the file inside the workspace, a comma
     { action: "Approve", text: "pnpm test", code: true },
   ]);
 });
+
+it("says what the current turn was asked, not an instruction from an earlier one", () => {
+  const docs = agent("Docs", { status: "done", turnId: "turn-2" });
+  const sent = [delivered(docs, "Write the changelog", "done")];
+  expect(overviewRows([docs], sent)[0]?.task).toBe("Write the changelog");
+  expect(
+    overviewRows(
+      [docs],
+      sent,
+      new Set(),
+      new Map([brief(docs, "Done.", "Fix the typo in README")]),
+    )[0]?.task,
+  ).toBe("Fix the typo in README");
+});
