@@ -175,7 +175,8 @@ test("closed chats fold apart, one that needs attention surfaces, and the group 
     // Closed chats are kept apart, folded: the open tabs are all the list shows.
     await expect(closed).toHaveCount(0);
     await expect(group).toHaveAttribute("aria-expanded", "false");
-    await expect(group).toContainText("5");
+    // Just its name: how many chats were closed is not worth a number.
+    await expect(group).toHaveText("Closed chats");
     await expect(list.locator("> li").first().locator("button[data-sidebar-tab-id]")).toHaveCount(
       1,
     );
@@ -195,7 +196,6 @@ test("closed chats fold apart, one that needs attention surfaces, and the group 
     const surfaced = list.locator(`button[data-agent-id="${oldest}"]`);
     await expect(surfaced.locator('[data-row-state="attention"]')).toBeVisible();
     await expect(closed).toHaveCount(1);
-    await expect(group).toContainText("4");
     await expect(group.locator("[data-show-more-dot] span")).toHaveCount(0);
 
     // The group opens to the rest, set apart under it, and folds again; it clears nothing.

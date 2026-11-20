@@ -514,8 +514,8 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                                   />
                                 )}
                               </span>
+                              {/* No count: how many chats were closed tells nobody anything. */}
                               <span className="flex-1">Closed chats</span>
-                              <span className="tabular-nums">{folded.length}</span>
                             </button>
                             {closedOpen && (
                               <ul

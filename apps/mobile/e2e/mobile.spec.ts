@@ -1961,7 +1961,7 @@ test("the sidebar lists each workspace's tabs under it, as desktop does", async 
     /^Fix sign-in/,
     /^Flaky upload test/,
     /^pnpm dev/,
-    /^Closed chats\s*1$/,
+    /^Closed chats$/,
   ]);
   await expect(row(treeIds.pinnedTab).getByLabel("Pinned")).toBeVisible();
   const closedChats = first.getByRole("button", { name: /^Closed chats/ });
