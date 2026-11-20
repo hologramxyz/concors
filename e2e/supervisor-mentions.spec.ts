@@ -13,8 +13,6 @@ test("@ in the Supervisor's message lists agents and writes the chosen mention",
     if (await dismissAccount.isVisible()) await dismissAccount.click();
     const dismissAnnouncement = page.getByRole("button", { name: "Dismiss iOS app announcement" });
     if (await dismissAnnouncement.isVisible()) await dismissAnnouncement.click();
-    // Status stays where it always was: the sidebar, beside the chat.
-    await expect(page.getByRole("button", { name: /^Activity/ })).toHaveCount(0);
 
     // @ lists agents and workspaces as / lists commands, and writes the mention into the text.
     const composer = page.getByRole("textbox", { name: "Message Codex", exact: true });

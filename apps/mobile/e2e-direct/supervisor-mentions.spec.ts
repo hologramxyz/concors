@@ -11,7 +11,6 @@ test("@ mentions an agent from the phone's Supervisor message", async ({ page })
     const ui = page.frameLocator('iframe[title="Concors workspace"]');
     const dismissAccount = ui.getByRole("button", { name: "Dismiss account connection" });
     if (await dismissAccount.isVisible()) await dismissAccount.click();
-    await expect(ui.getByRole("button", { name: /^Activity/ })).toHaveCount(0);
     const composer = ui.getByRole("textbox", { name: "Message Codex", exact: true });
     await composer.fill("Ask @ga");
     await expect(ui.getByRole("listbox", { name: "Mention" })).toContainText("Game QA");

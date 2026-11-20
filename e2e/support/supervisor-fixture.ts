@@ -13,10 +13,14 @@ export const delegationPrompt =
 
 /**
  * Two workspaces with three agents, and a started Supervisor. With `delegate`, Supervisor also
- * sends them work, leaving one waiting for approval, one working and one done; without it, the
- * Supervisor conversation stays empty, as specs that share its daemon expect.
+ * sends them work, leaving one waiting for approval, one working and one done. Without it, the
+ * Supervisor conversation stays empty, as specs that share its daemon expect; `work` then gives
+ * the agents the same work directly.
  */
-export async function seedSupervisorWorkspaces(url: string, { delegate = true } = {}) {
+export async function seedSupervisorWorkspaces(
+  url: string,
+  { delegate = true, work = false } = {},
+) {
   const directory = await mkdtemp(join(tmpdir(), "concors-supervisor-fixture-"));
   const transport = new DaemonConnection({
     endpoint: describeDaemonEndpoint(url),
@@ -122,9 +126,17 @@ export async function seedSupervisorWorkspaces(url: string, { delegate = true } 
       (node): node is Extract<LayoutNode, { kind: "pane" }> => node.kind === "pane",
     );
     if (!tab || !pane) throw new Error("Supervisor fixture has no pane");
-    const supervisor = await start(project.id, tab.id, pane.id);
+    // Specs share the daemon, so an earlier one may have started Supervisor already.
+    const supervisor = pane.sessionId ?? (await start(project.id, tab.id, pane.id));
     ids = { supervisor, tests, ui, notes };
-    if (!delegate) return Object.assign(() => rm(directory, { recursive: true, force: true }), ids);
+    if (!delegate) {
+      if (work) {
+        await send(tests, "Please approve the test command", "needs_input");
+        await send(ui, "Review the HUD and hold for feedback", "working");
+        await send(notes, "Check the release notes", "done");
+      }
+      return Object.assign(() => rm(directory, { recursive: true, force: true }), ids);
+    }
     await send(supervisor, delegationPrompt, "done");
     await expect
       .poll(() => transport.agents.find((agent) => agent.id === tests)?.status)
