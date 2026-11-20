@@ -169,7 +169,9 @@ it("names a file approval by its verb and the file inside the workspace, a comma
   const edit = agent("Footer", {
     status: "needs_input",
     directory: "/work/shop",
-    pending: [{ ...approval, summary: '{"file_path":"/work/shop/src/index.html"}\nEdit' }],
+    pending: [
+      { ...approval, summary: '{"file_path":"/work/shop/src/index.html"}\nEdit\nFolder: /work' },
+    ],
   });
   const run = agent("Tests", {
     status: "needs_input",

@@ -48,7 +48,7 @@ function needs(agent: AgentInfo): OverviewRow["needs"] {
     const summary = approvalSummary(pending);
     if (!summary) return { action: "Approve", text: pending.title };
     // A file operation reads as its verb and the file, e.g. "Edit src/app.ts".
-    const [verb, path] = summary.split(" · ");
+    const [verb, path] = firstLine(summary).split(" · ");
     if (path && verb && /^[A-Z][a-z]+(?: [a-z]+)*$/.test(verb))
       return { action: "Approve", text: `${verb} ${relative(path, agent.directory)}` };
     return { action: "Approve", text: firstLine(summary), code: true };
