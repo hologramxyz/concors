@@ -480,7 +480,9 @@ export function AgentComposer({
             mentionedReferences(input.message, selectedReferences ?? []),
           )
         : input.message;
-    if (message.length > 16000) {
+    // Mentions add their references after the text, which can take a message past the daemon's
+    // limit, measured as it measures it: trimmed.
+    if (message !== input.message && message.trim().length > 16000) {
       setError("Shorten your message or mention fewer agents before sending.");
       return Promise.resolve(undefined);
     }
