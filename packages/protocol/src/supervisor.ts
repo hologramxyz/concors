@@ -2,7 +2,7 @@ import { z } from "zod";
 import { WorkspaceCommandSchema, WorkspaceProjectSchema } from "./workspace.ts";
 
 const Id = z.string().uuid();
-/** Daemons that answer "briefs": each session's latest reply, which Activity summarizes. */
+/** Daemons that answer "briefs": each session's latest reply, which Overview summarizes. */
 export const SUPERVISOR_BRIEFS_CAPABILITY = "supervisor-briefs-v1";
 /**
  * The start of a session's latest turn: what it was asked and the last thing it replied, enough
@@ -15,6 +15,11 @@ export const SupervisorBriefSchema = z.object({
   reply: z.string().max(1200),
 });
 export type SupervisorBrief = z.infer<typeof SupervisorBriefSchema>;
+/**
+ * Where a message to Supervisor ends and the agents and workspaces it @-mentions begin, one JSON
+ * line each. What follows is for the model to resolve, so previews of the message stop here.
+ */
+export const SUPERVISOR_REFERENCES_MARKER = "\n\nConcors references (resolve by ID):\n";
 /** The native iOS host supplies the recipients it actually disclosed, never the model. */
 export const SupervisorSharingSchema = z.object({
   revision: z.number().int().nonnegative(),

@@ -37,6 +37,7 @@ import {
   WorkspaceProjectSchema,
   WorkspaceSnapshotSchema,
   WorkspaceResultSchema,
+  SUPERVISOR_REFERENCES_MARKER,
   type ClosedProject,
   type WorkspaceCommand,
   type WorkspaceProject,
@@ -1540,12 +1541,13 @@ export class WorkspaceStore {
     const rows = this.#db
       .prepare(
         `SELECT position, json_extract(item, '$.id') AS id,
-        substr(json_extract(item, '$.text'), 1, 240) AS preview,
+        substr(json_extract(item, '$.text'), 1, ?) AS preview,
         json_extract(item, '$.attachments[0].name') AS attachment
        FROM agent_items WHERE session_id = ? AND position < ?
        AND json_extract(item, '$.kind') = 'user' ORDER BY position DESC LIMIT 201`,
       )
-      .all(id, before);
+      // Enough to find a references marker that starts within the preview, and cut it off.
+      .all(240 + SUPERVISOR_REFERENCES_MARKER.length, id, before);
     return {
       messages: rows
         .slice(0, 200)
@@ -1554,7 +1556,7 @@ export class WorkspaceStore {
           id: String(row["id"]),
           position: Number(row["position"]),
           preview: (
-            String(row["preview"] ?? "")
+            (String(row["preview"] ?? "").split(SUPERVISOR_REFERENCES_MARKER)[0] ?? "")
               .replace(/\s+/g, " ")
               .trim() || String(row["attachment"] ?? "Attachment")
           ).slice(0, 240),

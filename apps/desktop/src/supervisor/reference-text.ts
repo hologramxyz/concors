@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SUPERVISOR_REFERENCES_MARKER as marker } from "@concors/protocol";
 
 /** The label is for people; the ID is what resolves a chat across renames. */
 export const SupervisorReferenceSchema = z.object({
@@ -13,7 +14,6 @@ export const SupervisorReferencesSchema = z
   .array(SupervisorReferenceSchema)
   .max(MAX_SUPERVISOR_REFERENCES);
 
-const marker = "\n\nConcors references (resolve by ID):\n";
 export function withSupervisorReferences(text: string, references: readonly SupervisorReference[]) {
   return references.length
     ? text.trimEnd() + marker + references.map((reference) => JSON.stringify(reference)).join("\n")
