@@ -142,6 +142,7 @@ describe("WebSocket handshake", () => {
           "agent-schedules-v1",
           "schedule-files",
           "supervisor-v1",
+          "supervisor-briefs-v1",
           "host-usage",
           "machine-resources",
           "preview-names",
