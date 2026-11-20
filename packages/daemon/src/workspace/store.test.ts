@@ -80,8 +80,14 @@ describe("workspace persistence", () => {
         JSON.stringify(legacyResult),
       );
       expect(store.execute(legacy).result).toEqual(legacyResult);
+      // A store from before receipts were bounded: 1500 of them, each with a large command.
+      // Seeded directly; executing that many is slow where every commit syncs to disk.
+      const insert = db.prepare("INSERT INTO commands (id, payload, result) VALUES (?, ?, ?)");
+      db.exec("BEGIN");
+      for (let i = 0; i < 1500; i++) insert.run(randomUUID(), "x".repeat(4000), "{}");
+      db.exec("COMMIT");
       let last: WorkspaceCommand | undefined;
-      for (let i = 0; i < 1500; i++) {
+      for (let i = 0; i < 3; i++) {
         last = {
           type: "workspace.command",
           commandId: randomUUID(),
@@ -95,9 +101,10 @@ describe("workspace persistence", () => {
         };
         expect(store.execute(last).result.outcome.status).toBe("rejected");
       }
-      const rows = db.prepare("SELECT payload FROM commands").all();
-      expect(rows.length).toBeLessThanOrEqual(1000);
-      expect(rows.every((row) => String(row["payload"]).startsWith("sha256:"))).toBe(true);
+      expect(Number(db.prepare("SELECT COUNT(*) AS n FROM commands").get()?.["n"])).toBe(1000);
+      // New receipts hold a digest, not the command.
+      const newest = db.prepare("SELECT payload FROM commands ORDER BY rowid DESC LIMIT 3").all();
+      expect(newest.every((row) => String(row["payload"]).startsWith("sha256:"))).toBe(true);
       // The newest still answer their retries, and a reused ID with another command is refused.
       expect(store.execute(last!).changed).toBe(false);
       expect(store.execute(last!).result.outcome).toMatchObject({ code: "CONFLICT" });
