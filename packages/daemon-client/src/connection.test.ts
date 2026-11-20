@@ -124,6 +124,30 @@ describe("DaemonConnection", () => {
     ).toBeNull();
   });
 
+  it("opens remote previews through the gateway's login page when the daemon reserves it", async () => {
+    const sockets: FakeWebSocket[] = [];
+    const connection = new DaemonConnection({
+      endpoint: describeDaemonEndpoint("wss://m-example.dev.concors.app/ws"),
+      client,
+      protocols: ["concors.bearer.preview-token"],
+      webSocketFactory: (url) => {
+        const socket = new FakeWebSocket(url);
+        sockets.push(socket);
+        return socket;
+      },
+    });
+    // Until the daemon says it reserves the path, the link opens the app's root.
+    expect(new URL(connection.previewUrl({ protocol: "http", port: 5173 })!).pathname).toBe("/");
+    const ready = connection.connect();
+    sockets[0]!.serverOpen();
+    sockets[0]!.serverSend({ ...READY, capabilities: ["preview-login-path"] });
+    await ready;
+    const url = new URL(connection.previewUrl({ protocol: "https", port: 8443 })!);
+    expect(url.pathname).toBe("/__concors/preview-auth");
+    expect(url.hostname.startsWith("https-8443.")).toBe(true);
+    expect(new URLSearchParams(url.hash.slice(1)).get("access_token")).toBe("preview-token");
+  });
+
   it("resubscribes after reconnect without accepting the old socket's readings", async () => {
     const { connection, socket, ready, sockets } = startConnection();
     const listener = vi.fn();
@@ -426,6 +450,8 @@ describe("in-place access renewal", () => {
     socket.serverSend({ type: "auth.refreshed", ok: true, expiresAt: Date.now() + 900_000 });
     await expect(renewed).resolves.toBe(true);
     expect(connection.previewUrl({ protocol: "http", port: 3000 })).toContain("access_token=fresh");
+    // A daemon without the reserved login path gets links to the app's root, as before.
+    expect(new URL(connection.previewUrl({ protocol: "http", port: 3000 })!).pathname).toBe("/");
     const refused = connection.refreshAuthorization("other");
     socket.serverSend({ type: "auth.refreshed", ok: false });
     await expect(refused).resolves.toBe(false);

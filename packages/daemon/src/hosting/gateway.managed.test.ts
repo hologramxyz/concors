@@ -384,6 +384,34 @@ it("authenticates detected preview hosts once, proxies browser traffic and suppo
   });
   expect(authorized.status).toBe(204);
   const cookie = authorized.headers.get("set-cookie")!.split(";", 1)[0]!;
+  // The cookie names a preview session; it is not the access token and opens nothing else.
+  const session = cookie.slice(cookie.indexOf("=") + 1);
+  expect(session).not.toContain(f.token);
+  expect(
+    (
+      await httpFetch(f.url + "/echo", {
+        headers: { host: f.headers.host, authorization: `Bearer ${session}` },
+      })
+    ).status,
+  ).toBe(401);
+  expect(
+    (await httpFetch(f.url + "/", { headers: { host, cookie: "__Host-concors_preview=forged" } }))
+      .status,
+  ).toBe(401);
+  // Signed in or not, Concors' own paths stay with the gateway: a link opened there again keeps
+  // its access fragment off the app's page.
+  const relogin = await httpFetch(f.url + "/__concors/preview-auth", { headers: { host, cookie } });
+  expect(relogin.status).toBe(401);
+  expect(await relogin.text()).toContain("Opening preview");
+  const script = await httpFetch(f.url + "/__concors/preview-auth.js", {
+    headers: { host, cookie },
+  });
+  expect(await script.text()).toContain("access_token");
+  expect(
+    (await httpFetch(f.url + "/__concors/other", { method: "PUT", headers: { host, cookie } }))
+      .status,
+  ).toBe(404);
+  expect(seen).toHaveLength(0);
   const page = await httpFetch(f.url + "/feature?ready=yes", { headers: { host, cookie } });
   expect(page.status).toBe(200);
   expect(await page.text()).toContain("Preview app");
