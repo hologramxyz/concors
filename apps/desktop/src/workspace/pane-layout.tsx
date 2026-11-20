@@ -38,12 +38,14 @@ import { AgentPaneIcon, AgentStatusIcon } from "@/agents/activity";
 import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
 import { isLiveTerminalAgent, terminalAgentStatus } from "@/agents/agent-status";
 import { useAgents } from "@/agents/context";
+import { canFork, useForkChat } from "@/agents/fork";
 import {
   ArrowRightLeft,
   Columns2,
   Rows2,
   Ellipsis,
   FolderInput,
+  GitFork,
   Pencil,
   Plug,
   Terminal,
@@ -633,6 +635,10 @@ function Pane({
   const terminalAgent =
     node.profile !== "chat" && terminal && isLiveTerminalAgent(terminal) ? terminal : null;
   const [mcpOpen, setMcpOpen] = useState(false);
+  const forkChat = useForkChat();
+  // Offered whenever the chat can be forked at all; greyed out while it is busy.
+  const forkOffered = !!agent?.controls?.fork && !agent.supervisor;
+  const forkable = canEdit && connection?.state.status === "ready" && canFork(agent);
   const profiles = useTerminalProfiles();
   const options = paneProfiles(profiles.profiles);
   const PaneIcon =
@@ -747,6 +753,21 @@ function Pane({
             {agent?.controls?.mcpStatus && (
               <DropdownMenuItem onSelect={() => setMcpOpen(true)}>
                 <Plug /> <span className="whitespace-nowrap">MCP servers…</span>
+              </DropdownMenuItem>
+            )}
+            {forkOffered && (
+              // The whole chat, as the sidebar row's Fork chat does; a reply's own fork button
+              // forks up to that reply.
+              <DropdownMenuItem
+                disabled={!forkable}
+                onSelect={() => {
+                  if (agent)
+                    void forkChat(agent).catch((error: unknown) =>
+                      console.error("Could not fork the chat", error),
+                    );
+                }}
+              >
+                <GitFork /> <span className="whitespace-nowrap">Fork chat</span>
               </DropdownMenuItem>
             )}
             {(canTransfer || ownTab) && (
