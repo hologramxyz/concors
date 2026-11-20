@@ -90,7 +90,7 @@ it("lists each session once, under what it needs, with what it needs said in ful
     [
       "Game QA",
       "Needs you",
-      { action: "Approve", text: "pnpm test" },
+      { action: "Approve", text: "pnpm test", code: true },
       "On it: reading base.css, then running the tests.",
       "",
       0,
@@ -163,4 +163,21 @@ it("keeps only the most recent finished sessions", () => {
   );
   expect(rows).toHaveLength(DONE_LIMIT);
   expect(rows[0]?.agent.name).toBe(`Agent ${DONE_LIMIT + 2}`);
+});
+
+it("names a file approval by its verb and the file inside the workspace, a command as code", () => {
+  const edit = agent("Footer", {
+    status: "needs_input",
+    directory: "/work/shop",
+    pending: [{ ...approval, summary: '{"file_path":"/work/shop/src/index.html"}\nEdit' }],
+  });
+  const run = agent("Tests", {
+    status: "needs_input",
+    directory: "/work/shop",
+    pending: [approval],
+  });
+  expect(overviewRows([edit, run], []).map((row) => row.needs)).toEqual([
+    { action: "Approve", text: "Edit src/index.html" },
+    { action: "Approve", text: "pnpm test", code: true },
+  ]);
 });

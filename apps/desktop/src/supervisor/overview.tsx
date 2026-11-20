@@ -1,24 +1,18 @@
-import { useRef, useState } from "react";
-import {
-  ChevronDown,
-  CircleAlert,
-  CircleCheck,
-  CircleSlash,
-  CircleX,
-  ListChecks,
-  MessageCircle,
-  X,
-} from "lucide-react";
+import { useRef } from "react";
+import { ListChecks, MessageCircle, X } from "lucide-react";
 import {
   agentProviderName,
+  modelName,
   type AgentInfo,
   type AgentPending,
   type WorkspaceSnapshot,
 } from "@concors/protocol";
 import { cn } from "cn";
+import { chatAgentStatus } from "@/agents/agent-status";
 import { useAgents } from "@/agents/context";
-import { AgentLoadingIcon } from "@/agents/activity";
+import { ProviderIcon } from "@/agents/provider-icon";
 import { Button } from "@/components/ui/button";
+import { SidebarEmpty, SidebarSection } from "@/components/sidebar-section";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import {
   Dialog,
@@ -28,15 +22,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { shortAge } from "@/lib/format-date";
-import { SidebarDot } from "@/workspace/sidebar-tabs";
+import { RowDot, RowWorking, SidebarDot } from "@/workspace/sidebar-tabs";
 import { chatState, useMinuteClock } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
-import {
-  overviewGroups,
-  overviewRows,
-  type OverviewGroup,
-  type OverviewRow,
-} from "./overview-model";
+import { overviewGroups, overviewRows, type OverviewRow } from "./overview-model";
 import { supervisorAgentName } from "./reference-context";
 import { useSupervisorBriefs, useSupervisorDeliveries } from "./use-overview";
 
@@ -97,8 +86,9 @@ export function SupervisorOverviewButton({
 /**
  * Every session at a glance, beside the Supervisor chat on desktop and in a drawer on a phone: what
  * needs you, what is in progress and what is done, each saying in full what it needs and what it
- * last said, so sessions need not be opened one by one to know where they stand. A row opens its
- * session, where approvals are answered; an approval also offers to ask Supervisor about it.
+ * last said, so sessions need not be opened one by one to know where they stand. It is drawn with
+ * the sidebar's own parts (sections, rows, dots, spinner), so the two read as one product. A row
+ * opens its session, where approvals are answered; an approval also offers to ask Supervisor.
  */
 export function SupervisorOverview({
   workspace,
@@ -122,7 +112,6 @@ export function SupervisorOverview({
 }) {
   // A phone's drawer returns focus to its button as it closes; after asking, the message takes it.
   const asked = useRef(false);
-  const [folded, setFolded] = useState<ReadonlySet<OverviewGroup>>(new Set());
   const ask = (agent: AgentInfo, request: AgentPending) => {
     onAsk(agent, request);
     if (!compact) return requestAnimationFrame(focusComposer);
@@ -153,47 +142,27 @@ export function SupervisorOverview({
     onOpenAgent(agent.id);
   };
   const list = (
-    <div className="space-y-2">
-      {warning && (
-        <p role="status" className="px-2 text-xs text-destructive">
-          {warning}
-        </p>
-      )}
+    <div className="space-y-1">
+      {warning && <SidebarEmpty tone="alert">{warning}</SidebarEmpty>}
       {!rows.length && (
-        <p className="px-2 py-6 text-center text-xs text-muted-foreground">
-          Sessions appear here once they reply.
-        </p>
+        <SidebarEmpty>
+          Sessions appear here once they reply, grouped by what they need.
+        </SidebarEmpty>
       )}
       {overviewGroups.map((group) => {
         const grouped = rows.filter((row) => row.group === group);
-        if (!grouped.length) return null;
-        const isFolded = folded.has(group);
         return (
-          <section key={group} aria-label={group}>
-            <button
-              type="button"
-              aria-expanded={!isFolded}
-              onClick={() =>
-                setFolded((current) => {
-                  const next = new Set(current);
-                  if (isFolded) next.delete(group);
-                  else next.add(group);
-                  return next;
-                })
+          grouped.length > 0 && (
+            <SidebarSection
+              key={group}
+              title={group}
+              action={
+                <span className="shrink-0 pr-2 text-xs text-muted-foreground tabular-nums">
+                  {grouped.length}
+                </span>
               }
-              className="flex w-full items-center gap-1.5 rounded-md bg-muted/70 px-2 py-1.5 text-left text-xs font-medium outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {group}
-              <span className="text-muted-foreground tabular-nums">{grouped.length}</span>
-              <ChevronDown
-                className={cn(
-                  "size-3.5 text-muted-foreground transition-transform",
-                  isFolded && "-rotate-90",
-                )}
-              />
-            </button>
-            {!isFolded && (
-              <ul className="mt-1 space-y-0.5">
+              <ul className="space-y-0.5">
                 {grouped.map((row) => (
                   <OverviewItem
                     key={row.agent.id}
@@ -213,8 +182,8 @@ export function SupervisorOverview({
                   />
                 ))}
               </ul>
-            )}
-          </section>
+            </SidebarSection>
+          )
         );
       })}
     </div>
@@ -245,39 +214,25 @@ export function SupervisorOverview({
       aria-label="Overview"
       className="flex w-[340px] shrink-0 flex-col border-l bg-sidebar text-ui text-sidebar-foreground"
     >
-      <div className="flex h-10 shrink-0 items-center gap-2 px-3">
-        <ListChecks className="size-4 text-muted-foreground" />
+      {/* The Files panel's header: icon, title, and a close button with its tooltip. */}
+      <div className="m-2 flex h-9 shrink-0 items-center gap-2 px-1 select-none">
+        <ListChecks className="size-4" />
         <h2 className="min-w-0 flex-1 truncate font-medium">Overview</h2>
-        <Button
-          type="button"
-          size="icon-xs"
-          variant="ghost"
-          aria-label="Close overview"
-          onClick={onClose}
-        >
-          <X />
-        </Button>
+        <SidebarTooltip place="title-bar" content="Close overview">
+          <Button size="icon-sm" variant="ghost" aria-label="Close overview" onClick={onClose}>
+            <X className="size-4" />
+          </Button>
+        </SidebarTooltip>
       </div>
       <div className="chat-scroll min-h-0 flex-1 overflow-y-auto px-2 pb-3">{list}</div>
     </aside>
   );
 }
 
-/** What a row's icon says: the same states the sidebar shows, told apart at a glance. */
-function StatusIcon({ row }: { row: OverviewRow }) {
-  if (row.group === "Needs you") return <CircleAlert className="size-4 text-destructive" />;
-  if (row.group === "In progress") return <AgentLoadingIcon className="size-4" />;
-  if (row.agent.status === "failed") return <CircleX className="size-4 text-muted-foreground" />;
-  if (row.agent.status === "interrupted")
-    return <CircleSlash className="size-4 text-muted-foreground" />;
-  return (
-    <CircleCheck className={cn("size-4", row.unseen ? "text-primary" : "text-muted-foreground")} />
-  );
-}
-
 /**
- * One session: its name and age, where it runs, then its one-liners in full, never truncated,
- * because they are the reason to look: what it needs from you, what it is doing, what it did.
+ * One session, laid out as a sidebar row that goes on: its dot, name and age (a spinner while it
+ * works), then which model in which workspace, then its one-liners in full, never cut off, because
+ * they are the reason to look: what it needs from you, what it is doing or what it did.
  */
 function OverviewItem({
   row,
@@ -294,51 +249,75 @@ function OverviewItem({
   onAsk: (() => void) | undefined;
   canAsk: boolean;
 }) {
-  const name = supervisorAgentName(row.agent);
+  const { agent } = row;
+  const name = supervisorAgentName(agent);
   const task = briefLine(row.task);
+  const state = chatState(agent);
+  const outcome =
+    row.group === "Done" && agent.status === "failed"
+      ? "Failed"
+      : row.group === "Done" && agent.status === "interrupted"
+        ? "Stopped"
+        : "";
   const meta = [
+    agent.model
+      ? modelName(agent.model)
+      : (agent.providerLabel ?? agentProviderName(agent.provider)),
     workspace,
-    row.agent.providerLabel ?? agentProviderName(row.agent.provider),
     row.queued ? `${row.queued} queued` : "",
+    outcome,
   ].filter(Boolean);
-  // The update leads; before a session has said anything, what it was asked stands in.
-  const said =
-    row.update ||
-    (row.group === "Done"
-      ? row.agent.status === "interrupted"
-        ? "Stopped before it replied."
-        : ""
-      : task);
+  // The latest update leads; before a session has said anything, what it was asked stands in,
+  // quieter, since it is the request rather than anything the session said.
+  const said = row.update || (row.group === "Done" ? "" : task);
+  const asked = !row.update;
   return (
-    <li className="rounded-md hover:bg-sidebar-accent/60">
+    <li className="group/row rounded-md hover:bg-sidebar-accent/70 has-[:focus-visible]:bg-sidebar-accent/70">
       <button
         type="button"
         onClick={onOpen}
         aria-label={`Open ${name}`}
-        className="flex w-full min-w-0 items-start gap-2 rounded-md px-2 py-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        data-overview-row={row.group}
+        className="flex w-full min-w-0 items-start gap-2 rounded-md py-1.5 pr-2 pl-2 text-left text-ui outline-none"
       >
-        <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center">
-          <StatusIcon row={row} />
+        <span className="flex h-5 shrink-0 items-center">
+          <RowDot state={state === "working" ? undefined : state} status={chatAgentStatus(agent)} />
         </span>
-        <span className="min-w-0 flex-1 space-y-0.5">
-          <span className="flex min-w-0 items-baseline gap-2">
-            <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
-            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-              {shortAge(row.updatedAt, now)}
-            </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex h-5 min-w-0 items-center gap-2">
+            <span className="min-w-0 flex-1 truncate">{name}</span>
+            {row.group === "In progress" && state === "working" ? (
+              <RowWorking />
+            ) : (
+              <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                {shortAge(row.updatedAt, now)}
+              </span>
+            )}
           </span>
-          <span className="block truncate text-xs text-muted-foreground">{meta.join(" · ")}</span>
+          <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <span className="flex size-3.5 shrink-0 items-center justify-center opacity-80">
+              <ProviderIcon provider={agent.provider} size={12} />
+            </span>
+            <span className="min-w-0 truncate">{meta.join(" · ")}</span>
+          </span>
           {row.needs && (
-            <span className="block text-ui break-words">
+            <span className="mt-1 block leading-5 break-words">
               <span className="font-medium text-destructive">{row.needs.action}:</span>{" "}
-              {row.needs.text}
+              {row.needs.code ? (
+                <code className="rounded bg-sidebar-accent px-1 py-px font-mono text-[12px] break-all">
+                  {row.needs.text}
+                </code>
+              ) : (
+                row.needs.text
+              )}
             </span>
           )}
           {said && (
             <span
               className={cn(
-                "block break-words",
-                row.needs ? "text-xs text-muted-foreground" : "text-ui text-foreground/90",
+                "block leading-5 break-words",
+                row.needs ? "text-xs" : "mt-1",
+                row.needs || asked ? "text-muted-foreground" : "text-sidebar-foreground/90",
               )}
             >
               {said}
@@ -347,15 +326,17 @@ function OverviewItem({
         </span>
       </button>
       {onAsk && (
-        <button
-          type="button"
-          disabled={!canAsk}
-          onClick={onAsk}
-          className="mb-1 ml-8 flex items-center gap-1 rounded px-0.5 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-        >
-          <MessageCircle className="size-3" />
-          Ask Supervisor
-        </button>
+        <div className="pb-1.5 pl-9">
+          <button
+            type="button"
+            disabled={!canAsk}
+            onClick={onAsk}
+            className="flex items-center gap-1 rounded text-xs text-muted-foreground outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          >
+            <MessageCircle className="size-3.5" />
+            Ask Supervisor
+          </button>
+        </div>
       )}
     </li>
   );

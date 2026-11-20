@@ -18,8 +18,11 @@ export const DONE_LIMIT = 20;
 export interface OverviewRow {
   agent: AgentInfo;
   group: OverviewGroup;
-  /** What the person must do, in full: approve a request, answer a question, look at a failure. */
-  needs: { action: string; text: string } | null;
+  /**
+   * What the person must do, in full: approve a request, answer a question, look at a failure.
+   * `code` marks a command, shown as code rather than prose.
+   */
+  needs: { action: string; text: string; code?: boolean } | null;
   /** The gist of its latest reply: progress while it works, the outcome once it is done. */
   update: string;
   /** What the turn was asked: Supervisor's instruction, else the turn's own prompt. */
@@ -33,10 +36,23 @@ export interface OverviewRow {
 
 const firstLine = (text: string) => text.trim().split("\n")[0]?.trim() ?? "";
 
+/** A path inside the session's folder, as it would be written there. */
+function relative(path: string, directory: string) {
+  const root = directory.replace(/\/+$/, "") + "/";
+  return path.startsWith(root) ? path.slice(root.length) : path;
+}
+
 function needs(agent: AgentInfo): OverviewRow["needs"] {
   const pending = agent.pending[0];
-  if (pending?.kind === "approval")
-    return { action: "Approve", text: approvalSummary(pending) || pending.title };
+  if (pending?.kind === "approval") {
+    const summary = approvalSummary(pending);
+    if (!summary) return { action: "Approve", text: pending.title };
+    // A file operation reads as its verb and the file, e.g. "Edit src/app.ts".
+    const [verb, path] = summary.split(" · ");
+    if (path && verb && /^[A-Z][a-z]+(?: [a-z]+)*$/.test(verb))
+      return { action: "Approve", text: `${verb} ${relative(path, agent.directory)}` };
+    return { action: "Approve", text: firstLine(summary), code: true };
+  }
   if (pending?.kind === "questions")
     return {
       action: "Answer",
