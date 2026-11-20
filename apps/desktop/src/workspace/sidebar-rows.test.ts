@@ -113,6 +113,8 @@ it("lists each workspace's open tabs in tab-bar order, then its closed chats new
     ["closed:old", "Chat old"],
   ]);
   const [chat, split, shell] = rows.get("p") ?? [];
+  expect(chat).toMatchObject({ chats: 1 });
+  expect(split).toMatchObject({ chats: 0 });
   expect(chat).toMatchObject({ tool: "chat", time: "2026-09-20T00:00:00Z" });
   // Claude Code started on the 21st, the shell beside it on the 22nd.
   expect(split).toMatchObject({ tool: "claude", time: "2026-09-22T00:00:00Z" });
@@ -257,6 +259,8 @@ it("marks a split tab's row with the most urgent dot among its panes", () => {
     [],
   ).rows.get("p")![0]!;
   expect(rowState(row)).toBe("done");
+  // Two chats: the row cannot say which one a single-chat action means.
+  expect(row).toMatchObject({ kind: "tab", chat: { id: "main" }, chats: 2 });
 });
 
 it("keeps open tabs, pins and closed chats that need attention listed, and folds the other closed ones", () => {

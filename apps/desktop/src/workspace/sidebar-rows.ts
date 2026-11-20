@@ -26,6 +26,11 @@ export interface OpenTabRow {
   readonly title: string;
   /** The chat its main pane shows, once that chat has started. */
   readonly chat?: AgentInfo | undefined;
+  /**
+   * How many of its panes are chats. With more than one the row cannot say which a chat action
+   * means, so actions for one chat (Fork) are left to each pane's own menu.
+   */
+  readonly chats: number;
   /** The terminal its main pane runs, once it has started. */
   readonly terminal?: TerminalInfo | undefined;
   /** What runs in the main pane when it is a terminal: a coding agent's CLI, or a shell. */
@@ -113,6 +118,7 @@ export function sidebarRows(
         tabId: tab.id,
         title: tabTitle(tab, chats, terminals),
         chat,
+        chats: tabPanes(tab).filter((node) => node.profile === "chat").length,
         terminal,
         tool,
         ...tabActivity(tabAgentStatuses(tab, chats, terminals)),
@@ -245,6 +251,7 @@ export function paneState(
     tabId: "",
     title: "",
     chat,
+    chats: pane.profile === "chat" ? 1 : 0,
     terminal,
     tool: pane.profile,
     dot: paneAgentStatus(pane, chats, terminals)?.dot,
@@ -264,6 +271,7 @@ export function chatState(chat: AgentInfo) {
     tabId: "",
     title: "",
     chat,
+    chats: 1,
     tool: "chat",
     dot: chatDot(chat),
     time: "",
