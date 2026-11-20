@@ -1,7 +1,7 @@
 import { test, expect, signedIn } from "./signed-in.ts";
 import { seedSupervisorWorkspaces } from "./support/supervisor-fixture.ts";
 
-test("Activity shows each session's status, what it needs, and the gist of its output", async ({
+test("Overview shows each session's status, what it needs, and the gist of its output", async ({
   page,
 }) => {
   test.setTimeout(90_000);
@@ -18,21 +18,21 @@ test("Activity shows each session's status, what it needs, and the gist of its o
     const dismissAnnouncement = page.getByRole("button", { name: "Dismiss iOS app announcement" });
     if (await dismissAnnouncement.isVisible()) await dismissAnnouncement.click();
 
-    await page.getByRole("button", { name: "Activity, 1 need you" }).click();
-    const activity = page.getByRole("complementary", { name: "Activity" });
-    const needsYou = activity.getByRole("region", { name: "Needs you" });
+    await page.getByRole("button", { name: "Overview, 1 need you" }).click();
+    const overview = page.getByRole("complementary", { name: "Overview" });
+    const needsYou = overview.getByRole("region", { name: "Needs you" });
     await expect(needsYou).toContainText("Game QA");
-    await expect(needsYou).toContainText("Star Catcher · pnpm test");
-    const working = activity.getByRole("region", { name: "Working" });
+    await expect(needsYou).toContainText("Approve: pnpm test");
+    const working = overview.getByRole("region", { name: "In progress" });
     await expect(working).toContainText("HUD polish");
-    // What a working session was asked, though Supervisor did not send it.
-    await expect(working).toContainText("Review the HUD and hold for feedback");
+    // A working session shows its latest update as it streams, refreshed while it works.
+    await expect(working).toContainText("Hello from");
     // A finished session says what it produced, so it need not be opened to find out.
-    const done = activity.getByRole("region", { name: "Done" });
+    const done = overview.getByRole("region", { name: "Done" });
     await expect(done).toContainText("Release editor");
     await expect(done).toContainText("Hello from Codex");
     await page.screenshot({
-      path: test.info().outputPath("desktop-activity.png"),
+      path: test.info().outputPath("desktop-overview.png"),
       animations: "disabled",
     });
 
@@ -48,10 +48,10 @@ test("Activity shows each session's status, what it needs, and the gist of its o
     await expect(page.getByTestId("supervisor-page")).toHaveCount(0);
     await page.getByRole("button", { name: "Allow once", exact: true }).click();
     await page.getByRole("button", { name: "Supervisor", exact: true }).click();
-    await expect(activity.getByRole("region", { name: "Needs you" })).toHaveCount(0);
+    await expect(overview.getByRole("region", { name: "Needs you" })).toHaveCount(0);
     await expect(done).toContainText("The fixture test suite finished.");
     await page.screenshot({
-      path: test.info().outputPath("desktop-activity-resolved.png"),
+      path: test.info().outputPath("desktop-overview-resolved.png"),
       animations: "disabled",
     });
   } finally {
