@@ -15,7 +15,7 @@ import { SessionLinkContext } from "./session-link";
 import { AgentDraftScopeContext, useAgentDraft } from "@/agents/draft";
 import { MAX_SUPERVISOR_REFERENCES } from "./reference-text";
 import { useAgents } from "@/agents/context";
-import { SupervisorActivity } from "./activity";
+import { SupervisorOverview } from "./overview";
 import {
   SupervisorReferences,
   supervisorAgentName,
@@ -30,14 +30,14 @@ export function SupervisorPage({
   connected,
   onOpenAgent,
   onOpenProject,
-  activityOpen,
-  onCloseActivity,
+  overviewOpen,
+  onCloseOverview,
 }: {
   workspace: WorkspaceSnapshot | null;
   connected: boolean;
   onOpenAgent: (id: string) => void;
-  activityOpen: boolean;
-  onCloseActivity: () => void;
+  overviewOpen: boolean;
+  onCloseOverview: () => void;
   /** Brings up a workspace, where a file the Supervisor links to opens. */
   onOpenProject: (projectId: string) => void;
 }) {
@@ -168,15 +168,15 @@ export function SupervisorPage({
                   </WorkspaceFileLinks>
                 </SupervisorReferences>
               </div>
-              {activityOpen && (
-                <SupervisorActivity
+              {overviewOpen && (
+                <SupervisorOverview
                   workspace={workspace}
                   supervisorId={supervisorId}
                   canAsk={canAsk}
                   onAsk={ask}
                   focusComposer={focusComposer}
                   compact={compact}
-                  onClose={onCloseActivity}
+                  onClose={onCloseOverview}
                   onOpenAgent={onOpenAgent}
                 />
               )}

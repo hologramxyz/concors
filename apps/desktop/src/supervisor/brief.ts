@@ -1,10 +1,13 @@
+/** An opening line this short is kept whole rather than cut to its first sentence. */
+const WHOLE = 200;
+
 /**
  * One line that says what a reply amounts to, taken from the reply itself: no model is asked, so
  * it costs nothing and never invents. A line the agent marked as its TL;DR or summary wins;
- * otherwise the first sentence of the first line that says something, skipping code, tables and
+ * otherwise the first line that says something (its first sentence if it is long), skipping code, tables and
  * bare labels such as "## Summary", with Markdown removed.
  */
-export function briefLine(reply: string, limit = 160): string {
+export function briefLine(reply: string, limit = 300): string {
   const lines = reply
     .replace(/```[\s\S]*?(```|$)/g, "\n")
     .split("\n")
@@ -21,7 +24,9 @@ export function briefLine(reply: string, limit = 160): string {
   const said = marked ?? lines.find((line) => !isLabel(line) && !/^(\||[-=*_]{3,}$)/.test(line));
   if (!said) return "";
   const plain = stripMarkdown(said);
-  const sentence = /^(.{20,}?[.!?])(?:\s|$)/.exec(plain)?.[1] ?? plain;
+  // A short opening says it all; only a long one is cut to its first sentence.
+  const sentence =
+    plain.length <= WHOLE ? plain : (/^(.{20,}?[.!?])(?:\s|$)/.exec(plain)?.[1] ?? plain);
   const line = sentence.replace(/:$/, "").trim();
   return line.length > limit ? line.slice(0, limit - 1).trimEnd() + "…" : line;
 }

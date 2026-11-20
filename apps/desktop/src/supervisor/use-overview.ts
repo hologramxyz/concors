@@ -62,10 +62,14 @@ export function useSupervisorDeliveries(supervisorId: string | null) {
   };
 }
 
+/** How often a working session's latest update is read again. */
+const WORKING_BRIEF_MS = 4000;
+
 /**
- * The latest reply of each listed session, for Activity's one-line summaries. A reply changes only
- * when its session's turn or status does, so the request is made again only then. Null when the
- * daemon cannot brief, and Activity simply shows no summaries.
+ * The latest reply of each listed session, for Overview's one-line updates. A finished reply
+ * changes only with its session's turn or status, so it is read again then; while a session works
+ * its reply grows, so it is also read every few seconds. Null when the daemon cannot brief, and
+ * Overview simply shows no updates.
  */
 export function useSupervisorBriefs(sessions: readonly AgentInfo[]) {
   const connection = useContext(TerminalConnectionContext);
@@ -80,8 +84,9 @@ export function useSupervisorBriefs(sessions: readonly AgentInfo[]) {
   useEffect(() => {
     if (!connection || !supported || !key) return;
     let current = true;
-    const sessionIds = key.split("\n").map((entry) => entry.split(" ")[0] ?? "");
-    const timer = setTimeout(() => {
+    const entries = key.split("\n").map((entry) => entry.split(" "));
+    const sessionIds = entries.map(([id]) => id ?? "");
+    const read = () =>
       void connection.requestSupervisor({ kind: "briefs", sessionIds }, crypto.randomUUID()).then(
         (result) => {
           if (current && result.outcome.status === "ok")
@@ -89,10 +94,13 @@ export function useSupervisorBriefs(sessions: readonly AgentInfo[]) {
         },
         () => undefined,
       );
-    }, 200);
+    const timer = setTimeout(read, 200);
+    const working = entries.some(([, , status]) => status === "working" || status === "starting");
+    const poll = working ? setInterval(read, WORKING_BRIEF_MS) : undefined;
     return () => {
       current = false;
       clearTimeout(timer);
+      clearInterval(poll);
     };
   }, [connection, supported, key]);
   return supported ? briefs : null;

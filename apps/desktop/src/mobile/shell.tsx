@@ -1,4 +1,4 @@
-import { SupervisorActivityButton } from "@/supervisor/activity";
+import { SupervisorOverviewButton } from "@/supervisor/overview";
 import { SupervisorNav } from "@/supervisor/nav";
 import { SupervisorPage } from "@/supervisor/page";
 import { SchedulesNav } from "@/schedules/nav";
@@ -155,7 +155,7 @@ function MobileWorkspaceContent({
   connection: DaemonConnection | null;
 }) {
   const files = useFiles();
-  const [supervisorActivity, setSupervisorActivity] = useState(false);
+  const [supervisorOverview, setSupervisorOverview] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   /** A full-height page over the workspace; Pull requests may show one workspace. */
@@ -856,10 +856,10 @@ function MobileWorkspaceContent({
                           )}
                           {page?.kind === "supervisor" && (
                             <div className="pointer-events-auto relative z-30">
-                              <SupervisorActivityButton
+                              <SupervisorOverviewButton
                                 compact
-                                open={supervisorActivity}
-                                onClick={() => setSupervisorActivity(!supervisorActivity)}
+                                open={supervisorOverview}
+                                onClick={() => setSupervisorOverview(!supervisorOverview)}
                               />
                             </div>
                           )}
@@ -950,8 +950,8 @@ function MobileWorkspaceContent({
                                 workspace={workspace}
                                 connected={!!ready}
                                 onOpenAgent={openAgent}
-                                activityOpen={supervisorActivity}
-                                onCloseActivity={() => setSupervisorActivity(false)}
+                                overviewOpen={supervisorOverview}
+                                onCloseOverview={() => setSupervisorOverview(false)}
                                 onOpenProject={selectProject}
                               />
                             ) : page?.kind === "schedules" ? (

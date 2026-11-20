@@ -12,6 +12,11 @@ it("summarizes replies by their opening sentence, without Markdown or code", () 
       "Both chats finished, and I checked the files on disk in each workspace.\n- **ws-alpha**: added a line",
     ),
   ).toBe("Both chats finished, and I checked the files on disk in each workspace.");
+  expect(briefLine("The fixture test suite finished. All checks passed.")).toBe(
+    "The fixture test suite finished. All checks passed.",
+  );
+  const long = `${"The rail clips at narrow widths because the grid has no minimum. ".repeat(4)}`;
+  expect(briefLine(long)).toBe("The rail clips at narrow widths because the grid has no minimum.");
   expect(briefLine("## Summary\n\n- Added `sub` to [math.js](src/math.js)\n- Ran 43 tests")).toBe(
     "Added sub to math.js",
   );
@@ -33,5 +38,5 @@ it("keeps short or empty replies and bounds long ones", () => {
   expect(briefLine("")).toBe("");
   expect(briefLine("```\nonly code\n```")).toBe("");
   expect(briefLine("Done.")).toBe("Done.");
-  expect(briefLine("x".repeat(400))).toHaveLength(160);
+  expect(briefLine("x".repeat(400))).toHaveLength(300);
 });
