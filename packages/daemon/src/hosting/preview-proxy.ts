@@ -7,9 +7,13 @@ import {
 import { request as httpsRequest } from "node:https";
 import type { Duplex } from "node:stream";
 import type { Socket } from "node:net";
+import { randomBytes } from "node:crypto";
+import { PREVIEW_LOGIN_PATH } from "@concors/protocol";
 import type { Principal, TokenVerifier } from "../managed/auth.ts";
 
-export const PREVIEW_AUTH_PATH = "/__concors/preview-auth";
+export const PREVIEW_AUTH_PATH = PREVIEW_LOGIN_PATH;
+/** Paths under here are the gateway's own on every preview host and never reach the app. */
+export const PREVIEW_RESERVED_PREFIX = "/__concors/";
 const PREVIEW_SCRIPT_PATH = "/__concors/preview-auth.js";
 const COOKIE = "__Host-concors_preview";
 
@@ -38,42 +42,67 @@ export function previewTarget(
   return { port, protocol: match[1] === "https" ? "https" : "http" };
 }
 
-export async function previewPrincipal(
-  request: IncomingMessage,
-  verifier: TokenVerifier,
-): Promise<Principal> {
-  const token = previewCookie(request);
-  if (!token) throw new Error("Unauthorized");
-  const principal = await verifier.verify(token);
-  if (!Number.isFinite(principal.expiresAt) || principal.expiresAt <= Date.now())
-    throw new Error("Unauthorized");
-  return principal;
-}
+/**
+ * Signed-in previews. The browser holds only a random session id in its cookie; the access token
+ * it was exchanged for stays in the daemon and is verified again on every request, so the preview's
+ * own scripts and server never see a credential that also opens the machine.
+ */
+export class PreviewSessions {
+  readonly #sessions = new Map<string, { token: string; expiresAt: number }>();
+  readonly #verifier: TokenVerifier;
+  readonly #limit: number;
+  constructor(verifier: TokenVerifier, limit = 1000) {
+    this.#verifier = verifier;
+    this.#limit = limit;
+  }
 
-export async function authorizePreview(
-  request: IncomingMessage,
-  response: ServerResponse,
-  verifier: TokenVerifier,
-): Promise<void> {
-  let token = "";
-  for await (const chunk of request) {
-    token += String(chunk);
-    if (token.length > 8192) {
-      response.writeHead(413).end();
-      return;
+  async principal(request: IncomingMessage): Promise<Principal> {
+    const id = previewCookie(request);
+    const session = id ? this.#sessions.get(id) : undefined;
+    if (!id || !session) throw new Error("Unauthorized");
+    if (session.expiresAt <= Date.now()) {
+      this.#sessions.delete(id);
+      throw new Error("Unauthorized");
+    }
+    const principal = await this.#verifier.verify(session.token);
+    if (!Number.isFinite(principal.expiresAt) || principal.expiresAt <= Date.now())
+      throw new Error("Unauthorized");
+    return principal;
+  }
+
+  async authorize(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    let token = "";
+    for await (const chunk of request) {
+      token += String(chunk);
+      if (token.length > 8192) {
+        response.writeHead(413).end();
+        return;
+      }
+    }
+    try {
+      const principal = await this.#verifier.verify(token);
+      const maxAge = Math.max(0, Math.floor((principal.expiresAt - Date.now()) / 1000));
+      if (!maxAge) throw new Error("Expired");
+      const id = randomBytes(32).toString("base64url");
+      this.#remember(id, { token, expiresAt: principal.expiresAt });
+      response.setHeader(
+        "set-cookie",
+        `${COOKIE}=${id}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${maxAge}`,
+      );
+      response.writeHead(204).end();
+    } catch {
+      response.writeHead(401).end();
     }
   }
-  try {
-    const principal = await verifier.verify(token);
-    const maxAge = Math.max(0, Math.floor((principal.expiresAt - Date.now()) / 1000));
-    if (!maxAge) throw new Error("Expired");
-    response.setHeader(
-      "set-cookie",
-      `${COOKIE}=${encodeURIComponent(token)}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${maxAge}`,
-    );
-    response.writeHead(204).end();
-  } catch {
-    response.writeHead(401).end();
+
+  #remember(id: string, session: { token: string; expiresAt: number }) {
+    const now = Date.now();
+    for (const [key, value] of this.#sessions)
+      if (value.expiresAt <= now) this.#sessions.delete(key);
+    // Oldest first: a flood of sign-ins signs out the earliest previews, not the newest.
+    while (this.#sessions.size >= this.#limit)
+      this.#sessions.delete(this.#sessions.keys().next().value ?? "");
+    this.#sessions.set(id, session);
   }
 }
 
@@ -85,11 +114,10 @@ export function servePreviewLogin(request: IncomingMessage, response: ServerResp
     "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'",
   );
   if (new URL(request.url ?? "/", "http://preview").pathname === PREVIEW_SCRIPT_PATH) {
-    response
-      .writeHead(200, { "content-type": "text/javascript; charset=utf-8" })
-      .end(
-        `const p=new URLSearchParams(location.hash.slice(1)),t=p.get('access_token'),m=document.querySelector('[data-message]'),u=location.pathname+location.search;history.replaceState(null,'',u);if(!t){m.textContent='Open this preview from Concors.'}else fetch('${PREVIEW_AUTH_PATH}',{method:'POST',headers:{'content-type':'text/plain'},body:t}).then(r=>{if(!r.ok)throw new Error();location.replace(u)}).catch(()=>{m.textContent='Preview access expired. Open it again from Concors.'});`,
-      );
+    response.writeHead(200, { "content-type": "text/javascript; charset=utf-8" }).end(
+      // On the reserved path the page to open comes from the fragment, same-origin only.
+      `const p=new URLSearchParams(location.hash.slice(1)),t=p.get('access_token'),m=document.querySelector('[data-message]');let u=location.pathname+location.search;if(location.pathname==='${PREVIEW_AUTH_PATH}'){u='/';try{const d=new URL(p.get('path')||'/',location.origin);if(d.origin===location.origin&&!d.pathname.startsWith('${PREVIEW_RESERVED_PREFIX}'))u=d.pathname+d.search}catch{}}history.replaceState(null,'',u);if(!t){m.textContent='Open this preview from Concors.'}else fetch('${PREVIEW_AUTH_PATH}',{method:'POST',headers:{'content-type':'text/plain'},body:t}).then(r=>{if(!r.ok)throw new Error();location.replace(u)}).catch(()=>{m.textContent='Preview access expired. Open it again from Concors.'});`,
+    );
     return;
   }
   response

@@ -136,7 +136,8 @@ export class TerminalManager {
 
   request(viewer: TerminalViewer, request: TerminalRequest): Promise<TerminalResult> {
     // Serialize launches around async directory validation; duplicate clicks cannot race a spawn.
-    const operation = this.#queue.then(async (): Promise<TerminalResult> => {
+    // A stop can take seconds and races nothing, so it waits on no one and holds no one up.
+    const run = async (): Promise<TerminalResult> => {
       try {
         if (this.#closed || !viewer.active()) throw new Error("Connection is closed");
         const result = await this.handle(viewer, request);
@@ -155,7 +156,9 @@ export class TerminalManager {
           },
         };
       }
-    });
+    };
+    if (request.operation.kind === "stop") return run();
+    const operation = this.#queue.then(run);
     this.#queue = operation;
     return operation;
   }

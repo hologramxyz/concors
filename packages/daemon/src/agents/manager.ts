@@ -8,6 +8,7 @@ import {
   accountBackendFactory,
   type AccountBackendFactory,
 } from "./accounts/manager.ts";
+import { carryOverText } from "./carry-over.ts";
 import { defaultSettings, parseModels, turnControls } from "./controls.ts";
 import { initialSettings, rememberable, supportedSettings } from "./remembered-settings.ts";
 import { claimUploads, messageInputs, readUpload } from "./attachments.ts";
@@ -125,6 +126,11 @@ interface Runtime {
   reloadWhenIdle: boolean;
   /** Sub-agent rows still working in the background, by item id; the CLI must stay up for them. */
   background: Set<string>;
+  /**
+   * The conversation so far, for the next prompt of a chat that went on in a new session because
+   * its CLI no longer had the old one (see carry-over.ts).
+   */
+  carryOver?: string;
 }
 
 /** Whether a resume failed only because the provider never saved the thread. */
@@ -522,6 +528,8 @@ export class AgentManager {
     const info = this.#store.agent(id);
     const tools = this.tools?.(info);
     const conversationEnv = this.registry.conversationEnvironment(info.provider, info.threadId);
+    // A Claude conversation kept under another account's directory is brought into this one.
+    this.registry.restoreClaudeConversation(info.provider, info.threadId);
     const provider = this.#factory(
       info.directory,
       (method, params, requestId) => this.approval(id, method, params, requestId),
@@ -574,14 +582,30 @@ export class AgentManager {
         // thread; never discard history or replay reserved prompts.
         if (
           !info.threadId ||
-          info.nativeImport ||
           !missingThread(this.registry.config(info.provider).engine, info.threadId, error) ||
-          this.#store.hasAgentProviderHistory(id) ||
           runtime.closed ||
           this.#closed
         )
           throw error;
+        // A conversation with history the CLI has since deleted (Claude Code keeps transcripts
+        // 30 days by default) goes on in a new session, given the messages Concors kept.
+        const engine = this.registry.config(info.provider).engine;
+        const lost = info.nativeImport || this.#store.hasAgentProviderHistory(id);
+        // Codex keeps its rollouts; one missing there is not a cleanup, so history stays as it is.
+        if (lost && engine !== "claude") throw error;
         response = ThreadResponse.parse(await provider.request("thread/start", options));
+        if (lost) {
+          const context = carryOverText(this.#store.agentMessages(id));
+          if (context) runtime.carryOver = context;
+          this.item(id, `recovered:${response.thread.id}`, {
+            id: `recovered:${response.thread.id}`,
+            kind: "system",
+            title: "New session",
+            text: `${this.registry.config(info.provider).label} no longer had this conversation, so it continues in a new session${context ? ", given the messages so far" : ""}.`,
+            detail: error instanceof Error ? error.message : "",
+            status: "completed",
+          });
+        }
       }
       if (runtime.closed || this.#closed) throw new Error("Agent connection ended");
       this.updateQuietly(id, {
@@ -715,6 +739,15 @@ export class AgentManager {
         if (runtime) runtime.reloadWhenIdle = true;
         continue;
       }
+      // New credentials answer an error the old ones caused, such as an expired token, so it
+      // should not stay above the composer until the chat is reopened. A failed chat is ready
+      // again; its next prompt starts a session with the new account.
+      if (resetEmptyThreads && (current.error || current.status === "failed"))
+        this.update(current.id, {
+          error: null,
+          ...(current.status === "failed" ? { status: "idle" as const } : {}),
+          updatedAt: current.updatedAt,
+        });
       const runtime = this.#runtimes.get(current.id);
       if (!runtime) continue;
       runtime.closed = true;
@@ -2149,18 +2182,23 @@ export class AgentManager {
       info.supervisor || ["pi", "omp", "acp"].includes(info.engine ?? info.provider)
         ? this.tools?.(info).instructions
         : undefined;
+    const runtime = this.#runtimes.get(id);
+    const carryOver = !command ? runtime?.carryOver : undefined;
+    const prompt = carryOver ? `${carryOver}\n\n${text}` : text;
     const inputText =
       instructions && !command
-        ? `<concors-tools>\n${instructions}\n</concors-tools>\n\n${text}`
-        : text;
+        ? `<concors-tools>\n${instructions}\n</concors-tools>\n\n${prompt}`
+        : prompt;
     const response = z.object({ turn: Turn }).parse(
       await provider.request(command ? "command/execute" : "turn/start", {
         threadId: info.threadId,
-        input: [...(text ? [{ type: "text", text: inputText }] : []), ...uploaded],
+        input: [...(prompt ? [{ type: "text", text: inputText }] : []), ...uploaded],
         ...(command ?? {}),
         ...turnControls({ ...info, settings: settings ?? defaultSettings }),
       }),
     );
+    // Given once: from here on the new session has it in its own transcript.
+    if (carryOver && runtime?.carryOver === carryOver) delete runtime.carryOver;
     const current = this.#store.agent(id);
     if (current.turnId?.startsWith("pending:")) this.started(id, response.turn.id);
   }

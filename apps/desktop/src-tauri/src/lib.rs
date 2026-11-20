@@ -63,6 +63,7 @@ pub fn run() {
             notifications::request_notification_access,
             notifications::open_notification_settings,
             sound::play_agent_sound,
+            sound::play_custom_sound,
             daemon::local_daemon_status,
             daemon::start_local_daemon,
             daemon::stop_local_daemon,

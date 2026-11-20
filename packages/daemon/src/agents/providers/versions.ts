@@ -16,7 +16,7 @@
  * of Concors' own is checked after every update and installed again from scratch if it does not
  * start, and one found broken later is reinstalled once per release.
  */
-import { closeSync, openSync, readSync, realpathSync } from "node:fs";
+import { closeSync, openSync, readFileSync, readSync, realpathSync, writeFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { basename, dirname, join, sep } from "node:path";
 import spawn from "cross-spawn";
@@ -44,6 +44,36 @@ export function compareVersions(a: string, b: string): number {
   }
   if (!preA || !preB) return preA ? -1 : preB ? 1 : 0;
   return Math.sign(preA.localeCompare(preB, "en", { numeric: true }));
+}
+
+/**
+ * Lets the CLI Concors installs into its own prefix run its install scripts. Claude Code and
+ * OpenCode put their native binary in place from a postinstall script, and npm 12 skips every
+ * dependency's scripts unless the project's package.json allows them; the prefix is a project of
+ * its own, so it allows the one package installed there. Without it the CLI installs but does not
+ * start. Install and update commands also pass `--ignore-scripts=false`, for the same reason, over
+ * a user-wide `ignore-scripts`.
+ */
+export function allowInstallScripts(prefix: string, pkg: string) {
+  const file = join(prefix, "package.json");
+  let manifest: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+      manifest = parsed as Record<string, unknown>;
+  } catch {
+    // No manifest yet: npm writes one on the first install.
+  }
+  const current = manifest["allowScripts"];
+  const allowed =
+    current && typeof current === "object" && !Array.isArray(current)
+      ? (current as Record<string, unknown>)
+      : {};
+  // A pinned spec (cline@3.0.46) is allowed by name, which is what npm matches.
+  const name = pkg.replace(/(?<=.)@[^/]*$/, "");
+  if (allowed[name] === true) return;
+  manifest["allowScripts"] = { ...allowed, [name]: true };
+  writeFileSync(file, JSON.stringify(manifest, null, 2) + "\n");
 }
 
 export interface Install {
@@ -83,6 +113,7 @@ export function updateCommand(install: Install): string[] | undefined {
       "--no-audit",
       "--no-fund",
       "--save-exact",
+      "--ignore-scripts=false",
       latest,
     ];
   // mise keeps each tool in installs/<tool>/<version>; backend-qualified tools (npm:…) are stored
@@ -94,7 +125,18 @@ export function updateCommand(install: Install): string[] | undefined {
     // A global install lives in <prefix>/lib/node_modules (Unix) or <prefix>/node_modules (Windows).
     const root = install.path.slice(0, modules);
     const prefix = basename(root) === "lib" ? dirname(root) : root;
-    return ["npm", "install", "--global", "--prefix", prefix, "--no-audit", "--no-fund", latest];
+    // npm 12 runs a global package's install scripts only when named; older npm ignores the flag.
+    return [
+      "npm",
+      "install",
+      "--global",
+      "--prefix",
+      prefix,
+      "--no-audit",
+      "--no-fund",
+      `--allow-scripts=${install.package}`,
+      latest,
+    ];
   }
   const cask = /\/Caskroom\/([^/]+)\//.exec(path)?.[1];
   if (cask) return ["brew", "upgrade", "--cask", cask];
@@ -354,6 +396,12 @@ export class ProviderVersions {
     this.entries.set(target.id, { ...entry, updating: true, updateError: undefined });
     const install = async () => {
       if (clean) await this.clear(target);
+      if (entry.automatic)
+        try {
+          allowInstallScripts(target.prefix, target.package);
+        } catch {
+          // The install itself reports a prefix it cannot write to.
+        }
       const result = await this.run(command, env, UPDATE_TIMEOUT_MS);
       // A copy of our own that npm "installed" without its binary is installed again, once.
       if (result.code !== 0 || !entry.automatic || (await this.starts(target))) return result;

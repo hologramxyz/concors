@@ -575,10 +575,11 @@ dependencies = [
 
 [[package]]
 name = "concors-desktop"
-version = "0.18.2"
+version = "0.19.1"
 dependencies = [
  "block2",
  "env_logger",
+ "getrandom 0.3.4",
  "log",
  "notify-rust",
  "objc2",

@@ -6,7 +6,11 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { afterEach, expect, it } from "vitest";
-import { DaemonConnection, describeDaemonEndpoint } from "@concors/daemon-client";
+import {
+  DaemonConnection,
+  describeDaemonEndpoint,
+  localDaemonEndpoint,
+} from "@concors/daemon-client";
 import type { TerminalEvent, TerminalOperation, WorkspaceOperation } from "@concors/protocol";
 import { countHostSessions } from "../managed/sessions.ts";
 import { defaultShellIsPowerShell } from "../terminal/testing/shell.ts";
@@ -78,9 +82,9 @@ async function gateway(directory: string, hostLaunch = launch) {
   cleanups.push(close);
   return { url: await g.listen(), close };
 }
-async function cliGateway(directory: string) {
+async function cliGateway(directory: string, env: NodeJS.ProcessEnv = {}) {
   const child = spawn(process.execPath, [cli, "serve", "--port", "0", "--log-level", "info"], {
-    env: { ...process.env, CONCORS_DATA_DIR: directory },
+    env: { ...process.env, CONCORS_DATA_DIR: directory, ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
   const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
@@ -99,6 +103,29 @@ async function cliGateway(directory: string) {
     .toBeTruthy();
   return { child, exited, url: /ready at (http:\/\/[^\s]+)/.exec(output)![1]! };
 }
+
+it("admits only clients presenting the token the desktop app started its gateway with", async () => {
+  const directory = await fixture();
+  const token = "a".repeat(64);
+  const { url } = await cliGateway(directory, { CONCORS_LOCAL_TOKEN: token });
+  const port = Number(new URL(url).port);
+  const attempt = async (presented?: string) => {
+    const c = new DaemonConnection({
+      endpoint: localDaemonEndpoint(port, presented),
+      client: { kind: "test", name: "local-token", version: "0.0.0" },
+      handshakeTimeoutMs: 5000,
+    });
+    cleanups.push(async () => c.disconnect());
+    return c.connect().then(
+      () => true,
+      () => false,
+    );
+  };
+  // Any other process on the computer, or another account, gets nothing without it.
+  expect(await attempt()).toBe(false);
+  expect(await attempt("b".repeat(64))).toBe(false);
+  expect(await attempt(token)).toBe(true);
+});
 
 it("preserves a real process, shell environment, cwd, screen, and bindings across graceful and killed gateways", async () => {
   const directory = await fixture();

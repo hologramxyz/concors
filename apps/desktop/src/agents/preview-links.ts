@@ -1,4 +1,4 @@
-import type { ProcessPreview } from "@concors/protocol";
+import { PREVIEW_LOGIN_PATH, type ProcessPreview } from "@concors/protocol";
 
 /**
  * Agents run on the machine, so the dev servers they link live at `localhost` there, which the
@@ -33,6 +33,13 @@ export function localPreviewLink(href: string): LocalPreviewLink | null {
 export function previewLinkUrl(link: LocalPreviewLink, previewUrl: string): string {
   const url = new URL(previewUrl);
   const target = new URL(link.path, "http://preview");
+  // A link to the gateway's login page names the page to open in its fragment instead.
+  if (url.pathname === PREVIEW_LOGIN_PATH) {
+    const fragment = new URLSearchParams(url.hash.slice(1));
+    fragment.set("path", target.pathname + target.search);
+    url.hash = fragment.toString();
+    return url.href;
+  }
   url.pathname = target.pathname;
   url.search = target.search;
   return url.href;

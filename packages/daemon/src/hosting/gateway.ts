@@ -6,6 +6,7 @@ import {
 } from "node:http";
 import { createServer as createTlsServer } from "node:https";
 import type { Duplex } from "node:stream";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { tokenFromRequest, type Principal, type TokenVerifier } from "../managed/auth.ts";
 import type { ManagedConfig, TlsMaterial } from "../managed/config.ts";
 import type { Logger } from "../managed/log.ts";
@@ -25,8 +26,8 @@ import {
 } from "./session-host.ts";
 import {
   PREVIEW_AUTH_PATH,
-  authorizePreview,
-  previewPrincipal,
+  PREVIEW_RESERVED_PREFIX,
+  PreviewSessions,
   previewTarget,
   proxyPreviewHttp,
   proxyPreviewUpgrade,
@@ -50,6 +51,11 @@ export function createPersistentGateway(
   directory: string,
   launch: HostLaunch,
   managed?: ManagedGatewayOptions,
+  /**
+   * A loopback gateway is reachable by every account on the computer. Given a token (the desktop
+   * app makes one each time it starts its gateway), only clients presenting it may connect.
+   */
+  localToken?: string,
 ) {
   if (!managed && !["127.0.0.1", "localhost", "::1"].includes(config.host))
     throw new Error(
@@ -90,6 +96,7 @@ export function createPersistentGateway(
     : undefined;
   const bindHost = managed ? "0.0.0.0" : config.host;
   const bindPort = managed ? managed.config.port : config.port;
+  const previews = managed ? new PreviewSessions(managed.verifier) : undefined;
 
   async function authenticate(req: IncomingMessage): Promise<Principal> {
     const token = tokenFromRequest(req);
@@ -117,16 +124,21 @@ export function createPersistentGateway(
   }
   const handle = async (req: IncomingMessage, res: ServerResponse) => {
     if (managed) {
-      const preview = previewTarget(req, managed.config.hostname, bindPort);
-      if (preview) {
+      const preview = previews && previewTarget(req, managed.config.hostname, bindPort);
+      if (previews && preview) {
         const path = new URL(req.url ?? "/", "http://preview").pathname;
-        if (path === PREVIEW_AUTH_PATH && req.method === "POST") {
-          await authorizePreview(req, res, managed.verifier);
+        // Concors' own paths never reach the app, signed in or not: the login page there reads
+        // access from the link, which must not stay in the address bar of the app's page.
+        if (path.startsWith(PREVIEW_RESERVED_PREFIX)) {
+          if (path === PREVIEW_AUTH_PATH && req.method === "POST")
+            await previews.authorize(req, res);
+          else if (req.method === "GET") servePreviewLogin(req, res);
+          else res.writeHead(404).end();
           return;
         }
         let principal: Principal;
         try {
-          principal = await previewPrincipal(req, managed.verifier);
+          principal = await previews.principal(req);
         } catch {
           if (req.method === "GET") servePreviewLogin(req, res);
           else res.writeHead(401).end();
@@ -244,10 +256,10 @@ export function createPersistentGateway(
     let principal: Principal | undefined;
     if (managed) {
       downstream.pause();
-      const preview = previewTarget(req, managed.config.hostname, bindPort);
-      if (preview) {
+      const preview = previews && previewTarget(req, managed.config.hostname, bindPort);
+      if (previews && preview) {
         try {
-          principal = await previewPrincipal(req, managed.verifier);
+          principal = await previews.principal(req);
         } catch {
           rejectUpgrade(downstream, 401);
           return;
@@ -271,6 +283,9 @@ export function createPersistentGateway(
         rejectUpgrade(downstream, 403);
         return;
       }
+    } else if (localToken && !sameSecret(tokenFromRequest(req), localToken)) {
+      rejectUpgrade(downstream, 401);
+      return;
     }
     if (
       (managed ? new URL(req.url ?? "/", "http://daemon").pathname !== "/ws" : req.url !== "/ws") ||
@@ -430,4 +445,11 @@ function rejectUpgrade(socket: Duplex, status: 401 | 403) {
   const timer = setTimeout(() => socket.destroy(), 1000);
   timer.unref();
   socket.once("close", () => clearTimeout(timer));
+}
+
+/** Compares secrets in constant time; digests first, so their lengths do not leak either. */
+function sameSecret(presented: string | null, expected: string): boolean {
+  if (!presented) return false;
+  const digest = (value: string) => createHash("sha256").update(value).digest();
+  return timingSafeEqual(digest(presented), digest(expected));
 }

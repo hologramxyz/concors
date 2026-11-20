@@ -48,7 +48,9 @@ async function native(page: Page, port: number, decorated = false) {
         unregisterCallback: (id: number) => callbacks.delete(id),
         invoke: async (command: string, args: Record<string, unknown> = {}) => {
           calls.push(command);
-          if (command === "start_local_daemon") return { state: "running", pid: 1, port };
+          // The test daemon was started without a token and accepts any client.
+          if (command === "start_local_daemon")
+            return { state: "running", pid: 1, port, token: "e2e-local-token" };
           if (command === "plugin:window|is_decorated") return decorated;
           if (command === "plugin:window|is_maximized") return maximized;
           if (command === "plugin:window|is_fullscreen") return false;

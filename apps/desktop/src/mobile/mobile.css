@@ -1937,3 +1937,44 @@ body {
     display: none;
   }
 }
+/* An image opened from a chat takes the whole screen: pinch and double tap zoom it
+   (files/zoomable-image.tsx). Title and buttons float over its top edge, clear of the notch. */
+[data-mobile-fullscreen] {
+  color: #fff;
+}
+[data-mobile-fullscreen][data-state="open"] {
+  animation: mobile-overlay-in 200ms ease-out;
+}
+[data-mobile-fullscreen][data-state="closed"] {
+  animation: mobile-overlay-out 160ms ease-in;
+}
+[data-mobile-fullscreen] > .image-viewer-header {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 1;
+  padding: calc(var(--mobile-safe-top) + 14px) 112px 28px max(16px, var(--mobile-safe-left));
+  background: linear-gradient(#000000b3, #00000000);
+  pointer-events: none;
+}
+[data-mobile-fullscreen] [data-slot="dialog-title"] {
+  font-size: 16px;
+  line-height: 1.375;
+}
+[data-mobile-fullscreen] [data-slot="dialog-actions"] {
+  z-index: 2;
+  top: calc(var(--mobile-safe-top) + 6px);
+  right: max(8px, var(--mobile-safe-right));
+}
+[data-mobile-fullscreen] [data-slot="dialog-actions"] button {
+  width: 44px;
+  height: 44px;
+  color: #fff;
+}
+[data-mobile-fullscreen] > [data-zoomable-image] {
+  padding: 0 var(--mobile-safe-right) var(--mobile-safe-bottom) var(--mobile-safe-left);
+}
+[data-mobile-fullscreen] > .image-viewer-error {
+  position: absolute;
+  inset: auto 16px calc(var(--mobile-safe-bottom) + 16px);
+  z-index: 1;
+}

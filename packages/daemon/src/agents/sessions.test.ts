@@ -1331,6 +1331,58 @@ it.each(["sign-in", "restart"])(
   },
 );
 
+it.each(["turn", "session"])(
+  "clears a %s failure once the account signs in again, without reopening the chat",
+  async (failure) => {
+    const { a, id } = await setup();
+    if (failure === "turn") {
+      // What an expired token looks like: the turn fails, and the CLI stays up.
+      await action(a, { kind: "send", sessionId: id, text: "please fail" });
+      await expect.poll(() => a.agents[0]?.error).toBe("Fixture failure");
+    } else {
+      // The CLI cannot even resume the chat, which leaves no running session to restart.
+      await action(a, { kind: "send", sessionId: id, text: "first message" });
+      await expect.poll(() => a.agents[0]?.status).toBe("done");
+      const request = TestAgentProvider.prototype.request;
+      providers[0]!.emit("session/disconnected", {});
+      const spy = vi
+        .spyOn(TestAgentProvider.prototype, "request")
+        .mockImplementation(async function (this: TestAgentProvider, method, params) {
+          if (method === "thread/resume") throw new Error("OAuth token has expired");
+          return request.call(this, method, params);
+        });
+      try {
+        await action(a, { kind: "read", sessionId: id });
+        await expect.poll(() => a.agents[0]?.status).toBe("failed");
+      } finally {
+        spy.mockRestore();
+      }
+      expect(a.agents[0]?.error).toBe("OAuth token has expired");
+    }
+    const flow = await action(a, {
+      kind: "account",
+      sessionId: id,
+      action: { type: "start", methodId: "fixture" },
+    });
+    if (flow.outcome.status !== "ok" || !flow.outcome.account?.challenge)
+      throw new Error("Missing challenge");
+    await action(a, {
+      kind: "account",
+      sessionId: id,
+      action: {
+        type: "complete",
+        flowId: flow.outcome.account.challenge.flowId,
+        value: "test-credential",
+      },
+    });
+    await expect.poll(() => a.agents[0]?.error).toBeNull();
+    expect(a.agents[0]?.status).not.toBe("failed");
+    await action(a, { kind: "send", sessionId: id, text: "after signing in" });
+    await expect.poll(() => a.agents[0]?.status).toBe("done");
+    expect(a.agents[0]?.error).toBeNull();
+  },
+);
+
 it("preserves a signed-in conversation that already has provider history", async () => {
   const { a, id } = await setup();
   await action(a, { kind: "send", sessionId: id, text: "first message" });
@@ -1389,6 +1441,52 @@ it("replaces an empty Claude conversation that was never saved after restart", a
   expect(
     providers[0]!.requests.filter((r) => r.method.startsWith("thread/")).map((r) => r.method),
   ).toEqual(["thread/resume", "thread/start"]);
+});
+
+it("goes on in a new session, given the messages so far, when Claude Code no longer has a chat", async () => {
+  vi.spyOn(ProviderRegistry.prototype, "installed").mockReturnValue(true);
+  const { a, b, id } = await setup();
+  const switched = await action(a, {
+    kind: "switch-provider",
+    sessionId: id,
+    provider: "claude",
+    model: null,
+    expectedRevision: a.agents[0]!.revision,
+  });
+  if (switched.outcome.status !== "ok") throw new Error("Switch failed");
+  const claude = switched.outcome.conversation.agent.id;
+  await expect.poll(() => a.agents.find((agent) => agent.id === claude)?.status).toBe("idle");
+  await action(a, { kind: "send", sessionId: claude, text: "plan the launch" });
+  await expect.poll(() => a.agents.find((agent) => agent.id === claude)?.status).toBe("done");
+  const oldThread = a.agents.find((agent) => agent.id === claude)!.threadId;
+  a.disconnect();
+  b.disconnect();
+  await server!.close();
+  providers.length = 0;
+  // A month later Claude Code has deleted the transcript.
+  const c = await open(await boot("missing"));
+  const agent = () => c.agents.find((item) => item.id === claude);
+  await action(c, { kind: "send", sessionId: claude, text: "and the follow-up?" });
+  await expect.poll(() => agent()?.status).toBe("done");
+  expect(agent()!.error).toBeNull();
+  expect(agent()!.threadId).not.toBe(oldThread);
+  const turns = () =>
+    providers[0]!.requests
+      .filter((r) => r.method === "turn/start")
+      .map((r) => (r.params as { input: { text: string }[] }).input[0]!.text);
+  expect(turns()).toHaveLength(1);
+  expect(turns()[0]).toMatch(
+    /^<earlier-conversation>[\s\S]*User: plan the launch[\s\S]*<\/earlier-conversation>\n\nand the follow-up\?$/,
+  );
+  const read = await action(c, { kind: "read", sessionId: claude });
+  if (read.outcome.status !== "ok") throw new Error("Read failed");
+  expect(read.outcome.conversation.items.find((i) => i.title === "New session")?.text).toMatch(
+    /no longer had this conversation/,
+  );
+  // Given once: the new session has it from here on.
+  await action(c, { kind: "send", sessionId: claude, text: "thanks" });
+  await expect.poll(() => turns()).toHaveLength(2);
+  expect(turns()[1]).toBe("thanks");
 });
 
 it("does not replace a missing Codex thread that has provider history", async () => {

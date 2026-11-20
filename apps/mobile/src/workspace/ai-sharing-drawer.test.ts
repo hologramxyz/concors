@@ -64,6 +64,14 @@ it("shows the short disclosure first, with optional details that never grant con
   expect(answer).toHaveBeenCalledExactlyOnceWith(false);
 });
 
+it("is as wide as the phone, so the summary wraps instead of running off the screen", async () => {
+  await act(async () => {
+    renderer = create(createElement(AISharingContent, { disclosure, onAnswer: vi.fn() }));
+  });
+  const root = renderer!.root.find((node) => node.props.testID === "ai-sharing-drawer");
+  expect(root.props.style).toMatchObject({ width: 390 });
+});
+
 it.each([true, false])(
   "returns the explicit %s choice only after the native drawer dismisses",
   async (allow) => {

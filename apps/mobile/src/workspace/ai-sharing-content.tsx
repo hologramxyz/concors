@@ -15,10 +15,16 @@ export function AISharingContent({
   disabled = false,
 }: AISharingDrawerProps & { disabled?: boolean }) {
   const theme = useTheme();
-  const { height } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const [expanded, setExpanded] = useState(false);
   return (
-    <View testID="ai-sharing-drawer" style={{ padding: 20, paddingTop: 28, gap: 14 }}>
+    <View
+      testID="ai-sharing-drawer"
+      // The native sheet sizes itself to this content, and React Native lays it out before the
+      // sheet reports a width, so without one the summary stays on a single line wider than the
+      // phone. An iPhone sheet spans the screen (the app does not run on iPad).
+      style={{ width, padding: 20, paddingTop: 28, gap: 14 }}
+    >
       <Copy size={20} weight="600" accessibilityRole="header">
         Share with AI?
       </Copy>

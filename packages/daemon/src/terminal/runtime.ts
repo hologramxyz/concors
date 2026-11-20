@@ -14,6 +14,10 @@ export interface TerminalViewer {
 }
 
 /** PTY + emulator survive client detach. Snapshots are serialized screen state, not ANSI tails. */
+/** How long a stopped terminal gets to exit on the hang-up before it is killed. */
+const STOP_GRACE_MS = 2000;
+const STOP_FORCE_MS = 3000;
+
 export class TerminalRuntime {
   info: TerminalInfo;
   readonly #pty: pty.IPty;
@@ -27,6 +31,7 @@ export class TerminalRuntime {
   #queuedBytes = 0;
   #paused = false;
   #stopped = false;
+  #stopping: Promise<void> | undefined;
   #title = "";
   #agentTurnActive = false;
   reportedDirectory: string | null = null;
@@ -258,18 +263,36 @@ export class TerminalRuntime {
     this.#pty.write(data);
   }
 
-  async stop(): Promise<void> {
-    if (this.info.status !== "running") return;
-    if (!this.#stopped) {
-      this.#stopped = true;
-      this.#pty.kill();
-    }
+  /**
+   * Hangs up, then kills: a shell that ignores the hang-up (`trap '' HUP`) would otherwise keep
+   * running, and keep its place among the running terminals, for good. Concurrent stops share one
+   * attempt; one that still fails leaves the next free to try again.
+   */
+  stop(): Promise<void> {
+    if (this.info.status !== "running") return Promise.resolve();
+    this.#stopping ??= this.#escalate().finally(() => {
+      this.#stopping = undefined;
+    });
+    return this.#stopping;
+  }
+
+  async #escalate(): Promise<void> {
+    this.#stopped = true;
+    this.#pty.kill();
+    if (await this.#exitsWithin(STOP_GRACE_MS)) return;
+    // Windows has no signals: its kill already ends the process outright.
+    if (process.platform !== "win32") this.#pty.kill("SIGKILL");
+    if (!(await this.#exitsWithin(STOP_FORCE_MS)))
+      throw new Error("Terminal did not exit after stop");
+  }
+
+  async #exitsWithin(ms: number): Promise<boolean> {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await Promise.race([
-        this.#exit,
-        new Promise<never>((_resolve, reject) => {
-          timer = setTimeout(() => reject(new Error("Terminal did not exit after stop")), 3000);
+      return await Promise.race([
+        this.#exit.then(() => true),
+        new Promise<boolean>((resolve) => {
+          timer = setTimeout(() => resolve(false), ms);
         }),
       ]);
     } finally {

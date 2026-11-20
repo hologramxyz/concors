@@ -26,6 +26,11 @@ export interface OpenTabRow {
   readonly title: string;
   /** The chat its main pane shows, once that chat has started. */
   readonly chat?: AgentInfo | undefined;
+  /**
+   * How many of its panes are chats. With more than one the row cannot say which a chat action
+   * means, so actions for one chat (Fork) are left to each pane's own menu.
+   */
+  readonly chats: number;
   /** The terminal its main pane runs, once it has started. */
   readonly terminal?: TerminalInfo | undefined;
   /** What runs in the main pane when it is a terminal: a coding agent's CLI, or a shell. */
@@ -113,6 +118,7 @@ export function sidebarRows(
         tabId: tab.id,
         title: tabTitle(tab, chats, terminals),
         chat,
+        chats: tabPanes(tab).filter((node) => node.profile === "chat").length,
         terminal,
         tool,
         ...tabActivity(tabAgentStatuses(tab, chats, terminals)),
@@ -245,6 +251,7 @@ export function paneState(
     tabId: "",
     title: "",
     chat,
+    chats: pane.profile === "chat" ? 1 : 0,
     terminal,
     tool: pane.profile,
     dot: paneAgentStatus(pane, chats, terminals)?.dot,
@@ -264,6 +271,7 @@ export function chatState(chat: AgentInfo) {
     tabId: "",
     title: "",
     chat,
+    chats: 1,
     tool: "chat",
     dot: chatDot(chat),
     time: "",
@@ -276,27 +284,23 @@ export function rowDot(row: SidebarRow): AgentDot | undefined {
   return state === "attention" || state === "done" ? state : undefined;
 }
 
-/** A workspace lists this many closed rows before "Show more". */
-const CLOSED_ROWS_SHOWN = 3;
+/** A closed row that should stay in sight: it asks for attention, or its agent is still at work. */
+export function surfacesRow(row: SidebarRow): boolean {
+  return row.kind === "closed" && (!!rowDot(row) || rowState(row) === "working");
+}
 
 /**
- * Splits a workspace's rows into those listed and those behind "Show more". Open tabs are never
- * folded, nor are pins, which someone asked to keep in sight. `surfaced` are the closed rows whose
- * dot keeps them out of the fold: while the pointer holds the list still, one that gets a dot stays
- * folded, so nothing moves under the pointer, and "Show more" carries its dot until then.
+ * Splits a workspace's rows into those listed and the closed chats kept apart under "Closed chats",
+ * so finished threads neither crowd nor pass for open ones. Listed: open tabs, terminals still
+ * running in the background, pins, which someone asked to keep in sight, and `surfaced`, the closed
+ * rows that ask for attention or are still at work (see `surfacesRow`). While the pointer holds the list still, one that gets a dot
+ * stays where it is, so nothing moves under the pointer, and the closed group carries its dot.
  */
 export function foldRows(rows: readonly SidebarRow[], surfaced: ReadonlySet<string>) {
   const listed: SidebarRow[] = [];
   const folded: SidebarRow[] = [];
-  let closed = 0;
-  for (const row of rows) {
-    if (row.kind === "tab" || rowPinned(row)) {
-      listed.push(row);
-      continue;
-    }
-    (closed < CLOSED_ROWS_SHOWN || surfaced.has(row.key) ? listed : folded).push(row);
-    closed += 1;
-  }
+  for (const row of rows)
+    (row.kind !== "closed" || rowPinned(row) || surfaced.has(row.key) ? listed : folded).push(row);
   return { listed, folded };
 }
 

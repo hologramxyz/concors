@@ -17,18 +17,24 @@ use tauri::{AppHandle, Manager, State};
 pub enum LocalDaemonStatus {
     NotBundled,
     Stopped,
-    Running { pid: u32, port: u16 },
+    /// `token` is the secret the gateway was started with; it refuses connections without it.
+    Running {
+        pid: u32,
+        port: u16,
+        token: String,
+    },
 }
 
 struct RunningDaemon {
     child: Child,
     port: u16,
+    token: String,
     /// Identity this gateway was started for; a different one needs its own data partition.
     profile: Profile,
 }
 
 /// Control-plane origin plus signed-in user id. Selects the daemon's data directory; it is a
-/// partition key, not a credential (the loopback gateway authenticates nothing).
+/// partition key, not a credential (the gateway's own token is, see [`new_token`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Profile {
     origin: String,
@@ -47,6 +53,7 @@ impl LocalDaemon {
             Ok(None) => Some(LocalDaemonStatus::Running {
                 pid: process.child.id(),
                 port: process.port,
+                token: process.token.clone(),
             }),
             result => {
                 log::info!("local gateway exited: {result:?}");
@@ -89,6 +96,7 @@ impl LocalDaemon {
         let status = LocalDaemonStatus::Running {
             pid: running.child.id(),
             port: running.port,
+            token: running.token.clone(),
         };
         *child = Some(running);
         Ok(status)
@@ -103,6 +111,15 @@ impl LocalDaemon {
             }
         }
     }
+}
+
+/// A fresh secret for each gateway. The gateway listens on loopback, which every account on the
+/// computer can reach, so it accepts only clients that present this; only this app knows it.
+fn new_token() -> Result<String, String> {
+    let mut bytes = [0u8; 32];
+    getrandom::fill(&mut bytes)
+        .map_err(|e| format!("Could not create a local access token: {e}"))?;
+    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
 }
 
 fn ready_port(line: &str) -> Option<u16> {
@@ -138,6 +155,7 @@ fn launch(
         .open(log_path)
         .map_err(|e| e.to_string())?;
     let stderr = output.try_clone().map_err(|e| e.to_string())?;
+    let token = new_token()?;
     let mut command = Command::new(&runtime.program);
     command.args(&runtime.script);
     #[cfg(windows)]
@@ -171,6 +189,8 @@ fn launch(
         .env_remove("CONCORS_DAEMON_MANAGED_CONFIG")
         .env("CONCORS_PROFILE_ORIGIN", &profile.origin)
         .env("CONCORS_PROFILE_USER", &profile.user)
+        // Read once by the gateway and removed from its environment, so nothing it starts sees it.
+        .env("CONCORS_LOCAL_TOKEN", &token)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(stderr)
@@ -194,6 +214,7 @@ fn launch(
         Ok(port) if matches!(child.try_wait(), Ok(None)) => Ok(RunningDaemon {
             child,
             port,
+            token,
             profile: profile.clone(),
         }),
         _ => {
@@ -394,6 +415,49 @@ mod tests {
             assert_eq!(ready_port(invalid), None);
         }
     }
+    #[cfg(unix)]
+    #[test]
+    fn each_gateway_gets_a_fresh_token_that_only_the_app_learns() {
+        use std::fs;
+        use std::os::unix::fs::PermissionsExt;
+        use std::time::Duration;
+        let root = std::env::temp_dir().join(format!("concors-token-test-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let script = root.join("daemon");
+        let seen = root.join("seen");
+        // A stand-in gateway that records the token it was given, then reports ready.
+        fs::write(
+            &script,
+            format!(
+                "#!/bin/sh\nprintf %s \"$CONCORS_LOCAL_TOKEN\" > '{}'\necho 'concors-daemon 0.0.0 ready at http://127.0.0.1:4321'\nexec sleep 10\n",
+                seen.display()
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&script, fs::Permissions::from_mode(0o700)).unwrap();
+        let runtime = Runtime {
+            program: script,
+            script: None,
+        };
+        let log = root.join("log");
+        let launch =
+            || super::launch(&runtime, &log, &profile(), None, Duration::from_secs(5)).unwrap();
+        let mut first = launch();
+        assert_eq!(first.port, 4321);
+        assert_eq!(first.token.len(), 64);
+        assert!(first.token.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_eq!(fs::read_to_string(&seen).unwrap(), first.token);
+        // The gateway's output goes to the log; the token must not.
+        assert!(!fs::read_to_string(&log).unwrap().contains(&first.token));
+        let mut second = launch();
+        assert_ne!(second.token, first.token);
+        for running in [&mut first, &mut second] {
+            let _ = running.child.kill();
+            let _ = running.child.wait();
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[cfg(unix)]
     #[test]
     fn startup_failure_is_bounded_and_does_not_claim_a_running_gateway() {

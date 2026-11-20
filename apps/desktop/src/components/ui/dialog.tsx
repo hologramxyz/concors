@@ -75,13 +75,20 @@ function DialogContent({
   ref: forwardedRef,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
-  /** `media` grows with what it shows (an image at its own size) up to the window's edges. */
-  size?: "default" | "wide" | "media";
+  /**
+   * `media` grows with what it shows (an image at its own size) up to the window's edges.
+   * `fullscreen` covers the whole screen on a phone, where every other size is a bottom sheet;
+   * elsewhere it is `media`.
+   */
+  size?: "default" | "wide" | "media" | "fullscreen";
   showCloseButton?: boolean;
   closeLabel?: string;
   headerActions?: React.ReactNode;
 }) {
-  const compact = React.useContext(CompactLayoutContext);
+  const phone = React.useContext(CompactLayoutContext);
+  const fullscreen = phone && size === "fullscreen";
+  /** Shown as a bottom sheet. */
+  const compact = phone && !fullscreen;
   const drawer = React.useContext(DrawerContext);
   const [content, setContent] = React.useState<HTMLDivElement | null>(null);
   const overlay = React.useRef<HTMLDivElement>(null);
@@ -103,6 +110,7 @@ function DialogContent({
         data-slot="dialog-content"
         data-size={size}
         data-mobile-drawer={compact || undefined}
+        data-mobile-fullscreen={fullscreen || undefined}
         onOpenAutoFocus={(event) => {
           returnFocus.current =
             document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -110,7 +118,7 @@ function DialogContent({
         }}
         onCloseAutoFocus={(event) => {
           onCloseAutoFocus?.(event);
-          if (!compact || event.defaultPrevented) return;
+          if (!phone || event.defaultPrevented) return;
           event.preventDefault();
           requestAnimationFrame(() => {
             const previous = returnFocus.current;
@@ -128,13 +136,15 @@ function DialogContent({
         }}
         className={cn(
           "chat-scroll fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] min-w-0 -translate-x-1/2 -translate-y-1/2 flex-col gap-5 overflow-y-auto overscroll-contain rounded-xl bg-popover p-6 text-[15px] text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none motion-reduce:animate-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
-          size === "media"
-            ? // Centred by its margins: a fit-content box placed at left: 50% could only grow
-              // into the right half of the window.
-              "inset-x-0 mx-auto w-fit max-w-[calc(100vw-2rem)] min-w-[min(28rem,calc(100vw-2rem))] translate-x-0"
-            : size === "wide"
-              ? "max-w-3xl"
-              : "max-w-xl",
+          fullscreen
+            ? "inset-0 h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none bg-black p-0 ring-0"
+            : size === "media" || size === "fullscreen"
+              ? // Centred by its margins: a fit-content box placed at left: 50% could only grow
+                // into the right half of the window.
+                "inset-x-0 mx-auto w-fit max-w-[calc(100vw-2rem)] min-w-[min(28rem,calc(100vw-2rem))] translate-x-0"
+              : size === "wide"
+                ? "max-w-3xl"
+                : "max-w-xl",
           className,
         )}
         {...props}

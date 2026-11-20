@@ -4,6 +4,12 @@ export const RESOURCES_CAPABILITY = "machine-resources";
 /** Previews carry a chosen name, and the `rename-preview` operation sets one. */
 export const PREVIEW_NAMES_CAPABILITY = "preview-names";
 export const PREVIEW_NAME_MAX = 80;
+/**
+ * The gateway always answers this path itself, so a preview link that carries access in its
+ * fragment never loads the previewed app with it. The fragment may name the page to open (`path`).
+ */
+export const PREVIEW_LOGIN_PATH = "/__concors/preview-auth";
+export const PREVIEW_LOGIN_CAPABILITY = "preview-login-path";
 const Bytes = z.number().int().nonnegative();
 const Path = z.string().max(4096);
 export const PreviewProtocolSchema = z.enum(["http", "https"]);

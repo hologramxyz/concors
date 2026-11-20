@@ -5,6 +5,7 @@ import { test, expect, signedIn } from "./signed-in.ts";
 import { seedProject } from "./support/projects.ts";
 import { chooseProvider } from "./support/agents.ts";
 import { closeTab } from "./support/tabs.ts";
+import { showClosedChats } from "./support/closed-chats.ts";
 
 test("a closed chat is found by its pane name and reopens with its name, model and history", async ({
   page,
@@ -88,7 +89,8 @@ test("a closed chat stays in the sidebar and in Search, and both reopen it", asy
     await closeTab(page, 1).click();
     await expect(pane).toHaveCount(0);
 
-    // A closed chat stays under its workspace, muted.
+    // A closed chat stays under its workspace, in its folded "Closed chats".
+    await showClosedChats(page, "Closed chats");
     const closed = page
       .getByRole("list", { name: "Closed chats tabs", exact: true })
       .locator("button[data-agent-closed]");
