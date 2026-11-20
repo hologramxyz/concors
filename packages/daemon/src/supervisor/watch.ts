@@ -70,12 +70,15 @@ export function permissionMode(agent: AgentInfo): string {
 }
 
 /** The latest turn's last reply, read from saved history; thinking is not a reply. */
-export function latestReply(store: WorkspaceStore, agent: AgentInfo) {
-  return agent.turnId
-    ? store
-        .agentTurnItems(agent.id, agent.turnId)
-        .findLast((item) => item.kind === "assistant" && item.presentation?.type !== "thinking")
-    : undefined;
+export function latestReply(
+  store: WorkspaceStore,
+  agent: AgentInfo,
+  /** The turn's items, when the caller has already read them. */
+  items = agent.turnId ? store.agentTurnItems(agent.id, agent.turnId) : [],
+) {
+  return items.findLast(
+    (item) => item.kind === "assistant" && item.presentation?.type !== "thinking",
+  );
 }
 
 /** Local saved context only. This never launches or prompts an agent for progress. */

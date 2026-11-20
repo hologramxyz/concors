@@ -100,16 +100,16 @@ export class SupervisorManager {
 
   request(request: SupervisorRequest): SupervisorResult {
     try {
-      let briefs: SupervisorBrief[] | undefined;
-      if (request.operation.kind === "briefs")
-        // For the person's own Activity panel: saved replies only, nothing reaches a model.
-        briefs = request.operation.sessionIds.flatMap((sessionId) => {
+      if (request.operation.kind === "briefs") {
+        // For the person's own Overview, polled while sessions work: saved replies only, nothing
+        // reaches a model, and none of the Supervisor state the other operations return.
+        const briefs = request.operation.sessionIds.flatMap<SupervisorBrief>((sessionId) => {
           try {
             const agent = this.store.agent(sessionId);
             if (agent.supervisor) return [];
             const items = agent.turnId ? this.store.agentTurnItems(sessionId, agent.turnId) : [];
             const prompt = items.find((item) => item.kind === "user")?.text ?? "";
-            const reply = latestReply(this.store, agent)?.text ?? "";
+            const reply = latestReply(this.store, agent, items)?.text ?? "";
             return [
               {
                 sessionId,
@@ -122,7 +122,13 @@ export class SupervisorManager {
             return [];
           }
         });
-      else if (request.operation.kind === "open") {
+        return {
+          type: "supervisor.result",
+          requestId: request.requestId,
+          outcome: { status: "ok", deliveries: [], briefs },
+        };
+      }
+      if (request.operation.kind === "open") {
         this.store.ensureSupervisor();
         this.changed();
       } else if (request.operation.kind === "revoke-sharing") {
@@ -136,7 +142,6 @@ export class SupervisorManager {
           status: "ok",
           project: this.store.snapshot().supervisor,
           deliveries: this.deliveries(),
-          ...(briefs ? { briefs } : {}),
         },
       };
     } catch (error) {

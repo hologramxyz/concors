@@ -593,7 +593,7 @@ it("runs again a send that stopped before anything left the daemon", async () =>
     f.providers.flatMap((p) => p.requests).filter((r) => r.method === "turn/start"),
   ).toHaveLength(1);
 });
-it("briefs each session's latest reply for Activity without reaching a model", async () => {
+it("briefs each session's latest reply for Overview without reaching a model", async () => {
   const f = await setup(),
     target = await f.target();
   await f.request({ kind: "send", sessionId: target.id, text: "Summarize the release" });
