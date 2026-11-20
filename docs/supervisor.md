@@ -38,9 +38,16 @@ OpenCode or other configured harness and sign-in; Supervisor does not create ano
    their results, send dependent follow-ups, and have another agent review the final work. New
    agents open in named tabs without changing your focus. Its event-driven wait can continue after
    you resolve a target approval. Ask it to stop watching a chat when you no longer need updates.
-8. Type **@** in the message to mention an agent or workspace, as **/** lists commands. The
+8. Open **Overview** in the header to triage every session without opening each one. Sections
+   (Needs you, In progress, Done) list each session once, with its status, where it runs, and its
+   one-liners in full: what it needs ("Approve: pnpm test", a question, a failure), its latest
+   update while it works, and the gist of its final reply once done. The gist is the reply's own
+   TL;DR or summary line, else its opening; no model is asked. A row opens the session. An approval
+   row offers **Ask Supervisor**, which drafts a question about it. Desktop keeps Overview beside
+   the chat; a phone opens it in a drawer. Gists need a daemon with `supervisor-briefs-v1`.
+9. Type **@** in the message to mention an agent or workspace, as **/** lists commands. The
    message reads `@Name`, and carries the agent's ID, so a rename doesn't change what it refers to.
-9. Change the harness, then switch back. Each harness's conversation returns in the same chat UI.
+10. Change the harness, then switch back. Each harness's conversation returns in the same chat UI.
 
 The mobile browser acceptance test runs the real shared UI through the native protocol relay.
 A native iOS development build is still needed to check the OS keyboard, microphone permission and
