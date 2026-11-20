@@ -1,5 +1,10 @@
 import { useContext, useEffect, useState } from "react";
-import type { SupervisorDelivery } from "@concors/protocol";
+import {
+  SUPERVISOR_BRIEFS_CAPABILITY,
+  type AgentInfo,
+  type SupervisorBrief,
+  type SupervisorDelivery,
+} from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
 
 /**
@@ -55,4 +60,40 @@ export function useSupervisorDeliveries(supervisorId: string | null) {
     deliveries: loaded?.supervisorId === supervisorId ? loaded.deliveries : [],
     warning: error,
   };
+}
+
+/**
+ * The latest reply of each listed session, for Activity's one-line summaries. A reply changes only
+ * when its session's turn or status does, so the request is made again only then. Null when the
+ * daemon cannot brief, and Activity simply shows no summaries.
+ */
+export function useSupervisorBriefs(sessions: readonly AgentInfo[]) {
+  const connection = useContext(TerminalConnectionContext);
+  const supported =
+    connection?.state.status === "ready" &&
+    !!connection.state.daemon.capabilities?.includes(SUPERVISOR_BRIEFS_CAPABILITY);
+  const [briefs, setBriefs] = useState<ReadonlyMap<string, SupervisorBrief>>(new Map());
+  const key = sessions
+    .slice(0, 64)
+    .map((agent) => `${agent.id} ${agent.turnId ?? ""} ${agent.status}`)
+    .join("\n");
+  useEffect(() => {
+    if (!connection || !supported || !key) return;
+    let current = true;
+    const sessionIds = key.split("\n").map((entry) => entry.split(" ")[0] ?? "");
+    const timer = setTimeout(() => {
+      void connection.requestSupervisor({ kind: "briefs", sessionIds }, crypto.randomUUID()).then(
+        (result) => {
+          if (current && result.outcome.status === "ok")
+            setBriefs(new Map((result.outcome.briefs ?? []).map((b) => [b.sessionId, b])));
+        },
+        () => undefined,
+      );
+    }, 200);
+    return () => {
+      current = false;
+      clearTimeout(timer);
+    };
+  }, [connection, supported, key]);
+  return supported ? briefs : null;
 }

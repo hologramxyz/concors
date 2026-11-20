@@ -96,3 +96,38 @@ it("keeps only the most recent finished agents", () => {
   expect(rows).toHaveLength(DONE_LIMIT);
   expect(rows[0]?.agent.name).toBe(`Agent ${DONE_LIMIT + 2}`);
 });
+
+it("lists open sessions that replied, with the gist of their latest reply", () => {
+  const open = agent("Docs", { status: "done", turnId: "turn-9" });
+  const fresh = agent("Empty", { turnId: null });
+  const hidden = agent("Closed", { status: "done", turnId: "turn-3" });
+  const working = agent("Builder", { status: "working", turnId: "turn-4" });
+  const shown = new Set([open.id, fresh.id, working.id]);
+  const briefs = new Map(
+    [
+      {
+        sessionId: open.id,
+        turnId: "turn-9",
+        prompt: "",
+        reply: "## Summary\n- Rewrote the **README** intro",
+      },
+      {
+        sessionId: working.id,
+        turnId: "turn-4",
+        prompt: "Port the build to Vite\nwith details",
+        reply: "Half a sentence",
+      },
+    ].map((brief) => [brief.sessionId, brief]),
+  );
+  const rows = activityRows([open, fresh, hidden, working], [], shown, briefs);
+  expect(rows.map((row) => [row.agent.name, row.group, row.detail, row.summary])).toEqual([
+    ["Docs", "Done", "", "Rewrote the README intro"],
+    // A working session says what it was asked; a reply still being written is no summary yet.
+    ["Builder", "Working", "Port the build to Vite", ""],
+  ]);
+  // A brief of an earlier turn says nothing about the current one.
+  const stale = new Map([
+    [open.id, { sessionId: open.id, turnId: "turn-8", prompt: "", reply: "Old" }],
+  ]);
+  expect(activityRows([open], [], shown, stale)[0]?.summary).toBe("");
+});

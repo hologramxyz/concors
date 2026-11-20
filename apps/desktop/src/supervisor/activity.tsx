@@ -18,7 +18,7 @@ import { SidebarDot } from "@/workspace/sidebar-tabs";
 import { chatState, useMinuteClock } from "@/workspace/sidebar-rows";
 import { activityGroups, activityRows, type ActivityRow } from "./activity-model";
 import { supervisorAgentName } from "./reference-context";
-import { useSupervisorDeliveries } from "./use-activity";
+import { useSupervisorBriefs, useSupervisorDeliveries } from "./use-activity";
 
 const needsYou = (agent: AgentInfo) =>
   !agent.supervisor && (agent.pending.length > 0 || chatState(agent) === "attention");
@@ -112,10 +112,19 @@ export function SupervisorActivity({
   const { deliveries, warning } = useSupervisorDeliveries(supervisorId);
   const projects = [...(workspace?.projects ?? []), ...(workspace?.closedProjects ?? [])];
   const names = new Map(projects.map((project) => [project.id, project.name]));
-  const rows = activityRows(
-    agents.filter((agent) => names.has(agent.projectId)),
-    deliveries,
+  const shown = new Set(
+    (workspace?.projects ?? []).flatMap((project) =>
+      project.tabs.flatMap((tab) =>
+        tab.nodes.flatMap((node) =>
+          node.kind === "pane" && node.profile === "chat" && node.sessionId ? [node.sessionId] : [],
+        ),
+      ),
+    ),
   );
+  const known = agents.filter((agent) => names.has(agent.projectId));
+  const listed = activityRows(known, deliveries, shown);
+  const briefs = useSupervisorBriefs(listed.map((row) => row.agent));
+  const rows = activityRows(known, deliveries, shown, briefs);
   const now = useMinuteClock();
   const open = (agent: AgentInfo) => {
     // On a phone the drawer covers the chat being opened; beside a desktop chat it stays.
@@ -258,6 +267,11 @@ function ActivityItem({
             </span>
             {row.queued > 0 && <span className="shrink-0">· {row.queued} queued</span>}
           </span>
+          {row.summary && (
+            <span className="block truncate text-xs text-foreground/85" title={row.summary}>
+              {row.summary}
+            </span>
+          )}
         </span>
       </button>
       {onAsk && (
