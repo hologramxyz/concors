@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import {
   SUPERVISOR_CAPABILITY,
   type AgentInfo,
@@ -44,26 +44,31 @@ export function SupervisorPage({
   const projects = [...(workspace?.projects ?? []), ...(workspace?.closedProjects ?? [])];
   const names = new Map(projects.map((project) => [project.id, project.name]));
   const agents = useAgents();
-  const references: SupervisorReference[] = [
-    ...projects.map((project) => ({
-      id: project.id,
-      kind: "Workspace" as const,
-      label: referenceLabel(project.name),
-    })),
-    ...agents.flatMap((agent) => {
-      const label = names.get(agent.projectId);
-      return !agent.supervisor && label
-        ? [
-            {
-              id: agent.id,
-              kind: "Agent" as const,
-              label: referenceLabel(supervisorAgentName(agent)),
-              workspace: label,
-            },
-          ]
-        : [];
-    }),
-  ];
+  // Kept stable between renders, so the composer's mention menu does not re-render with them.
+  const references = useMemo<SupervisorReference[]>(() => {
+    const all = [...(workspace?.projects ?? []), ...(workspace?.closedProjects ?? [])];
+    const workspaces = new Map(all.map((project) => [project.id, project.name]));
+    return [
+      ...all.map((project) => ({
+        id: project.id,
+        kind: "Workspace" as const,
+        label: referenceLabel(project.name),
+      })),
+      ...agents.flatMap((agent) => {
+        const label = workspaces.get(agent.projectId);
+        return !agent.supervisor && label
+          ? [
+              {
+                id: agent.id,
+                kind: "Agent" as const,
+                label: referenceLabel(supervisorAgentName(agent)),
+                workspace: label,
+              },
+            ]
+          : [];
+      }),
+    ];
+  }, [workspace?.projects, workspace?.closedProjects, agents]);
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
   const [error, setError] = useState<string | null>(null);
