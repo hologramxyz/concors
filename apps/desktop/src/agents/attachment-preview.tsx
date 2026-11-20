@@ -17,6 +17,8 @@ import { canSaveFiles, saveFile, type FileToSave } from "@/tauri";
 import { cachedAttachment, isPreviewableImage, loadAttachment } from "./attachment-cache";
 import { downloadName } from "./download-name";
 import { MAX_ZOOM, MIN_ZOOM, stepZoom } from "@/files/zoom";
+import { ZoomableImage } from "@/files/zoomable-image";
+import { CompactLayoutContext } from "@/components/compact-layout";
 const PdfView = lazy(() => import("@/files/pdf-view"));
 
 /** Saving a file from a preview, with its progress for the button and any error for the dialog. */
@@ -170,6 +172,31 @@ function ImageViewerContent({
   downloadable: boolean;
 }) {
   const save = useSave(downloadable ? file : null);
+  const source = `data:${file.mime};base64,${file.data}`;
+  const phone = useContext(CompactLayoutContext);
+  // A sheet shows a screenshot no larger than the phone is wide: give it the screen and zoom.
+  if (phone)
+    return (
+      <DialogContent
+        size="fullscreen"
+        closeLabel="Close image"
+        headerActions={save.button}
+        data-image-viewer="fullscreen"
+      >
+        <DialogHeader className="image-viewer-header">
+          <DialogTitle className="truncate">{name}</DialogTitle>
+          <DialogDescription className="sr-only">
+            {description} Pinch or double tap to zoom.
+          </DialogDescription>
+        </DialogHeader>
+        <ZoomableImage src={source} alt={name} />
+        {save.error && (
+          <p role="alert" className="image-viewer-error text-sm text-destructive">
+            {save.error}
+          </p>
+        )}
+      </DialogContent>
+    );
   return (
     <DialogContent
       size="media"
@@ -185,7 +212,7 @@ function ImageViewerContent({
         {/* As large as the image itself, never past the window: tall images scale to fit. */}
         <img
           className="block max-h-[calc(100dvh-9rem)] max-w-full object-contain"
-          src={`data:${file.mime};base64,${file.data}`}
+          src={source}
           alt={name}
         />
         {save.error && (
