@@ -5,7 +5,7 @@ import type {
   SupervisorBrief,
   SupervisorDelivery,
 } from "@concors/protocol";
-import { DONE_LIMIT, overviewRows } from "./overview-model";
+import { DONE_LIMIT, overviewRows, workspaceAgents } from "./overview-model";
 
 let next = 0;
 const id = () => `00000000-0000-4000-8000-${String(++next).padStart(12, "0")}`;
@@ -196,4 +196,15 @@ it("says what the current turn was asked, not an instruction from an earlier one
       new Map([brief(docs, "Done.", "Fix the typo in README")]),
     )[0]?.task,
   ).toBe("Fix the typo in README");
+});
+
+it("counts only sessions in the machine's workspaces", () => {
+  const mine = agent("Mine");
+  const stray = agent("Stray", { projectId: "00000000-0000-4000-8000-0000000000bb" });
+  const workspace = {
+    projects: [{ id: mine.projectId }],
+    closedProjects: [],
+  } as unknown as Parameters<typeof workspaceAgents>[1];
+  expect(workspaceAgents([mine, stray], workspace)).toEqual([mine]);
+  expect(workspaceAgents([mine], null)).toEqual([]);
 });

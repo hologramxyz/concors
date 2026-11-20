@@ -607,6 +607,7 @@ function AppContent() {
                             {view === "supervisor" && (
                               <>
                                 <SupervisorOverviewButton
+                                  workspace={workspace}
                                   open={supervisorOverview}
                                   onClick={() => setSupervisorOverview(!supervisorOverview)}
                                 />

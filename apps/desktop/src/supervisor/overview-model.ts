@@ -1,4 +1,9 @@
-import type { AgentInfo, SupervisorBrief, SupervisorDelivery } from "@concors/protocol";
+import type {
+  AgentInfo,
+  SupervisorBrief,
+  SupervisorDelivery,
+  WorkspaceSnapshot,
+} from "@concors/protocol";
 import { approvalSummary } from "@/agents/approval-summary";
 import { chatState } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
@@ -33,6 +38,14 @@ export interface OverviewRow {
   /** Follow-ups waiting behind the current turn. */
   queued: number;
   updatedAt: string;
+}
+
+/** Sessions in the machine's workspaces, open or closed: what Overview lists and its button counts. */
+export function workspaceAgents(agents: readonly AgentInfo[], workspace: WorkspaceSnapshot | null) {
+  const projects = new Set(
+    [...(workspace?.projects ?? []), ...(workspace?.closedProjects ?? [])].map((p) => p.id),
+  );
+  return agents.filter((agent) => projects.has(agent.projectId));
 }
 
 const firstLine = (text: string) => text.trim().split("\n")[0]?.trim() ?? "";

@@ -857,6 +857,7 @@ function MobileWorkspaceContent({
                           {page?.kind === "supervisor" && (
                             <div className="pointer-events-auto relative z-30">
                               <SupervisorOverviewButton
+                                workspace={workspace}
                                 compact
                                 open={supervisorOverview}
                                 onClick={() => setSupervisorOverview(!supervisorOverview)}

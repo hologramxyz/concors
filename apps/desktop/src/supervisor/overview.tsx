@@ -25,7 +25,7 @@ import { shortAge } from "@/lib/format-date";
 import { RowDot, RowWorking, SidebarDot } from "@/workspace/sidebar-tabs";
 import { chatState, useMinuteClock } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
-import { overviewGroups, overviewRows, type OverviewRow } from "./overview-model";
+import { overviewGroups, overviewRows, workspaceAgents, type OverviewRow } from "./overview-model";
 import { supervisorAgentName } from "./reference-context";
 import { useSupervisorBriefs, useSupervisorDeliveries } from "./use-overview";
 
@@ -37,15 +37,17 @@ const needsYou = (agent: AgentInfo) =>
  * finish nobody has seen is only a dot, since it can wait. On a phone it is the icon alone.
  */
 export function SupervisorOverviewButton({
+  workspace,
   open,
   compact = false,
   onClick,
 }: {
+  workspace: WorkspaceSnapshot | null;
   open: boolean;
   compact?: boolean;
   onClick: () => void;
 }) {
-  const agents = useAgents();
+  const agents = workspaceAgents(useAgents(), workspace);
   const blockers = agents.filter(needsYou).length;
   const unseen = agents.some((agent) => !agent.supervisor && chatState(agent) === "done");
   const label = blockers ? `Overview, ${blockers} need you` : unseen ? "Overview, new" : "Overview";
@@ -118,7 +120,7 @@ export function SupervisorOverview({
     asked.current = true;
     onClose();
   };
-  const agents = useAgents();
+  const known = workspaceAgents(useAgents(), workspace);
   const { deliveries, warning } = useSupervisorDeliveries(supervisorId);
   const projects = [...(workspace?.projects ?? []), ...(workspace?.closedProjects ?? [])];
   const names = new Map(projects.map((project) => [project.id, project.name]));
@@ -131,7 +133,6 @@ export function SupervisorOverview({
       ),
     ),
   );
-  const known = agents.filter((agent) => names.has(agent.projectId));
   const listed = overviewRows(known, deliveries, shown);
   const briefs = useSupervisorBriefs(listed.map((row) => row.agent));
   const rows = overviewRows(known, deliveries, shown, briefs);
