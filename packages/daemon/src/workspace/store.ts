@@ -21,7 +21,7 @@ import {
   MAX_LIVE_SUB_AGENTS,
 } from "@concors/protocol";
 import { DatabaseSync } from "node:sqlite";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   ProjectSetupSchema,
   type ProjectSetup,
@@ -51,6 +51,10 @@ import {
 export { AGENT_SESSION_LIMIT };
 /** How many closed workspaces a machine keeps; closing one more forgets the oldest. */
 const CLOSED_PROJECT_LIMIT = 64;
+/** Command receipts kept for retries; each holds a digest and a short result, not the command. */
+const COMMAND_RECEIPTS_KEPT = 1000;
+/** Finished terminals no pane shows, kept as recent history. */
+const FINISHED_TERMINALS_KEPT = 64;
 /** When the most recently used of these chats was last used. */
 const newest = (chats: readonly AgentInfo[]) =>
   chats.reduce((time, chat) => (chat.updatedAt > time ? chat.updatedAt : time), "");
@@ -136,6 +140,8 @@ export class WorkspaceStore {
       // Only machines that opened Supervisor need the new format; ordinary stores stay compatible.
       if (this.snapshot().supervisor) this.#db.exec("PRAGMA user_version = 5");
       this.#closeStrandedChats();
+      // Stores from before receipts were bounded can hold any number of them.
+      this.#pruneReceipts();
     } catch (error) {
       this.#db.close();
       throw error;
@@ -248,12 +254,14 @@ export class WorkspaceStore {
     try {
       const current = this.snapshot();
       const payload = JSON.stringify(command);
+      // Receipts only need to tell a retry from a different command, so they keep a digest.
+      const digest = "sha256:" + createHash("sha256").update(payload).digest("hex");
       const receipt = this.#db
         .prepare("SELECT payload, result FROM commands WHERE id = ?")
         .get(command.commandId);
       if (receipt) {
         const result =
-          receipt["payload"] === payload
+          receipt["payload"] === digest || receipt["payload"] === payload
             ? WorkspaceResultSchema.parse(JSON.parse(String(receipt["result"])))
             : this.reject(
                 command,
@@ -352,7 +360,8 @@ export class WorkspaceStore {
       }
       this.#db
         .prepare("INSERT INTO commands (id, payload, result) VALUES (?, ?, ?)")
-        .run(command.commandId, payload, JSON.stringify(result));
+        .run(command.commandId, digest, JSON.stringify(result));
+      this.#pruneReceipts();
       this.#db.exec("COMMIT");
       // After the snapshot that lists their workspace has gone out.
       if (moved.length)
@@ -639,6 +648,42 @@ export class WorkspaceStore {
       .run(JSON.stringify(ProjectSetupSchema.parse(setup)), setup.id);
   }
 
+  /**
+   * Receipts let a client retry a command and get the first answer; retries come within minutes,
+   * so only the newest are kept. Every command leaves one, rejected or not.
+   */
+  #pruneReceipts(): void {
+    this.#db
+      .prepare("DELETE FROM commands WHERE rowid <= (SELECT MAX(rowid) FROM commands) - ?")
+      .run(COMMAND_RECEIPTS_KEPT);
+  }
+
+  /**
+   * Finished terminals no pane shows are kept only as recent history, so a machine never runs out
+   * of room for new ones. A closed workspace reopened later shows the start screen in their place.
+   */
+  #pruneTerminals(state: WorkspaceSnapshot): void {
+    const shown = new Set(
+      [...state.projects, ...(state.supervisor ? [state.supervisor] : [])].flatMap((project) =>
+        project.tabs.flatMap((tab) =>
+          tab.nodes.flatMap((node) =>
+            node.kind === "pane" && node.sessionId ? [node.sessionId] : [],
+          ),
+        ),
+      ),
+    );
+    const finished = this.terminals().filter(
+      (terminal) =>
+        terminal.status !== "running" && terminal.status !== "starting" && !shown.has(terminal.id),
+    );
+    const remove = this.#db.prepare("DELETE FROM terminals WHERE id = ?");
+    for (const terminal of finished.slice(
+      0,
+      Math.max(0, finished.length - FINISHED_TERMINALS_KEPT),
+    ))
+      remove.run(terminal.id);
+  }
+
   terminals(): TerminalInfo[] {
     return this.#db
       .prepare("SELECT info FROM terminals ORDER BY rowid")
@@ -692,6 +737,7 @@ export class WorkspaceStore {
         throw new Error("Select a terminal profile before starting");
       if (pane.sessionId && ["running", "starting"].includes(this.terminal(pane.sessionId).status))
         throw new Error("This pane already has a running session");
+      this.#pruneTerminals(state);
       if (this.terminals().length >= 256)
         throw new Error("Terminal history limit reached (256 sessions)");
       pane.sessionId = info.id;

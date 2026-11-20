@@ -55,6 +55,136 @@ describe("workspace persistence", () => {
     }
   });
 
+  it("keeps a bounded number of small receipts, however many commands are rejected", () => {
+    const directory = mkdtempSync(join(tmpdir(), "concors-workspace-"));
+    const path = join(directory, "workspace.sqlite");
+    const store = new WorkspaceStore(path);
+    const db = new DatabaseSync(path);
+    try {
+      const epoch = store.snapshot().epoch;
+      // A receipt written before they held digests still answers its retry.
+      const legacy: WorkspaceCommand = {
+        type: "workspace.command",
+        commandId: randomUUID(),
+        epoch,
+        operation: { kind: "project.add", projectId: randomUUID(), name: "Old", directory: "/old" },
+      };
+      const legacyResult = {
+        type: "workspace.result",
+        commandId: legacy.commandId,
+        outcome: { status: "accepted", revision: 7 },
+      };
+      db.prepare("INSERT INTO commands (id, payload, result) VALUES (?, ?, ?)").run(
+        legacy.commandId,
+        JSON.stringify(legacy),
+        JSON.stringify(legacyResult),
+      );
+      expect(store.execute(legacy).result).toEqual(legacyResult);
+      let last: WorkspaceCommand | undefined;
+      for (let i = 0; i < 1500; i++) {
+        last = {
+          type: "workspace.command",
+          commandId: randomUUID(),
+          epoch: randomUUID(),
+          operation: {
+            kind: "project.add",
+            projectId: randomUUID(),
+            name: "x".repeat(200),
+            directory: "/" + "y".repeat(4000),
+          },
+        };
+        expect(store.execute(last).result.outcome.status).toBe("rejected");
+      }
+      const rows = db.prepare("SELECT payload FROM commands").all();
+      expect(rows.length).toBeLessThanOrEqual(1000);
+      expect(rows.every((row) => String(row["payload"]).startsWith("sha256:"))).toBe(true);
+      // The newest still answer their retries, and a reused ID with another command is refused.
+      expect(store.execute(last!).changed).toBe(false);
+      expect(store.execute(last!).result.outcome).toMatchObject({ code: "CONFLICT" });
+      expect(
+        store.execute({
+          ...last!,
+          operation: { ...last!.operation, name: "other" },
+        } as WorkspaceCommand).result.outcome,
+      ).toMatchObject({ code: "INVALID_OPERATION" });
+    } finally {
+      db.close();
+      store.close();
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("makes room for new terminals by forgetting finished ones no pane shows", () => {
+    const store = new WorkspaceStore();
+    try {
+      const epoch = store.snapshot().epoch,
+        projectId = randomUUID(),
+        tabId = randomUUID(),
+        paneId = randomUUID();
+      for (const operation of [
+        { kind: "project.add", projectId, name: "Shells", directory: "/shells" },
+        {
+          kind: "tab.create",
+          projectId,
+          expectedVersion: 0,
+          tabId,
+          paneId,
+          name: "Shell",
+          profile: "shell",
+        },
+      ] as const)
+        expect(
+          store.execute({ type: "workspace.command", commandId: randomUUID(), epoch, operation })
+            .result.outcome.status,
+        ).toBe("accepted");
+      let previous: string | null = null;
+      // Far past the old lifetime limit of 256, one shell at a time in the same pane.
+      for (let i = 0; i < 300; i++) {
+        if (previous)
+          store.saveTerminal({ ...store.terminal(previous), status: "exited", exitCode: 0 });
+        const sessionId = randomUUID();
+        store.reserveTerminal(
+          {
+            type: "terminal.request",
+            requestId: randomUUID(),
+            operation: {
+              kind: "start",
+              epoch,
+              projectId,
+              tabId,
+              paneId,
+              expectedVersion: 1,
+              expectedSessionId: previous,
+              cols: 80,
+              rows: 24,
+            },
+          },
+          {
+            id: sessionId,
+            projectId,
+            profile: "shell",
+            directory: "/shells",
+            status: "running",
+            exitCode: null,
+            error: null,
+            startedAt: new Date().toISOString(),
+            cols: 80,
+            rows: 24,
+          },
+        );
+        previous = sessionId;
+      }
+      const kept = store.terminals();
+      // 64 of history, the one the pane showed when the newest started, and the newest.
+      expect(kept.length).toBe(66);
+      // The one the pane shows, and the most recent history, stay.
+      expect(kept.at(-1)?.id).toBe(previous);
+      expect(kept.at(-1)?.status).toBe("running");
+    } finally {
+      store.close();
+    }
+  });
+
   it("rejects an old epoch without mutating state and remembers the rejection", () => {
     const store = new WorkspaceStore();
     try {
