@@ -10,6 +10,8 @@ export const SupervisorReferenceSchema = z.object({
 });
 export type SupervisorReference = z.infer<typeof SupervisorReferenceSchema>;
 export const MAX_SUPERVISOR_REFERENCES = 8;
+/** A name as a reference carries it, within the schema's bounds however the session is named. */
+export const referenceLabel = (name: string) => name.trim().slice(0, 200) || "Untitled";
 export const SupervisorReferencesSchema = z
   .array(SupervisorReferenceSchema)
   .max(MAX_SUPERVISOR_REFERENCES);

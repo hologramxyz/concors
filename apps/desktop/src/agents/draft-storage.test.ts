@@ -79,3 +79,36 @@ it("restores an uncertain request identity within its machine and expires old dr
   expect(readDraft(storage, key)).toBeNull();
   expect(values.size).toBe(0);
 });
+
+it("keeps a draft whose saved references no longer fit, without them", () => {
+  const values = new Map<string, string>();
+  const storage: DraftStorage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => {
+      values.set(key, value);
+    },
+    removeItem: (key) => {
+      values.delete(key);
+    },
+  };
+  const key = draftStorageKey("one", crypto.randomUUID());
+  values.set(
+    key,
+    JSON.stringify({
+      version: 1,
+      updatedAt: Date.now(),
+      draft: {
+        message: "Ask @Docs",
+        attachments: [],
+        queue: [],
+        references: [{ id: crypto.randomUUID(), kind: "Agent", label: "" }],
+      },
+      attempt: null,
+    }),
+  );
+  expect(readDraft(storage, key)?.draft).toEqual({
+    message: "Ask @Docs",
+    attachments: [],
+    queue: [],
+  });
+});

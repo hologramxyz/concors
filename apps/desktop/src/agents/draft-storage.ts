@@ -31,7 +31,8 @@ const saved = z.object({
   updatedAt: z.number(),
   draft: input.extend({
     queue: z.array(input).max(20),
-    references: SupervisorReferencesSchema.optional(),
+    // A reference that no longer fits drops its mentions, never the message typed around them.
+    references: SupervisorReferencesSchema.optional().catch(undefined),
   }),
   attempt: z
     .object({ id: z.string().uuid(), draft: input, operation: AgentOperationSchema })

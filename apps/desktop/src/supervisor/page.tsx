@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { WorkspaceFileLinks } from "@/files/provider";
 import { SessionLinkContext } from "./session-link";
 import { AgentDraftScopeContext, useAgentDraft } from "@/agents/draft";
-import { MAX_SUPERVISOR_REFERENCES } from "./reference-text";
+import { MAX_SUPERVISOR_REFERENCES, referenceLabel } from "./reference-text";
 import { useAgents } from "@/agents/context";
 import { SupervisorOverview } from "./overview";
 import {
@@ -48,7 +48,7 @@ export function SupervisorPage({
     ...projects.map((project) => ({
       id: project.id,
       kind: "Workspace" as const,
-      label: project.name,
+      label: referenceLabel(project.name),
     })),
     ...agents.flatMap((agent) => {
       const label = names.get(agent.projectId);
@@ -57,7 +57,7 @@ export function SupervisorPage({
             {
               id: agent.id,
               kind: "Agent" as const,
-              label: supervisorAgentName(agent),
+              label: referenceLabel(supervisorAgentName(agent)),
               workspace: label,
             },
           ]
@@ -102,7 +102,7 @@ export function SupervisorPage({
   // Asking about an approval drafts a question that mentions the agent, for the person to send.
   // The answer is still given in the agent's own chat.
   const ask = (worker: AgentInfo, pending: AgentPending) => {
-    const label = supervisorAgentName(worker);
+    const label = referenceLabel(supervisorAgentName(worker));
     const reference = {
       id: worker.id,
       kind: "Agent" as const,
