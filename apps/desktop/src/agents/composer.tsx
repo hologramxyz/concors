@@ -527,7 +527,14 @@ export function AgentComposer({
     references.length && !native && !dictation.active && mentionDismissed !== draft
       ? mentionQuery(draft, caret)
       : null;
-  const mentionMatches = mentionTyped ? matchReferences(references, mentionTyped.query) : [];
+  // The list keeps the order it opened with: agents re-sort by activity as they work, and the
+  // highlighted row must stay the one the person arrowed to.
+  const [mentionOrder, setMentionOrder] = useState<readonly SupervisorReference[] | null>(null);
+  if (mentionTyped && !mentionOrder) setMentionOrder(references);
+  if (!mentionTyped && mentionOrder) setMentionOrder(null);
+  const mentionMatches = mentionTyped
+    ? matchReferences(mentionOrder ?? references, mentionTyped.query)
+    : [];
   const mentionIndex = Math.min(mentionActive, mentionMatches.length - 1);
   const chooseMention = (reference: SupervisorReference) => {
     if (!mentionTyped || !remember(reference)) return;
