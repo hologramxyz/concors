@@ -22,6 +22,8 @@ export interface NoticeSink {
   show: (notice: Notice) => void;
   clear: (sessionId: string) => void;
   focused: (sessionId: string) => boolean;
+  /** Whether the session's state is in view elsewhere, as in Overview, though not its chat. */
+  listed?: (sessionId: string) => boolean;
   preferences: () => { sound: boolean; desktop: boolean };
 }
 /** Herdr-inspired policy, driven exclusively by authoritative attention IDs. */
@@ -102,7 +104,7 @@ export class AttentionEngine {
     const focused = focusedAtArrival || this.#sink.focused(id);
     const prefs = this.#sink.preferences();
     if (prefs.sound && (!focused || notice.kind === "needs_input")) this.#sink.sound(notice.kind);
-    if (!focused && prefs.desktop) this.#sink.show(notice);
+    if (!focused && prefs.desktop && !this.#sink.listed?.(id)) this.#sink.show(notice);
   }
   viewed(sessionId: string): void {
     this.#sink.clear(sessionId);

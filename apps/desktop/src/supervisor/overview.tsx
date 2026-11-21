@@ -10,6 +10,7 @@ import {
 import { cn } from "cn";
 import { chatAgentStatus } from "@/agents/agent-status";
 import { useAgents } from "@/agents/context";
+import { useListedAgents } from "@/notifications/context";
 import { ProviderIcon } from "@/agents/provider-icon";
 import { Button } from "@/components/ui/button";
 import { SidebarEmpty, SidebarSection } from "@/components/sidebar-section";
@@ -136,6 +137,8 @@ export function SupervisorOverview({
   const listed = overviewRows(known, deliveries, shown);
   const briefs = useSupervisorBriefs(listed.map((row) => row.agent));
   const rows = overviewRows(known, deliveries, shown, briefs);
+  // While the panel is open, what it lists needs no card on top of it.
+  useListedAgents(rows.map((row) => row.agent.id));
   const now = useMinuteClock();
   const open = (agent: AgentInfo) => {
     // On a phone the drawer covers the session being opened; beside a desktop chat it stays.

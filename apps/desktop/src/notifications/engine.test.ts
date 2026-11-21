@@ -130,3 +130,14 @@ it("names the workspace and tab, apart from the agent, so finished agents tell a
     }),
   );
 });
+
+it("shows no card or banner for a session in view elsewhere, though its sound plays", async () => {
+  const { sink, engine } = setup();
+  sink.listed = vi.fn(() => true);
+  engine.observe(agent("first", "needs_input"), false, place("Project"));
+  engine.observe(agent("second", "needs_input"), true, place("Project"));
+  await vi.runAllTimersAsync();
+  expect(sink.show).not.toHaveBeenCalled();
+  // Its sound still plays: the panel shows it, but nothing draws the eye there.
+  expect(sink.sound).toHaveBeenCalledWith("needs_input");
+});
