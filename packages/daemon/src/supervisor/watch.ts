@@ -27,8 +27,16 @@ const quote = (text: string) =>
     .split("\n")
     .map((line) => "> " + line)
     .join("\n");
+/** A JSON string literal's value, or nothing when it is not one. */
+function jsonString(literal: string | undefined): string | undefined {
+  try {
+    return literal === undefined ? undefined : (JSON.parse(literal) as string);
+  } catch {
+    return undefined;
+  }
+}
 /** The approval body may contain a whole generated file; show the action, not its source code. */
-function pendingAction(pending: AgentPending): string {
+export function pendingAction(pending: AgentPending): string {
   if (pending.kind === "questions")
     return pending.questions
       .map((q) => q.question)
@@ -44,6 +52,11 @@ function pendingAction(pending: AgentPending): string {
       return `${detail.reason ?? "File operation"} ${input.file_path.split(/[\\/]/).at(-1)}`;
     if (input.command) return input.command.slice(0, 1000);
   } catch {
+    // A file too large for the request's details is cut off before it parses, but its path still
+    // leads the input in the summary, and the tool's name follows it.
+    const path = jsonString(/^\{"file_path"\s*:\s*("(?:[^"\\]|\\.)*")/.exec(pending.summary)?.[1]);
+    if (path)
+      return `${pending.summary.split("\n")[1] || "File operation"} ${path.split(/[\\/]/).at(-1)}`;
     /* Older adapters supply a plain command or question. */
   }
   return (pending.summary || pending.detail || pending.title).slice(0, 1000);
@@ -366,7 +379,9 @@ export class SupervisorWatches {
         watch,
         `input:${previous.turnId}:${previous.id}`,
         "Input no longer pending",
-        `${prefix} is no longer waiting for that ${previous.kind === "approval" ? "approval" : "input"}.\n\n${quote(previous.action)}${target.status === "working" ? "\n\nThe agent has resumed." : ""}`,
+        // A line and the action it was about: an answered request is history, and a busy
+        // Supervisor chat gets one of these for every approval.
+        `${prefix} is no longer waiting for that ${previous.kind === "approval" ? "approval" : "input"}${target.status === "working" ? " and has resumed" : ""}.\n\n${quote(previous.action)}`,
       );
     }
     const pending = target.pending.map((p) => ({
@@ -382,11 +397,16 @@ export class SupervisorWatches {
       });
     for (const pending of target.pending) {
       const state = pending.kind === "approval" ? "needs your approval" : "needs your input";
+      // The app offers Allow once and Decline under a tool's approval; the rest need its chat.
+      const answerable =
+        pending.kind === "approval" &&
+        pending.plan === undefined &&
+        (!pending.approvalKind || pending.approvalKind === "tool");
       this.record(
         watch,
         `input:${pending.turnId}:${pending.id}`,
         "Agent needs your input",
-        `${prefix} ${state}.\n\n${quote([pendingAction(pending)].filter(Boolean).join("\n").slice(0, 3000))}\n\nOpen that chat to respond.${report.queued ? ` ${report.queued} follow-up instruction(s) are queued behind it.` : ""}`,
+        `${prefix} ${state}.\n\n${quote([pendingAction(pending)].filter(Boolean).join("\n").slice(0, 3000))}\n\n${answerable ? "Answer it here or in that chat." : "Open that chat to respond."}${report.queued ? ` ${report.queued} follow-up instruction(s) are queued behind it.` : ""}`,
       );
     }
     if (report.queuePaused && report.queued)

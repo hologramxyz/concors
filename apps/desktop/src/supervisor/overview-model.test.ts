@@ -151,7 +151,7 @@ it("lists open sessions that replied, with the prompt of a session nobody delega
   expect(overviewRows([open], [], new Set([open.id]), stale)[0]?.update).toBe("");
 });
 
-it("keeps only the most recent finished sessions", () => {
+it("keeps only the most recent finished sessions, and every one not yet opened", () => {
   const finished = Array.from({ length: DONE_LIMIT + 3 }, (_, index) =>
     agent(`Agent ${index}`, {
       updatedAt: `2026-11-18T10:${String(index).padStart(2, "0")}:00.000Z`,
@@ -163,6 +163,17 @@ it("keeps only the most recent finished sessions", () => {
   );
   expect(rows).toHaveLength(DONE_LIMIT);
   expect(rows[0]?.agent.name).toBe(`Agent ${DONE_LIMIT + 2}`);
+  const unread = agent("Unread", {
+    status: "done",
+    updatedAt: "2026-11-01T10:00:00.000Z",
+    attention: { id: "a", kind: "done", seen: false, createdAt: "2026-11-01T10:00:00.000Z" },
+  });
+  const withUnread = overviewRows(
+    [...finished, unread],
+    finished.map((item) => delivered(item, "Task", "done")),
+  );
+  expect(withUnread).toHaveLength(DONE_LIMIT + 1);
+  expect(withUnread.at(-1)?.agent.name).toBe("Unread");
 });
 
 it("names a file approval by its verb and the file inside the workspace, a command as code", () => {
@@ -207,4 +218,35 @@ it("counts only sessions in the machine's workspaces", () => {
   } as unknown as Parameters<typeof workspaceAgents>[1];
   expect(workspaceAgents([mine, stray], workspace)).toEqual([mine]);
   expect(workspaceAgents([mine], null)).toEqual([]);
+});
+
+it("folds seen finishes from before the last day under Earlier, never news or work", () => {
+  const now = Date.parse("2026-11-20T12:00:00.000Z");
+  const today = agent("Today", { turnId: "t1", updatedAt: "2026-11-20T09:00:00.000Z" });
+  const old = agent("Old", { turnId: "t2", updatedAt: "2026-11-03T09:00:00.000Z" });
+  const unread = agent("Unread", {
+    status: "done",
+    turnId: "t3",
+    updatedAt: "2026-11-03T09:00:00.000Z",
+    attention: { id: "a", kind: "done", seen: false, createdAt: "2026-11-03T09:00:00.000Z" },
+  });
+  const blocked = agent("Blocked", {
+    status: "needs_input",
+    turnId: "t4",
+    pending: [approval],
+    updatedAt: "2026-11-03T09:00:00.000Z",
+  });
+  const rows = overviewRows(
+    [today, old, unread, blocked],
+    [],
+    new Set([today.id, old.id, unread.id, blocked.id]),
+    null,
+    now,
+  );
+  expect(rows.map((row) => [row.agent.name, row.group, row.earlier])).toEqual([
+    ["Today", "Done", false],
+    ["Old", "Done", true],
+    ["Unread", "Done", false],
+    ["Blocked", "Needs you", false],
+  ]);
 });

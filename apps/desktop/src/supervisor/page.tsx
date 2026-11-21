@@ -19,7 +19,7 @@ import { SupervisorOverview } from "./overview";
 import {
   SupervisorReferences,
   supervisorAgentName,
-  type SupervisorReference,
+  supervisorReferences,
 } from "./reference-context";
 import { supervisorPane } from "./pane";
 import { approvalSummary } from "@/agents/approval-summary";
@@ -44,31 +44,13 @@ export function SupervisorPage({
   const projects = [...(workspace?.projects ?? []), ...(workspace?.closedProjects ?? [])];
   const names = new Map(projects.map((project) => [project.id, project.name]));
   const agents = useAgents();
+  const projectList = workspace?.projects,
+    closedList = workspace?.closedProjects;
   // Kept stable between renders, so the composer's mention menu does not re-render with them.
-  const references = useMemo<SupervisorReference[]>(() => {
-    const all = [...(workspace?.projects ?? []), ...(workspace?.closedProjects ?? [])];
-    const workspaces = new Map(all.map((project) => [project.id, project.name]));
-    return [
-      ...all.map((project) => ({
-        id: project.id,
-        kind: "Workspace" as const,
-        label: referenceLabel(project.name),
-      })),
-      ...agents.flatMap((agent) => {
-        const label = workspaces.get(agent.projectId);
-        return !agent.supervisor && label
-          ? [
-              {
-                id: agent.id,
-                kind: "Agent" as const,
-                label: referenceLabel(supervisorAgentName(agent)),
-                workspace: label,
-              },
-            ]
-          : [];
-      }),
-    ];
-  }, [workspace?.projects, workspace?.closedProjects, agents]);
+  const references = useMemo(
+    () => supervisorReferences({ projects: projectList ?? [], closedProjects: closedList }, agents),
+    [projectList, closedList, agents],
+  );
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
   const [error, setError] = useState<string | null>(null);

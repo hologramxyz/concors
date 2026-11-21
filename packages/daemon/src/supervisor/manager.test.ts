@@ -788,6 +788,8 @@ it("reports the approval blocking a queued instruction, with its command and cha
   expect(notices).toHaveLength(1);
   expect(notices[0]?.text).toContain("needs your approval");
   expect(notices[0]?.text).toContain("echo test");
+  // The app answers a tool's approval under this message, so it says so.
+  expect(notices[0]?.text).toContain("Answer it here or in that chat.");
   expect(notices[0]?.text).toContain(`concors://session/${target.id}`);
   expect(notices[0]?.text).toContain("queued behind it");
   expect(f.store.agent(target.id).pending[0]?.id).toBe(pending.id);

@@ -40,3 +40,37 @@ it("always shows the folder and network access an approval would grant", () => {
     "Edit · /w/a.ts\nFolder: /w",
   );
 });
+
+it("names a request whose input was too long for the summary", () => {
+  // The daemon cut a large Write at its summary limit, losing the tool name after it.
+  const content = "x".repeat(5000);
+  const summary = `{"file_path":"/w/index.html","content":"${content}`.slice(0, 4000);
+  const detail = JSON.stringify(
+    { threadId: "t", turnId: "turn-1", reason: "Write", command: `{"file_path":"/w/index.html"}` },
+    null,
+    2,
+  );
+  expect(approvalSummary({ ...approval(summary), detail })).toBe("Write · /w/index.html");
+  const command = approvalSummary(approval(`{"command":"npm test && ${content}`.slice(0, 4000)));
+  expect(command).toMatch(/^npm test && x+/);
+  expect(command.length).toBeLessThanOrEqual(600);
+});
+
+it("says what other tools act on, and at the least names the tool", () => {
+  expect(
+    approvalSummary(approval('{"url":"https://example.com","prompt":"Read it"}\nWebFetch')),
+  ).toBe("WebFetch · https://example.com");
+  expect(approvalSummary(approval('{"todos":[]}\nTodoWrite'))).toBe("TodoWrite");
+  expect(
+    approvalSummary({
+      ...approval('{"todos":[{"content":"x'),
+      detail: '{\n  "reason": "TodoWrite",\n  "command": "{\\"todos\\":',
+    }),
+  ).toBe("TodoWrite");
+});
+
+it("reads a cut-off value whole up to the cut, escapes and all", () => {
+  // A Windows command cut right after an escaped backslash, and one inside a \u escape.
+  expect(approvalSummary(approval('{"command":"dir C:\\\\Users\\\\'))).toBe("dir C:\\Users\\…");
+  expect(approvalSummary(approval('{"command":"echo caf\\u00'))).toBe("echo caf…");
+});

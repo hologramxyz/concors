@@ -21,6 +21,8 @@ import { projectIconKey, projectIcons } from "@/workspace/project-icons";
 
 /** How long an unanswered card stays readable, as long as a macOS or Windows banner does. */
 const CARD_TIMEOUT_MS = 5_000;
+/** Cards shown at once; older ones give way, so a burst never covers the window's controls. */
+const MAX_CARDS = 3;
 
 export function NotificationProvider({
   connection,
@@ -40,6 +42,7 @@ export function NotificationProvider({
   cards?: boolean;
 }) {
   const views = useRef(new Map<string, number>());
+  const lists = useRef(new Map<string, number>());
   const dismiss = useRef<(id: string) => void>(() => undefined);
   const acknowledge = useRef<() => void>(() => undefined);
   const [notices, setNotices] = useState<Notice[]>([]);
@@ -51,6 +54,18 @@ export function NotificationProvider({
       const count = views.current.get(id) ?? 0;
       if (count <= 1) views.current.delete(id);
       else views.current.set(id, count - 1);
+    };
+  }, []);
+  const list = useCallback((ids: readonly string[]) => {
+    for (const id of ids) lists.current.set(id, (lists.current.get(id) ?? 0) + 1);
+    // What came in view needs no card any more; the session stays unread.
+    setNotices((current) => current.filter((n) => !ids.includes(n.sessionId)));
+    return () => {
+      for (const id of ids) {
+        const count = lists.current.get(id) ?? 0;
+        if (count <= 1) lists.current.delete(id);
+        else lists.current.set(id, count - 1);
+      }
     };
   }, []);
   // Only the card goes: the agent stays unread and its OS notification stays in the list.
@@ -84,6 +99,7 @@ export function NotificationProvider({
     };
     const engine = new AttentionEngine({
       focused,
+      listed: (id) => windowInFront() && lists.current.has(id),
       preferences: () => ({
         ...getNotificationPreferences(),
         ...(inAppOnly ? { desktop: true } : {}),
@@ -98,7 +114,7 @@ export function NotificationProvider({
       show: (notice) => {
         if (cards)
           setNotices((current) =>
-            [...current.filter((n) => n.sessionId !== notice.sessionId), notice].slice(-5),
+            [...current.filter((n) => n.sessionId !== notice.sessionId), notice].slice(-MAX_CARDS),
           );
         const open = () => {
           if (disposed) return;
@@ -240,7 +256,7 @@ export function NotificationProvider({
     };
   }, [connection, onOpen, inAppOnly, cards]);
   return (
-    <NotificationContext value={{ view }}>
+    <NotificationContext value={{ view, list }}>
       {children}
       <aside
         aria-label="Agent notifications"

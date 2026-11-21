@@ -142,6 +142,9 @@ function missingThread(engine: string, threadId: string, error: unknown): boolea
   return false;
 }
 
+/** Claude's tools that change files. Their approvals reach the daemon as commands, named by tool. */
+const FILE_TOOLS = new Set(["Write", "Edit", "MultiEdit", "NotebookEdit"]);
+
 export class AgentManager {
   readonly #store: WorkspaceStore;
   readonly #emit: (event: AgentEvent) => void;
@@ -2671,11 +2674,16 @@ export class AgentManager {
       kind: elicitation ? "elicitation" : questions ? "questions" : "approval",
       title: questions
         ? `${agentProviderName(info.provider)} needs your input`
-        : method.includes("fileChange")
+        : method.includes("fileChange") ||
+            ((info.engine ?? info.provider) === "claude" &&
+              typeof params["reason"] === "string" &&
+              FILE_TOOLS.has(params["reason"]))
           ? "Allow file changes?"
           : "Allow command execution?",
       summary: [
-        normalizeCommandExecutionCommand(params["command"]),
+        // A file's whole content can come as the command; bounded alone, the lines after it
+        // (which tool, which folder, network access) are kept.
+        normalizeCommandExecutionCommand(params["command"])?.slice(0, 3000),
         typeof params["reason"] === "string" ? params["reason"] : "",
         typeof params["grantRoot"] === "string" ? `Folder: ${params["grantRoot"]}` : "",
         params["networkApprovalContext"]
