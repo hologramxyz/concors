@@ -27,8 +27,16 @@ const quote = (text: string) =>
     .split("\n")
     .map((line) => "> " + line)
     .join("\n");
+/** A JSON string literal's value, or nothing when it is not one. */
+function jsonString(literal: string | undefined): string | undefined {
+  try {
+    return literal === undefined ? undefined : (JSON.parse(literal) as string);
+  } catch {
+    return undefined;
+  }
+}
 /** The approval body may contain a whole generated file; show the action, not its source code. */
-function pendingAction(pending: AgentPending): string {
+export function pendingAction(pending: AgentPending): string {
   if (pending.kind === "questions")
     return pending.questions
       .map((q) => q.question)
@@ -44,6 +52,11 @@ function pendingAction(pending: AgentPending): string {
       return `${detail.reason ?? "File operation"} ${input.file_path.split(/[\\/]/).at(-1)}`;
     if (input.command) return input.command.slice(0, 1000);
   } catch {
+    // A file too large for the request's details is cut off before it parses, but its path still
+    // leads the input in the summary, and the tool's name follows it.
+    const path = jsonString(/^\{"file_path"\s*:\s*("(?:[^"\\]|\\.)*")/.exec(pending.summary)?.[1]);
+    if (path)
+      return `${pending.summary.split("\n")[1] || "File operation"} ${path.split(/[\\/]/).at(-1)}`;
     /* Older adapters supply a plain command or question. */
   }
   return (pending.summary || pending.detail || pending.title).slice(0, 1000);
