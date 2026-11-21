@@ -1590,6 +1590,43 @@ it("keeps invalid question replies pending, accepts optional blanks, and redacts
   expect(JSON.stringify(read)).toContain("[private answer]");
 });
 
+it("keeps the tool's name and title for a file write too large for the summary", async () => {
+  vi.spyOn(ProviderRegistry.prototype, "installed").mockReturnValue(true);
+  const { a, id } = await setup();
+  const switched = await action(a, {
+    kind: "switch-provider",
+    sessionId: id,
+    provider: "claude",
+    model: null,
+    expectedRevision: a.agents[0]!.revision,
+  });
+  if (switched.outcome.status !== "ok") throw new Error("Switch failed");
+  const claude = switched.outcome.conversation.agent.id;
+  const agent = () => a.agents.find((item) => item.id === claude);
+  await expect.poll(() => agent()?.status).toBe("idle");
+  await action(a, { kind: "send", sessionId: claude, text: "hold the turn" });
+  await expect.poll(() => agent()?.turnId?.startsWith("turn-")).toBe(true);
+  const provider = providers.at(-1)!;
+  // Claude asks to write a whole page, as its permission request does: the input as the command.
+  void provider
+    .onRequest(
+      "item/commandExecution/requestApproval",
+      {
+        threadId: agent()!.threadId,
+        turnId: agent()!.turnId,
+        reason: "Write",
+        command: JSON.stringify({ file_path: "/w/index.html", content: "x".repeat(8000) }),
+        grantRoot: "/w",
+      },
+      "write",
+    )
+    .catch(() => undefined);
+  await expect.poll(() => agent()?.pending.length).toBe(1);
+  const pending = agent()!.pending[0]!;
+  expect(pending.title).toBe("Allow file changes?");
+  expect(pending.summary.split("\n").slice(1)).toEqual(["Write", "Folder: /w"]);
+});
+
 it("preserves explicit permission actions and lets a question cancel the whole turn", async () => {
   const { a, id } = await setup();
   await action(a, { kind: "send", sessionId: id, text: "hold the turn" });
