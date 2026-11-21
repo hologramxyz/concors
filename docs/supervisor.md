@@ -43,10 +43,15 @@ OpenCode or other configured harness and sign-in; Supervisor does not create ano
    one-liners in full: what it needs ("Approve: pnpm test", a question, a failure), its latest
    update while it works, and the gist of its final reply once done. The gist is the reply's own
    TL;DR or summary line, else its opening; no model is asked. A row opens the session. An approval
-   row offers **Ask Supervisor**, which drafts a question about it. Desktop keeps Overview beside
-   the chat; a phone opens it in a drawer. Gists need a daemon with `supervisor-briefs-v1`.
-9. Type **@** in the message to mention an agent or workspace, as **/** lists commands. The
-   message reads `@Name`, and carries the agent's ID, so a rename doesn't change what it refers to.
+   row offers **Allow once** and **Decline**, as Supervisor's message about it does, and **Ask
+   Supervisor**, which drafts a question about it; plans and questions are answered in the chat.
+   Done shows the last day's finishes and any not yet opened; older ones fold under **Earlier**.
+   While Overview is open, the sessions it lists raise no notification cards. Desktop keeps
+   Overview beside the chat; a phone opens it in a drawer. Gists need a daemon with
+   `supervisor-briefs-v1`.
+9. Type **@** in the message to mention an agent or workspace, as **/** lists commands, the
+   sessions most recently active first. The message reads `@Name`, and carries the agent's ID, so a
+   rename doesn't change what it refers to.
 10. Change the harness, then switch back. Each harness's conversation returns in the same chat UI.
 
 The mobile browser acceptance test runs the real shared UI through the native protocol relay.
