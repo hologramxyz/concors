@@ -19,6 +19,11 @@ export type OverviewGroup = "Needs you" | "In progress" | "Done";
 export const overviewGroups: readonly OverviewGroup[] = ["Needs you", "In progress", "Done"];
 /** Done is history: the most recent rows are what is worth a glance beside the chat. */
 export const DONE_LIMIT = 20;
+/**
+ * How long a finish stays in Done's view. Older ones fold under Earlier, so sessions from past
+ * days do not pile up over today's, while one nobody has opened yet stays in view however old.
+ */
+export const RECENT_MS = 24 * 60 * 60 * 1000;
 
 export interface OverviewRow {
   agent: AgentInfo;
@@ -37,6 +42,8 @@ export interface OverviewRow {
   task: string;
   /** Follow-ups waiting behind the current turn. */
   queued: number;
+  /** A seen finish from before the last day, folded under Earlier in Done. */
+  earlier: boolean;
   updatedAt: string;
 }
 
@@ -85,6 +92,7 @@ export function overviewRows(
   /** Sessions an open tab shows. */
   shown: ReadonlySet<string> = new Set(),
   briefs: ReadonlyMap<string, SupervisorBrief> | null = null,
+  now = Date.now(),
 ): OverviewRow[] {
   // Deliveries arrive newest first. The one in progress says what the agent is doing; without
   // one, the latest says what it was last asked.
@@ -119,11 +127,16 @@ export function overviewRows(
         update: turn ? briefLine(turn.reply) : "",
         task: firstLine(turn?.prompt ?? "") || firstLine(delivery?.text ?? ""),
         queued,
+        earlier:
+          group === "Done" && state !== "done" && now - Date.parse(agent.updatedAt) > RECENT_MS,
         updatedAt: agent.updatedAt,
       },
     ];
   });
   rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  const done = rows.filter((row) => row.group === "Done").slice(DONE_LIMIT);
+  // A finish nobody has opened is news however old, so the limit only drops seen ones.
+  const done = rows
+    .filter((row) => row.group === "Done" && chatState(row.agent) !== "done")
+    .slice(DONE_LIMIT);
   return rows.filter((row) => !done.includes(row));
 }

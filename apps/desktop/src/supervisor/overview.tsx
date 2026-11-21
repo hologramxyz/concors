@@ -1,5 +1,5 @@
-import { useRef } from "react";
-import { ListChecks, MessageCircle, X } from "lucide-react";
+import { useRef, useState } from "react";
+import { ChevronRight, ListChecks, MessageCircle, X } from "lucide-react";
 import {
   agentProviderName,
   modelName,
@@ -135,12 +135,16 @@ export function SupervisorOverview({
       ),
     ),
   );
-  const listed = overviewRows(known, deliveries, shown);
-  const briefs = useSupervisorBriefs(listed.map((row) => row.agent));
-  const rows = overviewRows(known, deliveries, shown, briefs);
-  // While the panel is open, what it lists needs no card on top of it.
-  useListedAgents(rows.map((row) => row.agent.id));
   const now = useMinuteClock();
+  const [earlierOpen, setEarlierOpen] = useState(false);
+  const listed = overviewRows(known, deliveries, shown, null, now);
+  // Folded rows need no gist until Earlier is opened.
+  const briefs = useSupervisorBriefs(
+    listed.filter((row) => earlierOpen || !row.earlier).map((row) => row.agent),
+  );
+  const rows = overviewRows(known, deliveries, shown, briefs, now);
+  // While the panel is open, what it lists needs no card on top of it.
+  useListedAgents(rows.map((row) => row.agent.id).sort());
   const open = (agent: AgentInfo) => {
     // On a phone the drawer covers the session being opened; beside a desktop chat it stays.
     if (compact) onClose();
@@ -156,36 +160,69 @@ export function SupervisorOverview({
       )}
       {overviewGroups.map((group) => {
         const grouped = rows.filter((row) => row.group === group);
+        const recent = grouped.filter((row) => !row.earlier);
+        const earlier = grouped.filter((row) => row.earlier);
+        const item = (row: OverviewRow) => (
+          <OverviewItem
+            key={row.agent.id}
+            row={row}
+            workspace={names.get(row.agent.projectId) ?? ""}
+            now={now}
+            onOpen={() => open(row.agent)}
+            onAsk={
+              row.agent.pending[0]?.kind === "approval"
+                ? () => {
+                    const request = row.agent.pending[0];
+                    if (request) ask(row.agent, request);
+                  }
+                : undefined
+            }
+            canAsk={canAsk}
+          />
+        );
         return (
           grouped.length > 0 && (
             <SidebarSection
               key={group}
               title={group}
               action={
-                <span className="shrink-0 pr-2 text-xs text-muted-foreground tabular-nums">
-                  {grouped.length}
-                </span>
+                recent.length > 0 && (
+                  <span className="shrink-0 pr-2 text-xs text-muted-foreground tabular-nums">
+                    {recent.length}
+                  </span>
+                )
               }
             >
               <ul className="space-y-0.5">
-                {grouped.map((row) => (
-                  <OverviewItem
-                    key={row.agent.id}
-                    row={row}
-                    workspace={names.get(row.agent.projectId) ?? ""}
-                    now={now}
-                    onOpen={() => open(row.agent)}
-                    onAsk={
-                      row.agent.pending[0]?.kind === "approval"
-                        ? () => {
-                            const request = row.agent.pending[0];
-                            if (request) ask(row.agent, request);
-                          }
-                        : undefined
-                    }
-                    canAsk={canAsk}
-                  />
-                ))}
+                {recent.map(item)}
+                {earlier.length > 0 && (
+                  // Finishes from past days, folded as the sidebar folds closed chats: history,
+                  // not work in hand.
+                  <li>
+                    <button
+                      type="button"
+                      aria-expanded={earlierOpen}
+                      onClick={() => setEarlierOpen(!earlierOpen)}
+                      className="flex h-7 w-full items-center gap-2 rounded-md pr-2 pl-2 text-left text-xs text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-foreground"
+                    >
+                      <span className="flex size-[20px] shrink-0 items-center justify-center">
+                        <ChevronRight
+                          aria-hidden="true"
+                          className={cn(
+                            "size-3.5 transition-transform motion-reduce:transition-none",
+                            earlierOpen && "rotate-90",
+                          )}
+                        />
+                      </span>
+                      <span className="flex-1">Earlier</span>
+                    </button>
+                    {earlierOpen && (
+                      <ul aria-label="Earlier" className="mt-0.5 space-y-0.5">
+                        {earlier.map(item)}
+                      </ul>
+                    )}
+                  </li>
+                )}
               </ul>
             </SidebarSection>
           )
