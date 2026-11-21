@@ -43,17 +43,19 @@ test("Overview shows each session's status, what it needs, and the gist of its o
     await expect(composer).toHaveValue("Should I approve @Game QA’s request “pnpm test”?");
     await composer.fill("");
 
-    // A row opens its session, where the approval is answered; its result then reads in Done.
-    await needsYou.getByRole("button", { name: /Game QA/ }).click();
-    await expect(page.getByTestId("supervisor-page")).toHaveCount(0);
-    await page.getByRole("button", { name: "Allow once", exact: true }).click();
-    await page.getByRole("button", { name: "Supervisor", exact: true }).click();
+    // The approval is answered on its row, as in its chat; its result then reads in Done.
+    await needsYou.getByRole("button", { name: "Allow once", exact: true }).click();
+    await expect(page.getByTestId("supervisor-page")).toBeVisible();
     await expect(overview.getByRole("region", { name: "Needs you" })).toHaveCount(0);
     await expect(done).toContainText("The fixture test suite finished.");
     await page.screenshot({
       path: test.info().outputPath("desktop-overview-resolved.png"),
       animations: "disabled",
     });
+
+    // A row opens its session.
+    await done.getByRole("button", { name: /Game QA/ }).click();
+    await expect(page.getByTestId("supervisor-page")).toHaveCount(0);
   } finally {
     await cleanup();
   }

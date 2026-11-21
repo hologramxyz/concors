@@ -1,4 +1,5 @@
 import { mentionSegments, splitSupervisorReferences } from "@/supervisor/reference-text";
+import { WatchedApproval } from "@/supervisor/quick-approval";
 import { MessageAttachments } from "./attachment-preview";
 import { memo, useContext } from "react";
 import { FileLinkContext } from "@/files/context";
@@ -103,6 +104,10 @@ export const TimelineItem = memo(function TimelineItem({
     return (
       <article className="text-sm text-muted-foreground">
         <AgentMarkdown>{item.text}</AgentMarkdown>
+        {/* Only a report of a request still open can be answered; the rest never look it up. */}
+        {item.title === "Agent needs your input" && item.id.startsWith("supervisor-watch:") && (
+          <WatchedApproval itemId={item.id} />
+        )}
       </article>
     );
   if (item.kind === "system")

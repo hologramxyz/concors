@@ -27,6 +27,7 @@ import { RowDot, RowWorking, SidebarDot } from "@/workspace/sidebar-tabs";
 import { chatState, useMinuteClock } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
 import { overviewGroups, overviewRows, workspaceAgents, type OverviewRow } from "./overview-model";
+import { QuickApproval } from "./quick-approval";
 import { supervisorAgentName } from "./reference-context";
 import { useSupervisorBriefs, useSupervisorDeliveries } from "./use-overview";
 
@@ -254,6 +255,8 @@ function OverviewItem({
   canAsk: boolean;
 }) {
   const { agent } = row;
+  // An approval is answered here as in its chat; anything else is answered by opening it.
+  const request = agent.pending[0]?.kind === "approval" ? agent.pending[0] : undefined;
   const name = supervisorAgentName(agent);
   const task = briefLine(row.task);
   const state = chatState(agent);
@@ -330,7 +333,8 @@ function OverviewItem({
         </span>
       </button>
       {onAsk && (
-        <div className="pb-1.5 pl-9">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pr-2 pb-2 pl-9">
+          {request && <QuickApproval agent={agent} pending={request} />}
           <button
             type="button"
             disabled={!canAsk}
