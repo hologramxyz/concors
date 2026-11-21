@@ -366,7 +366,9 @@ export class SupervisorWatches {
         watch,
         `input:${previous.turnId}:${previous.id}`,
         "Input no longer pending",
-        `${prefix} is no longer waiting for that ${previous.kind === "approval" ? "approval" : "input"}.\n\n${quote(previous.action)}${target.status === "working" ? "\n\nThe agent has resumed." : ""}`,
+        // A line and the action it was about: an answered request is history, and a busy
+        // Supervisor chat gets one of these for every approval.
+        `${prefix} is no longer waiting for that ${previous.kind === "approval" ? "approval" : "input"}${target.status === "working" ? " and has resumed" : ""}.\n\n${quote(previous.action)}`,
       );
     }
     const pending = target.pending.map((p) => ({
