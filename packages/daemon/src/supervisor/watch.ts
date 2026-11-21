@@ -397,11 +397,16 @@ export class SupervisorWatches {
       });
     for (const pending of target.pending) {
       const state = pending.kind === "approval" ? "needs your approval" : "needs your input";
+      // The app offers Allow once and Decline under a tool's approval; the rest need its chat.
+      const answerable =
+        pending.kind === "approval" &&
+        pending.plan === undefined &&
+        (!pending.approvalKind || pending.approvalKind === "tool");
       this.record(
         watch,
         `input:${pending.turnId}:${pending.id}`,
         "Agent needs your input",
-        `${prefix} ${state}.\n\n${quote([pendingAction(pending)].filter(Boolean).join("\n").slice(0, 3000))}\n\nOpen that chat to respond.${report.queued ? ` ${report.queued} follow-up instruction(s) are queued behind it.` : ""}`,
+        `${prefix} ${state}.\n\n${quote([pendingAction(pending)].filter(Boolean).join("\n").slice(0, 3000))}\n\n${answerable ? "Answer it here or in that chat." : "Open that chat to respond."}${report.queued ? ` ${report.queued} follow-up instruction(s) are queued behind it.` : ""}`,
       );
     }
     if (report.queuePaused && report.queued)
