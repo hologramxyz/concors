@@ -9,8 +9,11 @@ import { parseToolTitle } from "./tool-label";
  * sub-agent, a plan, a failed step, a call an open request is about, a system line. A granted
  * permission is not a line of its own: it shows on the step it was for.
  *
- * This only rearranges what `timelineView` returns; items reach the screen unchanged. A turn
- * still in progress is left as it is: how a live run reads is a decision of its own.
+ * The turn in progress folds the same way, so nothing snaps into place when it ends. Its open run
+ * (the one at its end, or one with calls still running) has no ✓ yet, and the step it is on now
+ * leaves the run for the live line under it (see `liveStep`).
+ *
+ * This only rearranges what `timelineView` returns; items reach the screen unchanged.
  */
 
 export type StepKind = "tool" | "command" | "read" | "edit" | "search" | "web" | "thinking";
@@ -80,58 +83,76 @@ function approvals(items: readonly AgentItem[], waiting: ReadonlySet<string>) {
 }
 
 /**
- * `liveTurn` is the turn still in progress, whose rows stay as they are. `waiting` holds the
- * calls an open request names (its `sourceItemId`), which never fold out of sight.
+ * The step the turn in progress is on: its latest call still running. A call an open request
+ * names keeps its own card, so it is never this step.
+ */
+export function liveStep(
+  view: readonly TimelineEntry[],
+  liveTurn: string | null,
+  waiting: ReadonlySet<string> = new Set(),
+): AgentItem | undefined {
+  if (liveTurn === null) return undefined;
+  return view
+    .flatMap((entry) => (entry.turnId === liveTurn ? (entry.group ?? [entry]) : []))
+    .findLast((item) => item.status === "running" && stepKind(item) && !waiting.has(item.id));
+}
+
+/**
+ * `liveTurn` is the turn still in progress, if any. `waiting` holds the calls an open request
+ * names (its `sourceItemId`), which never fold out of sight.
  */
 export function stepGroups(
   view: readonly TimelineEntry[],
   liveTurn: string | null,
   waiting: ReadonlySet<string> = new Set(),
 ): TimelineEntry[] {
-  // Inside a finished turn, today's same-tool folds open into their calls, one row each.
-  const flat = view.flatMap((entry) =>
-    entry.turnId === liveTurn ? [entry] : (entry.group ?? [entry]),
-  );
-  const { marks, used } = approvals(
-    flat.filter((entry) => entry.turnId !== liveTurn),
-    waiting,
-  );
+  // Today's same-tool folds open into their calls, one row each.
+  const flat = view.flatMap((entry) => entry.group ?? [entry]);
+  const { marks, used } = approvals(flat, waiting);
+  const current = liveStep(view, liveTurn, waiting)?.id;
   const out: TimelineEntry[] = [];
   let run: TimelineEntry[] = [];
-  const flush = () => {
-    const counted = run.filter((item) => stepKind(item) !== "thinking").length;
+  /** `last`: nothing in the run's turn comes after it, so in the live turn it is still open. */
+  const flush = (last: boolean) => {
+    const live =
+      run[0]?.turnId === liveTurn && (last || run.some((item) => item.status === "running"));
+    // The step in progress is the live line's, not the run's.
+    const steps = live ? run.filter((item) => item.id !== current) : run;
+    const counted = steps.filter((item) => stepKind(item) !== "thinking").length;
     const first = run[0];
     // One step needs no summary: it and any reasoning beside it are shown as they are.
-    if (first && counted > 1) out.push({ ...first, steps: run, status: runStatus(run) });
+    if (first && counted > 1)
+      out.push({
+        ...first,
+        steps,
+        ...(live
+          ? { status: "running" as const, ...(last ? { live: true as const } : {}) }
+          : { status: runStatus(steps) }),
+      });
     else
-      for (const item of run)
+      for (const item of steps)
         out.push(stepKind(item) === "thinking" ? item : { ...item, quiet: true });
     run = [];
   };
   for (const entry of flat) {
-    if (entry.turnId === liveTurn) {
-      flush();
-      out.push(entry);
-      continue;
-    }
     // A granted permission shows on the step it was for, not as a line between steps.
     if (used.has(entry.id)) continue;
     const approval = marks.get(entry.id);
     const item: TimelineEntry = approval ? { ...entry, approval } : entry;
     const kind = stepKind(item);
     const quiet = kind && item.status !== "failed" && !waiting.has(item.id);
-    if (quiet && run[0] && run[0].turnId !== item.turnId) flush();
+    if (run[0] && run[0].turnId !== item.turnId) flush(true);
     if (quiet) run.push(item);
     else {
-      flush();
-      // A failed step reads as a plain row too, with its error; a call awaiting an answer
-      // keeps today's card until the live states are designed.
+      flush(false);
+      // A failed step reads as a plain row too, with its error; a call an open request names
+      // keeps its card, where the request is answered.
       if (kind && kind !== "thinking" && item.status === "failed")
         out.push({ ...item, quiet: true });
       else out.push(item);
     }
   }
-  flush();
+  flush(true);
   return out;
 }
 

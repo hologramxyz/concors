@@ -1,5 +1,5 @@
-import { approvalSummary } from "./approval-summary";
-import { useState } from "react";
+import { approvalParts, leadPreview } from "./approval-summary";
+import { useEffect, useRef, useState } from "react";
 import { Check, MessageCircleQuestionMark, ShieldAlert } from "lucide-react";
 import type { AgentPending } from "@concors/protocol";
 import { AgentMarkdown } from "./markdown";
@@ -7,10 +7,13 @@ import { Button } from "@/components/ui/button";
 export function PendingInput({
   pending,
   disabled,
+  reveal = false,
   onRespond,
 }: {
   pending: AgentPending;
   disabled: boolean;
+  /** Scroll the request fully into view when it appears: the reader is at the chat's bottom. */
+  reveal?: boolean;
   onRespond: (value: {
     decision?: "accept" | "decline" | "cancel";
     actionId?: string;
@@ -27,9 +30,18 @@ export function PendingInput({
   const Icon = pending.kind === "approval" ? ShieldAlert : MessageCircleQuestionMark;
   // A lone question needs no "Question 1" label; several are numbered so answers can be matched.
   const numbered = pending.questions.length > 1;
-  const summary = approvalSummary(pending);
+  const { lead, grants } = approvalParts(pending);
+  const section = useRef<HTMLElement>(null);
+  // Only when it appears: a reader who scrolled away keeps their place.
+  const [revealOnce] = useState(reveal);
+  useEffect(() => {
+    if (!revealOnce) return;
+    const frame = requestAnimationFrame(() => section.current && revealIn(section.current));
+    return () => cancelAnimationFrame(frame);
+  }, [revealOnce]);
   return (
     <section
+      ref={section}
       aria-label={pending.title}
       // Sits below the timeline, outside its selectable area: what it asks is worth copying too.
       className="selectable min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm"
@@ -40,11 +52,18 @@ export function PendingInput({
         </span>
         <div className="min-w-0 space-y-0.5">
           <h3 className="text-[length:var(--text-ui)] leading-6 font-medium">{pending.title}</h3>
-          {summary && (
-            <p className="text-xs break-words whitespace-pre-wrap text-muted-foreground">
-              {summary}
+          {lead && (
+            <p
+              className={`text-xs break-words whitespace-pre-wrap text-muted-foreground ${pending.kind === "approval" ? "line-clamp-3" : ""}`}
+            >
+              {pending.kind === "approval" ? leadPreview(lead) : lead}
             </p>
           )}
+          {grants.map((grant) => (
+            <p key={grant} className="text-xs break-words text-muted-foreground">
+              {grant}
+            </p>
+          ))}
         </div>
       </header>
       {pending.kind === "approval" ? (
@@ -322,4 +341,19 @@ export function PendingInput({
       )}
     </section>
   );
+}
+
+/**
+ * Scrolls the request's own scroller (the prompts above the composer, or the phone's timeline)
+ * so all of it shows, its answers first when it is taller than the room. Never the window.
+ */
+function revealIn(element: HTMLElement) {
+  let scroller = element.parentElement;
+  while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY))
+    scroller = scroller.parentElement;
+  if (!scroller) return;
+  const box = element.getBoundingClientRect();
+  const view = scroller.getBoundingClientRect();
+  if (box.bottom > view.bottom) scroller.scrollTop += box.bottom - view.bottom;
+  else if (box.top < view.top) scroller.scrollTop -= view.top - box.top;
 }

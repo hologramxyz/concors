@@ -10,7 +10,7 @@ import { Check, ChevronRight, FileCode, GitFork, Terminal, Wrench, XCircle } fro
 import { AgentMarkdown, CopyButton } from "./markdown";
 import { PlanProgress } from "./plan-progress";
 import { SubAgentCard } from "./sub-agent-card";
-import { BrailleSpinner } from "./activity";
+import { BrailleSpinner, Elapsed } from "./activity";
 import { Brain, Eye, Globe, Search, Pencil } from "lucide-react";
 import { resolveToolCallIconName } from "./paseo/tool-call-icon-name";
 import type { AgentItem } from "@concors/protocol";
@@ -326,6 +326,17 @@ const STEP_VERBS: Record<StepKind, string> = {
   thinking: "Thought",
 };
 
+/** The same, for a step still running. */
+const LIVE_VERBS: Record<StepKind, string> = {
+  tool: "Using",
+  command: "Running",
+  read: "Reading",
+  edit: "Editing",
+  search: "Searching for",
+  web: "Searching the web for",
+  thinking: "Thinking",
+};
+
 /** What a step acted on: the command as run, the file, the query, or the tool's name. */
 function stepTarget(item: AgentItem, kind: StepKind): string {
   if (kind === "command")
@@ -349,6 +360,7 @@ function StepRow({ item }: { item: TimelineEntry }) {
   const kind = stepKind(item) ?? "tool";
   const Icon = STEP_ICONS[kind];
   const failed = item.status === "failed";
+  const running = item.status === "running";
   const hasDetails = hasMeaningfulToolCallDetail(toolDetail(item));
   const stat =
     kind === "edit"
@@ -377,8 +389,12 @@ function StepRow({ item }: { item: TimelineEntry }) {
         ) : (
           <Icon className="size-3.5 shrink-0 text-muted-foreground" />
         )}
-        <span className="shrink-0 text-muted-foreground">{STEP_VERBS[kind]}</span>
-        <span className={`min-w-0 truncate ${kind === "command" ? "font-mono text-ui" : ""}`}>
+        <span className={`shrink-0 text-muted-foreground ${running ? "agent-shimmer" : ""}`}>
+          {(running ? LIVE_VERBS : STEP_VERBS)[kind]}
+        </span>
+        <span
+          className={`min-w-0 truncate ${kind === "command" ? "font-mono text-ui" : ""} ${running ? "agent-shimmer" : ""}`}
+        >
           {stepTarget(item, kind)}
         </span>
         {extra && <span className="min-w-0 truncate text-muted-foreground">{extra}</span>}
@@ -410,10 +426,65 @@ function StepRow({ item }: { item: TimelineEntry }) {
       )}
       {open && (
         <div className="chat-scroll mt-1 mb-2 max-h-96 overflow-auto rounded-lg border p-4 text-ui leading-6">
-          <ToolOutput item={item} running={false} />
+          <ToolOutput item={item} running={running} />
         </div>
       )}
     </article>
+  );
+}
+
+/**
+ * What the turn in progress is doing now, as one line: the step it is on in the present tense
+ * ("Running pnpm test"), or what it waits for, with the turn's time. It takes the place of the
+ * step's own row, which joins its run's summary once it is done, and opens to the step's output.
+ */
+export function LiveLine({
+  step,
+  waiting,
+  startedAt,
+}: {
+  step?: AgentItem | undefined;
+  /** Set while the turn waits on the user: what the line says instead of the step. */
+  waiting?: string | undefined;
+  startedAt?: string | null | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const kind = step && stepKind(step);
+  const hasDetails = !!step && !waiting && hasMeaningfulToolCallDetail(toolDetail(step));
+  return (
+    <div role="status" data-live-line className="text-sm">
+      <button
+        type="button"
+        disabled={!hasDetails}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={hasDetails ? open : undefined}
+        className="flex w-full min-w-0 items-center gap-2 py-0.5 text-left text-muted-foreground"
+      >
+        <BrailleSpinner />
+        <span className="agent-shimmer min-w-0 truncate">
+          {waiting ?? (kind ? LIVE_VERBS[kind] : "Working…")}
+          {!waiting && kind && kind !== "thinking" && (
+            <>
+              {" "}
+              <span className={`text-foreground ${kind === "command" ? "font-mono text-ui" : ""}`}>
+                {stepTarget(step, kind)}
+              </span>
+            </>
+          )}
+        </span>
+        <Elapsed startedAt={startedAt} />
+        {hasDetails && (
+          <ChevronRight
+            className={`size-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+          />
+        )}
+      </button>
+      {open && step && (
+        <div className="chat-scroll mt-1 mb-2 max-h-96 overflow-auto rounded-lg border p-4 text-ui leading-6">
+          <ToolOutput item={step} running />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -424,6 +495,8 @@ function StepRow({ item }: { item: TimelineEntry }) {
  */
 function StepGroup({ item, steps }: { item: AgentItem; steps: TimelineEntry[] }) {
   const [open, setOpen] = useState(false);
+  // A run the turn in progress is still on has no ✓ yet, and only its finished steps to count.
+  const running = item.status === "running";
   return (
     <article aria-label="Tool calls" data-tool-status={item.status} className="text-sm">
       <button
@@ -432,11 +505,13 @@ function StepGroup({ item, steps }: { item: AgentItem; steps: TimelineEntry[] })
         aria-expanded={open}
         className="flex max-w-full items-center gap-2 py-0.5 text-left text-muted-foreground transition-colors hover:text-foreground"
       >
-        <span className="min-w-0 truncate">{stepSummary(steps)}</span>
+        <span className="min-w-0 truncate">
+          {stepSummary(running ? steps.filter((step) => step.status !== "running") : steps)}
+        </span>
         {item.status === "interrupted" ? (
           <span className="shrink-0 text-xs">Stopped</span>
         ) : (
-          <Check className="size-3.5 shrink-0" aria-label="Done" />
+          !running && <Check className="size-3.5 shrink-0" aria-label="Done" />
         )}
         <ChevronRight
           className={`size-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
@@ -446,7 +521,7 @@ function StepGroup({ item, steps }: { item: AgentItem; steps: TimelineEntry[] })
         <div className="mt-1 ml-[7px] space-y-1 border-l pl-4">
           {steps.map((step) =>
             stepKind(step) === "thinking" ? (
-              <Thinking key={step.id} item={step} running={false} />
+              <Thinking key={step.id} item={step} running={step.status === "running"} />
             ) : (
               <StepRow key={step.id} item={step} />
             ),

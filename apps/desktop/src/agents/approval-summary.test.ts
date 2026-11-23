@@ -1,6 +1,6 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { AgentPending } from "@concors/protocol";
-import { approvalSummary } from "./approval-summary";
+import { approvalSummary, leadPreview } from "./approval-summary";
 
 const approval = (summary: string) =>
   ({
@@ -73,4 +73,14 @@ it("reads a cut-off value whole up to the cut, escapes and all", () => {
   // A Windows command cut right after an escaped backslash, and one inside a \u escape.
   expect(approvalSummary(approval('{"command":"dir C:\\\\Users\\\\'))).toBe("dir C:\\Users\\…");
   expect(approvalSummary(approval('{"command":"echo caf\\u00'))).toBe("echo caf…");
+});
+
+describe("leadPreview", () => {
+  it("keeps a request's first three lines, so its answers stay in view under a long script", () => {
+    expect(leadPreview("git push")).toBe("git push");
+    expect(leadPreview("a\nb\nc")).toBe("a\nb\nc");
+    expect(leadPreview("cat > a.js <<'EOF'\none\ntwo\nthree\nEOF")).toBe(
+      "cat > a.js <<'EOF'\none\ntwo …",
+    );
+  });
 });

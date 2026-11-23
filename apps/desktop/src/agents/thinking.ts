@@ -3,15 +3,16 @@ import { toolGroupKey } from "./tool-label";
 
 /**
  * A timeline row: one item, or a run of similar tool calls folded under the first one's id.
- * `steps` is a finished turn's run of quiet steps shown as one summary line, and `quiet` a step
- * of a finished turn shown as a plain row, with `approval` the permission granted for it (see
- * `stepGroups`).
+ * `steps` is a run of quiet steps shown as one summary line, `quiet` a step shown as a plain row,
+ * `approval` the permission granted for a step, and `live` the run the turn in progress is on now
+ * (see `stepGroups`).
  */
 export type TimelineEntry = AgentItem & {
   group?: AgentItem[];
   steps?: TimelineEntry[];
   quiet?: true;
   approval?: string;
+  live?: true;
 };
 
 /**

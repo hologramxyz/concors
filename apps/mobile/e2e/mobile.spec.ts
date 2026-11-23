@@ -611,11 +611,15 @@ test("desktop tool cards, diffs, MCP results, subagents and markdown fit a phone
   page,
 }) => {
   const ui = await enter(page);
-  const tools = ui.getByRole("article", { name: "Tool call", exact: true });
-  await expect(tools).toHaveCount(3);
+  // The command, edit and MCP call fold into one summary line, which opens to a row each.
+  const run = ui.getByRole("article", { name: "Tool calls", exact: true });
+  await expect(run).toHaveCount(1);
   // The demo turn is still live, so the chat stays pinned until the reader scrolls up to them.
   await scrollTimelineUp(page, ui.getByRole("log", { name: "Chat timeline" }), 400);
   await expect(ui.getByRole("button", { name: "Latest", exact: true })).toBeVisible();
+  await run.getByRole("button").first().click();
+  const tools = run.getByRole("article", { name: "Tool call", exact: true });
+  await expect(tools).toHaveCount(3);
   for (let i = 0; i < 3; i++) {
     await tools.nth(i).getByRole("button").first().click();
     await expect(tools.nth(i).getByRole("button").first()).toHaveAttribute("aria-expanded", "true");

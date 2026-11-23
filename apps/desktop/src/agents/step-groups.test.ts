@@ -5,6 +5,7 @@ import {
   diffStat,
   exitCode,
   firstErrorLine,
+  liveStep,
   stepGroups,
   stepSummary,
 } from "./step-groups";
@@ -95,11 +96,6 @@ describe("stepGroups", () => {
     expect(rows.find((row) => row.id === other.id)?.quiet).toBe(true);
   });
 
-  it("leaves the turn still in progress as it is", () => {
-    const view = timelineView([read("a.ts"), read("b.ts"), command("ls"), command("pwd")]);
-    expect(stepGroups(view, "turn")).toEqual(view);
-  });
-
   it("opens today's same-tool folds into one row per call", () => {
     const reads = [read("a.ts"), read("b.ts"), read("c.ts")];
     const view = timelineView(reads);
@@ -113,6 +109,104 @@ describe("stepGroups", () => {
   it("marks a run with a stopped step as stopped", () => {
     const rows = stepGroups([command("a"), command("b", { status: "interrupted" })], null);
     expect(rows[0]?.status).toBe("interrupted");
+  });
+});
+
+describe("the turn in progress", () => {
+  const shape = (rows: ReturnType<typeof stepGroups>) =>
+    rows.map((row) =>
+      row.steps
+        ? `${row.live ? "live" : "group"}:${row.status}:${row.steps.map((step) => step.text).join(",")}`
+        : `${row.quiet ? "row" : row.kind}:${row.text}`,
+    );
+
+  it("folds its finished steps and leaves the running one to the live line", () => {
+    const items = [message("user"), read("a.js"), read("b.js"), edit("a.js")];
+    const running = command("node --test", { status: "running" });
+    const view = timelineView([...items, running]);
+    expect(liveStep(view, "turn")).toBe(running);
+    const rows = stepGroups(view, "turn");
+    expect(shape(rows)).toEqual(["user:hi", "live:running:a.js,b.js,File changes"]);
+    expect(rows[1]?.id).toBe(items[1]?.id);
+  });
+
+  it("keeps the same row, under the same id, when the turn ends", () => {
+    const steps = [read("a.js"), edit("a.js"), command("node --test", { status: "running" })];
+    const live = stepGroups(timelineView(steps), "turn");
+    const done = stepGroups(
+      timelineView(steps.map((step) => ({ ...step, status: "completed" as const }))),
+      null,
+    );
+    expect(live.map((row) => row.id)).toEqual(done.map((row) => row.id));
+    expect(done[0]?.status).toBe("completed");
+    expect(done[0]?.live).toBeUndefined();
+  });
+
+  it("shows only the live line while the run's first step runs", () => {
+    const think = thought("**Planning**");
+    const rows = stepGroups([message("user"), think, command("ls", { status: "running" })], "turn");
+    expect(rows.map((row) => row.id)).toEqual([rows[0]?.id, think.id]);
+  });
+
+  it("shows one finished step as its plain row, as it will read once the turn ends", () => {
+    const rows = stepGroups([read("a.js"), command("ls", { status: "running" })], "turn");
+    expect(shape(rows)).toEqual(["row:a.js"]);
+  });
+
+  it("gives a run the turn is still on no ✓, even with nothing running between steps", () => {
+    const rows = stepGroups([read("a.js"), read("b.js")], "turn");
+    expect(shape(rows)).toEqual(["live:running:a.js,b.js"]);
+  });
+
+  it("ends a run at messages, sub-agents and failures as a finished turn does", () => {
+    const sub = item({ title: "Sub-agents", presentation: { type: "sub_agent" } });
+    const rows = stepGroups(
+      [
+        read("a.js"),
+        read("b.js"),
+        message("assistant"),
+        command("a"),
+        command("b", { status: "failed" }),
+        command("c"),
+        command("d"),
+        sub,
+      ],
+      "turn",
+    );
+    expect(shape(rows)).toEqual([
+      "group:completed:a.js,b.js",
+      "assistant:hi",
+      "row:a",
+      "row:b",
+      "group:completed:c,d",
+      "tool:",
+    ]);
+  });
+
+  it("keeps a run with a call still running open before a sub-agent, without a live line", () => {
+    const sub = item({ title: "Sub-agents", presentation: { type: "sub_agent" } });
+    const shell = command("echo", { status: "running" });
+    const rows = stepGroups([edit("a.ts"), read("b.ts"), shell, sub], "turn");
+    expect(liveStep([edit("a.ts"), shell, sub], "turn")).toBe(shell);
+    expect(shape(rows)).toEqual(["group:running:File changes,b.ts", "tool:"]);
+  });
+
+  it("leaves a call an open request names out of the live line", () => {
+    const asked = command("git push", { status: "running" });
+    const view = [read("a.js"), asked];
+    expect(liveStep(view, "turn", new Set([asked.id]))).toBeUndefined();
+    const rows = stepGroups(view, "turn", new Set([asked.id]));
+    expect(rows.at(-1)).toBe(asked);
+  });
+
+  it("shows a permission granted mid-turn on its step", () => {
+    const rows = stepGroups([read("a.js"), command("ls"), permission(), read("b.js")], "turn");
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.steps?.[1]?.approval).toBe("Allowed once");
+  });
+
+  it("has no live step once the turn is over", () => {
+    expect(liveStep([command("ls", { status: "running" })], null)).toBeUndefined();
   });
 });
 
@@ -162,12 +256,10 @@ describe("approvals", () => {
     ]);
   });
 
-  it("keeps declined and cancelled answers, and answers in the turn in progress, as lines", () => {
+  it("keeps declined and cancelled answers as lines", () => {
     const declined = permission("Decline");
     const rows = stepGroups([command("a"), declined, command("b")], null);
     expect(rows.map((row) => row.id)).toContain(declined.id);
-    const live = [command("a"), permission()];
-    expect(stepGroups(live, "turn")).toEqual(live);
   });
 
   it("does not let a granted permission split a run", () => {

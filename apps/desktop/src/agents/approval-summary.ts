@@ -11,7 +11,13 @@ const TARGETS = ["file_path", "notebook_path", "path", "url", "query", "pattern"
  * never blank for a tool's request: at the least it names the tool.
  */
 export function approvalSummary(pending: AgentPending): string {
-  if (pending.kind !== "approval") return pending.summary;
+  const { lead, grants } = approvalParts(pending);
+  return [lead, ...grants].filter(Boolean).join("\n");
+}
+
+/** The summary's two parts: what is asked for (the command, the path) and what it would widen. */
+export function approvalParts(pending: AgentPending): { lead: string; grants: string[] } {
+  if (pending.kind !== "approval") return { lead: pending.summary, grants: [] };
   const lines = pending.summary.split("\n");
   const grants = lines
     .filter((line) => GRANT.test(line))
@@ -20,7 +26,16 @@ export function approvalSummary(pending: AgentPending): string {
   // A tool's input can be too long for the summary, which then loses the tool's name after it.
   // The request's details name it first, so it survives there even when they are cut off too.
   const reason = reasons.join("\n") || field(pending.detail, "reason") || "";
-  return [lead(first, reason), ...grants].filter(Boolean).join("\n");
+  return { lead: lead(first, reason), grants };
+}
+
+/**
+ * The first `max` lines of a request's lead, so its answers stay in view under a long script;
+ * the whole of it is in the request's details. "…" marks lines left out.
+ */
+export function leadPreview(lead: string, max = 3): string {
+  const lines = lead.split("\n");
+  return lines.length > max ? `${lines.slice(0, max).join("\n")} …` : lead;
 }
 
 function lead(first: string, reason: string): string {

@@ -112,20 +112,32 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
       "animation-name",
       "agent-working-fade",
     );
-    const runningTools = page.locator('[data-tool-status="running"]');
-    await expect(runningTools).toHaveCount(3);
-    for (const tool of await runningTools.all()) {
-      // Running labels breathe in opacity, which WebKit animates without repainting their text.
-      const label = tool.locator("button .agent-shimmer").first();
-      await expect(label).toHaveCSS("animation-name", "agent-working-fade");
-      await expect(label).toHaveCSS("background-image", "none");
-      const opacity = await label.evaluate((el) => getComputedStyle(el).opacity);
-      await expect
-        .poll(() => label.evaluate((el) => getComputedStyle(el).opacity))
-        .not.toBe(opacity);
-    }
+    // One live line says what the turn is on now, with the turn's time.
+    const liveLine = page.getByRole("log").locator("[data-live-line]");
+    await expect(liveLine).toHaveCount(1);
+    await expect(liveLine).toContainText("Running echo fixture");
+    // The edit it made is done, so it reads as a quiet row, as it will once the turn ends.
+    const edited = page
+      .getByRole("article", { name: "Tool call", exact: true })
+      .filter({ hasText: "example.ts" });
+    await expect(edited).toHaveAttribute("data-tool-status", "completed");
+    // The live label breathes in opacity, which WebKit animates without repainting its text.
+    const label = liveLine.locator(".agent-shimmer").first();
+    await expect(label).toHaveCSS("animation-name", "agent-working-fade");
+    await expect(label).toHaveCSS("background-image", "none");
+    const opacity = await label.evaluate((el) => getComputedStyle(el).opacity);
+    await expect.poll(() => label.evaluate((el) => getComputedStyle(el).opacity)).not.toBe(opacity);
     await expect(page.locator('[data-tool-status="completed"] .agent-shimmer')).toHaveCount(0);
-    const elapsed = page.getByLabel("Elapsed time", { exact: true });
+    // One spinner for the turn's steps, the live line's. (A working sub-agent and the plan's
+    // current step keep their own on their cards.)
+    await expect(
+      page
+        .getByRole("log")
+        .locator('article[aria-label="Tool call"], article[aria-label="Tool calls"]')
+        .locator(".braille-frames"),
+    ).toHaveCount(0);
+    await expect(liveLine.locator(".braille-frames")).toHaveCount(1);
+    const elapsed = liveLine.getByLabel("Elapsed time", { exact: true });
     await expect(elapsed).toBeVisible();
     const initialElapsed = await elapsed.innerText();
     await expect(elapsed).not.toHaveText(initialElapsed);
@@ -168,15 +180,14 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
       "none",
     );
     await page.emulateMedia({ reducedMotion: "no-preference" });
-    await page.getByRole("button", { name: /^Shell/ }).click();
-    await expect(
-      page
-        .getByRole("button", { name: /^Shell/ })
-        .locator(".agent-shimmer")
-        .first(),
-    ).toHaveCSS("animation-name", "agent-working-fade");
-    await expect(page.getByLabel("Tool call").filter({ hasText: "fixture output" })).toBeVisible();
-    await page.getByRole("button", { name: /^Edit/ }).click();
+    // The live line opens to the running command's output as it streams.
+    await liveLine.getByRole("button", { name: /^Running echo fixture/ }).click();
+    await expect(liveLine.locator(".agent-shimmer").first()).toHaveCSS(
+      "animation-name",
+      "agent-working-fade",
+    );
+    await expect(liveLine).toContainText("fixture output");
+    await edited.getByRole("button", { name: /^Edited example\.ts/ }).click();
     await expect(page.getByText("+new line", { exact: true })).toBeVisible();
     await page.getByRole("textbox", { name: "Message Codex" }).fill("queued follow-up");
     // Enter would steer the running turn; ⌘/Ctrl+Enter queues the follow-up instead.
