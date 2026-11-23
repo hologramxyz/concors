@@ -287,7 +287,10 @@ export class AgentManager {
     this.draining.add(id);
     this.deliveries.set(request.requestId, head.id);
     try {
-      const result = await this.request(request);
+      const result = await this.request(
+        request,
+        this.triggerLabel?.(head.id) ? "webhook" : "local",
+      );
       if (result.outcome.status === "error")
         this.update(id, { queuePaused: true, error: result.outcome.message });
     } finally {
@@ -420,6 +423,7 @@ export class AgentManager {
       | "presentation"
       | "attachments"
       | "origin"
+      | "trigger"
     >,
   ): void {
     const previous = this.#store.agentItem(id, value.id);
@@ -1005,6 +1009,9 @@ export class AgentManager {
     }
   }
 
+  /** Only daemon-owned event receipts can label a user prompt, including queued deliveries. */
+  triggerLabel?: (eventId: string) => AgentItem["trigger"];
+
   async request(request: AgentRequest, owner = "local"): Promise<AgentResult> {
     let mutation: string | undefined;
     try {
@@ -1543,7 +1550,11 @@ export class AgentManager {
             "Supervisor sharing permission changed. Review permission before dispatching more work.",
           );
       }
-      if (info.supervisor && ["send", "queue-add", "steer"].includes(op.kind)) {
+      if (
+        owner !== "webhook" &&
+        info.supervisor &&
+        ["send", "queue-add", "steer"].includes(op.kind)
+      ) {
         info = { ...info, supervisorSharing: request.sharing ?? undefined };
         this.#store.saveAgent(info);
       }
@@ -1668,7 +1679,8 @@ export class AgentManager {
           paused = info.queuePaused ?? false;
         let delivery: AgentRequest | undefined;
         if (op.kind === "queue-add") {
-          if (queue.length >= 20) throw new Error("Queue up to 20 follow-ups per agent.");
+          if (queue.length >= 20 && owner !== "webhook")
+            throw new Error("Queue up to 20 follow-ups per agent.");
           queue = [
             ...queue,
             {
@@ -1826,10 +1838,15 @@ export class AgentManager {
         this.#store.reserveAgentAction(request, next, queueId ? { remove: queueId } : undefined);
         this.#emit({ type: "agent.state", agent: next });
         const files = messageFiles(op);
+        const trigger =
+          owner === "webhook" || queueId
+            ? this.triggerLabel?.(queueId ?? request.requestId)
+            : undefined;
         this.item(info.id, turnId, {
           id: `prompt:${request.requestId}`,
           kind: "user",
-          title: op.origin ? "From Supervisor" : "You",
+          title: trigger ? `Webhook · ${trigger.source}` : op.origin ? "From Supervisor" : "You",
+          ...(trigger ? { trigger } : {}),
           ...(op.origin ? { origin: op.origin } : {}),
           ...(files.length ? { attachments: files.map(({ name, mime }) => ({ name, mime })) } : {}),
           text: op.text,

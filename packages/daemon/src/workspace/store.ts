@@ -191,6 +191,14 @@ export class WorkspaceStore {
       .get(sessionId, deliveryId);
     return row ? this.agentItem(sessionId, String(row["item_id"])) : null;
   }
+  triggerPrompt(sessionId: string, eventId: string): AgentItem | null {
+    const row = this.#db
+      .prepare(
+        "SELECT item_id FROM agent_items WHERE session_id = ? AND json_extract(item, '$.trigger.eventId') = ? AND json_extract(item, '$.kind') = 'user' LIMIT 1",
+      )
+      .get(sessionId, eventId);
+    return row ? this.agentItem(sessionId, String(row["item_id"])) : null;
+  }
   supervisorRecord(key: string): unknown {
     const row = this.#db.prepare("SELECT value FROM supervisor_records WHERE key = ?").get(key);
     return row ? JSON.parse(String(row["value"])) : undefined;
@@ -1472,7 +1480,7 @@ export class WorkspaceStore {
     const value = AgentItemSchema.parse({
       ...item,
       revision: (this.agentItem(item.sessionId, item.id)?.revision ?? -1) + 1,
-      text: bound(item.text, 16000),
+      text: bound(item.text, item.trigger ? 100000 : 16000),
       detail: bound(item.detail, 16000),
       title: bound(item.title, 240),
     });
