@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 import {
   TriggerRequestSchema,
+  sessionProjects,
   type AgentInfo,
   type AgentTrigger,
   type TriggerDefinition,
@@ -42,6 +43,7 @@ export class TriggerManager {
   private closed = false;
   private jobs = new Map<string, Promise<void>>();
   private pumps = new Map<string, Promise<void>>();
+  private retries = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly store: TriggerStore;
   private readonly workspace: WorkspaceStore;
   private readonly agents: Pick<AgentManager, "request" | "startScheduled">;
@@ -375,34 +377,50 @@ export class TriggerManager {
       if (this.closed) throw new Error("Machine is shutting down");
       const queued = busy(info) || this.store.pending(sessionId).length > 0;
       const text = webhookPrompt(t.prompt, event.source, body);
-      if (queued) {
-        this.store.transaction(() => {
-          this.store.defer(id, eventId, sessionId, text);
-          this.patch(id, eventId, { status: "queued" });
-        });
-        await this.pump(sessionId);
-        return;
-      }
-      const result = await this.agents.request(
-        {
-          type: "agent.request",
-          requestId: eventId,
-          operation: {
-            kind: "send",
-            sessionId,
-            text,
+      if (!queued) {
+        const result = await this.agents.request(
+          {
+            type: "agent.request",
+            requestId: eventId,
+            operation: {
+              kind: "send",
+              sessionId,
+              text,
+            },
           },
-        },
-        "webhook",
-      );
-      if (result.outcome.status === "error") throw new Error(result.outcome.message);
-      this.observe(this.workspace.agent(sessionId));
+          "webhook",
+        );
+        if (result.outcome.status !== "error") {
+          this.observe(this.workspace.agent(sessionId));
+          return;
+        }
+        if (
+          !sessionProjects(this.workspace.snapshot()).some(
+            (project) => project.id === info.projectId,
+          )
+        )
+          throw new Error(result.outcome.message);
+      }
+      this.store.transaction(() => {
+        this.store.defer(id, eventId, sessionId, text);
+        this.patch(id, eventId, { status: "queued" });
+      });
+      await this.pump(sessionId);
     } catch (error) {
       this.patch(id, eventId, {
         status: "failed",
         message: (error instanceof Error ? error.message : "Delivery failed").slice(0, 1000),
       });
     }
+  }
+  private retry(sessionId: string) {
+    if (this.closed || this.retries.has(sessionId)) return;
+    const timer = setTimeout(() => {
+      this.retries.delete(sessionId);
+      if (!this.closed) void this.pump(sessionId);
+    }, 1000);
+    timer.unref();
+    this.retries.set(sessionId, timer);
   }
   private pump(sessionId: string): Promise<void> {
     const pending = this.pumps.get(sessionId);
@@ -442,6 +460,17 @@ export class TriggerManager {
         );
         if (result.outcome.status === "error") {
           if ((this.workspace.agent(sessionId).queue?.length ?? 0) >= 20) return;
+          if (
+            sessionProjects(this.workspace.snapshot()).some(
+              (project) => project.id === info.projectId,
+            )
+          ) {
+            this.patch(pending.triggerId, pending.eventId, {
+              message: result.outcome.message.slice(0, 1000),
+            });
+            this.retry(sessionId);
+            return;
+          }
           this.store.removePending(pending.eventId);
           this.patch(pending.triggerId, pending.eventId, {
             status: "failed",
@@ -484,6 +513,8 @@ export class TriggerManager {
   async close() {
     if (this.closed) return;
     this.closed = true;
+    for (const timer of this.retries.values()) clearTimeout(timer);
+    this.retries.clear();
     await Promise.allSettled(this.jobs.values());
     await Promise.allSettled(this.pumps.values());
     this.store.close();

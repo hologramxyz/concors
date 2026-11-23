@@ -64,4 +64,6 @@ credentials and source/idempotency headers to the private host. Other machine en
 require machine JWT authentication. Never place secrets in the body, query string or logs.
 Remove or deliver events already admitted to a chat's queue before deleting their trigger; its
 receipts supply queued prompt labels. Trigger-owned overflow that has not entered that queue is
-cancelled by deletion and does not block it. Rejected queue admissions are recorded as failed.
+cancelled by deletion and does not block it. Temporary admission refusals (such as a chat being
+forked) stay in trigger-owned overflow and retry automatically. Refusals while the target chat or
+workspace is unavailable are recorded as failed.

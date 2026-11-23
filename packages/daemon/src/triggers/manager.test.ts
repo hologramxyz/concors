@@ -554,6 +554,80 @@ it("allows deleting a trigger and cancelling overflow that has not entered the c
   expect(f.workspace.triggerPrompt(sessionId, pending.id)).toBeNull();
 });
 
+it.each(["queued", "idle", "cancel"])(
+  "retains webhook overflow during a fork lock (%s)",
+  async (mode) => {
+    const f = await setup();
+    const first = await f.settled(f.accept().event.id);
+    const sessionId = first.sessionId!;
+    await expect.poll(() => f.workspace.agent(sessionId).status).toBe("done");
+    if (mode === "queued") {
+      f.workspace.saveAgent({ ...f.workspace.agent(sessionId), queuePaused: true });
+      await f.agents.request({
+        type: "agent.request",
+        requestId: randomUUID(),
+        operation: { kind: "queue-add", sessionId, text: "Interactive first" },
+      });
+    }
+    const original = TestAgentProvider.prototype.request;
+    let release: (() => void) | undefined;
+    const waiting = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.spyOn(TestAgentProvider.prototype, "request").mockImplementation(async function (
+      this: TestAgentProvider,
+      method,
+      params,
+    ) {
+      if (method === "session/fork") await waiting;
+      return original.call(this, method, params);
+    });
+    const fork = await f.agents.request({
+      type: "agent.request",
+      requestId: randomUUID(),
+      operation: {
+        kind: "fork-session",
+        sessionId,
+        expectedRevision: f.workspace.agent(sessionId).revision,
+      },
+    });
+    expect(fork.outcome.status).toBe("ok");
+    const event = f.accept().event;
+    await expect
+      .poll(() => f.manager.list()[0]!.events.find((e) => e.id === event.id)?.message)
+      .toContain("being changed");
+    expect(f.manager.list()[0]!.events.find((e) => e.id === event.id)?.status).toBe("queued");
+    expect(f.store.pending(sessionId)).toHaveLength(1);
+    if (mode === "cancel")
+      expect(
+        f.request({ kind: "delete", id: f.id, expectedRevision: f.manager.list()[0]!.revision })
+          .outcome.status,
+      ).toBe("ok");
+    release?.();
+    await expect
+      .poll(() =>
+        f.workspace.agents().some((agent) => agent.id !== sessionId && agent.status === "idle"),
+      )
+      .toBe(true);
+    if (mode === "cancel") {
+      expect(f.store.pending(sessionId)).toHaveLength(0);
+      expect(f.workspace.triggerPrompt(sessionId, event.id)).toBeNull();
+      return;
+    }
+    await expect.poll(() => f.store.pending(sessionId).length, { timeout: 5000 }).toBe(0);
+    if (mode === "queued")
+      await f.agents.request({
+        type: "agent.request",
+        requestId: randomUUID(),
+        operation: { kind: "queue-pause", sessionId, paused: false },
+      });
+    await expect
+      .poll(() => f.manager.list()[0]!.events.find((e) => e.id === event.id)?.status)
+      .toBe("delivered");
+    expect(f.workspace.triggerPrompt(sessionId, event.id)?.trigger?.eventId).toBe(event.id);
+  },
+);
+
 it("delivers to the current Supervisor without changing its permissions or sharing consent", async () => {
   const f = await setup();
   const project = f.workspace.ensureSupervisor();
