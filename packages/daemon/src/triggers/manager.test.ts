@@ -137,6 +137,25 @@ it("deduplicates events across deliveries and reuses same-mode context with daem
   });
 });
 
+it("does not retain an uncreated chat when the workspace closes before first delivery", async () => {
+  const f = await setup();
+  const projectId = f.definition.projectId!;
+  const execute = (kind: "project.close" | "project.reopen") => {
+    const project = f.workspace.snapshot().projects.find((p) => p.id === projectId)!;
+    return f.workspace.execute({
+      type: "workspace.command",
+      commandId: randomUUID(),
+      epoch: f.workspace.snapshot().epoch,
+      operation: { kind, projectId, expectedVersion: project.version },
+    });
+  };
+  execute("project.close");
+  expect((await f.settled(f.accept().event.id)).status).toBe("failed");
+  expect(f.manager.list()[0]!.sessionId).toBeNull();
+  execute("project.reopen");
+  expect((await f.settled(f.accept().event.id)).status).toBe("delivered");
+});
+
 it("creates a fresh session for every new-mode event", async () => {
   const f = await setup("new");
   const first = await f.settled(f.accept().event.id);
