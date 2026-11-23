@@ -1,8 +1,14 @@
 # Webhook triggers
 
+## In the app
+
+Open **Webhooks** beside **Schedules** in the sidebar (on desktop or mobile). It appears when the connected daemon supports webhook triggers. Create a trigger, choose a chat or Supervisor, and select whether to keep context or start a new chat for each event. You can edit, enable, disable, delete, or rotate a trigger from its card. Expand **Recent events** to see delivery status and open the chat that received an event. Chat prompts are marked **From webhook · source**.
+
+Creating a trigger or rotating its secret opens connection details with copy buttons for the cloud machine's URL, the one-time secret, and a curl command. Save the secret before closing: it is shown only once. Local machines still allow trigger management, but have no public webhook URL; external delivery requires a cloud machine.
+
 Webhook triggers let CI, Sentry, bots and other tools send data to a chat and start a run without
 opening Concors. Public webhooks are available on **cloud machines only** for now; local gateways
-do not expose them. This release provides the daemon protocol; configuration UI comes separately.
+do not expose them.
 
 Clients negotiate `webhook-triggers-v1`, then use `trigger.request` with `list`, `create`, `update`,
 `delete` or `rotate`. Mutations other than create require `expectedRevision`. Create and rotate
