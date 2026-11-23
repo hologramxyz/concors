@@ -6,7 +6,8 @@ import { parseToolTitle } from "./tool-label";
  * A finished turn's quiet steps, folded into one summary line each run. A quiet step is a call
  * the reader needs nothing from: a command, a read, an edit, a search, an MCP call, or the
  * reasoning between them. A run ends at whatever must stay in view on its own: a message, a
- * sub-agent, a plan, a failed step, a call an open request is about, a system line.
+ * sub-agent, a plan, a failed step, a call an open request is about, a system line. A granted
+ * permission is not a line of its own: it shows on the step it was for.
  *
  * This only rearranges what `timelineView` returns; items reach the screen unchanged. A turn
  * still in progress is left as it is: how a live run reads is a decision of its own.
@@ -28,6 +29,56 @@ export function stepKind(item: AgentItem): StepKind | undefined {
   return undefined;
 }
 
+/** "Allowed once" for a permission the user granted; nothing for one declined or cancelled. */
+export function approvalMark(item: AgentItem): string | undefined {
+  if (item.kind !== "system" || item.title !== "Permission") return undefined;
+  const text = item.text.trim();
+  const allow = /^Allow\s+(.+)$/i.exec(text);
+  if (allow) return `Allowed ${allow[1]}`;
+  return /^(Approve|Apply)/i.test(text) ? "Approved" : undefined;
+}
+
+/** Calls that can stop for a permission. Reads and code searches seldom do. */
+const ASKS: ReadonlySet<StepKind> = new Set(["command", "edit", "web", "tool"]);
+
+/**
+ * Which step each granted permission was for. A permission line names no call: it is saved when
+ * the user answers, after the call it was for, and the agent asks in the order it made its calls.
+ * So each answer goes to the oldest call since the last message that still has none, or, when no
+ * such call came first, to the next step.
+ */
+function approvals(items: readonly AgentItem[], waiting: ReadonlySet<string>) {
+  const marks = new Map<string, string>();
+  const used = new Set<string>();
+  let asked: AgentItem[] = [];
+  let early: { id: string; mark: string }[] = [];
+  let turn: string | undefined;
+  for (const item of items) {
+    if (item.turnId !== turn || item.kind === "user" || item.kind === "assistant") {
+      asked = [];
+      early = [];
+      turn = item.turnId;
+    }
+    const mark = approvalMark(item);
+    if (mark) {
+      const call = asked.shift();
+      if (call) {
+        marks.set(call.id, mark);
+        used.add(item.id);
+      } else early.push({ id: item.id, mark });
+      continue;
+    }
+    const kind = stepKind(item);
+    if (!kind || kind === "thinking" || waiting.has(item.id)) continue;
+    const answer = early.shift();
+    if (answer) {
+      marks.set(item.id, answer.mark);
+      used.add(answer.id);
+    } else if (ASKS.has(kind)) asked.push(item);
+  }
+  return { marks, used };
+}
+
 /**
  * `liveTurn` is the turn still in progress, whose rows stay as they are. `waiting` holds the
  * calls an open request names (its `sourceItemId`), which never fold out of sight.
@@ -37,8 +88,16 @@ export function stepGroups(
   liveTurn: string | null,
   waiting: ReadonlySet<string> = new Set(),
 ): TimelineEntry[] {
+  // Inside a finished turn, today's same-tool folds open into their calls, one row each.
+  const flat = view.flatMap((entry) =>
+    entry.turnId === liveTurn ? [entry] : (entry.group ?? [entry]),
+  );
+  const { marks, used } = approvals(
+    flat.filter((entry) => entry.turnId !== liveTurn),
+    waiting,
+  );
   const out: TimelineEntry[] = [];
-  let run: AgentItem[] = [];
+  let run: TimelineEntry[] = [];
   const flush = () => {
     const counted = run.filter((item) => stepKind(item) !== "thinking").length;
     const first = run[0];
@@ -49,26 +108,27 @@ export function stepGroups(
         out.push(stepKind(item) === "thinking" ? item : { ...item, quiet: true });
     run = [];
   };
-  for (const entry of view) {
+  for (const entry of flat) {
     if (entry.turnId === liveTurn) {
       flush();
       out.push(entry);
       continue;
     }
-    // Inside a finished turn, today's same-tool folds open into their calls, one row each.
-    for (const item of entry.group ?? [entry]) {
-      const kind = stepKind(item);
-      const quiet = kind && item.status !== "failed" && !waiting.has(item.id);
-      if (quiet && run[0] && run[0].turnId !== item.turnId) flush();
-      if (quiet) run.push(item);
-      else {
-        flush();
-        // A failed step reads as a plain row too, with its error; a call awaiting an answer
-        // keeps today's card until the live states are designed.
-        if (kind && kind !== "thinking" && item.status === "failed")
-          out.push({ ...item, quiet: true });
-        else out.push(item);
-      }
+    // A granted permission shows on the step it was for, not as a line between steps.
+    if (used.has(entry.id)) continue;
+    const approval = marks.get(entry.id);
+    const item: TimelineEntry = approval ? { ...entry, approval } : entry;
+    const kind = stepKind(item);
+    const quiet = kind && item.status !== "failed" && !waiting.has(item.id);
+    if (quiet && run[0] && run[0].turnId !== item.turnId) flush();
+    if (quiet) run.push(item);
+    else {
+      flush();
+      // A failed step reads as a plain row too, with its error; a call awaiting an answer
+      // keeps today's card until the live states are designed.
+      if (kind && kind !== "thinking" && item.status === "failed")
+        out.push({ ...item, quiet: true });
+      else out.push(item);
     }
   }
   flush();
@@ -151,17 +211,48 @@ export function diffStat(diff: string): { added: number; removed: number } {
   return { added, removed };
 }
 
+/** A failed command's exit code: as the daemon reported it, else from the output's own line. */
+export function exitCode(item: AgentItem): number | undefined {
+  const code = item.presentation?.exitCode;
+  if (typeof code === "number") return code;
+  const line = /^Exit code:?\s*(-?\d+)\s*$/im.exec(item.detail);
+  return line ? Number(line[1]) : undefined;
+}
+
+const EXIT_LINE = /^Exit code:?\s*-?\d+$/i;
+/** Test runners' totals ("ℹ fail 1", "# fail 1", "Tests: 1 failed") and headers say no more. */
+const TALLY =
+  /^(?:[ℹ#]\s*)?(?:tests?|test files|suites?|pass(?:ed)?|fail(?:ed|ures)?|cancelled|skipped|todo|duration_ms)\b[\s:]*\d/i;
+const HEADER = /^[✖✗×]?\s*failing tests:?$/i;
+const ASSERTION = /\bassert|\bexpected\b|\breceived\b|!==/i;
+const FAILURE = /error|fail|✗|✖|×/i;
+
 /**
- * The line of a failed call's output that says what went wrong: the first that names an error
- * or failure, else the first line of output. The daemon puts the folder a command ran in first
- * and its exit code last, and neither says what failed.
+ * The line of a failed call's output that says what went wrong. A test's assertion (what it
+ * expected and got) comes first; then the first line that names an error or failure; then the
+ * first line of output. The folder a command ran in, its exit code, stack frames and a test
+ * runner's totals never say what failed.
  */
 export function firstErrorLine(item: AgentItem): string {
+  const cwd = item.presentation?.cwd?.trim();
   const lines = item.detail
     .split("\n")
     .map((line) => line.trim())
-    .filter(
-      (line) => line && line !== item.presentation?.cwd?.trim() && !/^Exit code:/i.test(line),
-    );
-  return lines.find((line) => /error|fail|✗|×/i.test(line)) ?? lines[0] ?? "";
+    .filter((line) => line && line !== cwd && !EXIT_LINE.test(line));
+  const useful = lines.filter(
+    (line) => !TALLY.test(line) && !HEADER.test(line) && !/^at\s/.test(line),
+  );
+  return (
+    useful.find((line) => ASSERTION.test(line)) ??
+    useful.find((line) => FAILURE.test(line)) ??
+    useful[0] ??
+    lines[0] ??
+    ""
+  );
+}
+
+/** A command's first line, with "…" when more follow (a heredoc, a script): the rest is in its details. */
+export function commandLine(command: string): string {
+  const [first = "", ...rest] = command.trim().split("\n");
+  return rest.length ? `${first.trimEnd()} …` : first;
 }

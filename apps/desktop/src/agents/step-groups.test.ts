@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { AgentItem } from "@concors/protocol";
-import { diffStat, firstErrorLine, stepGroups, stepSummary } from "./step-groups";
+import {
+  commandLine,
+  diffStat,
+  exitCode,
+  firstErrorLine,
+  stepGroups,
+  stepSummary,
+} from "./step-groups";
 import { timelineView } from "./thinking";
 
 let n = 0;
@@ -42,6 +49,8 @@ const thought = (text: string) =>
   item({ title: "Thinking", text, presentation: { type: "thinking" } });
 const message = (kind: "user" | "assistant", turnId = "turn") =>
   item({ kind, title: kind, text: "hi", turnId });
+const permission = (text = "Allow once") =>
+  item({ kind: "system", title: "Permission", text, id: `response:${++n}` });
 
 describe("stepGroups", () => {
   it("folds a finished turn's run into one row under its first step's id", () => {
@@ -107,6 +116,67 @@ describe("stepGroups", () => {
   });
 });
 
+describe("approvals", () => {
+  const marks = (rows: ReturnType<typeof stepGroups>) =>
+    rows.flatMap((row) => row.steps ?? [row]).map((row) => [row.title, row.approval ?? null]);
+
+  it("shows each granted permission on the call it was for, in the order the calls asked", () => {
+    // As Claude saves them: each answer after its call, two calls of one message answered in turn.
+    const rows = stepGroups(
+      [
+        message("user"),
+        command("node --test", { status: "failed" }),
+        permission(),
+        message("assistant"),
+        read("a.js"),
+        read("a.test.js"),
+        edit("a.js"),
+        command("node --test"),
+        permission(),
+        permission("Allow for this session"),
+        message("assistant"),
+      ],
+      null,
+    );
+    expect(rows.some((row) => row.title === "Permission")).toBe(false);
+    expect(rows.map((row) => row.kind)).toEqual(["user", "tool", "assistant", "tool", "assistant"]);
+    expect(marks(rows)).toEqual([
+      ["user", null],
+      ["Run command", "Allowed once"],
+      ["assistant", null],
+      ["Read file", null],
+      ["Read file", null],
+      ["Edit files", "Allowed once"],
+      ["Run command", "Allowed for this session"],
+      ["assistant", null],
+    ]);
+  });
+
+  it("gives an answer no earlier call could have asked for to the next step", () => {
+    const rows = stepGroups([read("a.ts"), permission(), read("b.ts"), command("ls")], null);
+    expect(rows).toHaveLength(1);
+    expect(marks(rows)).toEqual([
+      ["Read file", null],
+      ["Read file", "Allowed once"],
+      ["Run command", null],
+    ]);
+  });
+
+  it("keeps declined and cancelled answers, and answers in the turn in progress, as lines", () => {
+    const declined = permission("Decline");
+    const rows = stepGroups([command("a"), declined, command("b")], null);
+    expect(rows.map((row) => row.id)).toContain(declined.id);
+    const live = [command("a"), permission()];
+    expect(stepGroups(live, "turn")).toEqual(live);
+  });
+
+  it("does not let a granted permission split a run", () => {
+    const rows = stepGroups([command("a"), permission(), command("b"), permission()], null);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.steps?.map((step) => step.approval)).toEqual(["Allowed once", "Allowed once"]);
+  });
+});
+
 describe("stepSummary", () => {
   it("names each kind when there are up to three", () => {
     expect(stepSummary([command("a"), command("b")])).toBe("Ran 2 commands");
@@ -158,5 +228,55 @@ describe("step details", () => {
       presentation: { type: "shell", command: "x", cwd: "/repo", exitCode: 139 },
     });
     expect(firstErrorLine(crashed)).toBe("segfault");
+  });
+
+  it("prefers a test's assertion over the runner's totals", () => {
+    // node --test, as the daemon saved it from a Claude chat: exit code first, no folder.
+    const nodeTest = command("node --test math.test.js", {
+      status: "failed",
+      detail: [
+        "Exit code 1",
+        "✖ add adds two numbers (0.659916ms)",
+        "ℹ tests 1",
+        "ℹ pass 0",
+        "ℹ fail 1",
+        "",
+        "✖ failing tests:",
+        "",
+        "test at math.test.js:5:1",
+        "✖ add adds two numbers (0.659916ms)",
+        "  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:",
+        "  ",
+        "  -1 !== 5",
+        "      at TestContext.<anonymous> (/tmp/math.test.js:6:10)",
+      ].join("\n"),
+    });
+    expect(firstErrorLine(nodeTest)).toBe(
+      "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:",
+    );
+    const tap = command("node --test --test-reporter=tap", {
+      status: "failed",
+      detail: "# tests 1\n# fail 1\nnot ok 1 - add\n  error: 'Expected values to be equal'",
+    });
+    expect(firstErrorLine(tap)).toBe("error: 'Expected values to be equal'");
+    const build = command("pnpm build", {
+      status: "failed",
+      detail: "> build\nsrc/a.ts(3,1): error TS1005: ';' wanted.\nFound 1 error.",
+    });
+    expect(firstErrorLine(build)).toBe("src/a.ts(3,1): error TS1005: ';' wanted.");
+  });
+
+  it("reads a failed command's exit code from its output when the daemon gave none", () => {
+    expect(exitCode(command("x", { detail: "Exit code 1\nboom" }))).toBe(1);
+    expect(exitCode(command("x", { detail: "/repo\nboom\nExit code: 2" }))).toBe(2);
+    expect(
+      exitCode(command("x", { presentation: { type: "shell", command: "x", exitCode: 3 } })),
+    ).toBe(3);
+    expect(exitCode(command("x", { detail: "boom" }))).toBeUndefined();
+  });
+
+  it("shows a command's first line, marking that more follow", () => {
+    expect(commandLine("pnpm test")).toBe("pnpm test");
+    expect(commandLine("cat > a.js <<'EOF'\nconst a = 1;\nEOF")).toBe("cat > a.js <<'EOF' …");
   });
 });

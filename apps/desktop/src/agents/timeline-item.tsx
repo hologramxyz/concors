@@ -21,7 +21,15 @@ import { thinkingExpandable, thinkingPreview, thinkingText } from "./thinking";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import type { TimelineEntry } from "./thinking";
 import { commandSummary, toolDisplayName, toolSummary } from "./tool-label";
-import { diffStat, firstErrorLine, stepKind, stepSummary, type StepKind } from "./step-groups";
+import {
+  commandLine,
+  diffStat,
+  exitCode,
+  firstErrorLine,
+  stepKind,
+  stepSummary,
+  type StepKind,
+} from "./step-groups";
 
 /** Memoized: merges keep unchanged items' identity, so a streamed delta re-renders one row
  * instead of re-parsing every message's Markdown while the user scrolls. */
@@ -320,7 +328,8 @@ const STEP_VERBS: Record<StepKind, string> = {
 
 /** What a step acted on: the command as run, the file, the query, or the tool's name. */
 function stepTarget(item: AgentItem, kind: StepKind): string {
-  if (kind === "command") return commandSummary(item.presentation?.command ?? item.text);
+  if (kind === "command")
+    return commandLine(commandSummary(item.presentation?.command ?? item.text));
   if (kind === "read" || kind === "edit") {
     const files = item.presentation?.files ?? [];
     if (files.length > 1) return `${files[0]?.path} and ${files.length - 1} more`;
@@ -335,7 +344,7 @@ function stepTarget(item: AgentItem, kind: StepKind): string {
  * acted on in normal ink, and a chevron to today's details. A failed step also shows its exit
  * code and the line that says what went wrong, since it is shown outside any summary.
  */
-function StepRow({ item }: { item: AgentItem }) {
+function StepRow({ item }: { item: TimelineEntry }) {
   const [open, setOpen] = useState(false);
   const kind = stepKind(item) ?? "tool";
   const Icon = STEP_ICONS[kind];
@@ -351,7 +360,7 @@ function StepRow({ item }: { item: AgentItem }) {
           { added: 0, removed: 0 },
         )
       : null;
-  const exitCode = item.presentation?.exitCode;
+  const code = failed ? exitCode(item) : undefined;
   const error = failed ? firstErrorLine(item) : "";
   const extra = kind === "tool" ? toolSummary(item) : "";
   return (
@@ -373,6 +382,9 @@ function StepRow({ item }: { item: AgentItem }) {
           {stepTarget(item, kind)}
         </span>
         {extra && <span className="min-w-0 truncate text-muted-foreground">{extra}</span>}
+        {item.approval && (
+          <span className="shrink-0 text-xs text-muted-foreground">{item.approval}</span>
+        )}
         {stat && (stat.added > 0 || stat.removed > 0) && (
           <span className="shrink-0 text-xs tabular-nums">
             <span className="text-emerald-600">+{stat.added}</span>{" "}
@@ -381,7 +393,7 @@ function StepRow({ item }: { item: AgentItem }) {
         )}
         {failed && (
           <span className="shrink-0 text-xs text-destructive">
-            {typeof exitCode === "number" ? `Exit code ${exitCode}` : "Failed"}
+            {code === undefined ? "Failed" : `Exit code ${code}`}
           </span>
         )}
         {item.status === "interrupted" && (
@@ -410,7 +422,7 @@ function StepRow({ item }: { item: AgentItem }) {
  * Opening it lists each step under a thin rule, with the reasoning between them as it reads on
  * its own. It keeps its first step's id, so an opened group stays open as the chat updates.
  */
-function StepGroup({ item, steps }: { item: AgentItem; steps: AgentItem[] }) {
+function StepGroup({ item, steps }: { item: AgentItem; steps: TimelineEntry[] }) {
   const [open, setOpen] = useState(false);
   return (
     <article aria-label="Tool calls" data-tool-status={item.status} className="text-sm">
