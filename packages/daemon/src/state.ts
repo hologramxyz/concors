@@ -68,6 +68,7 @@ export class DaemonState {
       status: this.#status,
       capabilities: [
         "agent-schedules-v1",
+        "webhook-triggers-v1",
         SCHEDULE_FILES_CAPABILITY,
         SUPERVISOR_CAPABILITY,
         SUPERVISOR_BRIEFS_CAPABILITY,
