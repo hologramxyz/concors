@@ -6,6 +6,7 @@ import { completedTurnFooters } from "./duration";
 import { canFork, forkReplies, useForkChat } from "./fork";
 import { AgentComposer } from "./composer";
 import { TimelineItem } from "./timeline-item";
+import { stepGroups } from "./step-groups";
 import { useViewedAgent } from "@/notifications/context";
 import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
 import {
@@ -22,6 +23,7 @@ import { ArrowDown, ArrowUp, Bot, Brain, MessageSquare, Mic, Plus } from "lucide
 import {
   findAgentModel,
   type AgentInfo,
+  type AgentItem,
   type AgentOperation,
   type LayoutNode,
   type ProviderStatus,
@@ -503,10 +505,7 @@ export function Chat({
     ? undefined
     : conversation.items.findLast((item) => item.kind === "assistant")?.id;
   const forkChat = useForkChat();
-  const view = useMemo(
-    () => timelineView(conversation.items, footers.hidden),
-    [conversation.items, footers.hidden],
-  );
+  const view = useTimelineRows(conversation.items, footers.hidden, agent);
   const subAgentRows = useMemo(
     () => knownSubAgentRows(conversation.items, conversation.subAgents),
     [conversation.items, conversation.subAgents],
@@ -864,5 +863,28 @@ function HistoryError({ message, onRetry }: { message: string; onRetry: () => vo
         Retry loading messages
       </Button>
     </div>
+  );
+}
+
+/**
+ * What the timeline shows: `timelineView`, with each finished turn's quiet steps folded into
+ * summary lines. The turn in progress stays as it is, and so does a call an open request names.
+ */
+function useTimelineRows(
+  items: AgentItem[],
+  hidden: ReadonlySet<string>,
+  agent: AgentInfo | undefined,
+) {
+  const status = agent?.status;
+  const turnId = agent?.turnId ?? null;
+  const pending = agent?.pending;
+  return useMemo(
+    () =>
+      stepGroups(
+        timelineView(items, hidden),
+        status === "working" || status === "needs_input" ? turnId : null,
+        new Set(pending?.flatMap((p) => (p.sourceItemId ? [p.sourceItemId] : []))),
+      ),
+    [items, hidden, status, turnId, pending],
   );
 }

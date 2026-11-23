@@ -6,7 +6,7 @@ import { FileLinkContext } from "@/files/context";
 import { formatDuration } from "./duration";
 import { extractToolCallFilePath } from "./paseo/extract-tool-call-file-path";
 import { useState } from "react";
-import { ChevronRight, FileCode, GitFork, Terminal, Wrench, XCircle } from "lucide-react";
+import { Check, ChevronRight, FileCode, GitFork, Terminal, Wrench, XCircle } from "lucide-react";
 import { AgentMarkdown, CopyButton } from "./markdown";
 import { PlanProgress } from "./plan-progress";
 import { SubAgentCard } from "./sub-agent-card";
@@ -21,6 +21,7 @@ import { thinkingExpandable, thinkingPreview, thinkingText } from "./thinking";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import type { TimelineEntry } from "./thinking";
 import { commandSummary, toolDisplayName, toolSummary } from "./tool-label";
+import { diffStat, firstErrorLine, stepKind, stepSummary, type StepKind } from "./step-groups";
 
 /** Memoized: merges keep unchanged items' identity, so a streamed delta re-renders one row
  * instead of re-parsing every message's Markdown while the user scrolls. */
@@ -37,10 +38,11 @@ export const TimelineItem = memo(function TimelineItem({
   /** Set on a turn's last reply when the chat can be forked from there. */
   onFork?: ((turnId: string) => void) | undefined;
 }) {
-  const openFile = useContext(FileLinkContext);
   const [open, setOpen] = useState(false);
   const data = item.presentation;
   const running = live && item.status === "running";
+  if (item.steps) return <StepGroup item={item} steps={item.steps} />;
+  if (item.quiet) return <StepRow item={item} />;
   if (item.group) return <ToolGroup first={item} items={item.group} live={live} />;
   if (item.kind === "user" || item.kind === "assistant") {
     const message = item.kind === "user" ? splitSupervisorReferences(item.text) : null;
@@ -122,15 +124,7 @@ export const TimelineItem = memo(function TimelineItem({
         </span>
       </article>
     );
-  let detail: ToolCallDetail = { type: "unknown", input: item.text, output: item.detail };
-  if (data?.type === "shell")
-    detail = { type: "shell", command: data.command ?? item.text, output: item.detail };
-  if (data?.type === "files")
-    detail =
-      data.fileOperation === "read"
-        ? { type: "read", filePath: data.files?.[0]?.path ?? item.text, content: item.detail }
-        : { type: "edit", filePath: data.files?.[0]?.path ?? "Files", unifiedDiff: item.detail };
-  if (data?.type === "search") detail = { type: "search", query: item.text };
+  const detail = toolDetail(item);
   const display = buildToolCallDisplayModel({
     name: toolDisplayName(item.title),
     status:
@@ -158,7 +152,6 @@ export const TimelineItem = memo(function TimelineItem({
                 ? FileCode
                 : Wrench;
   const hasDetails = hasMeaningfulToolCallDetail(detail);
-  const filePath = extractToolCallFilePath(detail);
   return (
     <article
       data-tool-status={item.status}
@@ -201,88 +194,256 @@ export const TimelineItem = memo(function TimelineItem({
       </button>
       {open && (
         <div className="chat-scroll max-h-96 overflow-auto border-t p-4 text-ui leading-6">
-          <div className="mb-2 flex justify-end">
-            <CopyButton text={item.detail || item.text} label="Copy tool output" />
-          </div>
-          {filePath && (
-            <button
-              type="button"
-              className="mb-2 block max-w-full truncate font-mono text-muted-foreground hover:underline"
-              onClick={() => openFile?.(filePath)?.()}
-            >
-              {filePath}
-            </button>
-          )}
-          {data?.type === "files" && data.fileOperation === "read" ? (
-            <pre className="font-mono break-words whitespace-pre-wrap">
-              {item.detail || (running ? "Reading file…" : "No file content returned.")}
-            </pre>
-          ) : data?.type === "files" && data.files?.length ? (
-            data.files.map((file) => (
-              <div key={file.path} className="mb-3">
-                <div className="mb-2 flex items-center gap-2">
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 truncate text-left font-mono font-medium hover:underline"
-                    onClick={() => openFile?.(file.path)?.()}
-                  >
-                    {file.path}
-                  </button>
-                  <CopyButton label="Copy diff" text={file.diff} />
-                </div>
-                {!file.diff && (
-                  <pre className="font-mono break-words whitespace-pre-wrap">
-                    {item.detail || "No diff returned."}
-                  </pre>
-                )}
-                <pre className="overflow-x-auto font-mono">
-                  {file.diff.split("\n").map((line, i) => (
-                    <div
-                      key={i}
-                      className={
-                        line.startsWith("+")
-                          ? "bg-emerald-500/10 text-emerald-600"
-                          : line.startsWith("-")
-                            ? "bg-red-500/10 text-red-500"
-                            : ""
-                      }
-                    >
-                      {line || " "}
-                    </div>
-                  ))}
-                </pre>
-              </div>
-            ))
-          ) : data?.type === "mcp" ? (
-            <div className="space-y-4">
-              <section>
-                <h4 className="mb-1 font-medium">Input</h4>
-                <pre className="break-words whitespace-pre-wrap">
-                  {data.input || "No arguments"}
-                </pre>
-              </section>
-              <section>
-                <h4 className="mb-1 font-medium">
-                  {item.status === "failed" ? "Error" : "Result"}
-                </h4>
-                <pre className="break-words whitespace-pre-wrap">
-                  {data.output || (running ? "Waiting for result…" : "No output")}
-                </pre>
-              </section>
-            </div>
-          ) : (
-            <pre className="font-mono break-words whitespace-pre-wrap">
-              {item.detail || item.text || "Waiting for tool output…"}
-            </pre>
-          )}
-          {data?.type === "shell" && data.exitCode !== null && data.exitCode !== undefined && (
-            <p className="mt-2 text-muted-foreground">Exit code {data.exitCode}</p>
-          )}
+          <ToolOutput item={item} running={running} />
         </div>
       )}
     </article>
   );
 });
+
+/** What a tool call ran on, in the shape the shared display helpers read. */
+function toolDetail(item: AgentItem): ToolCallDetail {
+  const data = item.presentation;
+  if (data?.type === "shell")
+    return { type: "shell", command: data.command ?? item.text, output: item.detail };
+  if (data?.type === "files")
+    return data.fileOperation === "read"
+      ? { type: "read", filePath: data.files?.[0]?.path ?? item.text, content: item.detail }
+      : { type: "edit", filePath: data.files?.[0]?.path ?? "Files", unifiedDiff: item.detail };
+  if (data?.type === "search") return { type: "search", query: item.text };
+  return { type: "unknown", input: item.text, output: item.detail };
+}
+
+/** A tool call's opened details: its output, diff or arguments, with a way to copy them. */
+function ToolOutput({ item, running }: { item: AgentItem; running: boolean }) {
+  const openFile = useContext(FileLinkContext);
+  const data = item.presentation;
+  const filePath = extractToolCallFilePath(toolDetail(item));
+  return (
+    <>
+      <div className="mb-2 flex justify-end">
+        <CopyButton text={item.detail || item.text} label="Copy tool output" />
+      </div>
+      {filePath && (
+        <button
+          type="button"
+          className="mb-2 block max-w-full truncate font-mono text-muted-foreground hover:underline"
+          onClick={() => openFile?.(filePath)?.()}
+        >
+          {filePath}
+        </button>
+      )}
+      {data?.type === "files" && data.fileOperation === "read" ? (
+        <pre className="font-mono break-words whitespace-pre-wrap">
+          {item.detail || (running ? "Reading file…" : "No file content returned.")}
+        </pre>
+      ) : data?.type === "files" && data.files?.length ? (
+        data.files.map((file) => (
+          <div key={file.path} className="mb-3">
+            <div className="mb-2 flex items-center gap-2">
+              <button
+                type="button"
+                className="min-w-0 flex-1 truncate text-left font-mono font-medium hover:underline"
+                onClick={() => openFile?.(file.path)?.()}
+              >
+                {file.path}
+              </button>
+              <CopyButton label="Copy diff" text={file.diff} />
+            </div>
+            {!file.diff && (
+              <pre className="font-mono break-words whitespace-pre-wrap">
+                {item.detail || "No diff returned."}
+              </pre>
+            )}
+            <pre className="overflow-x-auto font-mono">
+              {file.diff.split("\n").map((line, i) => (
+                <div
+                  key={i}
+                  className={
+                    line.startsWith("+")
+                      ? "bg-emerald-500/10 text-emerald-600"
+                      : line.startsWith("-")
+                        ? "bg-red-500/10 text-red-500"
+                        : ""
+                  }
+                >
+                  {line || " "}
+                </div>
+              ))}
+            </pre>
+          </div>
+        ))
+      ) : data?.type === "mcp" ? (
+        <div className="space-y-4">
+          <section>
+            <h4 className="mb-1 font-medium">Input</h4>
+            <pre className="break-words whitespace-pre-wrap">{data.input || "No arguments"}</pre>
+          </section>
+          <section>
+            <h4 className="mb-1 font-medium">{item.status === "failed" ? "Error" : "Result"}</h4>
+            <pre className="break-words whitespace-pre-wrap">
+              {data.output || (running ? "Waiting for result…" : "No output")}
+            </pre>
+          </section>
+        </div>
+      ) : (
+        <pre className="font-mono break-words whitespace-pre-wrap">
+          {item.detail || item.text || "Waiting for tool output…"}
+        </pre>
+      )}
+      {data?.type === "shell" && data.exitCode !== null && data.exitCode !== undefined && (
+        <p className="mt-2 text-muted-foreground">Exit code {data.exitCode}</p>
+      )}
+    </>
+  );
+}
+
+const STEP_ICONS: Record<StepKind, typeof Terminal> = {
+  tool: Wrench,
+  command: Terminal,
+  read: Eye,
+  edit: Pencil,
+  search: Search,
+  web: Globe,
+  thinking: Brain,
+};
+
+const STEP_VERBS: Record<StepKind, string> = {
+  tool: "Used",
+  command: "Ran",
+  read: "Read",
+  edit: "Edited",
+  search: "Searched for",
+  web: "Searched the web for",
+  thinking: "Thought",
+};
+
+/** What a step acted on: the command as run, the file, the query, or the tool's name. */
+function stepTarget(item: AgentItem, kind: StepKind): string {
+  if (kind === "command") return commandSummary(item.presentation?.command ?? item.text);
+  if (kind === "read" || kind === "edit") {
+    const files = item.presentation?.files ?? [];
+    if (files.length > 1) return `${files[0]?.path} and ${files.length - 1} more`;
+    return files[0]?.path ?? item.text;
+  }
+  if (kind === "tool") return toolDisplayName(item.title);
+  return item.text;
+}
+
+/**
+ * One step of a finished turn as a line of text, not a card: icon and verb in muted ink, what it
+ * acted on in normal ink, and a chevron to today's details. A failed step also shows its exit
+ * code and the line that says what went wrong, since it is shown outside any summary.
+ */
+function StepRow({ item }: { item: AgentItem }) {
+  const [open, setOpen] = useState(false);
+  const kind = stepKind(item) ?? "tool";
+  const Icon = STEP_ICONS[kind];
+  const failed = item.status === "failed";
+  const hasDetails = hasMeaningfulToolCallDetail(toolDetail(item));
+  const stat =
+    kind === "edit"
+      ? (item.presentation?.files ?? []).reduce(
+          (sum, file) => {
+            const { added, removed } = diffStat(file.diff);
+            return { added: sum.added + added, removed: sum.removed + removed };
+          },
+          { added: 0, removed: 0 },
+        )
+      : null;
+  const exitCode = item.presentation?.exitCode;
+  const error = failed ? firstErrorLine(item) : "";
+  const extra = kind === "tool" ? toolSummary(item) : "";
+  return (
+    <article aria-label="Tool call" data-tool-status={item.status} className="text-sm">
+      <button
+        type="button"
+        disabled={!hasDetails}
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={hasDetails ? open : undefined}
+        className="flex w-full min-w-0 items-center gap-2 py-0.5 text-left"
+      >
+        {failed ? (
+          <XCircle className="size-3.5 shrink-0 text-destructive" />
+        ) : (
+          <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+        )}
+        <span className="shrink-0 text-muted-foreground">{STEP_VERBS[kind]}</span>
+        <span className={`min-w-0 truncate ${kind === "command" ? "font-mono text-ui" : ""}`}>
+          {stepTarget(item, kind)}
+        </span>
+        {extra && <span className="min-w-0 truncate text-muted-foreground">{extra}</span>}
+        {stat && (stat.added > 0 || stat.removed > 0) && (
+          <span className="shrink-0 text-xs tabular-nums">
+            <span className="text-emerald-600">+{stat.added}</span>{" "}
+            <span className="text-red-500">−{stat.removed}</span>
+          </span>
+        )}
+        {failed && (
+          <span className="shrink-0 text-xs text-destructive">
+            {typeof exitCode === "number" ? `Exit code ${exitCode}` : "Failed"}
+          </span>
+        )}
+        {item.status === "interrupted" && (
+          <span className="shrink-0 text-xs text-muted-foreground">Stopped</span>
+        )}
+        {hasDetails && (
+          <ChevronRight
+            className={`size-3 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+          />
+        )}
+      </button>
+      {error && (
+        <p className="ml-[22px] truncate font-mono text-xs text-muted-foreground">{error}</p>
+      )}
+      {open && (
+        <div className="chat-scroll mt-1 mb-2 max-h-96 overflow-auto rounded-lg border p-4 text-ui leading-6">
+          <ToolOutput item={item} running={false} />
+        </div>
+      )}
+    </article>
+  );
+}
+
+/**
+ * A finished turn's run of quiet steps as one muted line: "Ran 2 commands and edited 1 file".
+ * Opening it lists each step under a thin rule, with the reasoning between them as it reads on
+ * its own. It keeps its first step's id, so an opened group stays open as the chat updates.
+ */
+function StepGroup({ item, steps }: { item: AgentItem; steps: AgentItem[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <article aria-label="Tool calls" data-tool-status={item.status} className="text-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex max-w-full items-center gap-2 py-0.5 text-left text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <span className="min-w-0 truncate">{stepSummary(steps)}</span>
+        {item.status === "interrupted" ? (
+          <span className="shrink-0 text-xs">Stopped</span>
+        ) : (
+          <Check className="size-3.5 shrink-0" aria-label="Done" />
+        )}
+        <ChevronRight
+          className={`size-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+        />
+      </button>
+      {open && (
+        <div className="mt-1 ml-[7px] space-y-1 border-l pl-4">
+          {steps.map((step) =>
+            stepKind(step) === "thinking" ? (
+              <Thinking key={step.id} item={step} running={false} />
+            ) : (
+              <StepRow key={step.id} item={step} />
+            ),
+          )}
+        </div>
+      )}
+    </article>
+  );
+}
 
 /**
  * A run of the same tool called back to back, as one row: its name, how many calls, and the
