@@ -14,6 +14,7 @@ export class TriggerStore {
     this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS triggers (id TEXT PRIMARY KEY, value TEXT NOT NULL, hash TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS receipts (id TEXT PRIMARY KEY, request TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS pending (event_id TEXT PRIMARY KEY, trigger_id TEXT NOT NULL, session_id TEXT NOT NULL, text TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS keys (trigger_id TEXT NOT NULL, key TEXT NOT NULL, received_at TEXT NOT NULL, event_id TEXT NOT NULL, PRIMARY KEY(trigger_id,key));`);
   }
   list(): AgentTrigger[] {
@@ -39,6 +40,7 @@ export class TriggerStore {
       string | undefined;
   }
   remove(id: string) {
+    this.db.prepare("DELETE FROM pending WHERE trigger_id=?").run(id);
     this.db.prepare("DELETE FROM triggers WHERE id=?").run(id);
     this.db.prepare("DELETE FROM keys WHERE trigger_id=?").run(id);
   }
@@ -81,6 +83,23 @@ export class TriggerStore {
         .all(id)
         .map((r) => String(r.event_id)),
     );
+  }
+  defer(triggerId: string, eventId: string, sessionId: string, text: string) {
+    this.db.prepare("INSERT INTO pending VALUES(?,?,?,?)").run(eventId, triggerId, sessionId, text);
+  }
+  pending(sessionId?: string) {
+    const rows = sessionId
+      ? this.db.prepare("SELECT * FROM pending WHERE session_id=? ORDER BY rowid").all(sessionId)
+      : this.db.prepare("SELECT * FROM pending ORDER BY rowid").all();
+    return rows.map((row) => ({
+      eventId: String(row.event_id),
+      triggerId: String(row.trigger_id),
+      sessionId: String(row.session_id),
+      text: String(row.text),
+    }));
+  }
+  removePending(eventId: string) {
+    this.db.prepare("DELETE FROM pending WHERE event_id=?").run(eventId);
   }
   transaction<T>(fn: () => T): T {
     this.db.exec("BEGIN IMMEDIATE");

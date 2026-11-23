@@ -248,13 +248,14 @@ export const AgentInfoSchema = z.object({
     .array(
       z.object({
         id: Id,
-        text: z.string().max(100000),
+        text: z.string().max(16000),
         attachments: z
           .array(z.object({ name: z.string(), mime: z.string() }))
           .max(MAX_MESSAGE_ATTACHMENTS),
         queuedAt: z.string().datetime(),
       }),
     )
+    .max(20)
     .optional(),
   queuePaused: z.boolean().optional(),
   historyRevision: z.number().int().nonnegative().optional(),

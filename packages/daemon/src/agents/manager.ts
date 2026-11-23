@@ -1668,10 +1668,18 @@ export class AgentManager {
         if (!runtime) throw new Error("Agent disconnected. The follow-up stays queued.");
         this.draining.add(info.id);
         try {
-          await this.steer(info, runtime, op.turnId, request.requestId, entry.text, files, {
-            remove: op.id,
-            request,
-          });
+          await this.steer(
+            info,
+            runtime,
+            op.turnId,
+            request.requestId,
+            queued?.kind === "send" ? queued.text : entry.text,
+            files,
+            {
+              remove: op.id,
+              request,
+            },
+          );
         } finally {
           this.draining.delete(info.id);
           queueMicrotask(() => {
@@ -1685,13 +1693,12 @@ export class AgentManager {
           paused = info.queuePaused ?? false;
         let delivery: AgentRequest | undefined;
         if (op.kind === "queue-add") {
-          if (queue.length >= 20 && owner !== "webhook")
-            throw new Error("Queue up to 20 follow-ups per agent.");
+          if (queue.length >= 20) throw new Error("Queue up to 20 follow-ups per agent.");
           queue = [
             ...queue,
             {
               id: request.requestId,
-              text: op.text,
+              text: op.text.slice(0, 16000),
               attachments: messageFiles(op).map((a) => ({ name: a.name, mime: a.mime })),
               queuedAt: new Date().toISOString(),
             },

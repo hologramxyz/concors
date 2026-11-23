@@ -50,7 +50,10 @@ daemon-only trigger/event metadata. Inspect `trigger.list` for the latest 50 eve
   return `200` with the original event ID and current result; a changed body does not run again.
 - Unknown IDs and incorrect secrets both return `401`; disabled triggers return `409`.
 - An uncertain in-flight delivery after restart becomes failed and is not replayed. Already
-  persisted agent-queue entries remain in the chat queue.
+  persisted agent-queue entries remain in the chat queue. The visible queue stays within the
+  existing 20-follow-up limit; additional webhook events wait durably in the trigger store and
+  enter the chat queue as space becomes available, including after restart. Queue previews are
+  bounded to 16,000 characters; delivery and steering retain the complete webhook prompt.
 
 The URL alone is not a credential. Treat its bearer secret like a password; rotation immediately
 invalidates the old secret. TLS terminates at the managed gateway, which forwards only hook

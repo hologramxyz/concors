@@ -1,9 +1,22 @@
 import { expect, it } from "vitest";
-import { AgentRequestSchema } from "./agents.ts";
+import { AgentInfoSchema, AgentRequestSchema } from "./agents.ts";
 import { TriggerDefinitionSchema } from "./triggers.ts";
 
 let ids = 0;
 const randomUUID = () => `00000000-0000-4000-8000-${String(++ids).padStart(12, "0")}`;
+
+it("keeps queue snapshots within the bounds understood by existing v1 clients", () => {
+  const entry = {
+    id: randomUUID(),
+    text: "x".repeat(16000),
+    attachments: [],
+    queuedAt: "2026-11-23T00:00:00.000Z",
+  };
+  const queue = AgentInfoSchema.shape.queue;
+  expect(queue.safeParse(Array.from({ length: 20 }, () => entry)).success).toBe(true);
+  expect(queue.safeParse(Array.from({ length: 21 }, () => entry)).success).toBe(false);
+  expect(queue.safeParse([{ ...entry, text: "x".repeat(16001) }]).success).toBe(false);
+});
 
 it("accepts empty instructions but rejects slash commands and new Supervisor chats", () => {
   const definition = {

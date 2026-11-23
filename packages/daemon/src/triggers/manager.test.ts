@@ -33,7 +33,7 @@ async function setup(mode: "same" | "new" = "same") {
     (_cwd, handler, id) => new TestAgentProvider(handler, id),
     registry,
   );
-  const store = new TriggerStore(join(directory, "triggers.sqlite"));
+  let store = new TriggerStore(join(directory, "triggers.sqlite"));
   manager = new TriggerManager(store, workspace, agents, registry, () => undefined);
   agents.triggerLabel = (id) => manager.label(id);
   const projectId = randomUUID();
@@ -76,8 +76,17 @@ async function setup(mode: "same" | "new" = "same") {
     return manager.list()[0]!.events.find((e) => e.id === eventId)!;
   };
   return {
-    manager,
-    store,
+    get manager() {
+      return manager;
+    },
+    get store() {
+      return store;
+    },
+    restartTriggers: async () => {
+      await manager.close();
+      store = new TriggerStore(join(directory, "triggers.sqlite"));
+      manager = new TriggerManager(store, workspace, agents, registry, () => undefined);
+    },
     workspace,
     agents,
     app,
@@ -144,12 +153,19 @@ it("does not retain an uncreated chat when the workspace closes before first del
   const f = await setup();
   const projectId = f.definition.projectId!;
   const execute = (kind: "project.close" | "project.reopen") => {
-    const project = f.workspace.snapshot().projects.find((p) => p.id === projectId)!;
     return f.workspace.execute({
       type: "workspace.command",
       commandId: randomUUID(),
       epoch: f.workspace.snapshot().epoch,
-      operation: { kind, projectId, expectedVersion: project.version },
+      operation:
+        kind === "project.reopen"
+          ? { kind, projectId }
+          : {
+              kind,
+              projectId,
+              expectedVersion: f.workspace.snapshot().projects.find((p) => p.id === projectId)!
+                .version,
+            },
     });
   };
   execute("project.close");
@@ -187,7 +203,11 @@ it("waits for provider acceptance and records a rejected prompt as failed", asyn
   const f = await setup();
   const original = TestAgentProvider.prototype.request;
   let reject: ((error: Error) => void) | undefined;
-  vi.spyOn(TestAgentProvider.prototype, "request").mockImplementation(function (method, params) {
+  vi.spyOn(TestAgentProvider.prototype, "request").mockImplementation(function (
+    this: TestAgentProvider,
+    method,
+    params,
+  ) {
     if (method === "turn/start")
       return new Promise((_resolve, fail) => {
         reject = fail;
@@ -224,7 +244,10 @@ it("queues a busy session and retains bodies larger than normal client messages"
   expect(event.status).toBe("queued");
   const queued = f.workspace.agent(info.id).queue!;
   expect(queued).toHaveLength(1);
-  expect(queued[0]!.text).toContain("a".repeat(64000));
+  expect(queued[0]!.text).toHaveLength(16000);
+  expect(f.workspace.queuedRequest(event.id, info.id)?.operation).toMatchObject({
+    text: expect.stringContaining("a".repeat(64000)),
+  });
   expect(
     f.request({ kind: "delete", id: f.id, expectedRevision: f.manager.list()[0]!.revision })
       .outcome,
@@ -246,6 +269,7 @@ it("queues a busy session and retains bodies larger than normal client messages"
     f.workspace.agentTurnItems(info.id, current.turnId!).find((i) => i.kind === "user")?.trigger
       ?.eventId,
   ).toBe(event.id);
+  expect(f.workspace.triggerPrompt(info.id, event.id)?.text).toContain("a".repeat(64000));
 });
 
 it("preserves webhook metadata when a queued event steers a working turn", async () => {
@@ -259,7 +283,7 @@ it("preserves webhook metadata when a queued event steers a working turn", async
     operation: { kind: "send", sessionId, text: "hold this turn" },
   });
   await expect.poll(() => f.workspace.agent(sessionId).turnId?.startsWith("turn-")).toBe(true);
-  const event = await f.settled(f.accept().event.id);
+  const event = await f.settled(f.accept(undefined, "x".repeat(64000)).event.id);
   expect(event.status).toBe("queued");
   const result = await f.agents.request({
     type: "agent.request",
@@ -279,6 +303,7 @@ it("preserves webhook metadata when a queued event steers a working turn", async
     eventId: event.id,
     source: "stream",
   });
+  expect(f.workspace.triggerPrompt(sessionId, event.id)?.text).toContain("x".repeat(64000));
 });
 
 it("rotates secrets, checks revisions and never keeps plaintext secrets in receipts", async () => {
@@ -308,8 +333,29 @@ it("queues beyond the interactive follow-up limit without dropping accepted even
   f.workspace.saveAgent({ ...f.workspace.agent(first.sessionId!), status: "needs_input" });
   const events = Array.from({ length: 22 }, (_, i) => f.accept(`queue-${i}`).event);
   await f.settled(events.at(-1)!.id);
-  expect(f.workspace.agent(first.sessionId!).queue).toHaveLength(22);
+  expect(f.workspace.agent(first.sessionId!).queue).toHaveLength(20);
+  expect(f.store.pending(first.sessionId!)).toHaveLength(2);
   expect(f.manager.list()[0]!.events.filter((e) => e.status === "queued")).toHaveLength(22);
+  await f.restartTriggers();
+  expect(f.store.pending(first.sessionId!)).toHaveLength(2);
+  f.workspace.saveAgent({ ...f.workspace.agent(first.sessionId!), status: "idle" });
+  await f.agents.request({
+    type: "agent.request",
+    requestId: randomUUID(),
+    operation: { kind: "queue-pause", sessionId: first.sessionId!, paused: false },
+  });
+  await expect
+    .poll(
+      () =>
+        f.manager
+          .list()[0]!
+          .events.filter(
+            (e) => events.some((original) => original.id === e.id) && e.status === "delivered",
+          ).length,
+    )
+    .toBe(22);
+  expect(f.store.pending(first.sessionId!)).toHaveLength(0);
+  expect(f.workspace.agent(first.sessionId!).queue).toHaveLength(0);
 });
 
 it("copies the provider and model of a session target into new chats", async () => {
@@ -320,6 +366,7 @@ it("copies the provider and model of a session target into new chats", async () 
     ...source,
     settings: { model: "selected-model", effort: null, mode: "default" },
   });
+  const start = vi.spyOn(f.agents, "startScheduled");
   const current = f.manager.list()[0]!;
   expect(
     f.request({
@@ -338,8 +385,13 @@ it("copies the provider and model of a session target into new chats", async () 
   expect(second.sessionId).not.toBe(first.sessionId);
   expect(f.workspace.agent(second.sessionId!)).toMatchObject({
     provider: "codex",
-    model: "selected-model",
   });
+  expect(start).toHaveBeenCalledWith(
+    second.sessionId,
+    f.definition.projectId,
+    "codex",
+    "selected-model",
+  );
   expect(f.manager.list()[0]!.sessionId).toBeNull();
 });
 

@@ -41,6 +41,7 @@ export class TriggerHttpError extends Error {
 export class TriggerManager {
   private closed = false;
   private jobs = new Map<string, Promise<void>>();
+  private pumps = new Map<string, Promise<void>>();
   private readonly store: TriggerStore;
   private readonly workspace: WorkspaceStore;
   private readonly agents: Pick<AgentManager, "request" | "startScheduled">;
@@ -92,6 +93,11 @@ export class TriggerManager {
         }
       this.save(t);
     }
+    queueMicrotask(() => {
+      if (!this.closed)
+        for (const sessionId of new Set(this.store.pending().map((p) => p.sessionId)))
+          this.pump(sessionId);
+    });
   }
   list() {
     return this.store.list().map((t) => ({ ...t, events: t.events.slice(0, 50) }));
@@ -333,21 +339,29 @@ export class TriggerManager {
         info = this.workspace.agent(sessionId);
       }
       if (this.closed) throw new Error("Machine is shutting down");
-      const queued = busy(info);
+      const queued = busy(info) || this.store.pending(sessionId).length > 0;
+      const text = webhookPrompt(t.prompt, event.source, body);
+      if (queued) {
+        this.store.transaction(() => {
+          this.store.defer(id, eventId, sessionId, text);
+          this.patch(id, eventId, { status: "queued" });
+        });
+        await this.pump(sessionId);
+        return;
+      }
       const result = await this.agents.request(
         {
           type: "agent.request",
           requestId: eventId,
           operation: {
-            kind: queued ? "queue-add" : "send",
+            kind: "send",
             sessionId,
-            text: webhookPrompt(t.prompt, event.source, body),
+            text,
           },
         },
         "webhook",
       );
       if (result.outcome.status === "error") throw new Error(result.outcome.message);
-      if (queued) this.patch(id, eventId, { status: "queued" });
       this.observe(this.workspace.agent(sessionId));
     } catch (error) {
       this.patch(id, eventId, {
@@ -356,11 +370,60 @@ export class TriggerManager {
       });
     }
   }
+  private pump(sessionId: string): Promise<void> {
+    const pending = this.pumps.get(sessionId);
+    if (pending) return pending;
+    const job = this.feed(sessionId)
+      .catch((error: unknown) => {
+        if (this.closed) return;
+        for (const pending of this.store.pending(sessionId)) {
+          this.store.removePending(pending.eventId);
+          this.patch(pending.triggerId, pending.eventId, {
+            status: "failed",
+            message: (error instanceof Error ? error.message : "Delivery failed").slice(0, 1000),
+          });
+        }
+      })
+      .finally(() => this.pumps.delete(sessionId));
+    this.pumps.set(sessionId, job);
+    return job;
+  }
+  private async feed(sessionId: string) {
+    while (!this.closed) {
+      const pending = this.store.pending(sessionId)[0];
+      if (!pending) return;
+      const info = this.workspace.agent(sessionId);
+      if (
+        !info.queue?.some((q) => q.id === pending.eventId) &&
+        !this.workspace.triggerPrompt(sessionId, pending.eventId)
+      ) {
+        if ((info.queue?.length ?? 0) >= 20) return;
+        const result = await this.agents.request(
+          {
+            type: "agent.request",
+            requestId: pending.eventId,
+            operation: { kind: "queue-add", sessionId, text: pending.text },
+          },
+          "webhook",
+        );
+        if (result.outcome.status === "error") {
+          this.patch(pending.triggerId, pending.eventId, {
+            message: result.outcome.message.slice(0, 1000),
+          });
+          return;
+        }
+      }
+      this.store.removePending(pending.eventId);
+      this.observe(this.workspace.agent(sessionId));
+    }
+  }
   observe(agent: AgentInfo) {
     if (this.closed) return;
+    const deferred = new Set(this.store.pending(agent.id).map((p) => p.eventId));
     for (const t of this.all())
       for (const e of t.events) {
         if (!["queued", "received"].includes(e.status) || e.sessionId !== agent.id) continue;
+        if (deferred.has(e.id)) continue;
         if (this.workspace.agent(agent.id).queue?.some((q) => q.id === e.id)) continue;
         const prompt = this.workspace.triggerPrompt(agent.id, e.id);
         if (
@@ -379,11 +442,13 @@ export class TriggerManager {
               : "Queued event was removed",
         });
       }
+    if (deferred.size) void this.pump(agent.id);
   }
   async close() {
     if (this.closed) return;
     this.closed = true;
     await Promise.allSettled(this.jobs.values());
+    await Promise.allSettled(this.pumps.values());
     this.store.close();
   }
 }
