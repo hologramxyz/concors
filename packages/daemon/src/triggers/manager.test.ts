@@ -199,6 +199,54 @@ it("allows disabling and deleting a trigger after its target workspace closes", 
   ).toBe("ok");
 });
 
+it("does not bind an old first chat after a disabled trigger is retargeted during startup", async () => {
+  const f = await setup();
+  const original = f.agents.startScheduled.bind(f.agents);
+  let release: (() => void) | undefined;
+  const waiting = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const start = vi.spyOn(f.agents, "startScheduled").mockImplementationOnce(async (...args) => {
+    await waiting;
+    return original(...args);
+  });
+  const event = f.accept().event;
+  await expect.poll(() => start.mock.calls.length).toBe(1);
+  const edited = {
+    ...f.definition,
+    target: { kind: "agent" as const, provider: "codex", model: "changed-model" },
+    enabled: false,
+  };
+  expect(
+    f.request({
+      kind: "update",
+      id: f.id,
+      expectedRevision: f.manager.list()[0]!.revision,
+      trigger: edited,
+    }).outcome.status,
+  ).toBe("ok");
+  release?.();
+  const first = await f.settled(event.id);
+  expect(first.status).toBe("delivered");
+  expect(f.manager.list()[0]).toMatchObject({
+    sessionId: null,
+    target: edited.target,
+    enabled: false,
+  });
+  expect(
+    f.request({
+      kind: "update",
+      id: f.id,
+      expectedRevision: f.manager.list()[0]!.revision,
+      trigger: { ...edited, enabled: true },
+    }).outcome.status,
+  ).toBe("ok");
+  const second = await f.settled(f.accept().event.id);
+  expect(second.status).toBe("delivered");
+  expect(second.sessionId).not.toBe(first.sessionId);
+  expect(f.manager.list()[0]!.sessionId).toBe(second.sessionId);
+});
+
 it("waits for provider acceptance and records a rejected prompt as failed", async () => {
   const f = await setup();
   const original = TestAgentProvider.prototype.request;

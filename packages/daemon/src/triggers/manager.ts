@@ -298,10 +298,22 @@ export class TriggerManager {
     this.jobs.set(id, job);
     return { duplicate: false, event };
   }
-  private patch(id: string, eventId: string, patch: Partial<TriggerEvent>, sessionId?: string) {
+  private patch(
+    id: string,
+    eventId: string,
+    patch: Partial<TriggerEvent>,
+    binding?: { sessionId: string; definition: TriggerDefinition },
+  ) {
     const t = this.all().find((t) => t.id === id);
     if (!t) return;
-    if (sessionId && t.mode === "same") t.sessionId = sessionId;
+    if (
+      binding &&
+      t.mode === "same" &&
+      t.projectId === binding.definition.projectId &&
+      t.mode === binding.definition.mode &&
+      JSON.stringify(t.target) === JSON.stringify(binding.definition.target)
+    )
+      t.sessionId = binding.sessionId;
     t.events = t.events.map((e) => (e.id === eventId ? { ...e, ...patch } : e));
     this.save(t);
     this.publish();
@@ -332,7 +344,7 @@ export class TriggerManager {
           "settings" in target ? (target.settings?.model ?? target.model) : target.model;
         await this.agents.startScheduled(sessionId, t.projectId, target.provider, model);
       }
-      this.patch(id, eventId, { sessionId }, sessionId);
+      this.patch(id, eventId, { sessionId }, { sessionId, definition: t });
       let info = this.workspace.agent(sessionId);
       if (!busy(info) && !info.supervisor) {
         await this.agents.startScheduled(sessionId, info.projectId, info.provider, info.model);
