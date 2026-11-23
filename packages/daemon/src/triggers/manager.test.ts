@@ -101,6 +101,39 @@ async function setup(mode: "same" | "new" = "same") {
   };
 }
 
+it("fails a queued event lost between queue removal and provider acceptance on restart", async () => {
+  const f = await setup();
+  const first = await f.settled(f.accept().event.id);
+  const sessionId = first.sessionId!;
+  await expect.poll(() => f.workspace.agent(sessionId).status).toBe("done");
+  f.workspace.saveAgent({ ...f.workspace.agent(sessionId), status: "needs_input" });
+  const event = await f.settled(f.accept("lost-queued-event").event.id);
+  expect(event.status).toBe("queued");
+  expect(f.workspace.agent(sessionId).queue?.some((entry) => entry.id === event.id)).toBe(true);
+  f.workspace.reserveAgentAction(
+    {
+      type: "agent.request",
+      requestId: randomUUID(),
+      operation: { kind: "queue-remove", sessionId, id: event.id },
+    },
+    { ...f.workspace.agent(sessionId), queue: [] },
+    { remove: event.id },
+  );
+  expect(f.store.list()[0]!.events.find((e) => e.id === event.id)?.status).toBe("queued");
+  const request = vi.spyOn(f.agents, "request");
+  await f.restartTriggers();
+  expect(f.manager.list()[0]!.events.find((e) => e.id === event.id)).toMatchObject({
+    status: "failed",
+    message: expect.stringContaining("Queued delivery could not be confirmed"),
+  });
+  expect(f.accept("lost-queued-event").event).toMatchObject({ id: event.id, status: "failed" });
+  expect(request).not.toHaveBeenCalled();
+  expect(
+    f.request({ kind: "delete", id: f.id, expectedRevision: f.manager.list()[0]!.revision }).outcome
+      .status,
+  ).toBe("ok");
+});
+
 it("authenticates before parsing JSON webhook bodies", async () => {
   const f = await setup();
   await f.app.ready();

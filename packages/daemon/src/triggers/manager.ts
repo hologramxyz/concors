@@ -85,11 +85,23 @@ export class TriggerManager {
       }
       this.publish();
     };
+    const deferred = new Set(this.store.pending().map((pending) => pending.eventId));
+    const queues = new Map(
+      workspace.agents().map((agent) => [agent.id, new Set(agent.queue?.map((entry) => entry.id))]),
+    );
     for (const t of this.all()) {
       for (const e of t.events)
-        if (e.status === "received") {
+        if (
+          e.status === "received" ||
+          (e.status === "queued" &&
+            !deferred.has(e.id) &&
+            !queues.get(e.sessionId ?? "")?.has(e.id))
+        ) {
+          const queued = e.status === "queued";
           e.status = "failed";
-          e.message = "Machine restarted. This event was not resent.";
+          e.message = queued
+            ? "Machine restarted. Queued delivery could not be confirmed; this event was not resent."
+            : "Machine restarted. This event was not resent.";
         }
       this.save(t);
     }
