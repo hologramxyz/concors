@@ -156,6 +156,30 @@ it("does not retain an uncreated chat when the workspace closes before first del
   expect((await f.settled(f.accept().event.id)).status).toBe("delivered");
 });
 
+it("allows disabling and deleting a trigger after its target workspace closes", async () => {
+  const f = await setup();
+  const project = f.workspace.snapshot().projects[0]!;
+  f.workspace.execute({
+    type: "workspace.command",
+    commandId: randomUUID(),
+    epoch: f.workspace.snapshot().epoch,
+    operation: { kind: "project.close", projectId: project.id, expectedVersion: project.version },
+  });
+  expect(
+    f.request({
+      kind: "update",
+      id: f.id,
+      expectedRevision: f.manager.list()[0]!.revision,
+      trigger: { ...f.definition, enabled: false },
+    }).outcome.status,
+  ).toBe("ok");
+  expect(() => f.accept()).toThrow("Trigger is disabled");
+  expect(
+    f.request({ kind: "delete", id: f.id, expectedRevision: f.manager.list()[0]!.revision }).outcome
+      .status,
+  ).toBe("ok");
+});
+
 it("creates a fresh session for every new-mode event", async () => {
   const f = await setup("new");
   const first = await f.settled(f.accept().event.id);

@@ -175,7 +175,11 @@ export class TriggerManager {
           if (!t) throw new Error("Trigger no longer exists");
           if (op.expectedRevision !== t.revision)
             throw new Error("Trigger changed. Review the latest version and try again.");
-          if (this.jobs.has(t.id) && op.kind !== "rotate")
+          if (
+            this.jobs.has(t.id) &&
+            op.kind !== "rotate" &&
+            !(op.kind === "update" && !op.trigger.enabled)
+          )
             throw new Error("Wait for pending delivery before changing this trigger");
           if (op.kind === "delete") {
             if (t.events.some((e) => e.status === "queued"))
@@ -185,7 +189,7 @@ export class TriggerManager {
             secret = `cwh_${randomBytes(32).toString("base64url")}`;
             this.save({ ...t, secretHint: secret.slice(-4) }, digest(secret));
           } else {
-            this.validate(op.trigger);
+            if (op.trigger.enabled) this.validate(op.trigger);
             const targetChanged =
               t.projectId !== op.trigger.projectId ||
               JSON.stringify(t.target) !== JSON.stringify(op.trigger.target) ||
