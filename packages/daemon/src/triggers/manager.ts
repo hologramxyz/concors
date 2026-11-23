@@ -98,10 +98,14 @@ export class TriggerManager {
             !queues.get(e.sessionId ?? "")?.has(e.id))
         ) {
           const queued = e.status === "queued";
-          e.status = "failed";
-          e.message = queued
-            ? "Machine restarted. Queued delivery could not be confirmed; this event was not resent."
-            : "Machine restarted. This event was not resent.";
+          const prompt = queued && e.sessionId ? workspace.triggerPrompt(e.sessionId, e.id) : null;
+          const delivered = !!prompt && !prompt.turnId.startsWith("pending:");
+          e.status = delivered ? "delivered" : "failed";
+          e.message = delivered
+            ? null
+            : queued
+              ? "Machine restarted. Queued delivery could not be confirmed; this event was not resent."
+              : "Machine restarted. This event was not resent.";
         }
       this.save(t);
     }

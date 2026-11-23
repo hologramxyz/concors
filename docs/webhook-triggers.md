@@ -55,7 +55,8 @@ daemon-only trigger/event metadata. Inspect `trigger.list` for the latest 50 eve
   enter the chat queue as space becomes available, including after restart. Queue previews are
   bounded to 16,000 characters; delivery and steering retain the complete webhook prompt.
   A queued event missing from both the persisted chat queue and trigger overflow after restart
-  becomes failed without replay, rather than remaining stuck as queued.
+  becomes delivered if its provider-accepted prompt is saved in chat history, otherwise failed
+  without replay, rather than remaining stuck as queued.
 
 The URL alone is not a credential. Treat its bearer secret like a password; rotation immediately
 invalidates the old secret. TLS terminates at the managed gateway, which forwards only hook

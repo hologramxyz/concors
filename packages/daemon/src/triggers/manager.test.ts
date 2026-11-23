@@ -134,6 +134,26 @@ it("fails a queued event lost between queue removal and provider acceptance on r
   ).toBe("ok");
 });
 
+it("recovers a queued receipt as delivered when provider acceptance was already saved", async () => {
+  const f = await setup();
+  const delivered = await f.settled(f.accept("accepted-before-restart").event.id);
+  expect(delivered.status).toBe("delivered");
+  expect(f.workspace.triggerPrompt(delivered.sessionId!, delivered.id)?.turnId).not.toMatch(
+    /^pending:/,
+  );
+  const trigger = f.store.list()[0]!;
+  trigger.events.find((event) => event.id === delivered.id)!.status = "queued";
+  f.store.save(trigger);
+  const request = vi.spyOn(f.agents, "request");
+  await f.restartTriggers();
+  expect(f.accept("accepted-before-restart").event).toMatchObject({
+    id: delivered.id,
+    status: "delivered",
+    message: null,
+  });
+  expect(request).not.toHaveBeenCalled();
+});
+
 it("authenticates before parsing JSON webhook bodies", async () => {
   const f = await setup();
   await f.app.ready();
