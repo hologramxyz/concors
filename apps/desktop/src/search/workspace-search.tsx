@@ -1,6 +1,8 @@
 import { Folder } from "lucide-react";
 import { useContext, useMemo, useRef, useState } from "react";
 import type { WorkspaceProject } from "@concors/protocol";
+import { WEBHOOK_TRIGGERS_CAPABILITY } from "@concors/protocol";
+import { TerminalConnectionContext } from "@/terminal/connection-context";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { useCommands } from "@/shortcuts/context";
 import { isCompactCommand, type CommandId } from "@/shortcuts/bindings";
@@ -115,6 +117,10 @@ function SearchContent({
   ...props
 }: WorkspaceSearchProps & { run(action: () => void, ownsFocus?: boolean): void }) {
   const compact = useContext(CompactLayoutContext);
+  const connection = useContext(TerminalConnectionContext);
+  const supportsWebhooks =
+    connection?.state.status === "ready" &&
+    connection.state.daemon.capabilities?.includes(WEBHOOK_TRIGGERS_CAPABILITY);
   const commands = useCommands();
   const homePath = useHomePath();
   const agents = useAgents();
@@ -151,14 +157,17 @@ function SearchContent({
           if (action) run(action);
         },
       })),
-    ...ALL_NAV.filter((item) => item.view !== "settings" && !item.comingSoon).map(
-      (item): Action => ({
-        id: `navigate:${item.view}`,
-        title: `Go to ${item.label}`,
-        keywords: "navigate page",
-        run: () => run(() => props.onNavigate(item.view)),
-      }),
-    ),
+    ...ALL_NAV.filter(
+      (item) =>
+        item.view !== "settings" &&
+        !item.comingSoon &&
+        (item.view !== "webhooks" || supportsWebhooks),
+    ).map((item): Action => ({
+      id: `navigate:${item.view}`,
+      title: `Go to ${item.label}`,
+      keywords: "navigate page",
+      run: () => run(() => props.onNavigate(item.view)),
+    })),
     ...(!compact
       ? [
           {
