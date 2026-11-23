@@ -6,6 +6,7 @@ import {
   DictationResultSchema,
 } from "./dictation.ts";
 import { ScheduleRequestSchema, ScheduleResultSchema, ScheduleListSchema } from "./schedules.ts";
+import { TriggerRequestSchema, TriggerResultSchema, TriggerListSchema } from "./triggers.ts";
 import { ThemeRequestSchema, ThemeResultSchema } from "./themes.ts";
 import { ResourceRequestSchema, ResourceResultSchema } from "./resources.ts";
 import { PullRequestRequestSchema, PullRequestResultSchema } from "./pull-requests.ts";
@@ -78,6 +79,7 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   ProviderRequestSchema,
   ThemeRequestSchema,
   ScheduleRequestSchema,
+  TriggerRequestSchema,
   SupervisorRequestSchema,
   ResourceRequestSchema,
   PullRequestRequestSchema,
@@ -117,6 +119,8 @@ export const DaemonMessageSchema = z.discriminatedUnion("type", [
   ProviderResultSchema,
   ThemeResultSchema,
   ScheduleResultSchema,
+  TriggerResultSchema,
+  TriggerListSchema,
   SupervisorResultSchema,
   ScheduleListSchema,
   ResourceResultSchema,

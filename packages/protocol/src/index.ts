@@ -41,6 +41,7 @@ export * from "./themes.ts";
 export * from "./theme-presets.ts";
 
 export * from "./schedules.ts";
+export * from "./triggers.ts";
 
 export * from "./pull-requests.ts";
 

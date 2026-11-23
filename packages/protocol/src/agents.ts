@@ -248,14 +248,13 @@ export const AgentInfoSchema = z.object({
     .array(
       z.object({
         id: Id,
-        text: z.string().max(16000),
+        text: z.string().max(100000),
         attachments: z
           .array(z.object({ name: z.string(), mime: z.string() }))
           .max(MAX_MESSAGE_ATTACHMENTS),
         queuedAt: z.string().datetime(),
       }),
     )
-    .max(20)
     .optional(),
   queuePaused: z.boolean().optional(),
   historyRevision: z.number().int().nonnegative().optional(),
@@ -307,6 +306,7 @@ export const AgentInfoSchema = z.object({
 export type AgentInfo = z.infer<typeof AgentInfoSchema>;
 export const AgentOriginSchema = z.object({ supervisorId: Id, deliveryId: Id });
 export const AgentItemSchema = z.object({
+  trigger: z.object({ triggerId: Id, eventId: Id, source: z.string().max(40) }).optional(),
   origin: AgentOriginSchema.optional(),
   id: z.string(),
   sessionId: Id,
