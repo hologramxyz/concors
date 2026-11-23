@@ -322,7 +322,9 @@ export class TriggerManager {
         const target =
           t.target.kind === "agent" ? t.target : this.workspace.agent(t.target.sessionId);
         sessionId = randomUUID();
-        await this.agents.startScheduled(sessionId, t.projectId, target.provider, target.model);
+        const model =
+          "settings" in target ? (target.settings?.model ?? target.model) : target.model;
+        await this.agents.startScheduled(sessionId, t.projectId, target.provider, model);
       }
       this.patch(id, eventId, { sessionId }, sessionId);
       let info = this.workspace.agent(sessionId);

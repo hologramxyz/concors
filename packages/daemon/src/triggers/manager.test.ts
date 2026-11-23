@@ -258,6 +258,11 @@ it("queues beyond the interactive follow-up limit without dropping accepted even
 it("copies the provider and model of a session target into new chats", async () => {
   const f = await setup();
   const first = await f.settled(f.accept().event.id);
+  const source = f.workspace.agent(first.sessionId!);
+  f.workspace.saveAgent({
+    ...source,
+    settings: { model: "selected-model", effort: null, mode: "default" },
+  });
   const current = f.manager.list()[0]!;
   expect(
     f.request({
@@ -276,7 +281,7 @@ it("copies the provider and model of a session target into new chats", async () 
   expect(second.sessionId).not.toBe(first.sessionId);
   expect(f.workspace.agent(second.sessionId!)).toMatchObject({
     provider: "codex",
-    model: "fixture",
+    model: "selected-model",
   });
   expect(f.manager.list()[0]!.sessionId).toBeNull();
 });
