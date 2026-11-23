@@ -1049,6 +1049,75 @@ describe("schedule replica lifecycle", () => {
   });
 });
 
+describe("trigger replica lifecycle", () => {
+  const snapshot = {
+    schemaVersion: 1 as const,
+    machineId: "00000000-0000-4000-8000-000000000001",
+    epoch: "00000000-0000-4000-8000-000000000002",
+    revision: 0,
+    projects: [],
+    selection: null,
+  };
+  const id = "00000000-0000-4000-8000-000000000003";
+  it("settles one-time secrets without storing them in the replica and clears on disconnect", async () => {
+    const { connection, socket, ready } = startConnection();
+    const listener = vi.fn();
+    connection.subscribeWorkspace(() => undefined);
+    connection.onTriggers(listener);
+    socket.serverOpen();
+    socket.serverSend({ ...READY, capabilities: ["webhook-triggers-v1"] });
+    await ready;
+    socket.serverSend({ type: "workspace.snapshot", snapshot });
+    socket.serverSend({ type: "trigger.list", triggers: [] });
+    expect(listener).toHaveBeenLastCalledWith([]);
+    const pending = connection.requestTrigger({ kind: "list" }, id);
+    socket.serverSend({
+      type: "trigger.result",
+      requestId: id,
+      outcome: { status: "ok", triggers: [], secret: "once" },
+    });
+    await expect(pending).resolves.toMatchObject({ outcome: { secret: "once" } });
+    expect(connection.triggers).toEqual([]);
+    const interrupted = connection.requestTrigger({ kind: "list" }, id);
+    socket.serverClose();
+    await expect(interrupted).rejects.toThrow("disconnected");
+    expect(connection.triggers).toBeNull();
+    expect(listener).toHaveBeenLastCalledWith(null);
+  });
+  it("refuses requests to older daemons", async () => {
+    const { connection, socket, ready } = startConnection();
+    connection.subscribeWorkspace(() => undefined);
+    socket.serverOpen();
+    socket.serverSend(READY);
+    await ready;
+    socket.serverSend({ type: "workspace.snapshot", snapshot });
+    const count = socket.sent.length;
+    await expect(connection.requestTrigger({ kind: "list" }, id)).rejects.toThrow(
+      "Update the daemon",
+    );
+    expect(socket.sent).toHaveLength(count);
+    connection.disconnect();
+  });
+  it("returns daemon mutation errors to the caller", async () => {
+    const { connection, socket, ready } = startConnection();
+    connection.subscribeWorkspace(() => undefined);
+    socket.serverOpen();
+    socket.serverSend({ ...READY, capabilities: ["webhook-triggers-v1"] });
+    await ready;
+    socket.serverSend({ type: "workspace.snapshot", snapshot });
+    const pending = connection.requestTrigger({ kind: "delete", id, expectedRevision: 1 }, id);
+    socket.serverSend({
+      type: "trigger.result",
+      requestId: id,
+      outcome: { status: "error", message: "Revision changed" },
+    });
+    await expect(pending).resolves.toMatchObject({
+      outcome: { status: "error", message: "Revision changed" },
+    });
+    connection.disconnect();
+  });
+});
+
 describe("attachment uploads", () => {
   const snapshot = {
     schemaVersion: 1 as const,
