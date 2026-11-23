@@ -338,11 +338,17 @@ export class AgentManager {
     }
     const itemId = `steer:${requestId}`;
     const attachments = messageFiles(files);
+    const trigger = queued ? this.triggerLabel?.(queued.remove) : undefined;
     if (attachments.length) this.#store.saveAgentItemImages(info.id, itemId, attachments);
     this.item(info.id, turnId, {
       id: itemId,
       kind: "user",
-      title: files.origin ? "From Supervisor · steering" : "You · steering",
+      title: trigger
+        ? `Webhook · ${trigger.source} · steering`
+        : files.origin
+          ? "From Supervisor · steering"
+          : "You · steering",
+      ...(trigger ? { trigger } : {}),
       ...(files.origin ? { origin: files.origin } : {}),
       ...(attachments.length
         ? { attachments: attachments.map(({ name, mime }) => ({ name, mime })) }

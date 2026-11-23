@@ -224,6 +224,39 @@ it("queues a busy session and retains bodies larger than normal client messages"
   ).toBe(event.id);
 });
 
+it("preserves webhook metadata when a queued event steers a working turn", async () => {
+  const f = await setup();
+  const first = await f.settled(f.accept().event.id);
+  await expect.poll(() => f.workspace.agent(first.sessionId!).status).toBe("done");
+  const sessionId = first.sessionId!;
+  await f.agents.request({
+    type: "agent.request",
+    requestId: randomUUID(),
+    operation: { kind: "send", sessionId, text: "hold this turn" },
+  });
+  await expect.poll(() => f.workspace.agent(sessionId).turnId?.startsWith("turn-")).toBe(true);
+  const event = await f.settled(f.accept().event.id);
+  expect(event.status).toBe("queued");
+  const result = await f.agents.request({
+    type: "agent.request",
+    requestId: randomUUID(),
+    operation: {
+      kind: "queue-steer",
+      sessionId,
+      id: event.id,
+      turnId: f.workspace.agent(sessionId).turnId!,
+    },
+  });
+  expect(result.outcome.status).toBe("ok");
+  f.manager.observe(f.workspace.agent(sessionId));
+  expect(f.manager.list()[0]!.events.find((e) => e.id === event.id)?.status).toBe("delivered");
+  expect(f.workspace.triggerPrompt(sessionId, event.id)?.trigger).toEqual({
+    triggerId: f.id,
+    eventId: event.id,
+    source: "stream",
+  });
+});
+
 it("rotates secrets, checks revisions and never keeps plaintext secrets in receipts", async () => {
   const f = await setup();
   const requestId = randomUUID();
