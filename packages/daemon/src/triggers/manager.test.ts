@@ -443,6 +443,64 @@ it("copies the provider and model of a session target into new chats", async () 
   expect(f.manager.list()[0]!.sessionId).toBeNull();
 });
 
+it("fails a rejected follow-up to an inactive provider chat in a closed workspace", async () => {
+  const f = await setup();
+  const first = await f.settled(f.accept().event.id);
+  await expect.poll(() => f.workspace.agent(first.sessionId!).status).toBe("done");
+  const info = f.workspace.agent(first.sessionId!);
+  f.workspace.saveAgent({ ...info, status: "needs_input", providerGroupId: randomUUID() });
+  const project = f.workspace.snapshot().projects[0]!;
+  f.workspace.execute({
+    type: "workspace.command",
+    commandId: randomUUID(),
+    epoch: f.workspace.snapshot().epoch,
+    operation: { kind: "project.close", projectId: project.id, expectedVersion: project.version },
+  });
+  const event = f.accept().event;
+  await expect
+    .poll(() => f.manager.list()[0]!.events.find((e) => e.id === event.id)?.status)
+    .toBe("failed");
+  expect(f.manager.list()[0]!.events.find((e) => e.id === event.id)?.message).toContain(
+    "Switch back to this provider",
+  );
+  expect(f.store.pending(info.id)).toHaveLength(0);
+  expect(f.workspace.agent(info.id).queue ?? []).toHaveLength(0);
+  expect(
+    f.request({ kind: "delete", id: f.id, expectedRevision: f.manager.list()[0]!.revision }).outcome
+      .status,
+  ).toBe("ok");
+});
+
+it("allows deleting a trigger and cancelling overflow that has not entered the chat queue", async () => {
+  const f = await setup();
+  const first = await f.settled(f.accept().event.id);
+  const sessionId = first.sessionId!;
+  await expect.poll(() => f.workspace.agent(sessionId).status).toBe("done");
+  f.workspace.saveAgent({ ...f.workspace.agent(sessionId), status: "needs_input" });
+  for (let i = 0; i < 20; i++)
+    await f.agents.request({
+      type: "agent.request",
+      requestId: randomUUID(),
+      operation: { kind: "queue-add", sessionId, text: `Interactive follow-up ${i}` },
+    });
+  const pending = await f.settled(f.accept().event.id);
+  expect(pending.status).toBe("queued");
+  expect(f.store.pending(sessionId)).toHaveLength(1);
+  expect(
+    f.request({ kind: "delete", id: f.id, expectedRevision: f.manager.list()[0]!.revision }).outcome
+      .status,
+  ).toBe("ok");
+  expect(f.store.pending(sessionId)).toHaveLength(0);
+  expect(f.manager.list()).toHaveLength(0);
+  await f.agents.request({
+    type: "agent.request",
+    requestId: randomUUID(),
+    operation: { kind: "queue-remove", sessionId, id: f.workspace.agent(sessionId).queue![0]!.id },
+  });
+  expect(f.workspace.agent(sessionId).queue).toHaveLength(19);
+  expect(f.workspace.triggerPrompt(sessionId, pending.id)).toBeNull();
+});
+
 it("delivers to the current Supervisor without changing its permissions or sharing consent", async () => {
   const f = await setup();
   const project = f.workspace.ensureSupervisor();

@@ -59,4 +59,6 @@ The URL alone is not a credential. Treat its bearer secret like a password; rota
 invalidates the old secret. TLS terminates at the managed gateway, which forwards only hook
 credentials and source/idempotency headers to the private host. Other machine endpoints still
 require machine JWT authentication. Never place secrets in the body, query string or logs.
-Remove or deliver queued events before deleting a trigger; its receipts supply queued prompt labels.
+Remove or deliver events already admitted to a chat's queue before deleting their trigger; its
+receipts supply queued prompt labels. Trigger-owned overflow that has not entered that queue is
+cancelled by deletion and does not block it. Rejected queue admissions are recorded as failed.

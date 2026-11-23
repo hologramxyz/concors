@@ -188,7 +188,13 @@ export class TriggerManager {
           )
             throw new Error("Wait for pending delivery before changing this trigger");
           if (op.kind === "delete") {
-            if (t.events.some((e) => e.status === "queued"))
+            if (
+              this.workspace
+                .agents()
+                .some((agent) =>
+                  agent.queue?.some((entry) => t.events.some((event) => event.id === entry.id)),
+                )
+            )
               throw new Error("Remove or deliver queued events before deleting this trigger");
             this.store.remove(t.id);
           } else if (op.kind === "rotate") {
@@ -419,10 +425,13 @@ export class TriggerManager {
           "webhook",
         );
         if (result.outcome.status === "error") {
+          if ((this.workspace.agent(sessionId).queue?.length ?? 0) >= 20) return;
+          this.store.removePending(pending.eventId);
           this.patch(pending.triggerId, pending.eventId, {
+            status: "failed",
             message: result.outcome.message.slice(0, 1000),
           });
-          return;
+          continue;
         }
       }
       this.store.removePending(pending.eventId);
