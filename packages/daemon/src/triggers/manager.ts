@@ -123,6 +123,18 @@ export class TriggerManager {
   private all() {
     return this.store.list();
   }
+  private canAdmit(agent: AgentInfo) {
+    const projects = sessionProjects(this.workspace.snapshot());
+    return (
+      projects.some((project) => project.id === agent.projectId) &&
+      (!agent.providerGroupId ||
+        projects.some((project) =>
+          project.tabs.some((tab) =>
+            tab.nodes.some((pane) => pane.kind === "pane" && pane.sessionId === agent.id),
+          ),
+        ))
+    );
+  }
   private now() {
     return this.clock().toISOString();
   }
@@ -394,11 +406,7 @@ export class TriggerManager {
           this.observe(this.workspace.agent(sessionId));
           return;
         }
-        if (
-          !sessionProjects(this.workspace.snapshot()).some(
-            (project) => project.id === info.projectId,
-          )
-        )
+        if (!this.canAdmit(this.workspace.agent(sessionId)))
           throw new Error(result.outcome.message);
       }
       this.store.transaction(() => {
@@ -459,12 +467,9 @@ export class TriggerManager {
           "webhook",
         );
         if (result.outcome.status === "error") {
-          if ((this.workspace.agent(sessionId).queue?.length ?? 0) >= 20) return;
-          if (
-            sessionProjects(this.workspace.snapshot()).some(
-              (project) => project.id === info.projectId,
-            )
-          ) {
+          const current = this.workspace.agent(sessionId);
+          if ((current.queue?.length ?? 0) >= 20) return;
+          if (this.canAdmit(current)) {
             this.patch(pending.triggerId, pending.eventId, {
               message: result.outcome.message.slice(0, 1000),
             });

@@ -554,6 +554,39 @@ it("allows deleting a trigger and cancelling overflow that has not entered the c
   expect(f.workspace.triggerPrompt(sessionId, pending.id)).toBeNull();
 });
 
+it.each(["done", "needs_input"] as const)(
+  "fails hidden provider conversation refusals without blocking later events (%s)",
+  async (status) => {
+    const f = await setup();
+    const first = await f.settled(f.accept().event.id);
+    const sessionId = first.sessionId!;
+    await expect.poll(() => f.workspace.agent(sessionId).status).toBe("done");
+    f.workspace.saveAgent({
+      ...f.workspace.agent(sessionId),
+      status,
+      providerGroupId: randomUUID(),
+    });
+    expect(
+      f.workspace.snapshot().projects.some((project) => project.id === f.definition.projectId),
+    ).toBe(true);
+    const events = [f.accept().event, f.accept().event];
+    for (const event of events) {
+      await expect
+        .poll(() => f.manager.list()[0]!.events.find((e) => e.id === event.id)?.status)
+        .toBe("failed");
+      expect(f.manager.list()[0]!.events.find((e) => e.id === event.id)?.message).toContain(
+        "Switch back to this provider",
+      );
+    }
+    expect(f.store.pending(sessionId)).toHaveLength(0);
+    expect(f.workspace.agent(sessionId).queue ?? []).toHaveLength(0);
+    expect(
+      f.request({ kind: "delete", id: f.id, expectedRevision: f.manager.list()[0]!.revision })
+        .outcome.status,
+    ).toBe("ok");
+  },
+);
+
 it.each(["queued", "idle", "cancel"])(
   "retains webhook overflow during a fork lock (%s)",
   async (mode) => {
