@@ -221,11 +221,15 @@ export class TriggerManager {
       };
     }
   }
-  accept(id: string, secret: string, body: string, bytes: number, source?: string, key?: string) {
+  authenticate(id: string, secret: string) {
     const t = this.all().find((t) => t.id === id);
     const expected = this.store.hash(id) ?? digest("invalid");
     if (!timingSafeEqual(Buffer.from(digest(secret)), Buffer.from(expected)) || !t)
       throw new TriggerHttpError(401, "Unauthorized");
+    return t;
+  }
+  accept(id: string, secret: string, body: string, bytes: number, source?: string, key?: string) {
+    const t = this.authenticate(id, secret);
     if (bytes > 65536) throw new TriggerHttpError(413, "Body exceeds 64 KB");
     if (!t.enabled) throw new TriggerHttpError(409, "Trigger is disabled");
     if (this.closed) throw new TriggerHttpError(503, "Machine is shutting down");

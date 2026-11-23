@@ -89,6 +89,32 @@ async function setup(mode: "same" | "new" = "same") {
   };
 }
 
+it("authenticates before parsing JSON webhook bodies", async () => {
+  const f = await setup();
+  await f.app.ready();
+  const parse = vi.spyOn(JSON, "parse");
+  const payload = '{"untrusted-auth-test":true}';
+  const response = await f.app.inject({
+    method: "POST",
+    url: `/hooks/${f.id}`,
+    headers: { authorization: "Bearer wrong", "content-type": "application/json" },
+    payload,
+  });
+  expect(response.statusCode).toBe(401);
+  expect(parse.mock.calls.some(([input]) => input === payload)).toBe(false);
+  expect(
+    (
+      await f.app.inject({
+        method: "POST",
+        url: `/hooks/${f.id}`,
+        headers: { authorization: `Bearer ${f.secret}`, "content-type": "application/json" },
+        payload,
+      })
+    ).statusCode,
+  ).toBe(202);
+  expect(parse.mock.calls.some(([input]) => input === payload)).toBe(true);
+});
+
 it("deduplicates events across deliveries and reuses same-mode context with daemon labels", async () => {
   const f = await setup();
   const first = f.accept("abc");
