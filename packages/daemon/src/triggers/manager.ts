@@ -347,7 +347,8 @@ export class TriggerManager {
         "webhook",
       );
       if (result.outcome.status === "error") throw new Error(result.outcome.message);
-      this.patch(id, eventId, { status: queued ? "queued" : "delivered" });
+      if (queued) this.patch(id, eventId, { status: "queued" });
+      this.observe(this.workspace.agent(sessionId));
     } catch (error) {
       this.patch(id, eventId, {
         status: "failed",
@@ -359,12 +360,23 @@ export class TriggerManager {
     if (this.closed) return;
     for (const t of this.all())
       for (const e of t.events) {
-        if (e.status !== "queued" || e.sessionId !== agent.id) continue;
+        if (!["queued", "received"].includes(e.status) || e.sessionId !== agent.id) continue;
         if (this.workspace.agent(agent.id).queue?.some((q) => q.id === e.id)) continue;
-        const delivered = !!this.workspace.triggerPrompt(agent.id, e.id);
+        const prompt = this.workspace.triggerPrompt(agent.id, e.id);
+        if (
+          prompt?.turnId.startsWith("pending:") &&
+          !["failed", "interrupted"].includes(agent.status)
+        )
+          continue;
+        if (!prompt && e.status === "received") continue;
+        const delivered = !!prompt && !prompt.turnId.startsWith("pending:");
         this.patch(t.id, e.id, {
           status: delivered ? "delivered" : "failed",
-          message: delivered ? null : "Queued event was removed",
+          message: delivered
+            ? null
+            : prompt
+              ? (agent.error ?? "Delivery interrupted")
+              : "Queued event was removed",
         });
       }
   }

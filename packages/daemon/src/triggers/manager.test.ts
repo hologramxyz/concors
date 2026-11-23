@@ -23,15 +23,18 @@ async function setup(mode: "same" | "new" = "same") {
   const workspace = new WorkspaceStore(join(directory, "workspace.sqlite"));
   const registry = new ProviderRegistry(join(directory, "providers"));
   vi.spyOn(registry, "installed").mockReturnValue(true);
+  let manager: TriggerManager;
   const agents = new AgentManager(
     workspace,
-    () => undefined,
+    (event) => {
+      if (event.type === "agent.state") queueMicrotask(() => manager?.observe(event.agent));
+    },
     () => undefined,
     (_cwd, handler, id) => new TestAgentProvider(handler, id),
     registry,
   );
   const store = new TriggerStore(join(directory, "triggers.sqlite"));
-  const manager = new TriggerManager(store, workspace, agents, registry, () => undefined);
+  manager = new TriggerManager(store, workspace, agents, registry, () => undefined);
   agents.triggerLabel = (id) => manager.label(id);
   const projectId = randomUUID();
   workspace.execute({
@@ -178,6 +181,27 @@ it("allows disabling and deleting a trigger after its target workspace closes", 
     f.request({ kind: "delete", id: f.id, expectedRevision: f.manager.list()[0]!.revision }).outcome
       .status,
   ).toBe("ok");
+});
+
+it("waits for provider acceptance and records a rejected prompt as failed", async () => {
+  const f = await setup();
+  const original = TestAgentProvider.prototype.request;
+  let reject: ((error: Error) => void) | undefined;
+  vi.spyOn(TestAgentProvider.prototype, "request").mockImplementation(function (method, params) {
+    if (method === "turn/start")
+      return new Promise((_resolve, fail) => {
+        reject = fail;
+      });
+    return original.call(this, method, params);
+  });
+  const event = f.accept().event;
+  await expect.poll(() => !!reject).toBe(true);
+  expect(f.manager.list()[0]!.events.find((e) => e.id === event.id)?.status).toBe("received");
+  reject?.(new Error("Provider refused this prompt"));
+  expect(await f.settled(event.id)).toMatchObject({
+    status: "failed",
+    message: "Provider refused this prompt",
+  });
 });
 
 it("creates a fresh session for every new-mode event", async () => {
