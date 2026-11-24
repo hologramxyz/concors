@@ -94,3 +94,14 @@ export function pendingNotice(
 export function pendingWord(kind: PendingKind): string {
   return kind === "approval" ? "Needs your approval" : "Needs your answer";
 }
+
+/**
+ * The daemon's sentence about instructions queued behind a request, as the block's last line:
+ * "1 instruction queued" or "3 instructions queued". A sentence whose number cannot be read is
+ * kept as the daemon wrote it.
+ */
+export function queuedWords(sentence: string): string {
+  const count = Number(QUEUED.exec(` ${sentence}`)?.[1]);
+  if (!Number.isSafeInteger(count) || count < 1) return sentence;
+  return `${count} ${count === 1 ? "instruction" : "instructions"} queued`;
+}

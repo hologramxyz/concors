@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AgentItem, AgentPending } from "@concors/protocol";
 import { ANSWERED_TITLE, answeredNotice } from "./answered-notice";
-import { PENDING_TITLE, pendingNotice, pendingWord } from "./pending-notice";
+import { PENDING_TITLE, pendingNotice, pendingWord, queuedWords } from "./pending-notice";
 
 const SUPERVISOR = "11111111-1111-4111-8111-111111111111";
 const CHAT = "22222222-2222-4222-8222-222222222222";
@@ -110,6 +110,21 @@ describe("pendingNotice", () => {
  * is loaded by path at run time, since type-checking the daemon's sources belongs to the daemon's
  * own settings.
  */
+describe("queuedWords", () => {
+  it.each([
+    ["1 follow-up instruction(s) are queued behind it.", "1 instruction queued"],
+    ["2 follow-up instruction(s) are queued behind it.", "2 instructions queued"],
+    ["12 follow-up instruction(s) are queued behind it.", "12 instructions queued"],
+  ])("reads %s as %s", (sentence, words) => expect(queuedWords(sentence)).toBe(words));
+
+  it.each([
+    "Some follow-up instructions are queued behind it.",
+    "0 follow-up instruction(s) are queued behind it.",
+    "2 follow-up instructions are waiting.",
+    `${"9".repeat(30)} follow-up instruction(s) are queued behind it.`,
+  ])("keeps %s as the daemon wrote it", (sentence) => expect(queuedWords(sentence)).toBe(sentence));
+});
+
 describe("the daemon's pending notice", () => {
   interface Watches {
     track(supervisorId: string, sessionId: string, id: string): void;
@@ -262,6 +277,12 @@ describe("the daemon's pending notice", () => {
   it("is read with instructions queued behind it", async () => {
     const { open } = await posted(request("pnpm test"), { queue: [{ id: "q-1" }, { id: "q-2" }] });
     expect(pendingNotice(open!)?.queued).toBe("2 follow-up instruction(s) are queued behind it.");
+    expect(queuedWords(pendingNotice(open!)!.queued!)).toBe("2 instructions queued");
+  });
+
+  it("is read with one instruction queued behind it", async () => {
+    const { open } = await posted(request("pnpm test"), { queue: [{ id: "q-1" }] });
+    expect(queuedWords(pendingNotice(open!)!.queued!)).toBe("1 instruction queued");
   });
 
   it("becomes the answered notice under the same ID once answered", async () => {

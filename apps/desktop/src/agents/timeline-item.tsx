@@ -1,6 +1,11 @@
 import { mentionSegments, splitSupervisorReferences } from "@/supervisor/reference-text";
 import { ApprovalAction, WatchedApproval } from "@/supervisor/quick-approval";
-import { pendingNotice, pendingWord, type PendingNotice } from "@/supervisor/pending-notice";
+import {
+  pendingNotice,
+  pendingWord,
+  queuedWords,
+  type PendingNotice,
+} from "@/supervisor/pending-notice";
 import { useAgents } from "@/agents/context";
 import { approvalParts } from "@/agents/approval-summary";
 import { useHomePath } from "@/workspace/home-path";
@@ -746,8 +751,9 @@ function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: Superviso
           Answered
         </span>
         {expandable && (
+          // Rotated, it would sit above the toggle and take its clicks.
           <ChevronRight
-            className={`size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
+            className={`pointer-events-none size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
           />
         )}
       </div>
@@ -858,8 +864,9 @@ function FinishedRow({ notice, chat }: { notice: FinishedNotice; chat: Superviso
           {word}
         </span>
         {expandable && (
+          // Rotated, it would sit above the toggle and take its clicks.
           <ChevronRight
-            className={`size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
+            className={`pointer-events-none size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
           />
         )}
       </div>
@@ -971,7 +978,9 @@ function PendingBlock({
         >
           <ApprovalAction needs={needs} short={short} ink="text-foreground/90" />
         </div>
-        {notice.queued && <p className="text-xs text-muted-foreground">{notice.queued}</p>}
+        {notice.queued && (
+          <p className="text-xs text-muted-foreground">{queuedWords(notice.queued)}</p>
+        )}
         {notice.answerable && <WatchedApproval itemId={itemId} />}
       </div>
     </article>
