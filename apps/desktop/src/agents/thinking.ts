@@ -4,8 +4,9 @@ import { toolGroupKey } from "./tool-label";
 /**
  * A timeline row: one item, or a run of similar tool calls folded under the first one's id.
  * `steps` is a run of quiet steps shown as one summary line, `quiet` a step shown as a plain row,
- * `approval` the permission granted for a step, and `live` the run the turn in progress is on now
- * (see `stepGroups`).
+ * `approval` the permission granted for a step, `live` the run the turn in progress is on now
+ * (see `stepGroups`), and `answered` a run of Supervisor's answered-request notices folded into
+ * one line (see `answeredRuns`).
  */
 export type TimelineEntry = AgentItem & {
   group?: AgentItem[];
@@ -13,6 +14,7 @@ export type TimelineEntry = AgentItem & {
   quiet?: true;
   approval?: string;
   live?: true;
+  answered?: TimelineEntry[];
 };
 
 /**

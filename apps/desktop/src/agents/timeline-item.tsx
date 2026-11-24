@@ -1,5 +1,8 @@
 import { mentionSegments, splitSupervisorReferences } from "@/supervisor/reference-text";
 import { WatchedApproval } from "@/supervisor/quick-approval";
+import { answeredNotice, type AnsweredNotice } from "@/supervisor/answered-notice";
+import { SupervisorReferences, type SupervisorReference } from "@/supervisor/reference-context";
+import { SessionLinkContext } from "@/supervisor/session-link";
 import { MessageAttachments } from "./attachment-preview";
 import { memo, useContext, useId, useLayoutEffect, useRef, type RefObject } from "react";
 import { FileLinkContext } from "@/files/context";
@@ -117,16 +120,8 @@ export const TimelineItem = memo(function TimelineItem({
   if (data?.type === "plan" || item.kind === "plan") return <PlanProgress item={item} />;
   if (data?.type === "thinking") return <Thinking item={item} running={running} />;
   if (data?.type === "sub_agent") return <SubAgentCard item={item} running={running} />;
-  if (item.kind === "system" && item.origin)
-    return (
-      <article className="text-sm text-muted-foreground">
-        <AgentMarkdown>{item.text}</AgentMarkdown>
-        {/* Only a report of a request still open can be answered; the rest never look it up. */}
-        {item.title === "Agent needs your input" && item.id.startsWith("supervisor-watch:") && (
-          <WatchedApproval itemId={item.id} />
-        )}
-      </article>
-    );
+  if (item.answered) return <AnsweredGroup items={item.answered} />;
+  if (item.kind === "system" && item.origin) return <SupervisorNotice item={item} />;
   if (item.kind === "system")
     return (
       <article className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -633,6 +628,143 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
             cut={cut}
             className="rounded-lg border"
           />
+        </div>
+      </Collapse>
+    </article>
+  );
+}
+
+/**
+ * Supervisor's notice about a chat it watches, as the daemon wrote it. A request answered since
+ * reads as one row instead, when its chat and action can be read (see `answeredNotice`).
+ */
+function SupervisorNotice({ item }: { item: AgentItem }) {
+  const references = useContext(SupervisorReferences);
+  const notice = answeredNotice(item);
+  const chat = notice && answeredChat(references, notice.sessionId);
+  if (notice && chat) return <AnsweredRow notice={notice} chat={chat} />;
+  return (
+    <article className="text-sm text-muted-foreground">
+      <AgentMarkdown>{item.text}</AgentMarkdown>
+      {/* Only a report of a request still open can be answered; the rest never look it up. */}
+      {item.title === "Agent needs your input" && item.id.startsWith("supervisor-watch:") && (
+        <WatchedApproval itemId={item.id} />
+      )}
+    </article>
+  );
+}
+
+function answeredChat(references: readonly SupervisorReference[], sessionId: string) {
+  return references.find((ref) => ref.kind === "Agent" && ref.id === sessionId);
+}
+
+/**
+ * An answered request as one line, shaped as an answered step ("Ran echo test  Allowed once"):
+ * its chat, linked as Supervisor's notice links it, what it asked for, and "Resumed", since the
+ * notice does not say how it was answered. A command reads in monospace without the `cd` in
+ * front, as a step's does; opening the row shows the action in full when the line cuts it short.
+ */
+function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: SupervisorReference }) {
+  const [open, setOpen] = useState(false);
+  const openSession = useContext(SessionLinkContext);
+  const { action, command } = notice;
+  const line = command ? commandLine(commandSummary(action)) : action;
+  const target = useRef<HTMLSpanElement>(null);
+  const cut = useCutOff(target, true);
+  const expandable = cut || line !== action;
+  const Icon = command ? Terminal : Pencil;
+  const id = useId();
+  return (
+    <article aria-label="Answered request" className="text-sm">
+      {/* As a step row with a file link: the toggle lies under the whole line, the link above it. */}
+      <div className="mobile-tap-target relative flex w-full min-w-0 items-center gap-2 py-0.5">
+        <button
+          type="button"
+          disabled={!expandable}
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={expandable ? open : undefined}
+          aria-labelledby={`${id}-action ${id}-mark`}
+          className="absolute inset-0 rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        />
+        <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+        <span className="flex max-w-1/2 min-w-0 shrink-0 items-center text-muted-foreground">
+          {chat.workspace && <span className="min-w-0 truncate">{chat.workspace}</span>}
+          {chat.workspace && <span className="shrink-0 whitespace-pre"> / </span>}
+          {openSession ? (
+            <button
+              type="button"
+              onClick={() => openSession(notice.sessionId)}
+              className="mobile-hit-area text-link relative min-w-0 truncate rounded-sm text-left underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              {chat.label}
+            </button>
+          ) : (
+            <span className="min-w-0 truncate">{chat.label}</span>
+          )}
+        </span>
+        <span
+          ref={target}
+          id={`${id}-action`}
+          aria-hidden
+          className={`min-w-0 truncate ${command ? "font-mono text-ui" : ""}`}
+        >
+          {line}
+        </span>
+        <span id={`${id}-mark`} aria-hidden className="shrink-0 text-xs text-muted-foreground">
+          Resumed
+        </span>
+        {expandable && (
+          <ChevronRight
+            className={`size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
+          />
+        )}
+      </div>
+      <Collapse open={open}>
+        <div className="pt-1 pb-2">
+          <div className="group/details relative">
+            <OverlayScroll className="chat-scroll max-h-96 overflow-auto rounded-lg border p-4 text-ui leading-6">
+              <pre
+                className={`break-words whitespace-pre-wrap text-muted-foreground ${command ? "font-mono" : "font-sans"}`}
+              >
+                {action}
+              </pre>
+            </OverlayScroll>
+            <div className="absolute top-2 right-2 rounded-md bg-background opacity-0 transition-opacity group-focus-within/details:opacity-100 group-hover/details:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
+              <CopyButton label="Copy quote" text={action} />
+            </div>
+          </div>
+        </div>
+      </Collapse>
+    </article>
+  );
+}
+
+/**
+ * A run of answered requests as one muted line, "3 approvals answered", folded and opened as a
+ * run of steps is. It keeps its first notice's id, so it stays open as more are answered.
+ */
+function AnsweredGroup({ items }: { items: AgentItem[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <article aria-label="Answered requests" className="text-sm">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="mobile-tap-target flex max-w-full items-center gap-2 py-0.5 text-left text-muted-foreground transition-colors hover:text-foreground motion-reduce:transition-none"
+      >
+        <span className="min-w-0 truncate">{items.length} approvals answered</span>
+        <ChevronRight
+          className={`size-3 shrink-0 transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
+        />
+      </button>
+      <Collapse open={open}>
+        <div className="pt-1">
+          <div data-collapse-rows className="ml-[7px] space-y-1 border-l pl-4">
+            {items.map((item) => (
+              <SupervisorNotice key={item.id} item={item} />
+            ))}
+          </div>
         </div>
       </Collapse>
     </article>

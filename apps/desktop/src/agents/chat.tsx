@@ -8,6 +8,8 @@ import { AgentComposer } from "./composer";
 import { LiveLine, TimelineItem } from "./timeline-item";
 import { HIDE_NATIVE_SCROLLBAR, OverlayScrollbar } from "./overlay-scrollbar";
 import { liveStep, stepGroups } from "./step-groups";
+import { answeredRuns } from "@/supervisor/answered-notice";
+import { SupervisorReferences, type SupervisorReference } from "@/supervisor/reference-context";
 import { useViewedAgent } from "@/notifications/context";
 import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
 import {
@@ -505,7 +507,8 @@ export function Chat({
     ? undefined
     : conversation.items.findLast((item) => item.kind === "assistant")?.id;
   const forkChat = useForkChat();
-  const { view, step } = useTimelineRows(conversation.items, footers.hidden, agent);
+  const references = useContext(SupervisorReferences);
+  const { view, step } = useTimelineRows(conversation.items, footers.hidden, agent, references);
   const subAgentRows = useMemo(
     () => knownSubAgentRows(conversation.items, conversation.subAgents),
     [conversation.items, conversation.subAgents],
@@ -893,12 +896,14 @@ function HistoryError({ message, onRetry }: { message: string; onRetry: () => vo
 /**
  * What the timeline shows: `timelineView`, with each run of quiet steps folded into a summary
  * line, and the step the turn in progress is on, which its live line shows. A call an open request
- * names keeps its own card.
+ * names keeps its own card. In Supervisor, runs of answered-request notices fold the same way.
  */
 function useTimelineRows(
   items: AgentItem[],
   hidden: ReadonlySet<string>,
   agent: AgentInfo | undefined,
+  /** Supervisor's chats, by which its answered-request notices name theirs (none elsewhere). */
+  references: readonly SupervisorReference[],
 ) {
   const status = agent?.status;
   const turnId = agent?.turnId ?? null;
@@ -907,6 +912,10 @@ function useTimelineRows(
     const view = timelineView(items, hidden);
     const live = status === "working" || status === "needs_input" ? turnId : null;
     const waiting = new Set(pending?.flatMap((p) => (p.sourceItemId ? [p.sourceItemId] : [])));
-    return { view: stepGroups(view, live, waiting), step: liveStep(view, live, waiting) };
-  }, [items, hidden, status, turnId, pending]);
+    const chats = new Set(references.flatMap((ref) => (ref.kind === "Agent" ? [ref.id] : [])));
+    return {
+      view: answeredRuns(stepGroups(view, live, waiting), (id) => chats.has(id)),
+      step: liveStep(view, live, waiting),
+    };
+  }, [items, hidden, status, turnId, pending, references]);
 }
