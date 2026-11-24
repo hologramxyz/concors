@@ -207,11 +207,11 @@ export function rowAgentStatus(row: SidebarRow): AgentStatus | undefined {
 export function rowState(
   row: SidebarRow,
 ): "working" | "running" | "attention" | "done" | undefined {
-  if (row.kind === "terminal") {
-    if (!isLiveTerminalAgent(row.terminal)) return "running";
-    const { dot, running } = terminalAgentStatus(row.terminal);
-    return dot ?? (running ? "running" : undefined);
-  }
+  // Grey while it runs with its pane closed, idle or not, unless its agent has a dot of its own.
+  if (row.kind === "terminal")
+    return (
+      (isLiveTerminalAgent(row.terminal) && terminalAgentStatus(row.terminal).dot) || "running"
+    );
   const chat = row.kind === "closed" ? row.chat.agent : row.chat;
   const dot = row.kind === "tab" ? row.dot : chat && chatDot(chat);
   // A question waits on the user, so it outranks work going on; a finish not yet seen does not.
@@ -284,23 +284,37 @@ export function rowDot(row: SidebarRow): AgentDot | undefined {
   return state === "attention" || state === "done" ? state : undefined;
 }
 
+/**
+ * A closed row that can go under "Closed": a closed chat, or a coding agent's CLI still running with
+ * its pane closed. A closed shell running a command stays listed, as nothing tells whether it is
+ * busy or done.
+ */
+function foldable(row: SidebarRow): boolean {
+  return row.kind === "closed" || (row.kind === "terminal" && isLiveTerminalAgent(row.terminal));
+}
+
 /** A closed row that should stay in sight: it asks for attention, or its agent is still at work. */
 export function surfacesRow(row: SidebarRow): boolean {
-  return row.kind === "closed" && (!!rowDot(row) || rowState(row) === "working");
+  if (!foldable(row)) return false;
+  if (rowDot(row)) return true;
+  return row.kind === "terminal"
+    ? terminalAgentStatus(row.terminal).running
+    : rowState(row) === "working";
 }
 
 /**
- * Splits a workspace's rows into those listed and the closed chats kept apart under "Closed chats",
- * so finished threads neither crowd nor pass for open ones. Listed: open tabs, terminals still
- * running in the background, pins, which someone asked to keep in sight, and `surfaced`, the closed
- * rows that ask for attention or are still at work (see `surfacesRow`). While the pointer holds the list still, one that gets a dot
- * stays where it is, so nothing moves under the pointer, and the closed group carries its dot.
+ * Splits a workspace's rows into those listed and the closed ones kept apart under "Closed" (see
+ * `foldable`), so finished work neither crowds nor passes for open tabs. Listed: open tabs, closed
+ * shells still running a command, pins, which someone asked to keep in sight, and `surfaced`, the
+ * closed rows that ask for attention or are still at work (see `surfacesRow`). While the pointer
+ * holds the list still, one that gets a dot stays where it is, so nothing moves under the pointer,
+ * and the closed group carries its dot.
  */
 export function foldRows(rows: readonly SidebarRow[], surfaced: ReadonlySet<string>) {
   const listed: SidebarRow[] = [];
   const folded: SidebarRow[] = [];
   for (const row of rows)
-    (row.kind !== "closed" || rowPinned(row) || surfaced.has(row.key) ? listed : folded).push(row);
+    (!foldable(row) || rowPinned(row) || surfaced.has(row.key) ? listed : folded).push(row);
   return { listed, folded };
 }
 
@@ -315,8 +329,13 @@ export function rowStatusLabel(row: SidebarRow): string | undefined {
       return row.chat.agent.status === "failed" ? "Failed" : "Needs your reply";
     return state === "working" ? "Working" : "Closed";
   }
-  if (row.kind === "terminal")
-    return state === "attention" ? "Needs your reply" : "Running in background";
+  // Its pane is closed but it still runs, which a grey dot alone does not say.
+  if (row.kind === "terminal") {
+    if (state === "attention") return "Closed, needs your reply";
+    return isLiveTerminalAgent(row.terminal) && terminalAgentStatus(row.terminal).running
+      ? "Closed, working"
+      : "Closed and still running";
+  }
   if (state === "attention")
     return row.chat && agentDisplayStatus(row.chat) === "failed" ? "Failed" : "Needs your reply";
   return state === "working" || state === "running" ? "Working" : undefined;

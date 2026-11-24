@@ -611,15 +611,22 @@ test("desktop tool cards, diffs, MCP results, subagents and markdown fit a phone
   page,
 }) => {
   const ui = await enter(page);
-  const tools = ui.getByRole("article", { name: "Tool call", exact: true });
-  await expect(tools).toHaveCount(3);
+  // The command, edit and MCP call fold into one summary line, which opens to a row each.
+  const run = ui.getByRole("article", { name: "Tool calls", exact: true });
+  await expect(run).toHaveCount(1);
   // The demo turn is still live, so the chat stays pinned until the reader scrolls up to them.
   await scrollTimelineUp(page, ui.getByRole("log", { name: "Chat timeline" }), 400);
   await expect(ui.getByRole("button", { name: "Latest", exact: true })).toBeVisible();
+  await run.getByRole("button").first().click();
+  const tools = run.getByRole("article", { name: "Tool call", exact: true });
+  await expect(tools).toHaveCount(3);
   for (let i = 0; i < 3; i++) {
     await tools.nth(i).getByRole("button").first().click();
     await expect(tools.nth(i).getByRole("button").first()).toHaveAttribute("aria-expanded", "true");
-    await expect(tools.nth(i).getByRole("button", { name: "Copy tool output" })).toBeVisible();
+    // One copy button per step: an edit's copies its diff.
+    await expect(
+      tools.nth(i).getByRole("button", { name: /^Copy (tool output|diff)$/ }),
+    ).toBeVisible();
   }
   await expect(ui.getByRole("button", { name: "Copy diff" })).toBeAttached();
   await expect(ui.getByRole("article", { name: "Sub-agent activity" })).toBeAttached();
@@ -1961,10 +1968,10 @@ test("the sidebar lists each workspace's tabs under it, as desktop does", async 
     /^Fix sign-in/,
     /^Flaky upload test/,
     /^pnpm dev/,
-    /^Closed chats$/,
+    /^Closed$/,
   ]);
   await expect(row(treeIds.pinnedTab).getByLabel("Pinned")).toBeVisible();
-  const closedChats = first.getByRole("button", { name: /^Closed chats/ });
+  const closedChats = first.getByRole("button", { name: /^Closed$/ });
   expect((await closedChats.boundingBox())?.height).toBeGreaterThanOrEqual(44);
   await closedChats.click();
   await expect(row(treeIds.closed).locator("[data-agent-closed]")).toBeVisible();

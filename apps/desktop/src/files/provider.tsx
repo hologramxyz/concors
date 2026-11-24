@@ -16,6 +16,7 @@ import { resolveFileLink, workspaceFileLink, type FileLocation } from "./links";
 import {
   FilesContext,
   FileLinkContext,
+  ProjectRootsContext,
   FileLinkTargetContext,
   fileScope,
   useFiles,
@@ -162,6 +163,7 @@ export function ProjectFileLinks({
 }) {
   return (
     <FileLinks
+      roots={[project.directory]}
       resolve={(href, sourcePath) => {
         const location = resolveFileLink(href, project.directory, sourcePath);
         return location && { project, location };
@@ -187,17 +189,23 @@ export function WorkspaceFileLinks({
   children: ReactNode;
 }) {
   return (
-    <FileLinks resolve={(href) => workspaceFileLink(href, projects)} onOpen={onShowProject}>
+    <FileLinks
+      roots={projects.map((project) => project.directory)}
+      resolve={(href) => workspaceFileLink(href, projects)}
+      onOpen={onShowProject}
+    >
       {children}
     </FileLinks>
   );
 }
 
 function FileLinks({
+  roots,
   resolve,
   onOpen,
   children,
 }: {
+  roots: readonly string[];
   resolve: (
     href: string,
     sourcePath?: string,
@@ -208,6 +216,9 @@ function FileLinks({
   const files = useFiles();
   const connection = useContext(TerminalConnectionContext);
   const epoch = connection?.workspace?.epoch;
+  // Kept by value: a new list on every render would re-render each step row that shortens a path.
+  const rootsKey = roots.join("\0");
+  const projectRoots = useMemo(() => rootsKey.split("\0").filter(Boolean), [rootsKey]);
   return (
     <FileLinkContext
       value={(href, sourcePath) => {
@@ -245,7 +256,7 @@ function FileLinks({
             : null;
         }}
       >
-        {children}
+        <ProjectRootsContext value={projectRoots}>{children}</ProjectRootsContext>
       </FileLinkTargetContext>
     </FileLinkContext>
   );

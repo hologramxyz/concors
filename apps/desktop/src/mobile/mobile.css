@@ -1522,10 +1522,21 @@ body {
   padding-bottom: var(--native-composer-inset, 88px);
   scroll-padding-bottom: var(--native-composer-inset, 88px);
 }
+/* The native composer floats over the timeline, so Latest floats just above it, not behind it. */
 .mobile-pane
   [aria-label="Agent conversation"]:has([data-native-composer="true"])
   [data-chat-latest] {
+  position: absolute;
   bottom: var(--native-composer-inset, 88px);
+  inset-inline: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+.mobile-pane
+  [aria-label="Agent conversation"]:has([data-native-composer="true"])
+  [data-chat-latest]
+  > button {
+  pointer-events: auto;
 }
 .mobile-composer-options-grid {
   display: grid;

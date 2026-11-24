@@ -61,7 +61,7 @@ function leaves(value: unknown, out: string[]) {
   else if (value && typeof value === "object") for (const v of Object.values(value)) leaves(v, out);
 }
 
-/** A few words from an MCP call's arguments, such as "read · 3f9c…" for Supervisor's tool. */
+/** A few words from an MCP call's arguments, such as "read, 3f9c…" for Supervisor's tool. */
 export function argumentsSummary(input: string | undefined): string {
   if (!input?.trim()) return "";
   let args: unknown;
@@ -79,7 +79,7 @@ export function argumentsSummary(input: string | undefined): string {
   }
   const found: string[] = [];
   leaves(args, found);
-  return found.join(" · ");
+  return found.join(", ");
 }
 
 /**

@@ -336,7 +336,7 @@ it("labels a row's tooltip only while something is happening", () => {
     [terminal("dev", { foregroundCommand: "npm run dev" })],
   ).rows.get("p")!;
   expect(rowStatusLabel(background.find((row) => row.kind === "terminal")!)).toBe(
-    "Running in background",
+    "Closed and still running",
   );
 });
 
@@ -378,7 +378,46 @@ it("keeps a closed terminal's tab name and its agent's state", () => {
   expect(waiting.kind === "terminal" && waiting.title).toBe("test");
   expect(rowState(waiting)).toBe("attention");
   expect(rowState(background({ agentActivity: "working" }))).toBe("running");
-  expect(rowState(background({ agentActivity: "idle" }))).toBeUndefined();
+  // Idle, it still runs with its pane closed: the grey dot says so.
+  expect(rowState(background({ agentActivity: "idle" }))).toBe("running");
+  expect(rowStatusLabel(waiting)).toBe("Closed, needs your reply");
+  expect(rowStatusLabel(background({ agentActivity: "working" }))).toBe("Closed, working");
+  expect(rowStatusLabel(background({ agentActivity: "idle" }))).toBe("Closed and still running");
+});
+
+it("folds a closed CLI with the closed chats while it is idle, and keeps it listed while it works or asks", () => {
+  const rows = sidebarRows(
+    workspace,
+    [],
+    [
+      terminal("idle", { profile: "claude", agentActivity: "idle" }),
+      terminal("working", { profile: "codex", agentActivity: "working" }),
+      terminal("asking", { profile: "claude", agentActivity: "needs_input" }),
+      terminal("dev", { foregroundCommand: "npm run dev" }),
+    ],
+  ).rows.get("p")!;
+  const closed = rows.filter((row) => row.kind === "terminal");
+  expect(closed.filter(surfacesRow).map((row) => row.key)).toEqual([
+    "terminal:working",
+    "terminal:asking",
+  ]);
+  const { listed, folded } = foldRows(
+    closed,
+    new Set(closed.filter(surfacesRow).map((r) => r.key)),
+  );
+  // A shell running a command has no idle to tell, so it stays listed.
+  expect(listed.map((row) => row.key)).toEqual([
+    "terminal:working",
+    "terminal:asking",
+    "terminal:dev",
+  ]);
+  expect(folded.map((row) => row.key)).toEqual(["terminal:idle"]);
+  // Held still while the pointer is over the list, the folded group carries the waiting one's dot.
+  expect(foldRows(closed, new Set()).folded.map(rowDot)).toEqual([
+    undefined,
+    undefined,
+    "attention",
+  ]);
 });
 
 it("dots an open shell while it runs a command", () => {
