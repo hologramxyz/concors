@@ -4,6 +4,18 @@ on:
   # Native compilation and simulator tests are opt-in, outside the PR time budget.
   workflow_dispatch:
     inputs:
+      store_build:
+        description: Build a signed store IPA instead of running simulator acceptance; does not submit
+        type: boolean
+        default: false
+      source_ref:
+        description: Full commit SHA already merged into main, required for a store IPA
+        type: string
+        default: ""
+      build_number:
+        description: Reserved unused iOS build number, required for a store IPA
+        type: string
+        default: ""
       simulator_artifact:
         description: Optional universal Expo simulator artifact URL; skip native compilation
         type: string
@@ -34,7 +46,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  store:
+    if: inputs.store_build
+    uses: ./.github/workflows/mobile-ios-store.yml
+    with:
+      source_ref: ${{ inputs.source_ref }}
+      build_number: ${{ inputs.build_number }}
+    secrets:
+      CONCORS_IOS_SIGNING: ${{ secrets.CONCORS_IOS_SIGNING }}
   simulator:
+    if: ${{ !inputs.store_build }}
     name: Native iOS glass and composer
     # Exercise Expo's prebuilt app on Apple Silicon; reserve Intel's memory for local compilation.
     runs-on: ${{ inputs.simulator_artifact != '' && 'macos-26' || 'macos-26-intel' }}
