@@ -6,6 +6,7 @@ import { completedTurnFooters } from "./duration";
 import { canFork, forkReplies, useForkChat } from "./fork";
 import { AgentComposer } from "./composer";
 import { LiveLine, TimelineItem } from "./timeline-item";
+import { HIDE_NATIVE_SCROLLBAR, OverlayScrollbar } from "./overlay-scrollbar";
 import { liveStep, stepGroups } from "./step-groups";
 import { useViewedAgent } from "@/notifications/context";
 import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
@@ -705,7 +706,7 @@ export function Chat({
               role="log"
               aria-label="Chat timeline"
               aria-live="off"
-              className={`chat-scroll selectable min-h-0 min-w-0 flex-1 overflow-y-auto ${compact ? "px-3" : "px-[24px]"} py-4 [overflow-anchor:none]`}
+              className={`chat-scroll selectable min-h-0 min-w-0 flex-1 overflow-y-auto ${compact ? "px-3" : "px-[24px]"} py-4 [overflow-anchor:none] ${HIDE_NATIVE_SCROLLBAR}`}
               onScroll={onScroll}
             >
               <div className="mx-auto max-w-chat space-y-5">
@@ -780,6 +781,8 @@ export function Chat({
                 {compact && feedback}
               </div>
             </div>
+            {/* Its thumb floats over the edge, so the chat never moves when it starts to scroll. */}
+            <OverlayScrollbar target={scroll} />
             <MessageNavigation
               entries={messageIndex.entries}
               viewport={scroll}

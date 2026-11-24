@@ -12,6 +12,7 @@ import { PlanProgress } from "./plan-progress";
 import { SubAgentCard } from "./sub-agent-card";
 import { BrailleSpinner, Elapsed } from "./activity";
 import { Collapse } from "./collapse";
+import { OverlayScroll } from "./overlay-scrollbar";
 import { Brain, Eye, Globe, Search, Pencil } from "lucide-react";
 import { resolveToolCallIconName } from "./paseo/tool-call-icon-name";
 import type { AgentItem } from "@concors/protocol";
@@ -202,9 +203,9 @@ export const TimelineItem = memo(function TimelineItem({
         )}
       </button>
       {open && (
-        <div className="chat-scroll max-h-96 overflow-auto border-t p-4 text-ui leading-6">
+        <OverlayScroll className="chat-scroll max-h-96 overflow-auto border-t p-4 text-ui leading-6">
           <ToolOutput item={item} running={running} />
-        </div>
+        </OverlayScroll>
       )}
     </article>
   );
@@ -427,9 +428,9 @@ function StepRow({ item }: { item: TimelineEntry }) {
       )}
       <Collapse open={open}>
         <div className="pt-1 pb-2">
-          <div className="chat-scroll max-h-96 overflow-auto rounded-lg border p-4 text-ui leading-6">
+          <OverlayScroll className="chat-scroll max-h-96 overflow-auto rounded-lg border p-4 text-ui leading-6">
             <ToolOutput item={item} running={running} />
-          </div>
+          </OverlayScroll>
         </div>
       </Collapse>
     </article>
@@ -485,9 +486,9 @@ export function LiveLine({
       {step && (
         <Collapse open={open}>
           <div className="pt-1 pb-2">
-            <div className="chat-scroll max-h-96 overflow-auto rounded-lg border p-4 text-ui leading-6">
+            <OverlayScroll className="chat-scroll max-h-96 overflow-auto rounded-lg border p-4 text-ui leading-6">
               <ToolOutput item={step} running />
-            </div>
+            </OverlayScroll>
           </div>
         </Collapse>
       )}
