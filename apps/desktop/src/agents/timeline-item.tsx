@@ -310,6 +310,7 @@ function StepDetails({
  */
 function ToolOutput({ item, running }: { item: AgentItem; running: boolean }) {
   const openFile = useContext(FileLinkContext);
+  const short = useShortPath();
   const data = item.presentation;
   const filePath =
     data?.type === "files" && data.fileOperation !== "read"
@@ -337,7 +338,7 @@ function ToolOutput({ item, running }: { item: AgentItem; running: boolean }) {
             <div key={file.path}>
               {files.length > 1 && (
                 <div className="mb-2 flex min-w-0 font-mono font-medium">
-                  <FilePathLink path={file.path} label={file.path} />
+                  <FilePathLink path={file.path} label={short(file.path)} />
                 </div>
               )}
               {file.diff ? (
