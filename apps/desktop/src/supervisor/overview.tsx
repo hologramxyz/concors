@@ -28,6 +28,8 @@ import { chatState, useMinuteClock } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
 import { overviewGroups, overviewRows, workspaceAgents, type OverviewRow } from "./overview-model";
 import { QuickApproval } from "./quick-approval";
+import { shortPath } from "@/agents/short-path";
+import { useHomePath } from "@/workspace/home-path";
 import { supervisorAgentName } from "./reference-context";
 import { useSupervisorBriefs, useSupervisorDeliveries } from "./use-overview";
 
@@ -292,6 +294,12 @@ function OverviewItem({
   canAsk: boolean;
 }) {
   const { agent } = row;
+  const home = useHomePath();
+  // A file the request names, written from the session's folder, else with "~" for home.
+  const short = (path: string) => {
+    const relative = shortPath(path, [agent.directory], null);
+    return relative === path ? home(path) : relative;
+  };
   // An approval is answered here as in its chat; anything else is answered by opening it.
   const request = agent.pending[0]?.kind === "approval" ? agent.pending[0] : undefined;
   const name = supervisorAgentName(agent);
@@ -351,6 +359,14 @@ function OverviewItem({
                 <code className="rounded bg-sidebar-accent px-1 py-px font-mono text-[12px] break-all">
                   {row.needs.text}
                 </code>
+              ) : row.needs.verb ? (
+                // The tool in muted ink beside what it acts on, as the approval card shows them.
+                <>
+                  <span className="text-muted-foreground">{row.needs.verb}</span>{" "}
+                  <span title={row.needs.text}>
+                    {row.needs.path ? short(row.needs.text) : row.needs.text}
+                  </span>
+                </>
               ) : (
                 row.needs.text
               )}

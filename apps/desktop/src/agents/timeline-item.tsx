@@ -793,7 +793,7 @@ function ToolGroup({
         <span
           className={`min-w-0 flex-1 truncate text-sm text-muted-foreground ${running ? "agent-shimmer" : ""}`}
         >
-          {open || !toolSummary(latest) ? "" : `· ${toolSummary(latest)}`}
+          {open ? "" : toolSummary(latest)}
         </span>
         {failed > 0 && <span className="text-xs text-muted-foreground">{failed} failed</span>}
         <ChevronRight

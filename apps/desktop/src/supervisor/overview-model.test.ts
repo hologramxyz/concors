@@ -190,9 +190,19 @@ it("names a file approval by its verb and the file inside the workspace, a comma
     pending: [approval],
   });
   expect(overviewRows([edit, run], []).map((row) => row.needs)).toEqual([
-    { action: "Approve", text: "Edit src/index.html" },
+    // The tool and its file apart, with no separator: the row writes the path from its folder.
+    { action: "Approve", verb: "Edit", text: "/work/shop/src/index.html", path: true },
     { action: "Approve", text: "pnpm test", code: true },
   ]);
+  const fetch = agent("Docs", {
+    status: "needs_input",
+    pending: [{ ...approval, summary: '{"url":"https://example.com"}\nWebFetch' }],
+  });
+  expect(overviewRows([fetch], [])[0]?.needs).toEqual({
+    action: "Approve",
+    verb: "WebFetch",
+    text: "https://example.com",
+  });
 });
 
 it("says what the current turn was asked, not an instruction from an earlier one", () => {
