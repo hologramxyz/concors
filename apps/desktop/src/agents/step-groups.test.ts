@@ -343,9 +343,8 @@ describe("step details", () => {
         "      at TestContext.<anonymous> (/tmp/math.test.js:6:10)",
       ].join("\n"),
     });
-    expect(firstErrorLine(nodeTest)).toBe(
-      "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:",
-    );
+    // The assertion's first line only introduces the values, so they are read with it.
+    expect(firstErrorLine(nodeTest)).toBe("Expected values to be strictly equal: -1 !== 5");
     const tap = command("node --test --test-reporter=tap", {
       status: "failed",
       detail: "# tests 1\n# fail 1\nnot ok 1 - add\n  error: 'Expected values to be equal'",
@@ -356,6 +355,39 @@ describe("step details", () => {
       detail: "> build\nsrc/a.ts(3,1): error TS1005: ';' wanted.\nFound 1 error.",
     });
     expect(firstErrorLine(build)).toBe("src/a.ts(3,1): error TS1005: ';' wanted.");
+  });
+
+  it("prefers a program's complaint over a listing it printed first", () => {
+    const listed = command("ls -la concors-test; cat concors-test/package.json", {
+      status: "failed",
+      detail: [
+        "Exit code 1",
+        "total 16",
+        "drwxr-xr-x@  4 me  staff  128 Nov 23 10:02 .",
+        "drwxr-xr-x@ 12 me  staff  384 Nov 23 10:01 ..",
+        "-rw-r--r--@  1 me  staff  120 Nov 23 10:02 math.js",
+        "-rw-r--r--@  1 me  staff  210 Nov 23 10:02 math.test.js",
+        "cat: concors-test/package.json: No such file or directory",
+      ].join("\n"),
+    });
+    expect(firstErrorLine(listed)).toBe(
+      "cat: concors-test/package.json: No such file or directory",
+    );
+    const missing = command("cat package.json", {
+      status: "failed",
+      detail: "Exit code 1\ncat: package.json: No such file or directory",
+    });
+    expect(firstErrorLine(missing)).toBe("cat: package.json: No such file or directory");
+    const empty = command("ls -la empty", { status: "failed", detail: "Exit code 1\ntotal 0" });
+    expect(firstErrorLine(empty)).toBe("");
+  });
+
+  it("reads a line that ends in a colon with the one after it", () => {
+    const thrown = command("node a.js", {
+      status: "failed",
+      detail: "Exit code 1\nError: config is missing these keys:\n  apiUrl\n    at load (a.js:3:9)",
+    });
+    expect(firstErrorLine(thrown)).toBe("Error: config is missing these keys: apiUrl");
   });
 
   it("reads a failed command's exit code from its output when the daemon gave none", () => {

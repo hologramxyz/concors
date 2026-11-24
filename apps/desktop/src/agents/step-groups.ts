@@ -246,13 +246,23 @@ const TALLY =
   /^(?:[ℹ#]\s*)?(?:tests?|test files|suites?|pass(?:ed)?|fail(?:ed|ures)?|cancelled|skipped|todo|duration_ms)\b[\s:]*\d/i;
 const HEADER = /^[✖✗×]?\s*failing tests:?$/i;
 const ASSERTION = /\bassert|\bexpected\b|\breceived\b|!==/i;
-const FAILURE = /error|fail|✗|✖|×/i;
+const FAILURE =
+  /error|fail|✗|✖|×|no such file|not found|cannot|can't|denied|not permitted|unknown option/i;
+/**
+ * A program's own complaint, as it prints it on stderr: "cat: a.json: No such file or
+ * directory", "ls: cannot access 'x'". stdout and stderr reach the app as one text, so this is
+ * how a line from stderr is told apart.
+ */
+const COMPLAINT = /^[\w.-]+: .+: \S/;
+/** A listing's lines, which a command prints on success: "total 16", "drwxr-xr-x  3 me  staff". */
+const LISTING = /^total \d+$|^[bcdlps-][rwxsStT-]{9}[@+.]?\s/;
 
 /**
- * The line of a failed call's output that says what went wrong. A test's assertion (what it
- * expected and got) comes first; then the first line that names an error or failure; then the
- * first line of output. The folder a command ran in, its exit code, stack frames and a test
- * runner's totals never say what failed.
+ * The line of a failed call's output that says what went wrong. A program's complaint on stderr
+ * comes first; then a test's assertion (what it expected and got); then the first line that names
+ * an error or failure; then the first line of output. The folder a command ran in, its exit code,
+ * stack frames, a listing and a test runner's totals never say what failed. A line that only
+ * introduces the next ("Expected values to be strictly equal:") is read together with it.
  */
 export function firstErrorLine(item: AgentItem): string {
   const cwd = item.presentation?.cwd?.trim();
@@ -261,15 +271,19 @@ export function firstErrorLine(item: AgentItem): string {
     .map((line) => line.trim())
     .filter((line) => line && line !== cwd && !EXIT_LINE.test(line));
   const useful = lines.filter(
-    (line) => !TALLY.test(line) && !HEADER.test(line) && !/^at\s/.test(line),
+    (line) => !TALLY.test(line) && !HEADER.test(line) && !LISTING.test(line) && !/^at\s/.test(line),
   );
-  return (
-    useful.find((line) => ASSERTION.test(line)) ??
-    useful.find((line) => FAILURE.test(line)) ??
-    useful[0] ??
-    lines[0] ??
-    ""
-  );
+  const at = [
+    useful.findIndex((line) => COMPLAINT.test(line) && FAILURE.test(line)),
+    useful.findIndex((line) => ASSERTION.test(line)),
+    useful.findIndex((line) => FAILURE.test(line)),
+  ].find((index) => index >= 0);
+  if (at === undefined) return useful[0] ?? lines.find((line) => !LISTING.test(line)) ?? "";
+  const line = useful[at] ?? "";
+  const next = useful[at + 1];
+  if (!line.endsWith(":") || !next) return line;
+  // Node's "AssertionError [ERR_ASSERTION]: " only names the kind; what follows says what failed.
+  return `${line.replace(/^AssertionError(?: \[\w+\])?: /, "")} ${next}`;
 }
 
 /** A command's first line, with "…" when more follow (a heredoc, a script): the rest is in its details. */
