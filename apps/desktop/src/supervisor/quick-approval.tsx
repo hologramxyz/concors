@@ -81,3 +81,31 @@ export function WatchedApproval({ itemId }: { itemId: string }) {
     <QuickApproval agent={agent} pending={pending} className="mt-2" />
   ) : null;
 }
+
+/**
+ * What an approval would do, as Overview's line shows it after "Approve:": a command in plain
+ * monospace that wraps at spaces (only a token longer than the line breaks inside, by the line's
+ * break-words), a file request as the tool in muted ink beside the shortened path, anything else
+ * as written. `ink` is what the path is drawn in, a step stronger than the line around it.
+ */
+export function ApprovalAction({
+  needs,
+  short,
+  ink = "text-sidebar-foreground/90",
+}: {
+  needs: { text: string; code?: boolean; verb?: string; path?: boolean };
+  short: (path: string) => string;
+  ink?: string;
+}) {
+  if (needs.code) return <code className="font-mono text-[12px]">{needs.text}</code>;
+  if (needs.verb)
+    return (
+      <>
+        <span>{needs.verb}</span>{" "}
+        <span className={ink} title={needs.text}>
+          {needs.path ? short(needs.text) : needs.text}
+        </span>
+      </>
+    );
+  return <>{needs.text}</>;
+}

@@ -1,5 +1,10 @@
 import { mentionSegments, splitSupervisorReferences } from "@/supervisor/reference-text";
-import { WatchedApproval } from "@/supervisor/quick-approval";
+import { ApprovalAction, WatchedApproval } from "@/supervisor/quick-approval";
+import { pendingNotice, pendingWord, type PendingNotice } from "@/supervisor/pending-notice";
+import { useAgents } from "@/agents/context";
+import { approvalParts } from "@/agents/approval-summary";
+import { useHomePath } from "@/workspace/home-path";
+import { SidebarDot } from "@/workspace/sidebar-tabs";
 import { answeredNotice, answeredSummary, type AnsweredNotice } from "@/supervisor/answered-notice";
 import { finishedNotice, finishedWord, type FinishedNotice } from "@/supervisor/finished-notice";
 import { SupervisorReferences, type SupervisorReference } from "@/supervisor/reference-context";
@@ -42,7 +47,7 @@ import {
   toolSummary,
   type NameOf,
 } from "./tool-label";
-import { useShortPath } from "./short-path";
+import { shortPath, useShortPath } from "./short-path";
 import {
   commandLine,
   diffStat,
@@ -667,9 +672,9 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
 }
 
 /**
- * Supervisor's notice about a chat it watches, as the daemon wrote it. A request answered since,
- * or a turn that ended, reads as one row instead, when its chat and its shape can be read (see
- * `answeredNotice` and `finishedNotice`).
+ * Supervisor's notice about a chat it watches, as the daemon wrote it. A request still open, one
+ * answered since, or a turn that ended reads as one block or row instead, when its chat and its
+ * shape can be read (see `pendingNotice`, `answeredNotice` and `finishedNotice`).
  */
 function SupervisorNotice({ item }: { item: AgentItem }) {
   const references = useContext(SupervisorReferences);
@@ -679,6 +684,10 @@ function SupervisorNotice({ item }: { item: AgentItem }) {
   const finished = finishedNotice(item);
   const finishedChat = finished && answeredChat(references, finished.sessionId);
   if (finished && finishedChat) return <FinishedRow notice={finished} chat={finishedChat} />;
+  const pending = pendingNotice(item);
+  const pendingChat = pending && answeredChat(references, pending.sessionId);
+  if (pending && pendingChat)
+    return <PendingBlock itemId={item.id} notice={pending} chat={pendingChat} />;
   return (
     <article className="text-sm text-muted-foreground">
       <AgentMarkdown>{item.text}</AgentMarkdown>
@@ -870,6 +879,101 @@ function FinishedRow({ notice, chat }: { notice: FinishedNotice; chat: Superviso
           <CopyButton label="Copy quote" text={notice.quote} />
         </div>
       )}
+    </article>
+  );
+}
+
+/**
+ * A request a chat is waiting on, as one block shaped as an answered row: its chat, linked, then
+ * what it needs ("Needs your approval", "Needs your answer") in stronger ink beside the attention
+ * dot, as Overview marks what needs you; a request is not an error. Under it, what the request is
+ * for as Overview's approval line reads (a command in monospace, a file request as its tool beside
+ * the shortened path), clamped to two lines that the row opens in place, then Allow once and
+ * Decline where the request can be answered here. A question, a plan or a mode change has no
+ * buttons: its link opens the chat where it is answered. Once answered, the daemon rewrites the
+ * same item, and it becomes an answered row in the same place.
+ */
+function PendingBlock({
+  itemId,
+  notice,
+  chat,
+}: {
+  itemId: string;
+  notice: PendingNotice;
+  chat: SupervisorReference;
+}) {
+  const agents = useAgents();
+  const home = useHomePath();
+  const [open, setOpen] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  const text = useRef<HTMLDivElement>(null);
+  // Whether two lines cut the action short, measured again as the chat or the text changes.
+  useLayoutEffect(() => {
+    const element = text.current;
+    if (!element || open) return;
+    const check = () => setClamped(element.scrollHeight > element.clientHeight + 1);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [open, notice.action]);
+  const agent = agents.find((a) => a.id === notice.sessionId);
+  const request = agent?.pending.find((p) => p.id === notice.requestId);
+  // The notice names a file by its name alone; the open request holds its path.
+  const parts = notice.file && request?.kind === "approval" ? approvalParts(request) : null;
+  const short = (path: string) => {
+    const relative = agent ? shortPath(path, [agent.directory], null) : path;
+    return relative === path ? home(path) : relative;
+  };
+  const needs = notice.command
+    ? { text: notice.action, code: true }
+    : notice.file
+      ? parts?.tool && parts.target && parts.path
+        ? { verb: parts.tool, text: parts.target, path: true }
+        : { verb: notice.file.tool, text: notice.file.name }
+      : { text: notice.action };
+  const expandable = clamped || open;
+  const Icon = notice.kind === "question" ? MessageCircle : notice.command ? Terminal : Pencil;
+  const word = pendingWord(notice.kind);
+  const id = useId();
+  return (
+    <article aria-label={`${chat.label} ${word.toLowerCase()}`} className="text-sm">
+      <div className="mobile-tap-target relative flex w-full min-w-0 items-center gap-2 py-0.5">
+        {expandable && (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-labelledby={`${id}-mark`}
+            className="absolute inset-0 rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          />
+        )}
+        <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+        <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
+        <span className="flex shrink-0 items-center gap-1.5">
+          <SidebarDot dot="attention" />
+          <span id={`${id}-mark`} className="text-xs font-semibold text-foreground">
+            {word}
+          </span>
+        </span>
+        {expandable && (
+          // Rotated, it would sit above the toggle and take its clicks.
+          <ChevronRight
+            className={`pointer-events-none size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
+          />
+        )}
+      </div>
+      <div className="ml-[7px] min-w-0 border-l pl-4">
+        <div
+          ref={text}
+          data-pending-action
+          className={`py-0.5 leading-5 break-words text-muted-foreground ${open ? "" : "line-clamp-2"}`}
+        >
+          <ApprovalAction needs={needs} short={short} ink="text-foreground/90" />
+        </div>
+        {notice.queued && <p className="text-xs text-muted-foreground">{notice.queued}</p>}
+        {notice.answerable && <WatchedApproval itemId={itemId} />}
+      </div>
     </article>
   );
 }

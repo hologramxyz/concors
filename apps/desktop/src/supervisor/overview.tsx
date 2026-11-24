@@ -27,7 +27,7 @@ import { RowDot, RowWorking, SidebarDot } from "@/workspace/sidebar-tabs";
 import { chatState, useMinuteClock } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
 import { overviewGroups, overviewRows, workspaceAgents, type OverviewRow } from "./overview-model";
-import { QuickApproval } from "./quick-approval";
+import { ApprovalAction, QuickApproval } from "./quick-approval";
 import { shortPath } from "@/agents/short-path";
 import { useHomePath } from "@/workspace/home-path";
 import { supervisorAgentName } from "./reference-context";
@@ -479,20 +479,7 @@ function NeedsText({
       >
         {needs.action}:
       </span>{" "}
-      {needs.code ? (
-        // Wraps at spaces; only a token longer than the line breaks inside (the line's break-words).
-        <code className="font-mono text-[12px]">{needs.text}</code>
-      ) : needs.verb ? (
-        // The tool in muted ink beside what it acts on, as the approval card shows them.
-        <>
-          <span>{needs.verb}</span>{" "}
-          <span className="text-sidebar-foreground/90" title={needs.text}>
-            {needs.path ? short(needs.text) : needs.text}
-          </span>
-        </>
-      ) : (
-        needs.text
-      )}
+      <ApprovalAction needs={needs} short={short} />
     </>
   );
 }
