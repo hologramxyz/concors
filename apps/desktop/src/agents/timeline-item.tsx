@@ -12,6 +12,7 @@ import { useHomePath } from "@/workspace/home-path";
 import { SidebarDot } from "@/workspace/sidebar-tabs";
 import { answeredNotice, answeredSummary, type AnsweredNotice } from "@/supervisor/answered-notice";
 import { finishedNotice, finishedWord, type FinishedNotice } from "@/supervisor/finished-notice";
+import { pausedNotice, pausedWords, type PausedNotice } from "@/supervisor/paused-notice";
 import { SupervisorReferences, type SupervisorReference } from "@/supervisor/reference-context";
 import { SessionLinkContext } from "@/supervisor/session-link";
 import { MessageAttachments } from "./attachment-preview";
@@ -25,6 +26,7 @@ import {
   ChevronRight,
   FileCode,
   GitFork,
+  Pause,
   Square,
   Terminal,
   Wrench,
@@ -678,8 +680,9 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
 
 /**
  * Supervisor's notice about a chat it watches, as the daemon wrote it. A request still open, one
- * answered since, or a turn that ended reads as one block or row instead, when its chat and its
- * shape can be read (see `pendingNotice`, `answeredNotice` and `finishedNotice`).
+ * answered since, a turn that ended, or a paused queue reads as one block or row instead, when its
+ * chat and its shape can be read (see `pendingNotice`, `answeredNotice`, `finishedNotice` and
+ * `pausedNotice`).
  */
 function SupervisorNotice({ item }: { item: AgentItem }) {
   const references = useContext(SupervisorReferences);
@@ -693,6 +696,9 @@ function SupervisorNotice({ item }: { item: AgentItem }) {
   const pendingChat = pending && answeredChat(references, pending.sessionId);
   if (pending && pendingChat)
     return <PendingBlock itemId={item.id} notice={pending} chat={pendingChat} />;
+  const paused = pausedNotice(item);
+  const pausedChat = paused && answeredChat(references, paused.sessionId);
+  if (paused && pausedChat) return <PausedRow notice={paused} chat={pausedChat} />;
   return (
     <article className="text-sm text-muted-foreground">
       <AgentMarkdown>{item.text}</AgentMarkdown>
@@ -886,6 +892,25 @@ function FinishedRow({ notice, chat }: { notice: FinishedNotice; chat: Superviso
           <CopyButton label="Copy quote" text={notice.quote} />
         </div>
       )}
+    </article>
+  );
+}
+
+/**
+ * A chat's paused queue as one row shaped as a finished turn's: its chat, linked, then how many
+ * instructions are paused ("1 instruction paused", or "Queue paused" when the daemon's number
+ * cannot be read) in the row's usual ink. Nothing here waits on an answer, so it has no attention
+ * dot; the link opens the chat, where the queue is reviewed and resumed.
+ */
+function PausedRow({ notice, chat }: { notice: PausedNotice; chat: SupervisorReference }) {
+  const word = pausedWords(notice.count);
+  return (
+    <article aria-label={`${chat.label} ${word.toLowerCase()}`} className="text-sm">
+      <div className="mobile-tap-target relative flex w-full min-w-0 items-center gap-2 py-0.5">
+        <Pause className="size-3.5 shrink-0 text-muted-foreground" />
+        <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
+        <span className="shrink-0 text-xs text-muted-foreground">{word}</span>
+      </div>
     </article>
   );
 }
