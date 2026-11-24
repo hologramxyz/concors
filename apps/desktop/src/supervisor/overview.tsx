@@ -350,11 +350,26 @@ function OverviewItem({
             <span className="flex size-3.5 shrink-0 items-center justify-center opacity-80">
               <ProviderIcon provider={agent.provider} size={12} />
             </span>
-            <span className="min-w-0 truncate">{meta.join(" · ")}</span>
+            {/* Each fact its own span, set apart by the row's gap rather than a separator. */}
+            {meta.map((part, i) => (
+              <span key={i} className={i < 2 ? "min-w-0 truncate" : "shrink-0"}>
+                {part}
+              </span>
+            ))}
           </span>
           {row.needs && (
-            <span className="mt-1 block leading-5 break-words">
-              <span className="font-medium text-destructive">{row.needs.action}:</span>{" "}
+            // The action leads in full ink; what it is about follows a step quieter. Only a
+            // failure keeps the error colour: a request is not an error.
+            <span className="mt-1 block leading-5 break-words text-muted-foreground">
+              <span
+                className={
+                  row.needs.action === "Failed"
+                    ? "font-medium text-destructive"
+                    : "font-semibold text-sidebar-foreground"
+                }
+              >
+                {row.needs.action}:
+              </span>{" "}
               {row.needs.code ? (
                 <code className="rounded bg-sidebar-accent px-1 py-px font-mono text-[12px] break-all">
                   {row.needs.text}
@@ -362,8 +377,8 @@ function OverviewItem({
               ) : row.needs.verb ? (
                 // The tool in muted ink beside what it acts on, as the approval card shows them.
                 <>
-                  <span className="text-muted-foreground">{row.needs.verb}</span>{" "}
-                  <span title={row.needs.text}>
+                  <span>{row.needs.verb}</span>{" "}
+                  <span className="text-sidebar-foreground/90" title={row.needs.text}>
                     {row.needs.path ? short(row.needs.text) : row.needs.text}
                   </span>
                 </>

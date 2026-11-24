@@ -192,7 +192,8 @@ function MachineBanner({
         <span className="font-semibold">
           {machine ? `Setting up ${machine.name}` : "Setting up"}
         </span>
-        {machine && <span className="text-muted-foreground"> · {describeStatus(machine)}</span>}
+        {/* Set apart from the name by weight and ink, not a separator. */}
+        {machine && <span className="text-muted-foreground"> {describeStatus(machine)}</span>}
       </span>
       <span className="shrink-0 text-xs text-muted-foreground">usually a few minutes</span>
     </div>

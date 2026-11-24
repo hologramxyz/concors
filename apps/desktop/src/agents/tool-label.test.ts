@@ -41,7 +41,7 @@ describe("tool labels", () => {
   it("summarizes a call by its arguments, not its own name again", () => {
     expect(toolSummary(item("a"))).toBe("workspaces");
     expect(argumentsSummary('{"query":"select:Read","max_results":5}')).toBe("select:Read");
-    expect(argumentsSummary('{"operation":{"kind":"read","sessionId":"s1"}}')).toBe("read · s1");
+    expect(argumentsSummary('{"operation":{"kind":"read","sessionId":"s1"}}')).toBe("read, s1");
     expect(toolSummary(item("b", { presentation: { type: "mcp" } }))).toBe("Concors supervisor");
   });
 });
@@ -59,7 +59,7 @@ describe("rows from Claude Code's own tools", () => {
     expect(toolSummary(claude("ListAgents", "{}"))).toBe("");
     expect(toolDisplayName(" · SendMessage")).toBe("Send message");
     expect(toolSummary(claude("SendMessage", '{"to":"reviewer","message":"Ship it"}'))).toBe(
-      "reviewer · Ship it",
+      "reviewer, Ship it",
     );
   });
 
