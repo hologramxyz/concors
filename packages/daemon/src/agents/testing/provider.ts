@@ -410,7 +410,17 @@ export class TestAgentProvider implements AgentProvider {
         .then(() => this.finish())
         .catch(() => undefined);
     } else if (text.includes("fail")) this.finish("failed");
-    else {
+    else if (text.includes("haiku") || text.includes("long-reply")) {
+      // A final reply over several lines, as Supervisor's notice of a finished chat quotes it.
+      const haiku = "Maple leaves let go\ndrifting on the cooling wind\ndusk arrives sooner";
+      const steps = Array.from({ length: 10 }, (_, i) => `${i + 1}. Checked step ${i + 1}.`);
+      this.reply(
+        this.turnId,
+        text.includes("haiku")
+          ? `I saved this haiku to \`haiku.txt\`:\n\n${haiku}`
+          : `Release notes reviewed:\n\n${steps.join("\n")}\n\nAll ten steps pass.`,
+      );
+    } else {
       if (text.includes("background")) {
         // A sub-agent left working in the background, as Claude Code runs them: the turn that
         // started it ends first, and it keeps reporting into that turn until it is done.

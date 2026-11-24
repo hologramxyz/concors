@@ -757,7 +757,7 @@ body {
 .mobile-pane [data-page-title] {
   display: none;
 }
-/* An answered request in Supervisor names its chat alone, so the action keeps room to be read. */
+/* An answered or finished row in Supervisor names its chat alone, so the rest keeps room. */
 [data-answered-workspace] {
   display: none;
 }

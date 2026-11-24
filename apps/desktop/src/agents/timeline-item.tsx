@@ -1,6 +1,7 @@
 import { mentionSegments, splitSupervisorReferences } from "@/supervisor/reference-text";
 import { WatchedApproval } from "@/supervisor/quick-approval";
 import { answeredNotice, answeredSummary, type AnsweredNotice } from "@/supervisor/answered-notice";
+import { finishedNotice, finishedWord, type FinishedNotice } from "@/supervisor/finished-notice";
 import { SupervisorReferences, type SupervisorReference } from "@/supervisor/reference-context";
 import { SessionLinkContext } from "@/supervisor/session-link";
 import { MessageAttachments } from "./attachment-preview";
@@ -9,7 +10,16 @@ import { FileLinkContext } from "@/files/context";
 import { formatDuration } from "./duration";
 import { extractToolCallFilePath } from "./paseo/extract-tool-call-file-path";
 import { useState } from "react";
-import { Check, ChevronRight, FileCode, GitFork, Terminal, Wrench, XCircle } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  FileCode,
+  GitFork,
+  Square,
+  Terminal,
+  Wrench,
+  XCircle,
+} from "lucide-react";
 import { AgentMarkdown, CopyButton } from "./markdown";
 import { PlanProgress } from "./plan-progress";
 import { SubAgentCard } from "./sub-agent-card";
@@ -635,14 +645,18 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
 }
 
 /**
- * Supervisor's notice about a chat it watches, as the daemon wrote it. A request answered since
- * reads as one row instead, when its chat and action can be read (see `answeredNotice`).
+ * Supervisor's notice about a chat it watches, as the daemon wrote it. A request answered since,
+ * or a turn that ended, reads as one row instead, when its chat and its shape can be read (see
+ * `answeredNotice` and `finishedNotice`).
  */
 function SupervisorNotice({ item }: { item: AgentItem }) {
   const references = useContext(SupervisorReferences);
   const notice = answeredNotice(item);
   const chat = notice && answeredChat(references, notice.sessionId);
   if (notice && chat) return <AnsweredRow notice={notice} chat={chat} />;
+  const finished = finishedNotice(item);
+  const finishedChat = finished && answeredChat(references, finished.sessionId);
+  if (finished && finishedChat) return <FinishedRow notice={finished} chat={finishedChat} />;
   return (
     <article className="text-sm text-muted-foreground">
       <AgentMarkdown>{item.text}</AgentMarkdown>
@@ -668,7 +682,6 @@ function answeredChat(references: readonly SupervisorReference[], sessionId: str
  */
 function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: SupervisorReference }) {
   const [open, setOpen] = useState(false);
-  const openSession = useContext(SessionLinkContext);
   const { action, command } = notice;
   const line = command ? commandLine(commandSummary(action)) : action;
   const target = useRef<HTMLSpanElement>(null);
@@ -689,25 +702,7 @@ function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: Superviso
           className="absolute inset-0 rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         />
         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="flex max-w-1/2 min-w-0 shrink-0 items-center text-muted-foreground">
-          {chat.workspace && (
-            <span data-answered-workspace className="flex min-w-0 items-center">
-              <span className="min-w-0 truncate">{chat.workspace}</span>
-              <span className="shrink-0 whitespace-pre"> / </span>
-            </span>
-          )}
-          {openSession ? (
-            <button
-              type="button"
-              onClick={() => openSession(notice.sessionId)}
-              className="mobile-hit-area text-link relative min-w-0 truncate rounded-sm text-left underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-            >
-              {chat.label}
-            </button>
-          ) : (
-            <span className="min-w-0 truncate">{chat.label}</span>
-          )}
-        </span>
+        <NoticeChat chat={chat} sessionId={notice.sessionId} className="max-w-1/2 shrink-0" />
         <span
           ref={target}
           id={`${id}-action`}
@@ -742,6 +737,117 @@ function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: Superviso
           </div>
         </div>
       </Collapse>
+    </article>
+  );
+}
+
+/**
+ * The chat a notice is about, as Supervisor's notice links it: "Workspace / Chat", the chat's name
+ * opening it. On a phone the workspace's name gives way (mobile.css).
+ */
+function NoticeChat({
+  chat,
+  sessionId,
+  className,
+}: {
+  chat: SupervisorReference;
+  sessionId: string;
+  className: string;
+}) {
+  const openSession = useContext(SessionLinkContext);
+  return (
+    <span className={`flex min-w-0 items-center text-muted-foreground ${className}`}>
+      {chat.workspace && (
+        <span data-answered-workspace className="flex min-w-0 items-center">
+          <span className="min-w-0 truncate">{chat.workspace}</span>
+          <span className="shrink-0 whitespace-pre"> / </span>
+        </span>
+      )}
+      {openSession ? (
+        <button
+          type="button"
+          onClick={() => openSession(sessionId)}
+          className="mobile-hit-area text-link relative min-w-0 truncate rounded-sm text-left underline underline-offset-2 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        >
+          {chat.label}
+        </button>
+      ) : (
+        <span className="min-w-0 truncate">{chat.label}</span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * A chat's ended turn as one row shaped as an answered request's: its chat, linked, then how the
+ * turn ended ("Finished", "Failed", "Stopped"; only a failure in the error colour). The agent's
+ * last reply, or the chat's error, sits under it as a quiet quote with its line breaks kept and a
+ * copy button; past six lines it is clamped, and the row opens it in place. Without a reply the
+ * row stands alone, since its link already opens the chat.
+ */
+function FinishedRow({ notice, chat }: { notice: FinishedNotice; chat: SupervisorReference }) {
+  const [open, setOpen] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  const quote = useRef<HTMLDivElement>(null);
+  // Whether six lines cut the quote short, measured again as the chat or the text changes.
+  useLayoutEffect(() => {
+    const element = quote.current;
+    if (!element || open) return;
+    const check = () => setClamped(element.scrollHeight > element.clientHeight + 1);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [open, notice.quote]);
+  const expandable = clamped || open;
+  const failed = notice.state === "failed";
+  const Icon = failed ? XCircle : notice.state === "interrupted" ? Square : Check;
+  const word = finishedWord(notice.state);
+  const id = useId();
+  return (
+    <article aria-label={`${chat.label} ${word.toLowerCase()}`} className="text-sm">
+      <div className="mobile-tap-target relative flex w-full min-w-0 items-center gap-2 py-0.5">
+        {expandable && (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            aria-labelledby={`${id}-mark`}
+            className="absolute inset-0 rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          />
+        )}
+        <Icon
+          className={`size-3.5 shrink-0 ${failed ? "text-destructive" : "text-muted-foreground"}`}
+        />
+        <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
+        <span
+          id={`${id}-mark`}
+          className={`shrink-0 text-xs ${failed ? "text-destructive" : "text-muted-foreground"}`}
+        >
+          {word}
+        </span>
+        {expandable && (
+          <ChevronRight
+            className={`size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
+          />
+        )}
+      </div>
+      {notice.quote !== null && (
+        <div className="ml-[7px] flex min-w-0 items-start gap-2 border-l pl-4">
+          <div className="min-w-0 flex-1 py-0.5 text-muted-foreground">
+            {/* Each line as the agent wrote it: Markdown would run a quote's lines together. */}
+            <div
+              ref={quote}
+              data-finished-quote
+              className={`[&_p]:whitespace-pre-line ${open ? "" : "line-clamp-6"}`}
+            >
+              <AgentMarkdown>{notice.quote}</AgentMarkdown>
+            </div>
+            {notice.cut && <p className="mt-2">Read the original chat for the full reply.</p>}
+          </div>
+          <CopyButton label="Copy quote" text={notice.quote} />
+        </div>
+      )}
     </article>
   );
 }
