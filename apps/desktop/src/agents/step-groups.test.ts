@@ -6,6 +6,7 @@ import {
   exitCode,
   firstErrorLine,
   liveStep,
+  shellOutput,
   stepGroups,
   stepSummary,
 } from "./step-groups";
@@ -397,6 +398,16 @@ describe("step details", () => {
       exitCode(command("x", { presentation: { type: "shell", command: "x", exitCode: 3 } })),
     ).toBe(3);
     expect(exitCode(command("x", { detail: "boom" }))).toBeUndefined();
+  });
+
+  it("leaves the exit code out of a command's opened output, which the step's line shows", () => {
+    expect(shellOutput("Exit code 1\n✖ failing tests:\n\n  -1 !== 5")).toBe(
+      "✖ failing tests:\n\n  -1 !== 5",
+    );
+    expect(shellOutput("/repo\nboom\nExit code: 2")).toBe("/repo\nboom");
+    // Only the agent's own first or last line: output that mentions an exit code keeps it.
+    expect(shellOutput("a\nExit code 3\nb")).toBe("a\nExit code 3\nb");
+    expect(shellOutput("Exit code 0")).toBe("");
   });
 
   it("shows a command's first line, marking that more follow", () => {

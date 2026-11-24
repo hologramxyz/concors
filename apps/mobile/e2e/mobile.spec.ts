@@ -623,7 +623,10 @@ test("desktop tool cards, diffs, MCP results, subagents and markdown fit a phone
   for (let i = 0; i < 3; i++) {
     await tools.nth(i).getByRole("button").first().click();
     await expect(tools.nth(i).getByRole("button").first()).toHaveAttribute("aria-expanded", "true");
-    await expect(tools.nth(i).getByRole("button", { name: "Copy tool output" })).toBeVisible();
+    // One copy button per step: an edit's copies its diff.
+    await expect(
+      tools.nth(i).getByRole("button", { name: /^Copy (tool output|diff)$/ }),
+    ).toBeVisible();
   }
   await expect(ui.getByRole("button", { name: "Copy diff" })).toBeAttached();
   await expect(ui.getByRole("article", { name: "Sub-agent activity" })).toBeAttached();

@@ -1,7 +1,7 @@
 import { mentionSegments, splitSupervisorReferences } from "@/supervisor/reference-text";
 import { WatchedApproval } from "@/supervisor/quick-approval";
 import { MessageAttachments } from "./attachment-preview";
-import { memo, useContext } from "react";
+import { memo, useContext, useLayoutEffect, useRef, type RefObject } from "react";
 import { FileLinkContext } from "@/files/context";
 import { formatDuration } from "./duration";
 import { extractToolCallFilePath } from "./paseo/extract-tool-call-file-path";
@@ -28,6 +28,7 @@ import {
   diffStat,
   exitCode,
   firstErrorLine,
+  shellOutput,
   stepKind,
   stepSummary,
   type StepKind,
@@ -49,6 +50,9 @@ export const TimelineItem = memo(function TimelineItem({
   onFork?: ((turnId: string) => void) | undefined;
 }) {
   const [open, setOpen] = useState(false);
+  // A tool card's summary line, to tell when its command is cut off (set only for a tool card).
+  const summary = useRef<HTMLSpanElement>(null);
+  const cut = useCutOff(summary, open);
   const data = item.presentation;
   const running = live && item.status === "running";
   if (item.steps) return <StepGroup item={item} steps={item.steps} />;
@@ -187,6 +191,7 @@ export const TimelineItem = memo(function TimelineItem({
           {display.displayName}
         </span>
         <span
+          ref={summary}
           className={`min-w-0 flex-1 truncate text-sm text-muted-foreground ${running ? "agent-shimmer" : ""}`}
         >
           {detail.type === "shell"
@@ -203,9 +208,13 @@ export const TimelineItem = memo(function TimelineItem({
         )}
       </button>
       {open && (
-        <OverlayScroll className="chat-scroll max-h-96 overflow-auto border-t p-4 text-ui leading-6">
-          <ToolOutput item={item} running={running} />
-        </OverlayScroll>
+        <StepDetails
+          item={item}
+          running={running}
+          shown={detail.type === "shell" ? commandSummary(detail.command) : null}
+          cut={cut}
+          className="border-t"
+        />
       )}
     </article>
   );
@@ -224,16 +233,90 @@ function toolDetail(item: AgentItem): ToolCallDetail {
   return { type: "unknown", input: item.text, output: item.detail };
 }
 
-/** A tool call's opened details: its output, diff or arguments, with a way to copy them. */
+/**
+ * Whether a one-line element's text is cut off with an ellipsis, checked while `active` (a step's
+ * details are open) and again whenever the element is resized.
+ */
+function useCutOff(ref: RefObject<HTMLElement | null>, active: boolean): boolean {
+  const [cut, setCut] = useState(false);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!active || !element) return;
+    const check = () => setCut(element.scrollWidth > element.clientWidth);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [ref, active]);
+  return cut;
+}
+
+/**
+ * A step's opened details in a panel that hugs them, with one copy button floating in its top
+ * corner, shown on hover or focus like the app's other row actions. When the step's line did not
+ * show its whole command (cut off at the edge, its `cd` dropped, or only its first line), the
+ * command leads the panel.
+ */
+function StepDetails({
+  item,
+  running,
+  shown,
+  cut,
+  className,
+}: {
+  item: AgentItem;
+  running: boolean;
+  /** The command as the step's line shows it; null when the step is not a command. */
+  shown: string | null;
+  /** Whether the step's line is cut off with an ellipsis. */
+  cut: boolean;
+  /** The panel's frame: a border all round in a list of steps, or above it under a card. */
+  className: string;
+}) {
+  const data = item.presentation;
+  const command = (data?.command ?? item.text).trim();
+  const diff =
+    data?.type === "files" && data.fileOperation !== "read"
+      ? (data.files ?? []).map((file) => file.diff).filter(Boolean)
+      : [];
+  return (
+    <div className="group/details relative">
+      <OverlayScroll
+        className={`chat-scroll max-h-96 overflow-auto p-4 text-ui leading-6 ${className}`}
+      >
+        {shown !== null && (cut || shown !== command) && (
+          <pre className="mb-2 font-mono break-words whitespace-pre-wrap text-muted-foreground">
+            {command}
+          </pre>
+        )}
+        <ToolOutput item={item} running={running} />
+      </OverlayScroll>
+      <div className="absolute top-2 right-2 rounded-md bg-background opacity-0 transition-opacity group-focus-within/details:opacity-100 group-hover/details:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
+        {diff.length ? (
+          <CopyButton label="Copy diff" text={diff.join("\n")} />
+        ) : (
+          <CopyButton label="Copy tool output" text={item.detail || item.text} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A tool call's opened details: its output, diff or arguments. The step's line above already
+ * says what it ran on and how it ended, so an edit's single file and a command's exit code are
+ * not repeated here; an edit of several files names each above its diff.
+ */
 function ToolOutput({ item, running }: { item: AgentItem; running: boolean }) {
   const openFile = useContext(FileLinkContext);
   const data = item.presentation;
-  const filePath = extractToolCallFilePath(toolDetail(item));
+  const filePath =
+    data?.type === "files" && data.fileOperation !== "read"
+      ? null
+      : extractToolCallFilePath(toolDetail(item));
+  const files = data?.type === "files" ? (data.files ?? []) : [];
   return (
     <>
-      <div className="mb-2 flex justify-end">
-        <CopyButton text={item.detail || item.text} label="Copy tool output" />
-      </div>
       {filePath && (
         <button
           type="button"
@@ -247,42 +330,44 @@ function ToolOutput({ item, running }: { item: AgentItem; running: boolean }) {
         <pre className="font-mono break-words whitespace-pre-wrap">
           {item.detail || (running ? "Reading file…" : "No file content returned.")}
         </pre>
-      ) : data?.type === "files" && data.files?.length ? (
-        data.files.map((file) => (
-          <div key={file.path} className="mb-3">
-            <div className="mb-2 flex items-center gap-2">
-              <button
-                type="button"
-                className="min-w-0 flex-1 truncate text-left font-mono font-medium hover:underline"
-                onClick={() => openFile?.(file.path)?.()}
-              >
-                {file.path}
-              </button>
-              <CopyButton label="Copy diff" text={file.diff} />
-            </div>
-            {!file.diff && (
-              <pre className="font-mono break-words whitespace-pre-wrap">
-                {item.detail || "No diff returned."}
-              </pre>
-            )}
-            <pre className="overflow-x-auto font-mono">
-              {file.diff.split("\n").map((line, i) => (
-                <div
-                  key={i}
-                  className={
-                    line.startsWith("+")
-                      ? "bg-emerald-500/10 text-emerald-600"
-                      : line.startsWith("-")
-                        ? "bg-red-500/10 text-red-500"
-                        : ""
-                  }
+      ) : files.length ? (
+        <div className="space-y-3">
+          {files.map((file) => (
+            <div key={file.path}>
+              {files.length > 1 && (
+                <button
+                  type="button"
+                  className="mb-2 block max-w-full truncate text-left font-mono font-medium hover:underline"
+                  onClick={() => openFile?.(file.path)?.()}
                 >
-                  {line || " "}
-                </div>
-              ))}
-            </pre>
-          </div>
-        ))
+                  {file.path}
+                </button>
+              )}
+              {file.diff ? (
+                <pre className="overflow-x-auto font-mono">
+                  {file.diff.split("\n").map((line, i) => (
+                    <div
+                      key={i}
+                      className={
+                        line.startsWith("+")
+                          ? "bg-emerald-500/10 text-emerald-600"
+                          : line.startsWith("-")
+                            ? "bg-red-500/10 text-red-500"
+                            : ""
+                      }
+                    >
+                      {line || " "}
+                    </div>
+                  ))}
+                </pre>
+              ) : (
+                <pre className="font-mono break-words whitespace-pre-wrap">
+                  {item.detail || "No diff returned."}
+                </pre>
+              )}
+            </div>
+          ))}
+        </div>
       ) : data?.type === "mcp" ? (
         <div className="space-y-4">
           <section>
@@ -298,11 +383,10 @@ function ToolOutput({ item, running }: { item: AgentItem; running: boolean }) {
         </div>
       ) : (
         <pre className="font-mono break-words whitespace-pre-wrap">
-          {item.detail || item.text || "Waiting for tool output…"}
+          {(data?.type === "shell" ? shellOutput(item.detail) : item.detail) ||
+            item.text ||
+            "Waiting for tool output…"}
         </pre>
-      )}
-      {data?.type === "shell" && data.exitCode !== null && data.exitCode !== undefined && (
-        <p className="mt-2 text-muted-foreground">Exit code {data.exitCode}</p>
       )}
     </>
   );
@@ -377,6 +461,8 @@ function StepRow({ item }: { item: TimelineEntry }) {
   const code = failed ? exitCode(item) : undefined;
   const error = failed ? firstErrorLine(item) : "";
   const extra = kind === "tool" ? toolSummary(item) : "";
+  const target = useRef<HTMLSpanElement>(null);
+  const cut = useCutOff(target, open);
   return (
     <article aria-label="Tool call" data-tool-status={item.status} className="text-sm">
       <button
@@ -395,6 +481,7 @@ function StepRow({ item }: { item: TimelineEntry }) {
           {(running ? LIVE_VERBS : STEP_VERBS)[kind]}
         </span>
         <span
+          ref={target}
           className={`min-w-0 truncate ${kind === "command" ? "font-mono text-ui" : ""} ${running ? "agent-shimmer" : ""}`}
         >
           {stepTarget(item, kind)}
@@ -423,14 +510,18 @@ function StepRow({ item }: { item: TimelineEntry }) {
           />
         )}
       </button>
-      {error && (
+      {error && !open && (
         <p className="ml-[22px] truncate font-mono text-xs text-muted-foreground">{error}</p>
       )}
       <Collapse open={open}>
         <div className="pt-1 pb-2">
-          <OverlayScroll className="chat-scroll max-h-96 overflow-auto rounded-lg border p-4 text-ui leading-6">
-            <ToolOutput item={item} running={running} />
-          </OverlayScroll>
+          <StepDetails
+            item={item}
+            running={running}
+            shown={kind === "command" ? stepTarget(item, kind) : null}
+            cut={cut}
+            className="rounded-lg border"
+          />
         </div>
       </Collapse>
     </article>
@@ -455,6 +546,8 @@ export function LiveLine({
   const [open, setOpen] = useState(false);
   const kind = step && stepKind(step);
   const hasDetails = !!step && !waiting && hasMeaningfulToolCallDetail(toolDetail(step));
+  const line = useRef<HTMLSpanElement>(null);
+  const cut = useCutOff(line, open);
   return (
     <div role="status" data-live-line className="text-sm">
       <button
@@ -465,7 +558,7 @@ export function LiveLine({
         className="flex w-full min-w-0 items-center gap-2 py-0.5 text-left text-muted-foreground"
       >
         <BrailleSpinner />
-        <span className="agent-shimmer min-w-0 truncate">
+        <span ref={line} className="agent-shimmer min-w-0 truncate">
           {waiting ?? (kind ? LIVE_VERBS[kind] : "Working…")}
           {!waiting && kind && kind !== "thinking" && (
             <>
@@ -486,9 +579,13 @@ export function LiveLine({
       {step && (
         <Collapse open={open}>
           <div className="pt-1 pb-2">
-            <OverlayScroll className="chat-scroll max-h-96 overflow-auto rounded-lg border p-4 text-ui leading-6">
-              <ToolOutput item={step} running />
-            </OverlayScroll>
+            <StepDetails
+              item={step}
+              running
+              shown={kind === "command" ? stepTarget(step, kind) : null}
+              cut={cut}
+              className="rounded-lg border"
+            />
           </div>
         </Collapse>
       )}

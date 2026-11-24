@@ -286,6 +286,17 @@ export function firstErrorLine(item: AgentItem): string {
   return `${line.replace(/^AssertionError(?: \[\w+\])?: /, "")} ${next}`;
 }
 
+/**
+ * A command's output as its opened details show it: without the "Exit code N" line agents put
+ * first (Claude) or last (Codex), since the step's line already shows how it ended.
+ */
+export function shellOutput(detail: string): string {
+  const lines = detail.split("\n");
+  if (EXIT_LINE.test(lines[0]?.trim() ?? "")) lines.shift();
+  if (EXIT_LINE.test(lines.at(-1)?.trim() ?? "")) lines.pop();
+  return lines.join("\n");
+}
+
 /** A command's first line, with "…" when more follow (a heredoc, a script): the rest is in its details. */
 export function commandLine(command: string): string {
   const [first = "", ...rest] = command.trim().split("\n");
