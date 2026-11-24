@@ -51,10 +51,10 @@ def reusable(app, bundle, arch, record=False):
     revision = revision_in(app)
     if not revision:
         return {"reuse": False, "reason": "source-stamp-missing"}
-    # Asset generation rewrites these tracked PNGs using the runner's libvips. Their SVG/TSX
-    # sources, generator and dependency lock remain part of the comparison.
-    generated = ["icon", "adaptive-icon", "notification-icon", "splash", "splash-dark",
-                 "codex", "claude", "opencode"]
+    # Asset generation rewrites these tracked PNGs using the runner's libvips. Their TSX
+    # sources, generator and dependency lock remain part of the comparison. The app icon and
+    # launch marks are checked in, not generated, so they count like any other change.
+    generated = ["codex", "claude", "opencode"]
     result = subprocess.run([
         "git", "diff", "--quiet", revision, "--", ".",
         ":(exclude).github", ":(exclude)docs", ":(exclude)AGENTS.md",

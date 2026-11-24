@@ -1,40 +1,67 @@
-# Logo drop folder
+# Logos and app icons
 
-Drop the new files here under the names below, without `.current`. Each `<name>.current.<ext>`
-beside it is what that file replaces. Nothing in the app reads this folder: the swap copies the
-files into place and regenerates everything else.
+Every logo and app icon the apps use is in this folder, under its real file name. To change one,
+replace the file here and run:
 
-## What to supply
+```sh
+pnpm brand:apply          # put the files in place, regenerating what is made from a source
+pnpm brand:apply --check  # only list what differs from the apps; exits 1 if anything does
+```
 
-| Drop in                     | Format                                                 | Size                                           | Transparent                                                   | Light / dark                                                                             | Where it is used                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Source?                                                               |
-| --------------------------- | ------------------------------------------------------ | ---------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------- |
-| `app-icon.svg`              | SVG, square viewBox (current: `0 0 96 96`)             | Renders to 1024×1024; must still read at 16×16 | Corners outside the tile, yes; iOS flattens it onto `#f4f3ef` | One file. No dark or tinted app icon exists today                                        | Desktop app icon in Dock, taskbar, Finder, Start menu and Linux menus (`apps/desktop/src-tauri/icons/source.svg`). Browser tab of the web build (`apps/desktop/public/favicon.svg`, a copy). Phone home screen, Android launcher, Android notification, phone launch screen and native welcome screen, mobile web favicon (`apps/mobile/assets/*.png`). Store icon and marketing images (`apps/mobile/release/google-play/exports/`, `apps/mobile/release/marketing/exports/`) | **Yes**: generates 15 desktop icon files and 5 mobile PNGs, see below |
-| `logo-mark.svg`             | SVG, square viewBox (current: `0 0 96 96`), one colour | Vector; shown at 60–64 px                      | Yes                                                           | One file: drawn in `currentColor`, the app colours it (ink in light, light grey in dark) | Sign-in screen (`apps/desktop/src/auth/auth-screen.tsx`), startup screen (`apps/desktop/src/startup/startup-screen.tsx` and its pre-React copy in `apps/desktop/index.html`), phone Settings → About (`apps/desktop/src/settings/about-settings.tsx`), all through `apps/desktop/src/components/brand-mark.tsx`. Mac disk image window (`apps/desktop/src-tauri/macos/dmg-background.svg`)                                                                                     | No: pasted by hand into 3 files (path data)                           |
-| `wordmark.svg` _(optional)_ | SVG, text converted to outlines                        | Any width, 27 px tall in the disk image        | Yes                                                           | One colour (`#20211f`)                                                                   | Mac disk image window only (`apps/desktop/src-tauri/macos/dmg-background.svg`). Elsewhere "Concors" is plain text in the UI font. Skip this if the name stays as typed text                                                                                                                                                                                                                                                                                                    | No                                                                    |
+Replacing a file in `sources/` regenerates the files made from it, and the copies here are updated
+to match. A file you replace in any other folder is copied as it is and wins over the generated one:
+a hand-tuned 32×32 icon, say. [`manifest.json`](manifest.json) says where each file goes, and the
+desktop tests fail if this folder and the apps differ.
 
-### Rules for `app-icon.svg`
+## Files
 
-`apps/mobile/scripts/assets.mjs` derives the mobile mark from this file by deleting its first
-`<rect …/>` and swapping `color="#20211f"` for white or light grey. So the new file should keep
-that shape: **one background `<rect/>`, then the mark drawn with `fill="currentColor"` and
-`color="#20211f"` on the root `<svg>`**. If the new icon is built differently (gradient, several
-colours, no plain background), the swap slice will point the mobile assets at `logo-mark.svg`
-instead.
+| File                             | Size                       | Transparent              | Where it shows up                                                                                                                  |
+| -------------------------------- | -------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `sources/app-icon.svg`           | Square SVG, drawn at 1024  | Corners outside the tile | Source of the desktop and phone icons and the favicon (below)                                                                      |
+| `sources/logo-mark.svg`          | Square SVG (`0 0 96 96`)   | Yes, one colour          | Sign-in, startup screen, phone Settings → About. Read by the build directly; the app colours it, so one file serves light and dark |
+| `sources/wordmark.svg`           | SVG, 27 px tall            | Yes                      | Nothing reads it yet: the disk image sets "Concors" as text. Kept as the master for the next wordmark                              |
+| `desktop/icon.icns`              | 16–1024 px, 10 sizes       | Corners                  | Mac: Dock, Finder, app switcher (generated)                                                                                        |
+| `desktop/icon.ico`               | Up to 256 px               | Corners                  | Windows: taskbar, Start menu, title bar (generated)                                                                                |
+| `desktop/32x32.png`              | 32×32                      | Corners                  | Linux app menus and windows (generated)                                                                                            |
+| `desktop/128x128.png`            | 128×128                    | Corners                  | Linux app menus and windows (generated)                                                                                            |
+| `desktop/128x128@2x.png`         | 256×256                    | Corners                  | Linux app menus and windows (generated)                                                                                            |
+| `desktop/icon.png`               | 512×512                    | Corners                  | Linux packages (tarball, AUR) (generated)                                                                                          |
+| `mobile/icon.png`                | 1024×1024                  | No, on `#f4f3ef`         | iPhone home screen and App Store, mobile web favicon, phone welcome screen, Play Store icon (generated)                            |
+| `mobile/adaptive-icon.png`       | 1024×1024, mark in the 640 | Yes                      | Android launcher, on a `#f4f3ef` background (generated)                                                                            |
+| `mobile/notification-icon.png`   | 96×96, white               | Yes                      | Android notifications and themed launcher icon (generated)                                                                         |
+| `mobile/splash.png`              | 512×512, ink               | Yes                      | Phone launch screen, light (generated)                                                                                             |
+| `mobile/splash-dark.png`         | 512×512, light grey        | Yes                      | Phone launch screen, dark (generated)                                                                                              |
+| `web/favicon.svg`                | Square SVG                 | Corners                  | Browser tab of the web build; logo on the store images (generated)                                                                 |
+| `disk-image/dmg-background.svg`  | 660×440                    | No                       | Mac disk image window: the mark, "Concors" and the arrow. Source of the `.tiff`                                                    |
+| `disk-image/dmg-background.tiff` | 660×440 and 1320×880       | No                       | What the disk image actually shows; made by hand from the `.svg` (below)                                                           |
 
-macOS 26 puts icons that ignore its grid inside its own squircle (see
-`screens/logo-inventory/macos-app-icon-dock-*.png`); the current one is a full-bleed tile with a
-12/96 corner radius. Design to Apple's 1024 grid (824×824 body, ~185 px radius) or expect the
-same treatment.
+"Generated" files are made from `sources/app-icon.svg`: the desktop ones by `tauri icon`, the phone
+ones by `apps/mobile/scripts/app-icons.mjs`, and the favicon is a copy without the fixed size. When
+the icon or the favicon changes, `brand:apply` also re-renders the store images in
+`apps/mobile/release/*/exports/`.
 
-## Generated from the sources
+## Drawing a new app icon
 
-| Command (from the repo root, Node 24)                                                                                                                                        | Reads                                                            | Writes                                                                                                                                                                                                                                                                                                 |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `pnpm --filter @concors/desktop tauri icon src-tauri/icons/source.svg`, then `rm -rf apps/desktop/src-tauri/icons/android apps/desktop/src-tauri/icons/ios`                  | `apps/desktop/src-tauri/icons/source.svg`                        | `apps/desktop/src-tauri/icons/`: `icon.icns`, `icon.ico`, `icon.png`, `32x32.png`, `64x64.png`, `128x128.png`, `128x128@2x.png`, `Square*Logo.png` (9), `StoreLogo.png`. Checked: the committed files are byte-identical to this output. The `android/` and `ios/` folders it also writes are not used |
-| `pnpm --filter @concors/mobile assets`                                                                                                                                       | `source.svg` (and the provider icons, which are not ours)        | `apps/mobile/assets/`: `icon.png` 1024, `adaptive-icon.png` 1024, `notification-icon.png` 96, `splash.png` 512, `splash-dark.png` 512. Also rebuilds the git-ignored `workspace-html.ts`                                                                                                               |
-| `pnpm --filter @concors/mobile exec expo prebuild --clean` (run by EAS and `ios:local` builds)                                                                               | `apps/mobile/app.config.ts` → the PNGs above                     | Git-ignored `apps/mobile/ios/` AppIcon set and launch screen, `apps/mobile/android/` launcher mipmaps and splash                                                                                                                                                                                       |
-| `node apps/mobile/release/google-play/render.mjs`, `node apps/mobile/release/marketing/render.mjs`                                                                           | `apps/desktop/public/favicon.svg`, `apps/mobile/assets/icon.png` | Play icon, feature graphic and store screenshots in `apps/mobile/release/*/exports/`                                                                                                                                                                                                                   |
-| By hand: render `dmg-background.svg` at 660×440 and 1320×880 with Marcellus and Geist installed, then `tiffutil -cathidpicheck small.png large.png -out dmg-background.tiff` | `apps/desktop/src-tauri/macos/dmg-background.svg`                | `apps/desktop/src-tauri/macos/dmg-background.tiff`                                                                                                                                                                                                                                                     |
+- **Structure:** one plain background shape (`<rect …/>`), then the mark in one colour, drawn with
+  `fill="currentColor"` and `color="#20211f"` on the root `<svg>`. The phone's launch screen,
+  Android launcher and notification icon are made by deleting that first `<rect/>` and changing the
+  colour, so an icon built differently (gradients, several colours, no plain background) needs those
+  files hand-made in `mobile/`.
+- **Apple's grid:** macOS 26 puts icons that ignore its grid inside its own rounded square. Draw on
+  a 1024 canvas with an 824×824 body and a corner radius of about 185 px. Today's icon is a
+  full-bleed tile with a 12/96 radius, which is why macOS frames it.
+- It must still read at 16×16; if it doesn't, drop a hand-made `desktop/32x32.png` (and replace
+  the small sizes in `icon.icns`).
 
-The tray, the Dock badge and desktop notifications have no icon of their own: there is no tray
-icon, and notifications use the app icon. Concors Dev builds use the same icon as the release.
+## Still by hand afterwards
+
+- **Native phone projects:** `apps/mobile/ios/` and `android/` are not checked in. Rebuild them with
+  `pnpm --filter @concors/mobile exec expo prebuild --clean`; store builds do this themselves.
+- **Disk image background:** after changing `dmg-background.svg` (or the mark or wordmark in it),
+  render it at 660×440 and 1320×880 with Marcellus and Geist installed, then run
+  `tiffutil -cathidpicheck small.png large.png -out disk-image/dmg-background.tiff` and
+  `pnpm brand:apply`. The mark inside the `.svg` is a copy of `sources/logo-mark.svg`.
+- **Store screenshots:** the four store screenshots show the app itself, so retake them if the logo
+  appears in a captured screen.
+- **Docs:** screenshots in `docs/mobile-polish/` and `docs/images/` show the old logo.
+- **Website:** `concors-web` has its own favicon and logo.
