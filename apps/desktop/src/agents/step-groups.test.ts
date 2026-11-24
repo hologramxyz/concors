@@ -8,6 +8,7 @@ import {
   liveStep,
   shellOutput,
   stepGroups,
+  stepKind,
   stepSummary,
 } from "./step-groups";
 import { timelineView } from "./thinking";
@@ -40,6 +41,32 @@ const edit = (path: string) =>
     title: "Edit files",
     text: "File changes",
     presentation: { type: "files", fileOperation: "edit", files: [{ path, diff: "+a" }] },
+  });
+/** Claude's Write, which says in its result whether the file was new. */
+const write = (path: string, type: "create" | "update" = "create") =>
+  item({
+    title: "Edit files",
+    text: "File changes",
+    detail: JSON.stringify({
+      changes: [{ path, diff: "+a" }],
+      input: { file_path: path, content: "a" },
+      output: { content: "ok", details: { type, filePath: path } },
+    }),
+    presentation: { type: "files", fileOperation: "edit", files: [{ path, diff: "+a" }] },
+  });
+/** Codex's file change, which marks each file it added. */
+const patch = (changes: { path: string; kind: "add" | "update" }[]) =>
+  item({
+    title: "Edit files",
+    text: "File changes",
+    detail: JSON.stringify({
+      changes: changes.map(({ path, kind }) => ({ path, kind: { type: kind }, diff: "+a" })),
+    }),
+    presentation: {
+      type: "files",
+      fileOperation: "edit",
+      files: changes.map(({ path }) => ({ path, diff: "+a" })),
+    },
   });
 const web = (query: string) =>
   item({ title: "Search the web", text: query, presentation: { type: "search" } });
@@ -295,6 +322,44 @@ describe("stepSummary", () => {
       web("r"),
     ];
     expect(stepSummary(steps)).toBe("Edited 2 files, searched the web 2 times and 3 more");
+  });
+
+  it("says a new file was created when the agent reported it", () => {
+    expect(stepSummary([write("a.js"), write("b.js")])).toBe("Created 2 files");
+    expect(stepSummary([write("a.js"), edit("b.js")])).toBe("Created 1 file and edited 1 file");
+    expect(
+      stepSummary([
+        patch([
+          { path: "a.js", kind: "add" },
+          { path: "b.js", kind: "update" },
+        ]),
+      ]),
+    ).toBe("Created 1 file and edited 1 file");
+    // Overwriting a file that was there, or an agent that does not say, still reads as an edit.
+    expect(stepSummary([write("a.js", "update"), edit("b.js")])).toBe("Edited 2 files");
+  });
+
+  it("counts a file the run created as created, even after edits to it", () => {
+    expect(stepSummary([write("a.js"), edit("a.js"), edit("b.js")])).toBe(
+      "Created 1 file and edited 1 file",
+    );
+  });
+
+  it("calls a step a creation only when every file in it is new", () => {
+    expect(stepKind(write("a.js"))).toBe("create");
+    expect(stepKind(patch([{ path: "a.js", kind: "add" }]))).toBe("create");
+    expect(
+      stepKind(
+        patch([
+          { path: "a.js", kind: "add" },
+          { path: "b.js", kind: "update" },
+        ]),
+      ),
+    ).toBe("edit");
+    expect(stepKind(write("a.js", "update"))).toBe("edit");
+    expect(stepKind({ ...write("a.js"), detail: '{"output": {"details": {"type": "cre' })).toBe(
+      "edit",
+    );
   });
 
   it("counts a file once however often it is touched, and skips reasoning", () => {

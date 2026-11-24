@@ -16,7 +16,8 @@ import { parseToolTitle } from "./tool-label";
  * This only rearranges what `timelineView` returns; items reach the screen unchanged.
  */
 
-export type StepKind = "tool" | "command" | "read" | "edit" | "search" | "web" | "thinking";
+export type StepKind =
+  "tool" | "command" | "read" | "create" | "edit" | "search" | "web" | "thinking";
 
 const WEB_TOOLS = new Set(["search the web", "websearch", "web_search", "webfetch", "web_fetch"]);
 
@@ -25,11 +26,53 @@ export function stepKind(item: AgentItem): StepKind | undefined {
   const type = item.presentation?.type;
   if (type === "thinking") return "thinking";
   if (type === "shell") return "command";
-  if (type === "files") return item.presentation?.fileOperation === "read" ? "read" : "edit";
+  if (type === "files") {
+    if (item.presentation?.fileOperation === "read") return "read";
+    const files = item.presentation?.files ?? [];
+    const created = createdPaths(item);
+    return files.length && files.every((file) => created.has(file.path)) ? "create" : "edit";
+  }
   if (type === "search")
     return WEB_TOOLS.has(parseToolTitle(item.title).tool.toLowerCase()) ? "web" : "search";
   if (type === "mcp" || type === undefined) return "tool";
   return undefined;
+}
+
+const NONE: ReadonlySet<string> = new Set();
+const record = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
+/**
+ * The files an edit call made new. The presentation says only "edit", but the call's details
+ * keep what the agent reported: Claude's Write answers with `type: "create"` (or "update" when the
+ * file was there), and Codex marks each added file's change `kind: { type: "add" }`. Other agents
+ * do not say, so their calls read as edits.
+ */
+export function createdPaths(item: AgentItem): ReadonlySet<string> {
+  const data = item.presentation;
+  if (data?.type !== "files" || data.fileOperation === "read") return NONE;
+  // Most edits name neither, and their details can be long: skip parsing them.
+  if (!/"(?:create|add)"/.test(item.detail)) return NONE;
+  let detail: Record<string, unknown>;
+  try {
+    detail = record(JSON.parse(item.detail));
+  } catch {
+    return NONE;
+  }
+  if (record(record(detail["output"])["details"])["type"] === "create")
+    return new Set((data.files ?? []).map((file) => file.path));
+  const changes = Array.isArray(detail["changes"]) ? detail["changes"].map(record) : [];
+  return new Set(
+    changes
+      .filter((change) => {
+        const kind = change["kind"];
+        return kind === "add" || record(kind)["type"] === "add";
+      })
+      .map((change) => change["path"])
+      .filter((path): path is string => typeof path === "string"),
+  );
 }
 
 /** "Allowed once" for a permission the user granted; nothing for one declined or cancelled. */
@@ -42,7 +85,7 @@ export function approvalMark(item: AgentItem): string | undefined {
 }
 
 /** Calls that can stop for a permission. Reads and code searches seldom do. */
-const ASKS: ReadonlySet<StepKind> = new Set(["command", "edit", "web", "tool"]);
+const ASKS: ReadonlySet<StepKind> = new Set(["command", "create", "edit", "web", "tool"]);
 
 /**
  * Which step each granted permission was for. A permission line names no call: it is saved when
@@ -160,25 +203,32 @@ function runStatus(run: readonly AgentItem[]): AgentItem["status"] {
   return run.some((item) => item.status === "interrupted") ? "interrupted" : "completed";
 }
 
-/** Distinct files for reads and edits, calls for the rest; reasoning is not counted. */
+/**
+ * Distinct files for reads, new files and edits, calls for the rest; reasoning is not counted.
+ * A file the run made new counts as created even when a later call edits it.
+ */
 export function stepCounts(steps: readonly AgentItem[]): Map<StepKind, number> {
   const files = new Map<StepKind, Set<string>>();
   const counts = new Map<StepKind, number>();
+  const add = (kind: StepKind, path: string) =>
+    files.set(kind, (files.get(kind) ?? new Set<string>()).add(path));
   for (const item of steps) {
     const kind = stepKind(item);
     if (!kind || kind === "thinking") continue;
-    if (kind === "read" || kind === "edit") {
-      const set = files.get(kind) ?? new Set<string>();
+    if (kind === "read" || kind === "edit" || kind === "create") {
+      const created = createdPaths(item);
       const paths = item.presentation?.files?.map((file) => file.path) ?? [];
-      for (const path of paths.length ? paths : [item.text]) set.add(path);
-      files.set(kind, set);
-      counts.set(kind, set.size);
+      for (const path of paths.length ? paths : [item.text])
+        add(kind === "read" ? "read" : created.has(path) ? "create" : "edit", path);
     } else counts.set(kind, (counts.get(kind) ?? 0) + 1);
   }
+  const created = files.get("create");
+  if (created) for (const path of created) files.get("edit")?.delete(path);
+  for (const [kind, set] of files) if (set.size) counts.set(kind, set.size);
   return counts;
 }
 
-const ORDER: StepKind[] = ["tool", "command", "read", "edit", "search", "web"];
+const ORDER: StepKind[] = ["tool", "command", "read", "create", "edit", "search", "web"];
 
 function phrase(kind: StepKind, n: number, first: boolean): string {
   const plural = (one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -188,6 +238,8 @@ function phrase(kind: StepKind, n: number, first: boolean): string {
       return `${verb("Ran")} ${plural("command", "commands")}`;
     case "read":
       return `${verb("Read")} ${plural("file", "files")}`;
+    case "create":
+      return `${verb("Created")} ${plural("file", "files")}`;
     case "edit":
       return `${verb("Edited")} ${plural("file", "files")}`;
     case "web":

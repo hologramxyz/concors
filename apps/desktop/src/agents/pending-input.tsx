@@ -6,6 +6,7 @@ import { OverlayScroll } from "./overlay-scrollbar";
 import type { AgentPending } from "@concors/protocol";
 import { AgentMarkdown } from "./markdown";
 import { Button } from "@/components/ui/button";
+import { useShortPath } from "./short-path";
 export function PendingInput({
   pending,
   disabled,
@@ -32,7 +33,8 @@ export function PendingInput({
   const Icon = pending.kind === "approval" ? ShieldAlert : MessageCircleQuestionMark;
   // A lone question needs no "Question 1" label; several are numbered so answers can be matched.
   const numbered = pending.questions.length > 1;
-  const { lead, grants } = approvalParts(pending);
+  const { lead, grants, tool, target, path } = approvalParts(pending);
+  const short = useShortPath();
   const [details, setDetails] = useState(false);
   const section = useRef<HTMLElement>(null);
   // Only when it appears: a reader who scrolled away keeps their place.
@@ -58,12 +60,23 @@ export function PendingInput({
         </span>
         <div className="min-w-0 space-y-0.5">
           <h3 className="text-[length:var(--text-ui)] leading-6 font-medium">{pending.title}</h3>
-          {lead && (
-            <p
-              className={`text-xs break-words whitespace-pre-wrap text-muted-foreground ${pending.kind === "approval" ? "line-clamp-3" : ""}`}
-            >
-              {pending.kind === "approval" ? leadPreview(lead) : lead}
+          {target ? (
+            // The tool and what it acts on sit side by side, set apart by space and ink, as a
+            // step row's verb and target are.
+            <p className="flex min-w-0 gap-1.5 text-xs text-muted-foreground">
+              {tool && <span className="shrink-0">{tool}</span>}
+              <span className="min-w-0 truncate text-foreground" title={target}>
+                {path ? short(target) : target}
+              </span>
             </p>
+          ) : (
+            lead && (
+              <p
+                className={`text-xs break-words whitespace-pre-wrap text-muted-foreground ${pending.kind === "approval" ? "line-clamp-3" : ""}`}
+              >
+                {pending.kind === "approval" ? leadPreview(lead) : lead}
+              </p>
+            )
           )}
           {grants.map((grant) => (
             <p key={grant} className="text-xs break-words text-muted-foreground">

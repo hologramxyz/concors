@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentPending } from "@concors/protocol";
-import { approvalSummary, leadPreview } from "./approval-summary";
+import { approvalParts, approvalSummary, leadPreview } from "./approval-summary";
 
 const approval = (summary: string) =>
   ({
@@ -23,6 +23,25 @@ it("names a file request by its tool and path, not the raw payload", () => {
     "Write · /work/src/a.ts",
   );
   expect(approvalSummary(approval('{"command":"git push"}\nBash'))).toBe("git push");
+});
+
+it("holds a file request's tool and path apart, for a card to lay out without a separator", () => {
+  expect(approvalParts(approval('{"file_path":"/w/a.ts"}\nEdit\nFolder: /w'))).toEqual({
+    lead: "Edit · /w/a.ts",
+    tool: "Edit",
+    target: "/w/a.ts",
+    path: true,
+    grants: ["Folder: /w"],
+  });
+  expect(approvalParts(approval('{"url":"https://example.com"}\nWebFetch'))).toMatchObject({
+    tool: "WebFetch",
+    target: "https://example.com",
+    path: false,
+  });
+  expect(approvalParts(approval("pnpm test\nRun the suite"))).toEqual({
+    lead: "pnpm test\nRun the suite",
+    grants: [],
+  });
 });
 
 it("always shows the folder and network access an approval would grant", () => {

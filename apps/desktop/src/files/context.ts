@@ -60,3 +60,5 @@ export function knownWorkspace(connection: DaemonConnection | null): WorkspaceSn
   if (live) lastWorkspaces.set(connection, live);
   return live ?? lastWorkspaces.get(connection) ?? null;
 }
+/** The folders of the projects a chat's paths belong to, for writing those paths shorter. */
+export const ProjectRootsContext = createContext<readonly string[]>([]);

@@ -23,6 +23,7 @@ import { thinkingExpandable, thinkingPreview, thinkingText } from "./thinking";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import type { TimelineEntry } from "./thinking";
 import { commandSummary, toolDisplayName, toolSummary } from "./tool-label";
+import { useShortPath } from "./short-path";
 import {
   commandLine,
   diffStat,
@@ -396,6 +397,7 @@ const STEP_ICONS: Record<StepKind, typeof Terminal> = {
   tool: Wrench,
   command: Terminal,
   read: Eye,
+  create: Pencil,
   edit: Pencil,
   search: Search,
   web: Globe,
@@ -406,6 +408,7 @@ const STEP_VERBS: Record<StepKind, string> = {
   tool: "Used",
   command: "Ran",
   read: "Read",
+  create: "Created",
   edit: "Edited",
   search: "Searched for",
   web: "Searched the web for",
@@ -417,23 +420,38 @@ const LIVE_VERBS: Record<StepKind, string> = {
   tool: "Using",
   command: "Running",
   read: "Reading",
+  create: "Creating",
   edit: "Editing",
   search: "Searching for",
   web: "Searching the web for",
   thinking: "Thinking",
 };
 
-/** What a step acted on: the command as run, the file, the query, or the tool's name. */
-function stepTarget(item: AgentItem, kind: StepKind): string {
+/**
+ * What a step acted on: the command as run, the file, the query, or the tool's name. A file is
+ * written as `short` writes it (see `useShortPath`).
+ */
+function stepTarget(
+  item: AgentItem,
+  kind: StepKind,
+  short: (path: string) => string = (path) => path,
+): string {
   if (kind === "command")
     return commandLine(commandSummary(item.presentation?.command ?? item.text));
-  if (kind === "read" || kind === "edit") {
+  if (kind === "read" || kind === "edit" || kind === "create") {
     const files = item.presentation?.files ?? [];
-    if (files.length > 1) return `${files[0]?.path} and ${files.length - 1} more`;
-    return files[0]?.path ?? item.text;
+    if (files.length > 1) return `${short(files[0]?.path ?? "")} and ${files.length - 1} more`;
+    return short(files[0]?.path ?? item.text);
   }
   if (kind === "tool") return toolDisplayName(item.title);
   return item.text;
+}
+
+/** A file step's paths in full, one a line, for the tooltip of its shortened target. */
+function stepPaths(item: AgentItem, kind: StepKind): string | undefined {
+  if (kind !== "read" && kind !== "edit" && kind !== "create") return undefined;
+  const files = item.presentation?.files ?? [];
+  return files.length ? files.map((file) => file.path).join("\n") : item.text;
 }
 
 /**
@@ -445,11 +463,12 @@ function StepRow({ item }: { item: TimelineEntry }) {
   const [open, setOpen] = useState(false);
   const kind = stepKind(item) ?? "tool";
   const Icon = STEP_ICONS[kind];
+  const short = useShortPath();
   const failed = item.status === "failed";
   const running = item.status === "running";
   const hasDetails = hasMeaningfulToolCallDetail(toolDetail(item));
   const stat =
-    kind === "edit"
+    kind === "edit" || kind === "create"
       ? (item.presentation?.files ?? []).reduce(
           (sum, file) => {
             const { added, removed } = diffStat(file.diff);
@@ -483,17 +502,19 @@ function StepRow({ item }: { item: TimelineEntry }) {
         <span
           ref={target}
           className={`min-w-0 truncate ${kind === "command" ? "font-mono text-ui" : ""} ${running ? "agent-shimmer" : ""}`}
+          title={stepPaths(item, kind)}
         >
-          {stepTarget(item, kind)}
+          {stepTarget(item, kind, short)}
         </span>
         {extra && <span className="min-w-0 truncate text-muted-foreground">{extra}</span>}
         {item.approval && (
           <span className="shrink-0 text-xs text-muted-foreground">{item.approval}</span>
         )}
+        {/* A side with nothing to count is left out: a new file reads "+4", not "+4 −0". */}
         {stat && (stat.added > 0 || stat.removed > 0) && (
-          <span className="shrink-0 text-xs tabular-nums">
-            <span className="text-emerald-600">+{stat.added}</span>{" "}
-            <span className="text-red-500">−{stat.removed}</span>
+          <span className="flex shrink-0 gap-1 text-xs tabular-nums">
+            {stat.added > 0 && <span className="text-emerald-600">+{stat.added}</span>}
+            {stat.removed > 0 && <span className="text-red-500">−{stat.removed}</span>}
           </span>
         )}
         {failed && (
@@ -545,6 +566,7 @@ export function LiveLine({
 }) {
   const [open, setOpen] = useState(false);
   const kind = step && stepKind(step);
+  const short = useShortPath();
   const hasDetails = !!step && !waiting && hasMeaningfulToolCallDetail(toolDetail(step));
   const line = useRef<HTMLSpanElement>(null);
   const cut = useCutOff(line, open);
@@ -563,8 +585,11 @@ export function LiveLine({
           {!waiting && kind && kind !== "thinking" && (
             <>
               {" "}
-              <span className={`text-foreground ${kind === "command" ? "font-mono text-ui" : ""}`}>
-                {stepTarget(step, kind)}
+              <span
+                className={`text-foreground ${kind === "command" ? "font-mono text-ui" : ""}`}
+                title={stepPaths(step, kind)}
+              >
+                {stepTarget(step, kind, short)}
               </span>
             </>
           )}
