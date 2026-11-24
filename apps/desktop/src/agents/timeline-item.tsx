@@ -1,7 +1,7 @@
 import { mentionSegments, splitSupervisorReferences } from "@/supervisor/reference-text";
 import { WatchedApproval } from "@/supervisor/quick-approval";
 import { MessageAttachments } from "./attachment-preview";
-import { memo, useContext, useLayoutEffect, useRef, type RefObject } from "react";
+import { memo, useContext, useId, useLayoutEffect, useRef, type RefObject } from "react";
 import { FileLinkContext } from "@/files/context";
 import { formatDuration } from "./duration";
 import { extractToolCallFilePath } from "./paseo/extract-tool-call-file-path";
@@ -336,13 +336,9 @@ function ToolOutput({ item, running }: { item: AgentItem; running: boolean }) {
           {files.map((file) => (
             <div key={file.path}>
               {files.length > 1 && (
-                <button
-                  type="button"
-                  className="mb-2 block max-w-full truncate text-left font-mono font-medium hover:underline"
-                  onClick={() => openFile?.(file.path)?.()}
-                >
-                  {file.path}
-                </button>
+                <div className="mb-2 flex min-w-0 font-mono font-medium">
+                  <FilePathLink path={file.path} label={file.path} />
+                </div>
               )}
               {file.diff ? (
                 <pre className="overflow-x-auto font-mono">
@@ -454,6 +450,40 @@ function stepPaths(item: AgentItem, kind: StepKind): string | undefined {
   return files.length ? files.map((file) => file.path).join("\n") : item.text;
 }
 
+/** How a file link reads in a chat message (`.chat-markdown a`), for a path outside one. */
+const FILE_LINK =
+  "text-(--link) underline decoration-[color-mix(in_srgb,var(--link)_40%,transparent)] underline-offset-2 hover:decoration-current";
+
+/**
+ * A file a step touched, opening as a file link in a chat message does, through the same handler
+ * and with its full path. One the chat cannot open (outside the workspace) reads as such a link
+ * does there: dotted, and saying so, but not clickable.
+ */
+function FilePathLink({ path, label }: { path: string; label: string }) {
+  const openFile = useContext(FileLinkContext);
+  const open = openFile?.(path) ?? null;
+  if (!open)
+    return (
+      <span
+        className="min-w-0 truncate underline decoration-dotted underline-offset-2"
+        title={`Outside this project: ${path}`}
+      >
+        {label}
+      </span>
+    );
+  return (
+    <button
+      type="button"
+      title={path}
+      onClick={open}
+      // Above a row's own toggle, which lies under the whole line.
+      className={`relative min-w-0 truncate rounded-sm text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none ${FILE_LINK}`}
+    >
+      {label}
+    </button>
+  );
+}
+
 /**
  * One step of a finished turn as a line of text, not a card: icon and verb in muted ink, what it
  * acted on in normal ink, and a chevron to today's details. A failed step also shows its exit
@@ -482,55 +512,110 @@ function StepRow({ item }: { item: TimelineEntry }) {
   const extra = kind === "tool" ? toolSummary(item) : "";
   const target = useRef<HTMLSpanElement>(null);
   const cut = useCutOff(target, open);
+  const openFile = useContext(FileLinkContext);
+  const id = useId();
+  // An edit's file opens from its row once the step is done, as a file link in the chat does.
+  const files = kind === "edit" || kind === "create" ? (item.presentation?.files ?? []) : [];
+  const file = !running ? files[0]?.path : undefined;
+  const opens = !!file && !!openFile?.(file);
+  const more = files.length > 1 && (
+    <span className="shrink-0" title={stepPaths(item, kind)}>
+      {` and ${files.length - 1} more`}
+    </span>
+  );
+  const lead = (
+    <>
+      {failed ? (
+        <XCircle className="size-3.5 shrink-0 text-destructive" />
+      ) : (
+        <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+      )}
+      <span className={`shrink-0 text-muted-foreground ${running ? "agent-shimmer" : ""}`}>
+        {(running ? LIVE_VERBS : STEP_VERBS)[kind]}
+      </span>
+    </>
+  );
+  const rest = (
+    <>
+      {extra && <span className="min-w-0 truncate text-muted-foreground">{extra}</span>}
+      {item.approval && (
+        <span className="shrink-0 text-xs text-muted-foreground">{item.approval}</span>
+      )}
+      {/* A side with nothing to count is left out: a new file reads "+4", not "+4 −0". */}
+      {stat && (stat.added > 0 || stat.removed > 0) && (
+        <span className="flex shrink-0 gap-1 text-xs tabular-nums">
+          {stat.added > 0 && <span className="text-emerald-600">+{stat.added}</span>}
+          {stat.removed > 0 && <span className="text-red-500">−{stat.removed}</span>}
+        </span>
+      )}
+      {failed && (
+        <span className="shrink-0 text-xs text-destructive">
+          {code === undefined ? "Failed" : `Exit code ${code}`}
+        </span>
+      )}
+      {item.status === "interrupted" && (
+        <span className="shrink-0 text-xs text-muted-foreground">Stopped</span>
+      )}
+      {hasDetails && (
+        <ChevronRight
+          className={`size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
+        />
+      )}
+    </>
+  );
   return (
     <article aria-label="Tool call" data-tool-status={item.status} className="text-sm">
-      <button
-        type="button"
-        disabled={!hasDetails}
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={hasDetails ? open : undefined}
-        className="flex w-full min-w-0 items-center gap-2 py-0.5 text-left"
-      >
-        {failed ? (
-          <XCircle className="size-3.5 shrink-0 text-destructive" />
-        ) : (
-          <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-        )}
-        <span className={`shrink-0 text-muted-foreground ${running ? "agent-shimmer" : ""}`}>
-          {(running ? LIVE_VERBS : STEP_VERBS)[kind]}
-        </span>
-        <span
-          ref={target}
-          className={`min-w-0 truncate ${kind === "command" ? "font-mono text-ui" : ""} ${running ? "agent-shimmer" : ""}`}
-          title={stepPaths(item, kind)}
-        >
-          {stepTarget(item, kind, short)}
-        </span>
-        {extra && <span className="min-w-0 truncate text-muted-foreground">{extra}</span>}
-        {item.approval && (
-          <span className="shrink-0 text-xs text-muted-foreground">{item.approval}</span>
-        )}
-        {/* A side with nothing to count is left out: a new file reads "+4", not "+4 −0". */}
-        {stat && (stat.added > 0 || stat.removed > 0) && (
-          <span className="flex shrink-0 gap-1 text-xs tabular-nums">
-            {stat.added > 0 && <span className="text-emerald-600">+{stat.added}</span>}
-            {stat.removed > 0 && <span className="text-red-500">−{stat.removed}</span>}
-          </span>
-        )}
-        {failed && (
-          <span className="shrink-0 text-xs text-destructive">
-            {code === undefined ? "Failed" : `Exit code ${code}`}
-          </span>
-        )}
-        {item.status === "interrupted" && (
-          <span className="shrink-0 text-xs text-muted-foreground">Stopped</span>
-        )}
-        {hasDetails && (
-          <ChevronRight
-            className={`size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
+      {file && opens ? (
+        // A button cannot hold another, so the row's toggle lies under the whole line and the
+        // path sits above it: a click on the path opens the file, anywhere else opens the step.
+        // The toggle keeps the line's words as its name; the words beside it are not read twice.
+        <div className="relative flex w-full min-w-0 items-center gap-2 py-0.5">
+          <button
+            type="button"
+            disabled={!hasDetails}
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={hasDetails ? open : undefined}
+            aria-labelledby={`${id}-lead ${id}-path ${id}-rest`}
+            className="absolute inset-0 rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           />
-        )}
-      </button>
+          <span id={`${id}-lead`} aria-hidden className="contents">
+            {lead}
+          </span>
+          <span id={`${id}-path`} className="contents">
+            <FilePathLink path={file} label={short(file)} />
+            {more}
+          </span>
+          <span id={`${id}-rest`} aria-hidden className="contents">
+            {rest}
+          </span>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={!hasDetails}
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={hasDetails ? open : undefined}
+          className="flex w-full min-w-0 items-center gap-2 py-0.5 text-left"
+        >
+          {lead}
+          {file ? (
+            // Outside the workspace: as a chat message shows a file it cannot open.
+            <>
+              <FilePathLink path={file} label={short(file)} />
+              {more}
+            </>
+          ) : (
+            <span
+              ref={target}
+              className={`min-w-0 truncate ${kind === "command" ? "font-mono text-ui" : ""} ${running ? "agent-shimmer" : ""}`}
+              title={stepPaths(item, kind)}
+            >
+              {stepTarget(item, kind, short)}
+            </span>
+          )}
+          {rest}
+        </button>
+      )}
       {error && !open && (
         <p className="ml-[22px] truncate font-mono text-xs text-muted-foreground">{error}</p>
       )}

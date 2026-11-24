@@ -1,5 +1,5 @@
 import { seedProject } from "./support/projects.ts";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
@@ -305,6 +305,49 @@ test("an unconfirmed message can stop retrying, to edit it or remove its attachm
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Just the text");
     await expect(page.getByRole("log").getByRole("button", { name: "spec.pdf" })).toHaveCount(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("an edit's path opens its file, and the rest of its row opens the step", async ({ page }) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-edit-path-"));
+  try {
+    await writeFile(join(directory, "example.ts"), "export const fromDisk = true;\n");
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Edit paths", directory);
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
+    await chooseProvider(page);
+    // Held, the turn keeps its finished edit as a row of its own (see the journey above).
+    await page.getByRole("textbox", { name: "Message Codex" }).fill("rich hold");
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    await expect(page.getByRole("log").locator("[data-live-line]")).toContainText("Running");
+    const edited = page
+      .getByRole("log")
+      .getByRole("article", { name: "Tool call", exact: true })
+      .filter({ hasText: "example.ts" });
+    const toggle = edited.getByRole("button", { name: /^Edited example\.ts/ });
+    const path = edited.getByRole("button", { name: "example.ts", exact: true });
+    await expect(path).toHaveAttribute("title", "example.ts");
+    // Anywhere on the row but its path opens and closes the step: here, its icon.
+    const icon = { position: { x: 6, y: 8 } };
+    await toggle.click(icon);
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByText("+new line", { exact: true })).toBeVisible();
+    await toggle.click(icon);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    // The path is a control of its own, reached by keyboard, and opens the file without the step.
+    await path.focus();
+    await expect(path).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("textbox", { name: "Code editor: example.ts" })).toBeVisible();
+    // The chat is behind the file now, but its row is still there, and still closed.
+    await expect(page.locator("button[aria-labelledby][aria-expanded]")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
