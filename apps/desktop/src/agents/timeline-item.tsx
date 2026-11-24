@@ -57,7 +57,7 @@ export const TimelineItem = memo(function TimelineItem({
   const data = item.presentation;
   const running = live && item.status === "running";
   if (item.steps) return <StepGroup item={item} steps={item.steps} />;
-  if (item.quiet) return <StepRow item={item} />;
+  if (item.quiet) return <StepRow item={item} live={live} />;
   if (item.group) return <ToolGroup first={item} items={item.group} live={live} />;
   if (item.kind === "user" || item.kind === "assistant") {
     const message = item.kind === "user" ? splitSupervisorReferences(item.text) : null;
@@ -492,13 +492,15 @@ function FilePathLink({ path, label }: { path: string; label: string }) {
  * acted on in normal ink, and a chevron to today's details. A failed step also shows its exit
  * code and the line that says what went wrong, since it is shown outside any summary.
  */
-function StepRow({ item }: { item: TimelineEntry }) {
+function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
   const [open, setOpen] = useState(false);
   const kind = stepKind(item) ?? "tool";
   const Icon = STEP_ICONS[kind];
   const short = useShortPath();
   const failed = item.status === "failed";
-  const running = item.status === "running";
+  // Running only while its turn is: a finished turn has nothing left running, even when the
+  // client's copy of a call never heard it end (it would read "Editing" for good).
+  const running = live && item.status === "running";
   const hasDetails = hasMeaningfulToolCallDetail(toolDetail(item));
   const stat =
     kind === "edit" || kind === "create"
@@ -740,9 +742,14 @@ function StepGroup({ item, steps }: { item: AgentItem; steps: TimelineEntry[] })
           <div data-collapse-rows className="ml-[7px] space-y-1 border-l pl-4">
             {steps.map((step) =>
               stepKind(step) === "thinking" ? (
-                <Thinking key={step.id} item={step} running={step.status === "running"} />
+                <Thinking
+                  key={step.id}
+                  item={step}
+                  running={running && step.status === "running"}
+                />
               ) : (
-                <StepRow key={step.id} item={step} />
+                // A group still running is in the turn in progress; a finished one is not.
+                <StepRow key={step.id} item={step} live={running} />
               ),
             )}
           </div>
