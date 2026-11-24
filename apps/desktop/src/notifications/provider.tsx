@@ -12,6 +12,7 @@ import { errorMessage, firstNotificationProblem, notificationProblem } from "./a
 import { isMac } from "@/shortcuts/bindings";
 import { isTauri } from "@/tauri";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { playAgentSound, unlockAudio } from "./sound";
 import { terminalAgentSound } from "./terminal";
 import { paneNames } from "@/agents/visible-sessions";
@@ -30,6 +31,7 @@ export function NotificationProvider({
   children,
   inAppOnly = false,
   cards = true,
+  besideOverview = false,
 }: {
   connection: DaemonConnection | null;
   onOpen: (id: string) => void;
@@ -40,6 +42,8 @@ export function NotificationProvider({
    * small pop-ups, and the Agents list already marks what finished or needs input.
    */
   cards?: boolean;
+  /** Supervisor's Overview panel is open at the window's right edge; cards keep to its left. */
+  besideOverview?: boolean;
 }) {
   const views = useRef(new Map<string, number>());
   const lists = useRef(new Map<string, number>());
@@ -258,9 +262,18 @@ export function NotificationProvider({
   return (
     <NotificationContext value={{ view, list }}>
       {children}
+      {/*
+        Top right, below the tab bar and the pane's title row, where macOS shows its banners too:
+        a chat's approval card and composer grow up from the bottom, and a card there hid their
+        buttons. Beside Overview the cards sit left of its 340px panel (plus the surface's 0.5rem
+        margin and border), so they never cover its rows' Allow once and Decline.
+      */}
       <aside
         aria-label="Agent notifications"
-        className="fixed right-4 bottom-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
+        className={cn(
+          "fixed top-24 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2",
+          besideOverview ? "right-[calc(340px+1.5rem+1px)]" : "right-4",
+        )}
       >
         {notices.map((notice) => (
           <NoticeCard key={notice.id} id={notice.id} onExpire={expire}>
