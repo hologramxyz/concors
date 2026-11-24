@@ -757,6 +757,10 @@ body {
 .mobile-pane [data-page-title] {
   display: none;
 }
+/* An answered request in Supervisor names its chat alone, so the action keeps room to be read. */
+[data-answered-workspace] {
+  display: none;
+}
 .mobile-pane [data-schedule-card] {
   border-radius: calc(var(--corner-radius) * 2);
   background: var(--card);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AgentItem, AgentPending } from "@concors/protocol";
-import { answeredNotice, answeredRuns, ANSWERED_TITLE } from "./answered-notice";
+import { answeredNotice, answeredRuns, answeredSummary, ANSWERED_TITLE } from "./answered-notice";
 
 const SUPERVISOR = "11111111-1111-4111-8111-111111111111";
 const CHAT = "22222222-2222-4222-8222-222222222222";
@@ -31,9 +31,30 @@ describe("answeredNotice", () => {
   it("reads the chat from the ID and the action from the quote", () => {
     expect(answeredNotice(notice(`${sentence}\n\n> pnpm test`))).toEqual({
       sessionId: CHAT,
+      kind: "approval",
       action: "pnpm test",
       command: true,
     });
+  });
+
+  it("tells an answered question by the daemon's phrase, and reads it in the normal font", () => {
+    const asked = `**Star Catcher / [Game QA](concors://session/${CHAT})** is no longer waiting for that input.`;
+    expect(answeredNotice(notice(`${asked}\n\n> Which color?`))).toEqual({
+      sessionId: CHAT,
+      kind: "question",
+      action: "Which color?",
+      command: false,
+    });
+  });
+
+  it("calls a notice with neither phrase a request, read as before", () => {
+    const read = answeredNotice(notice(`Something else entirely.\n\n> pnpm test`));
+    expect(read).toMatchObject({ kind: "request", action: "pnpm test", command: true });
+  });
+
+  it("reads only the sentence for the phrase, not the quote", () => {
+    const quoted = `Something else.\n\n> echo "is no longer waiting for that input"`;
+    expect(answeredNotice(notice(quoted))?.kind).toBe("request");
   });
 
   it("keeps a quoted action's every line", () => {
@@ -48,12 +69,6 @@ describe("answeredNotice", () => {
     expect(answeredNotice(notice(`${sentence}\n\n> Write a/b.txt && rm x`))?.command).toBe(true);
   });
 
-  it("does not depend on the sentence's words", () => {
-    expect(answeredNotice(notice(`Something else entirely.\n\n> pnpm test`))?.action).toBe(
-      "pnpm test",
-    );
-  });
-
   describe("leaves to the notice as written", () => {
     const text = `${sentence}\n\n> pnpm test`;
     it.each([
@@ -66,6 +81,19 @@ describe("answeredNotice", () => {
       ["text after the quote", notice(`${text}\n\nOpen that chat to respond.`)],
     ])("%s", (_, item) => expect(answeredNotice(item)).toBeNull());
   });
+});
+
+describe("answeredSummary", () => {
+  const approval = notice(`${sentence}\n\n> pnpm test`);
+  const question = notice(`Game QA is no longer waiting for that input.\n\n> Which color?`);
+  const unknown = notice(`Game QA has moved on.\n\n> pnpm test`);
+  it.each([
+    [[approval, approval, approval], "3 approvals answered"],
+    [[question, question], "2 questions answered"],
+    [[approval, question], "2 requests answered"],
+    [[approval, unknown], "2 requests answered"],
+    [[unknown, unknown], "2 requests answered"],
+  ])("%#: %s", (items, summary) => expect(answeredSummary(items)).toBe(summary));
 });
 
 describe("answeredRuns", () => {
@@ -134,7 +162,7 @@ describe("the daemon's answered-approval notice", () => {
     questions: [],
   });
 
-  async function answered(pending: AgentPending) {
+  async function answered(pending: AgentPending, after: object = {}) {
     const path = new URL("../../../../packages/daemon/src/supervisor/watch.ts", import.meta.url)
       .href;
     const { SupervisorWatches } = (await import(/* @vite-ignore */ path)) as {
@@ -175,7 +203,7 @@ describe("the daemon's answered-approval notice", () => {
       () => new Set([SUPERVISOR]),
     );
     watches.track(SUPERVISOR, CHAT, "watch-1");
-    target = agent(CHAT);
+    target = agent(CHAT, after);
     watches.observe({ type: "agent.state", agent: target });
     return [...items.values()].find((item) => item.title === ANSWERED_TITLE);
   }
@@ -183,7 +211,12 @@ describe("the daemon's answered-approval notice", () => {
   it("is read as an answered command", async () => {
     const item = await answered(approval("pnpm test", "{}"));
     expect(item).toBeDefined();
-    expect(answeredNotice(item!)).toEqual({ sessionId: CHAT, action: "pnpm test", command: true });
+    expect(answeredNotice(item!)).toEqual({
+      sessionId: CHAT,
+      kind: "approval",
+      action: "pnpm test",
+      command: true,
+    });
     // Folded with another, it still names its chat.
     expect(answeredRuns<Row>([item!, item!], (id) => id === CHAT)[0]?.answered).toHaveLength(2);
   });
@@ -194,9 +227,45 @@ describe("the daemon's answered-approval notice", () => {
     const item = await answered(approval(`${input}\nWrite`, detail));
     expect(answeredNotice(item!)).toEqual({
       sessionId: CHAT,
+      kind: "approval",
       action: "Write index.html",
       command: false,
     });
+  });
+
+  it("is read as an approval whether or not the chat carried on", async () => {
+    const item = await answered(approval("pnpm test", "{}"), { status: "done" });
+    expect(answeredNotice(item!)?.kind).toBe("approval");
+  });
+
+  it("is read as an answered question", async () => {
+    const question: AgentPending = {
+      id: "question-1",
+      turnId: "turn-1",
+      kind: "questions",
+      title: "Which color?",
+      summary: "",
+      detail: "{}",
+      decisions: [],
+      questions: [
+        {
+          id: "color",
+          header: "Color",
+          question: "Which color?",
+          options: [{ label: "Blue", description: "Use blue" }],
+        },
+      ],
+    } as unknown as AgentPending;
+    for (const after of [{}, { status: "done" }]) {
+      const item = await answered(question, after);
+      expect(answeredNotice(item!)).toEqual({
+        sessionId: CHAT,
+        kind: "question",
+        action: "Which color?",
+        command: false,
+      });
+      expect(answeredSummary([item!, item!])).toBe("2 questions answered");
+    }
   });
 
   it("keeps a long command whole", async () => {

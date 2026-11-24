@@ -1,6 +1,6 @@
 import { mentionSegments, splitSupervisorReferences } from "@/supervisor/reference-text";
 import { WatchedApproval } from "@/supervisor/quick-approval";
-import { answeredNotice, type AnsweredNotice } from "@/supervisor/answered-notice";
+import { answeredNotice, answeredSummary, type AnsweredNotice } from "@/supervisor/answered-notice";
 import { SupervisorReferences, type SupervisorReference } from "@/supervisor/reference-context";
 import { SessionLinkContext } from "@/supervisor/session-link";
 import { MessageAttachments } from "./attachment-preview";
@@ -16,7 +16,7 @@ import { SubAgentCard } from "./sub-agent-card";
 import { BrailleSpinner, Elapsed } from "./activity";
 import { Collapse } from "./collapse";
 import { OverlayScroll } from "./overlay-scrollbar";
-import { Brain, Eye, Globe, Search, Pencil } from "lucide-react";
+import { Brain, Eye, Globe, MessageCircle, Search, Pencil } from "lucide-react";
 import { resolveToolCallIconName } from "./paseo/tool-call-icon-name";
 import type { AgentItem } from "@concors/protocol";
 import { buildToolCallDisplayModel } from "./paseo/tool-call-display";
@@ -660,9 +660,11 @@ function answeredChat(references: readonly SupervisorReference[], sessionId: str
 
 /**
  * An answered request as one line, shaped as an answered step ("Ran echo test  Allowed once"):
- * its chat, linked as Supervisor's notice links it, what it asked for, and "Resumed", since the
- * notice does not say how it was answered. A command reads in monospace without the `cd` in
- * front, as a step's does; opening the row shows the action in full when the line cuts it short.
+ * its chat, linked as Supervisor's notice links it, what it asked for, and "Answered", which holds
+ * however it was answered and whether or not the chat carried on. A command reads in monospace
+ * without the `cd` in front, as a step's does; a question and a file request read in the normal
+ * font. Opening the row shows the action in full when the line cuts it short. On a phone the
+ * workspace's name gives way to the action (mobile.css).
  */
 function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: SupervisorReference }) {
   const [open, setOpen] = useState(false);
@@ -672,7 +674,7 @@ function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: Superviso
   const target = useRef<HTMLSpanElement>(null);
   const cut = useCutOff(target, true);
   const expandable = cut || line !== action;
-  const Icon = command ? Terminal : Pencil;
+  const Icon = notice.kind === "question" ? MessageCircle : command ? Terminal : Pencil;
   const id = useId();
   return (
     <article aria-label="Answered request" className="text-sm">
@@ -688,8 +690,12 @@ function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: Superviso
         />
         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
         <span className="flex max-w-1/2 min-w-0 shrink-0 items-center text-muted-foreground">
-          {chat.workspace && <span className="min-w-0 truncate">{chat.workspace}</span>}
-          {chat.workspace && <span className="shrink-0 whitespace-pre"> / </span>}
+          {chat.workspace && (
+            <span data-answered-workspace className="flex min-w-0 items-center">
+              <span className="min-w-0 truncate">{chat.workspace}</span>
+              <span className="shrink-0 whitespace-pre"> / </span>
+            </span>
+          )}
           {openSession ? (
             <button
               type="button"
@@ -711,7 +717,7 @@ function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: Superviso
           {line}
         </span>
         <span id={`${id}-mark`} aria-hidden className="shrink-0 text-xs text-muted-foreground">
-          Resumed
+          Answered
         </span>
         {expandable && (
           <ChevronRight
@@ -723,14 +729,15 @@ function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: Superviso
         <div className="pt-1 pb-2">
           <div className="group/details relative">
             <OverlayScroll className="chat-scroll max-h-96 overflow-auto rounded-lg border p-4 text-ui leading-6">
+              {/* Room on the right for the copy button, so the first line wraps before it. */}
               <pre
-                className={`break-words whitespace-pre-wrap text-muted-foreground ${command ? "font-mono" : "font-sans"}`}
+                className={`pr-7 break-words whitespace-pre-wrap text-muted-foreground ${command ? "font-mono" : "font-sans"}`}
               >
                 {action}
               </pre>
             </OverlayScroll>
             <div className="absolute top-2 right-2 rounded-md bg-background opacity-0 transition-opacity group-focus-within/details:opacity-100 group-hover/details:opacity-100 motion-reduce:transition-none [@media(hover:none)]:opacity-100">
-              <CopyButton label="Copy quote" text={action} />
+              <CopyButton label="Copy" text={action} />
             </div>
           </div>
         </div>
@@ -753,7 +760,7 @@ function AnsweredGroup({ items }: { items: AgentItem[] }) {
         aria-expanded={open}
         className="mobile-tap-target flex max-w-full items-center gap-2 py-0.5 text-left text-muted-foreground transition-colors hover:text-foreground motion-reduce:transition-none"
       >
-        <span className="min-w-0 truncate">{items.length} approvals answered</span>
+        <span className="min-w-0 truncate">{answeredSummary(items)}</span>
         <ChevronRight
           className={`size-3 shrink-0 transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
         />
