@@ -11,6 +11,7 @@ import { AgentMarkdown, CopyButton } from "./markdown";
 import { PlanProgress } from "./plan-progress";
 import { SubAgentCard } from "./sub-agent-card";
 import { BrailleSpinner, Elapsed } from "./activity";
+import { Collapse } from "./collapse";
 import { Brain, Eye, Globe, Search, Pencil } from "lucide-react";
 import { resolveToolCallIconName } from "./paseo/tool-call-icon-name";
 import type { AgentItem } from "@concors/protocol";
@@ -417,18 +418,20 @@ function StepRow({ item }: { item: TimelineEntry }) {
         )}
         {hasDetails && (
           <ChevronRight
-            className={`size-3 shrink-0 text-muted-foreground transition-transform ${open ? "rotate-90" : ""}`}
+            className={`size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
           />
         )}
       </button>
       {error && (
         <p className="ml-[22px] truncate font-mono text-xs text-muted-foreground">{error}</p>
       )}
-      {open && (
-        <div className="chat-scroll mt-1 mb-2 max-h-96 overflow-auto rounded-lg border p-4 text-ui leading-6">
-          <ToolOutput item={item} running={running} />
+      <Collapse open={open}>
+        <div className="pt-1 pb-2">
+          <div className="chat-scroll max-h-96 overflow-auto rounded-lg border p-4 text-ui leading-6">
+            <ToolOutput item={item} running={running} />
+          </div>
         </div>
-      )}
+      </Collapse>
     </article>
   );
 }
@@ -475,14 +478,18 @@ export function LiveLine({
         <Elapsed startedAt={startedAt} />
         {hasDetails && (
           <ChevronRight
-            className={`size-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+            className={`size-3 shrink-0 transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
           />
         )}
       </button>
-      {open && step && (
-        <div className="chat-scroll mt-1 mb-2 max-h-96 overflow-auto rounded-lg border p-4 text-ui leading-6">
-          <ToolOutput item={step} running />
-        </div>
+      {step && (
+        <Collapse open={open}>
+          <div className="pt-1 pb-2">
+            <div className="chat-scroll max-h-96 overflow-auto rounded-lg border p-4 text-ui leading-6">
+              <ToolOutput item={step} running />
+            </div>
+          </div>
+        </Collapse>
       )}
     </div>
   );
@@ -503,7 +510,7 @@ function StepGroup({ item, steps }: { item: AgentItem; steps: TimelineEntry[] })
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex max-w-full items-center gap-2 py-0.5 text-left text-muted-foreground transition-colors hover:text-foreground"
+        className="flex max-w-full items-center gap-2 py-0.5 text-left text-muted-foreground transition-colors hover:text-foreground motion-reduce:transition-none"
       >
         <span className="min-w-0 truncate">
           {stepSummary(running ? steps.filter((step) => step.status !== "running") : steps)}
@@ -514,20 +521,22 @@ function StepGroup({ item, steps }: { item: AgentItem; steps: TimelineEntry[] })
           !running && <Check className="size-3.5 shrink-0" aria-label="Done" />
         )}
         <ChevronRight
-          className={`size-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
+          className={`size-3 shrink-0 transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
         />
       </button>
-      {open && (
-        <div className="mt-1 ml-[7px] space-y-1 border-l pl-4">
-          {steps.map((step) =>
-            stepKind(step) === "thinking" ? (
-              <Thinking key={step.id} item={step} running={step.status === "running"} />
-            ) : (
-              <StepRow key={step.id} item={step} />
-            ),
-          )}
+      <Collapse open={open}>
+        <div className="pt-1">
+          <div className="ml-[7px] space-y-1 border-l pl-4">
+            {steps.map((step) =>
+              stepKind(step) === "thinking" ? (
+                <Thinking key={step.id} item={step} running={step.status === "running"} />
+              ) : (
+                <StepRow key={step.id} item={step} />
+              ),
+            )}
+          </div>
         </div>
-      )}
+      </Collapse>
     </article>
   );
 }

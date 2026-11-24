@@ -829,9 +829,10 @@ export function Chat({
               {/*
                * In a short pane the timeline gives up its room first, then the prompts and notices
                * above the composer scroll, and the composer stays whole and pinned. When there is
-               * not even room for those, the conversation itself scrolls behind the composer.
+               * not even room for those, the conversation itself scrolls behind the composer. An
+               * approval may take the timeline's room down to its least, so it shows whole.
                */}
-              <div className="chat-prompts flex max-h-[max(calc(55cqh-8.5rem),3rem)] min-h-12 shrink overflow-y-auto px-[24px] pt-2 has-[>div:empty]:hidden">
+              <div className="chat-prompts flex max-h-[max(calc(55cqh-8.5rem),3rem)] min-h-12 shrink overflow-y-auto px-[24px] pt-2 has-[[data-pending-input]]:max-h-[max(calc(100cqh-11.5rem),3rem)] has-[>div:empty]:hidden">
                 <div className="mx-auto h-fit w-full max-w-chat space-y-3">{prompts}</div>
               </div>
               <div
