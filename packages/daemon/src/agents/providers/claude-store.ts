@@ -2,8 +2,21 @@ import { appendFile, mkdir, readFile, readdir, stat } from "node:fs/promises";
 import { dirname, join, sep } from "node:path";
 import type { SessionStore } from "@anthropic-ai/claude-agent-sdk";
 
+/**
+ * Past this a transcript is not read into the daemon: a long chat full of screenshots holds them
+ * all as base64, and parsing one that size would take the daemon's memory with it.
+ */
+export const TRANSCRIPT_READ_LIMIT = 64 * 1024 * 1024;
+
+export class TranscriptTooLargeError extends Error {
+  override readonly name = "TranscriptTooLargeError";
+  constructor() {
+    super("Transcript exceeds the 64 MB recovery limit");
+  }
+}
+
 /** Keeps SDK transcript helpers in the same account directory as the configured CLI. */
-export function claudeStore(directory: string): SessionStore {
+export function claudeStore(directory: string, limit = TRANSCRIPT_READ_LIMIT): SessionStore {
   const component = (value: string) => {
     if (!value || value === "." || value === ".." || /[/\\\0]/.test(value))
       throw new Error("Invalid transcript key");
@@ -30,8 +43,7 @@ export function claudeStore(directory: string): SessionStore {
     async load(key) {
       try {
         const path = file(key);
-        if ((await stat(path)).size > 64 * 1024 * 1024)
-          throw new Error("Transcript exceeds the 64 MB recovery limit");
+        if ((await stat(path)).size > limit) throw new TranscriptTooLargeError();
         const lines = (await readFile(path, "utf8")).trimEnd().split("\n");
         return lines.flatMap((line, index) => {
           try {
