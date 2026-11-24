@@ -450,9 +450,11 @@ function stepPaths(item: AgentItem, kind: StepKind): string | undefined {
   return files.length ? files.map((file) => file.path).join("\n") : item.text;
 }
 
-/** How a file link reads in a chat message (`.chat-markdown a`), for a path outside one. */
-const FILE_LINK =
-  "text-(--link) underline decoration-[color-mix(in_srgb,var(--link)_40%,transparent)] underline-offset-2 hover:decoration-current";
+/**
+ * A path a step row can open: in the row's own ink, so a list of steps stays quiet, and
+ * underlined only under the pointer or keyboard focus, as the path inside a step's details was.
+ */
+const FILE_LINK = "cursor-pointer hover:underline focus-visible:underline";
 
 /**
  * A file a step touched, opening as a file link in a chat message does, through the same handler
