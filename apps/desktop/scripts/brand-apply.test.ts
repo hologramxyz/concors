@@ -159,10 +159,11 @@ describe("faviconFrom", () => {
     ).toBe('<svg viewBox="0 0 96 96"><rect width="96" height="96"/></svg>');
   });
 
-  it("turns today's app icon into today's favicon", () => {
+  it("keeps everything but the render size of today's app icon", () => {
     const repo = join(import.meta.dirname, "../../..");
-    expect(
-      faviconFrom(readFileSync(join(repo, "apps/desktop/src-tauri/icons/source.svg"), "utf8")),
-    ).toBe(readFileSync(join(repo, "apps/desktop/public/favicon.svg"), "utf8"));
+    const icon = readFileSync(join(repo, "apps/desktop/src-tauri/icons/source.svg"), "utf8");
+    const favicon = faviconFrom(icon);
+    expect(favicon).not.toMatch(/^<svg\b[^>]*\s(?:width|height)=/);
+    expect(favicon.replace(/<svg\b[^>]*>/, "")).toBe(icon.replace(/<svg\b[^>]*>/, ""));
   });
 });

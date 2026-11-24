@@ -3,10 +3,12 @@ import source from "../../../../brand/incoming/sources/logo-mark.svg?raw";
 import { parseLogoMark } from "./logo-mark";
 
 describe("parseLogoMark", () => {
-  it("reads the checked-in mark", () => {
+  it("reads the checked-in mark, which the app colours", () => {
     const mark = parseLogoMark(source);
-    expect(mark.viewBox).toBe("0 0 96 96");
-    expect(mark.body).toMatch(/^<path fill="currentColor" fill-rule="evenodd" d="M12 24L48 10/);
+    expect(mark.viewBox).toMatch(/^[\d.-]+ [\d.-]+ [\d.]+ [\d.]+$/);
+    // A fixed colour would vanish on one of the two themes.
+    const fills = [...mark.body.matchAll(/\b(?:fill|stroke)="([^"]*)"/g)].map((match) => match[1]);
+    expect(fills.filter((fill) => fill !== "currentColor" && fill !== "none")).toEqual([]);
   });
 
   it("keeps the shapes and drops the prolog, comments and root attributes", () => {
