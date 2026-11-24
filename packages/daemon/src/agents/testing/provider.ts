@@ -684,6 +684,7 @@ export class TestAgentProvider implements AgentProvider {
       { kind: "send", sessionId: qa.id, text: "Run the full suite", whenBusy: "steer" },
       { kind: "wait", sessionIds: [qa.id, hud.id], timeoutMs: 20000 },
       { kind: "read", sessionId: notes.id },
+      { kind: "capabilities" },
     ];
     for (const [index, operation] of operations.entries())
       this.emit("item/completed", {

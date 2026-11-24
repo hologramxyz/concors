@@ -355,7 +355,7 @@ test("the Supervisor's own tool calls say what they did to which chat, never its
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(supervisor.getByRole("log")).toContainText("Both chats are on it.");
     const run = supervisor.getByRole("article", { name: "Tool calls", exact: true }).last();
-    await expect(run).toContainText("Used 6 tools");
+    await expect(run).toContainText("Used 7 tools");
     const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-/;
     await expect(run).not.toContainText(uuid);
     await run.getByRole("button").first().click();
@@ -365,7 +365,8 @@ test("the Supervisor's own tool calls say what they did to which chat, never its
       /Sent instructions to\s*HUD polish/,
       /Started\s*Level QA/,
       /Steered\s*Game QA/,
-      /Waited on\s*2 chats/,
+      /Waited on\s*Game QA and HUD polish/,
+      /Checked\s*agents and permissions/,
       /Read\s*Release editor/,
     ])
       await expect(run).toContainText(line);

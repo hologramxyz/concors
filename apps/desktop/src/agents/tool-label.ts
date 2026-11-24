@@ -188,14 +188,22 @@ export function controlStep(
     case "status":
       return step("Checked", "Checking", "delivery status");
     case "capabilities":
-      return step("Checked", "Checking", "harnesses and permissions");
+      return step("Checked", "Checking", "agents and permissions");
     case "watch":
       return op.enabled === false
         ? step("Stopped watching", "Stopping watching", chat(op.sessionId))
         : step("Watching", "Watching", chat(op.sessionId));
     case "wait": {
       const ids = Array.isArray(op.sessionIds) ? op.sessionIds : [];
-      return step("Waited on", "Waiting on", ids.length > 1 ? `${ids.length} chats` : chat(ids[0]));
+      // Two chats the client knows read by name; more, or any it cannot name, keep the count.
+      const names = ids.map((id) => (typeof id === "string" ? nameOf(id)?.trim() : undefined));
+      const target =
+        ids.length === 2 && names.every(Boolean)
+          ? `${names[0]} and ${names[1]}`
+          : ids.length > 1
+            ? `${ids.length} chats`
+            : chat(ids[0]);
+      return step("Waited on", "Waiting on", target);
     }
     default:
       return { verb: humanizeIdentifier(op.kind), target: "" };

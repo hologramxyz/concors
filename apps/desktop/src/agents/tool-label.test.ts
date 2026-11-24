@@ -100,13 +100,24 @@ describe("Concors control rows", () => {
       "Stopped Sandbox – writer",
     );
     expect(say({ kind: "status" })).toBe("Checked delivery status");
-    expect(say({ kind: "capabilities" })).toBe("Checked harnesses and permissions");
+    expect(say({ kind: "capabilities" })).toBe("Checked agents and permissions");
     expect(say({ kind: "watch", sessionId: REVIEWER })).toBe("Watching Sandbox – reviewer");
     expect(say({ kind: "watch", sessionId: REVIEWER, enabled: false })).toBe(
       "Stopped watching Sandbox – reviewer",
     );
     expect(say({ kind: "wait", sessionIds: [REVIEWER] })).toBe("Waited on Sandbox – reviewer");
     expect(say({ kind: "wait", sessionIds: [REVIEWER, WRITER], on: "change" })).toBe(
+      "Waited on Sandbox – reviewer and Sandbox – writer",
+    );
+  });
+
+  it("name both chats of a wait on two known chats, and count three or more or any unknown", () => {
+    expect(say({ kind: "wait", sessionIds: [WRITER, REVIEWER] }, true)).toBe(
+      "Waiting on Sandbox – writer and Sandbox – reviewer",
+    );
+    expect(say({ kind: "wait", sessionIds: [WRITER, GONE] })).toBe("Waited on 2 chats");
+    expect(say({ kind: "wait", sessionIds: [WRITER, REVIEWER, WRITER] })).toBe("Waited on 3 chats");
+    expect(controlSummary(call({ kind: "wait", sessionIds: [WRITER, REVIEWER] }))).toBe(
       "Waited on 2 chats",
     );
   });
