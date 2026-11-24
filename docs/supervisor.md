@@ -40,8 +40,9 @@ OpenCode or other configured harness and sign-in; Supervisor does not create ano
    you resolve a target approval. Ask it to stop watching a chat when you no longer need updates.
 8. Open **Overview** in the header to triage every session without opening each one. Sections
    (Needs you, In progress, Done) list each session once, with its status, where it runs, and its
-   one-liners in full: what it needs ("Approve: pnpm test", a question, a failure), its latest
-   update while it works, and the gist of its final reply once done. The gist is the reply's own
+   one-liners in full: what it needs (a question, a failure), its latest update while it works, and
+   the gist of its final reply once done. An approval row shows only the action ("Approve: pnpm
+   test") in at most two lines; a longer one unfolds in place to show it in full. The gist is the reply's own
    TL;DR or summary line, else its opening; no model is asked. A row opens the session. An approval
    row offers **Allow once** and **Decline**, as Supervisor's message about it does, and **Ask
    Supervisor**, which drafts a question about it; plans and questions are answered in the chat.

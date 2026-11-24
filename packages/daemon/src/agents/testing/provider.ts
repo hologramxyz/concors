@@ -2,6 +2,14 @@ import type { AgentProviderId } from "@concors/protocol";
 import type { AgentPlanUsage } from "@concors/protocol";
 import type { AgentProvider, AgentProviderFactory } from "../manager.ts";
 
+/** The command a fixture asks to run: one short, one long enough to wrap, any other a stand-in. */
+const approvalCommand = (text: string) =>
+  text === "Please approve the test command"
+    ? "pnpm test"
+    : text === "Please approve the long command"
+      ? 'cd "/tmp/concors-fixture/star-catcher" && for i in $(seq 1 60); do if [ -s haiku.txt ]; then echo READY; exit 0; fi; sleep 10; done; echo TIMEOUT'
+      : "echo test";
+
 /** Deterministic provider used only by integration tests and the acceptance-test server. */
 export class TestAgentProvider implements AgentProvider {
   static turns = 0;
@@ -352,7 +360,7 @@ export class TestAgentProvider implements AgentProvider {
         item: {
           id: `tool-${this.turnId}`,
           type: "commandExecution",
-          command: text === "Please approve the test command" ? "pnpm test" : "echo test",
+          command: approvalCommand(text),
           status: "inProgress",
         },
       });
@@ -362,7 +370,7 @@ export class TestAgentProvider implements AgentProvider {
           threadId: this.threadId,
           turnId: this.turnId,
           itemId: `tool-${this.turnId}`,
-          command: text === "Please approve the test command" ? "pnpm test" : "echo test",
+          command: approvalCommand(text),
         },
         "approval-1",
       )

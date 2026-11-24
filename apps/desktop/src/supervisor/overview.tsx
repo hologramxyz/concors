@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { ChevronRight, ListChecks, MessageCircle, X } from "lucide-react";
 import {
   agentProviderName,
@@ -89,8 +89,8 @@ export function SupervisorOverviewButton({
 
 /**
  * Every session at a glance, beside the Supervisor chat on desktop and in a drawer on a phone: what
- * needs you, what is in progress and what is done, each saying in full what it needs and what it
- * last said, so sessions need not be opened one by one to know where they stand. It is drawn with
+ * needs you, what is in progress and what is done, each saying what it needs and what it last said,
+ * so sessions need not be opened one by one to know where they stand. It is drawn with
  * the sidebar's own parts (sections, rows, dots, spinner), so the two read as one product. A row
  * opens its session, where approvals are answered; an approval also offers to ask Supervisor.
  */
@@ -273,8 +273,10 @@ export function SupervisorOverview({
 
 /**
  * One session, laid out as a sidebar row that goes on: its dot, name and age (a spinner while it
- * works), then which model in which workspace, then its one-liners in full, never cut off, because
- * they are the reason to look: what it needs from you, what it is doing or what it did.
+ * works), then which model in which workspace, then its one-liners, because they are the reason to
+ * look: what it needs from you, what it is doing or what it did. An approval says only what it
+ * would do, in at most two lines so several fit at once; a longer one unfolds in place, as Earlier
+ * does, since nobody should approve what they cannot read in full.
  */
 function OverviewItem({
   row,
@@ -294,6 +296,22 @@ function OverviewItem({
   const { agent } = row;
   // An approval is answered here as in its chat; anything else is answered by opening it.
   const request = agent.pending[0]?.kind === "approval" ? agent.pending[0] : undefined;
+  const approval = request && row.needs ? row.needs : null;
+  const [unfolded, setUnfolded] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  // Whether two lines cut the action short, measured again as the panel or the text changes.
+  const measure = useCallback(
+    (text: HTMLElement | null) => {
+      if (!text || unfolded) return;
+      const check = () => setClamped(text.scrollHeight > text.clientHeight + 1);
+      check();
+      const observer = new ResizeObserver(check);
+      observer.observe(text);
+      return () => observer.disconnect();
+    },
+    [unfolded],
+  );
+  const foldable = !!approval && (clamped || unfolded);
   const name = supervisorAgentName(agent);
   const task = briefLine(row.task);
   const state = chatState(agent);
@@ -313,7 +331,7 @@ function OverviewItem({
   ].filter(Boolean);
   // The latest update leads; before a session has said anything, what it was asked stands in,
   // quieter, since it is the request rather than anything the session said.
-  const said = row.update || (row.group === "Done" ? "" : task);
+  const said = approval ? "" : row.update || (row.group === "Done" ? "" : task);
   const asked = !row.update;
   return (
     <li className="group/row rounded-md hover:bg-sidebar-accent/70 has-[:focus-visible]:bg-sidebar-accent/70">
@@ -322,7 +340,10 @@ function OverviewItem({
         onClick={onOpen}
         aria-label={`Open ${name}`}
         data-overview-row={row.group}
-        className="flex w-full min-w-0 items-start gap-2 rounded-md py-1.5 pr-2 pl-2 text-left text-ui outline-none"
+        className={cn(
+          "flex w-full min-w-0 items-start gap-2 rounded-md py-1.5 pr-2 pl-2 text-left text-ui outline-none",
+          foldable && "pb-0",
+        )}
       >
         <span className="flex h-5 shrink-0 items-center">
           <RowDot state={state === "working" ? undefined : state} status={chatAgentStatus(agent)} />
@@ -344,16 +365,12 @@ function OverviewItem({
             </span>
             <span className="min-w-0 truncate">{meta.join(" · ")}</span>
           </span>
-          {row.needs && (
-            <span className="mt-1 block leading-5 break-words">
-              <span className="font-medium text-destructive">{row.needs.action}:</span>{" "}
-              {row.needs.code ? (
-                <code className="rounded bg-sidebar-accent px-1 py-px font-mono text-[12px] break-all">
-                  {row.needs.text}
-                </code>
-              ) : (
-                row.needs.text
-              )}
+          {row.needs && !foldable && (
+            <span
+              ref={approval ? measure : undefined}
+              className={cn("mt-1 block leading-5 break-words", approval && "line-clamp-2")}
+            >
+              <NeedsText needs={row.needs} />
             </span>
           )}
           {said && (
@@ -369,6 +386,33 @@ function OverviewItem({
           )}
         </span>
       </button>
+      {approval && foldable && (
+        // A disclosure laid out as the Earlier fold: its chevron in the dot's column.
+        <div className="pt-1 pr-2 pb-1.5 pl-2">
+          <button
+            type="button"
+            aria-expanded={unfolded}
+            onClick={() => setUnfolded(!unfolded)}
+            className="mobile-hit-area flex w-full min-w-0 items-start gap-2 rounded text-left text-ui outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span className="flex size-[20px] shrink-0 items-center justify-center text-muted-foreground">
+              <ChevronRight
+                aria-hidden="true"
+                className={cn(
+                  "size-3.5 transition-transform motion-reduce:transition-none",
+                  unfolded && "rotate-90",
+                )}
+              />
+            </span>
+            <span
+              ref={measure}
+              className={cn("min-w-0 flex-1 leading-5 break-words", !unfolded && "line-clamp-2")}
+            >
+              <NeedsText needs={approval} />
+            </span>
+          </button>
+        </div>
+      )}
       {onAsk && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pr-2 pb-2 pl-9">
           {request && <QuickApproval agent={agent} pending={request} />}
@@ -384,5 +428,23 @@ function OverviewItem({
         </div>
       )}
     </li>
+  );
+}
+
+/**
+ * What a session needs, in the action's colour. A command reads as code by its font alone: a
+ * highlight would turn a long one into a block, and a clamped one would show the next line's edge.
+ */
+function NeedsText({ needs }: { needs: NonNullable<OverviewRow["needs"]> }) {
+  return (
+    <>
+      <span className="font-medium text-destructive">{needs.action}:</span>{" "}
+      {needs.code ? (
+        // Wraps at spaces; only a token longer than the line breaks inside (the line's break-words).
+        <code className="font-mono text-[12px]">{needs.text}</code>
+      ) : (
+        needs.text
+      )}
+    </>
   );
 }
