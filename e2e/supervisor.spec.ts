@@ -7,6 +7,7 @@ import { chooseProvider } from "./support/agents.ts";
 import { mockDictation } from "./support/dictation.ts";
 import { reportNonMac } from "./support/platform.ts";
 import { seedProject } from "./support/projects.ts";
+import { seedSupervisorWorkspaces } from "./support/supervisor-fixture.ts";
 
 test("Supervisor uses the unified chat and retains its selected harness after navigation and reload", async ({
   page,
@@ -334,5 +335,48 @@ test("a notification from the Supervisor names it as the place, and opens it", a
   } finally {
     off();
     control.disconnect();
+  }
+});
+
+test("the Supervisor's own tool calls say what they did to which chat, never its ID", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const cleanup = await seedSupervisorWorkspaces("ws://127.0.0.1:7429/ws", { delegate: false });
+  try {
+    await signedIn(page, "Simone", undefined, { supervisorLanding: true });
+    await page.goto("/");
+    const supervisor = page.getByTestId("supervisor-page");
+    await expect(supervisor).toBeVisible();
+    await chooseProvider(page);
+    await supervisor
+      .getByRole("textbox", { name: "Message Codex", exact: true })
+      .fill("primitive-control-run");
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    await expect(supervisor.getByRole("log")).toContainText("Both chats are on it.");
+    const run = supervisor.getByRole("article", { name: "Tool calls", exact: true }).last();
+    await expect(run).toContainText("Used 6 tools");
+    const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-/;
+    await expect(run).not.toContainText(uuid);
+    await run.getByRole("button").first().click();
+    // The chats are named from the Supervisor's mention list.
+    for (const line of [
+      /Searched chats for\s*touch targets/,
+      /Sent instructions to\s*HUD polish/,
+      /Started\s*Level QA/,
+      /Steered\s*Game QA/,
+      /Waited on\s*2 chats/,
+      /Read\s*Release editor/,
+    ])
+      await expect(run).toContainText(line);
+    await expect(run).not.toContainText("Concors control");
+    await expect(run).not.toContainText(uuid);
+    // Opening a call still shows everything it was given.
+    const send = run.getByRole("article", { name: "Tool call", exact: true }).nth(1);
+    await send.getByRole("button").first().click();
+    await expect(send).toContainText("Check touch targets on the pause menu too");
+    await expect(send).toContainText(uuid);
+  } finally {
+    await cleanup();
   }
 });

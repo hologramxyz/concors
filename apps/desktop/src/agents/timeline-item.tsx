@@ -5,7 +5,7 @@ import { finishedNotice, finishedWord, type FinishedNotice } from "@/supervisor/
 import { SupervisorReferences, type SupervisorReference } from "@/supervisor/reference-context";
 import { SessionLinkContext } from "@/supervisor/session-link";
 import { MessageAttachments } from "./attachment-preview";
-import { memo, useContext, useId, useLayoutEffect, useRef, type RefObject } from "react";
+import { memo, useContext, useId, useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import { FileLinkContext } from "@/files/context";
 import { formatDuration } from "./duration";
 import { extractToolCallFilePath } from "./paseo/extract-tool-call-file-path";
@@ -35,7 +35,13 @@ import { hasMeaningfulToolCallDetail } from "./paseo/tool-call-detail-state";
 import { thinkingExpandable, thinkingPreview, thinkingText } from "./thinking";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import type { TimelineEntry } from "./thinking";
-import { commandSummary, toolDisplayName, toolSummary } from "./tool-label";
+import {
+  commandSummary,
+  controlStep,
+  toolDisplayName,
+  toolSummary,
+  type NameOf,
+} from "./tool-label";
 import { useShortPath } from "./short-path";
 import {
   commandLine,
@@ -67,6 +73,7 @@ export const TimelineItem = memo(function TimelineItem({
   // A tool card's summary line, to tell when its command is cut off (set only for a tool card).
   const summary = useRef<HTMLSpanElement>(null);
   const cut = useCutOff(summary, open);
+  const nameOf = useNameOf();
   const data = item.presentation;
   const running = live && item.status === "running";
   if (item.steps) return <StepGroup item={item} steps={item.steps} />;
@@ -202,7 +209,7 @@ export const TimelineItem = memo(function TimelineItem({
         >
           {detail.type === "shell"
             ? commandSummary(detail.command)
-            : (display.summary ?? toolSummary(item))}
+            : (display.summary ?? toolSummary(item, nameOf))}
         </span>
         {item.status === "failed" || item.status === "interrupted" ? (
           <span className="text-xs text-muted-foreground">{item.status}</span>
@@ -225,6 +232,18 @@ export const TimelineItem = memo(function TimelineItem({
     </article>
   );
 });
+
+/**
+ * Names for the IDs in Supervisor's own tool calls: its mention list, which holds the chats and
+ * workspaces on this machine. Outside Supervisor the list is empty and nothing resolves.
+ */
+function useNameOf(): NameOf {
+  const references = useContext(SupervisorReferences);
+  return useMemo(() => {
+    const names = new Map(references.map((reference) => [reference.id, reference.label]));
+    return (id) => names.get(id);
+  }, [references]);
+}
 
 /** What a tool call ran on, in the shape the shared display helpers read. */
 function toolDetail(item: AgentItem): ToolCallDetail {
@@ -519,7 +538,10 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
       : null;
   const code = failed ? exitCode(item) : undefined;
   const error = failed ? firstErrorLine(item) : "";
-  const extra = kind === "tool" ? toolSummary(item) : "";
+  const nameOf = useNameOf();
+  // Supervisor's own calls read as what they did to which chat, in place of "Used Concors control".
+  const control = kind === "tool" ? controlStep(item, nameOf, running) : undefined;
+  const extra = kind === "tool" && !control ? toolSummary(item, nameOf) : "";
   const target = useRef<HTMLSpanElement>(null);
   const cut = useCutOff(target, open);
   const openFile = useContext(FileLinkContext);
@@ -541,7 +563,7 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
       )}
       <span className={`shrink-0 text-muted-foreground ${running ? "agent-shimmer" : ""}`}>
-        {(running ? LIVE_VERBS : STEP_VERBS)[kind]}
+        {control?.verb ?? (running ? LIVE_VERBS : STEP_VERBS)[kind]}
       </span>
     </>
   );
@@ -620,7 +642,7 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
               className={`min-w-0 truncate ${kind === "command" ? "font-mono text-ui" : ""} ${running ? "agent-shimmer" : ""}`}
               title={stepPaths(item, kind)}
             >
-              {stepTarget(item, kind, short)}
+              {control ? control.target : stepTarget(item, kind, short)}
             </span>
           )}
           {rest}
@@ -902,6 +924,8 @@ export function LiveLine({
   const [open, setOpen] = useState(false);
   const kind = step && stepKind(step);
   const short = useShortPath();
+  const nameOf = useNameOf();
+  const control = step && kind === "tool" ? controlStep(step, nameOf, true) : undefined;
   const hasDetails = !!step && !waiting && hasMeaningfulToolCallDetail(toolDetail(step));
   const line = useRef<HTMLSpanElement>(null);
   const cut = useCutOff(line, open);
@@ -916,15 +940,15 @@ export function LiveLine({
       >
         <BrailleSpinner />
         <span ref={line} className="agent-shimmer min-w-0 truncate">
-          {waiting ?? (kind ? LIVE_VERBS[kind] : "Working…")}
-          {!waiting && kind && kind !== "thinking" && (
+          {waiting ?? control?.verb ?? (kind ? LIVE_VERBS[kind] : "Working…")}
+          {!waiting && kind && kind !== "thinking" && (!control || control.target) && (
             <>
               {" "}
               <span
                 className={`text-foreground ${kind === "command" ? "font-mono text-ui" : ""}`}
                 title={stepPaths(step, kind)}
               >
-                {stepTarget(step, kind, short)}
+                {control ? control.target : stepTarget(step, kind, short)}
               </span>
             </>
           )}
@@ -1018,6 +1042,7 @@ function ToolGroup({
   live: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const nameOf = useNameOf();
   const latest = items.at(-1) ?? first;
   const running = live && items.some((item) => item.status === "running");
   const failed = items.filter((item) => item.status === "failed").length;
@@ -1045,7 +1070,7 @@ function ToolGroup({
         <span
           className={`min-w-0 flex-1 truncate text-sm text-muted-foreground ${running ? "agent-shimmer" : ""}`}
         >
-          {open ? "" : toolSummary(latest)}
+          {open ? "" : toolSummary(latest, nameOf)}
         </span>
         {failed > 0 && <span className="text-xs text-muted-foreground">{failed} failed</span>}
         <ChevronRight

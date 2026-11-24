@@ -255,6 +255,11 @@ export class TestAgentProvider implements AgentProvider {
       void this.supervisorDelegationFixture(turnId).catch(() => this.finish("failed", turnId));
       return { turn: { id: turnId, status: "inProgress", items: [] } };
     }
+    if (this.tools?.env?.CONCORS_CONTROL_URL && text === "primitive-control-run") {
+      const turnId = this.turnId;
+      void this.supervisorControlRun(turnId).catch(() => this.finish("failed", turnId));
+      return { turn: { id: turnId, status: "inProgress", items: [] } };
+    }
     if (text === "primitive-usage-limit") {
       // The account ran out: how Codex fails a turn when the plan's limit is reached.
       const turnId = this.turnId;
@@ -655,6 +660,43 @@ export class TestAgentProvider implements AgentProvider {
       turnId,
       "I sent work to **Game QA**, **HUD polish**, and the **Release editor**. I’ll bring blockers and results back here.",
     );
+  }
+  /**
+   * Supervisor's calls as Claude Code reports them, on the fixture's real chats: shown, not run,
+   * so the workers' state stays as the delegation fixture left it.
+   */
+  private async supervisorControlRun(turnId: string) {
+    const { sessions } = (await this.supervisorControl({ kind: "sessions" })) as {
+      sessions: { id: string; projectId: string; name: string }[];
+    };
+    const chat = (name: string) => {
+      const found = sessions.find((session) => session.name === name);
+      if (!found) throw new Error("Fixture worker not found");
+      return found;
+    };
+    const qa = chat("Game QA"),
+      hud = chat("HUD polish"),
+      notes = chat("Release editor");
+    const operations = [
+      { kind: "sessions", query: "touch targets" },
+      { kind: "send", sessionId: hud.id, text: "Check touch targets on the pause menu too" },
+      { kind: "start", projectId: qa.projectId, provider: "codex", name: "Level QA" },
+      { kind: "send", sessionId: qa.id, text: "Run the full suite", whenBusy: "steer" },
+      { kind: "wait", sessionIds: [qa.id, hud.id], timeoutMs: 20000 },
+      { kind: "read", sessionId: notes.id },
+    ];
+    for (const [index, operation] of operations.entries())
+      this.emit("item/completed", {
+        item: {
+          id: `control-${index}-${turnId}`,
+          type: "mcpToolCall",
+          status: "completed",
+          tool: "mcp__concors-supervisor__concors_control",
+          arguments: { operation },
+          result: "ok",
+        },
+      });
+    this.reply(turnId, "Both chats are on it.");
   }
   private reply(turnId: string, text: string) {
     if (this.turnId !== turnId || this.closed) return;

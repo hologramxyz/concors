@@ -56,9 +56,13 @@ test("chat presents native forms, plan review, file content and durable attachme
     await run.getByRole("button").first().click();
     await expect(run.getByRole("article", { name: "Tool call", exact: true })).toHaveCount(4);
     await expect(run).toContainText("Tool search");
-    await expect(run).toContainText("Concors control");
+    // Supervisor's own calls say what they did, not the tool's name and its operation. The verb
+    // and what it acted on are separate spans, set apart by the row's gap.
+    await expect(run).toContainText(/Listed\s*workspaces/);
+    await expect(run).toContainText(/Listed\s*chats/);
+    await expect(run).toContainText(/Checked\s*delivery status/);
+    await expect(run).not.toContainText("Concors control");
     await expect(run).not.toContainText("mcp__");
-    await expect(run).toContainText("workspaces");
     await page.locator('input[type="file"]').setInputFiles({
       name: "notes.md",
       mimeType: "text/markdown",
