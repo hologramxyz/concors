@@ -94,7 +94,7 @@ export function PendingInput({
             </button>
             {/* In a short pane the details give up their height first; only they scroll. */}
             <Collapse open={details} className="min-h-0 shrink">
-              <div className="flex h-full min-h-0 flex-col">
+              <div className="flex min-h-0 flex-col">
                 <OverlayScroll className="chat-scroll max-h-40 min-h-0 overflow-auto rounded-lg border bg-background px-3 py-2">
                   <pre className="font-mono text-xs break-words whitespace-pre-wrap">
                     {pending.detail}

@@ -527,7 +527,7 @@ function StepGroup({ item, steps }: { item: AgentItem; steps: TimelineEntry[] })
       </button>
       <Collapse open={open}>
         <div className="pt-1">
-          <div className="ml-[7px] space-y-1 border-l pl-4">
+          <div data-collapse-rows className="ml-[7px] space-y-1 border-l pl-4">
             {steps.map((step) =>
               stepKind(step) === "thinking" ? (
                 <Thinking key={step.id} item={step} running={step.status === "running"} />
