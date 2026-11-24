@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ChevronRight, ListChecks, MessageCircle, X } from "lucide-react";
+import { ChevronRight, Folder, ListChecks, MessageCircle, X } from "lucide-react";
 import {
   agentProviderName,
   modelName,
@@ -311,14 +311,10 @@ function OverviewItem({
       : row.group === "Done" && agent.status === "interrupted"
         ? "Stopped"
         : "";
-  const meta = [
-    agent.model
-      ? modelName(agent.model)
-      : (agent.providerLabel ?? agentProviderName(agent.provider)),
-    workspace,
-    row.queued ? `${row.queued} queued` : "",
-    outcome,
-  ].filter(Boolean);
+  const model = agent.model
+    ? modelName(agent.model)
+    : (agent.providerLabel ?? agentProviderName(agent.provider));
+  const extras = [row.queued ? `${row.queued} queued` : "", outcome].filter(Boolean);
   // The latest update leads; before a session has said anything, what it was asked stands in,
   // quieter, since it is the request rather than anything the session said.
   const said = row.update || (row.group === "Done" ? "" : task);
@@ -350,9 +346,18 @@ function OverviewItem({
             <span className="flex size-3.5 shrink-0 items-center justify-center opacity-80">
               <ProviderIcon provider={agent.provider} size={12} />
             </span>
-            {/* Each fact its own span, set apart by the row's gap rather than a separator. */}
-            {meta.map((part, i) => (
-              <span key={i} className={i < 2 ? "min-w-0 truncate" : "shrink-0"}>
+            <span className="min-w-0 truncate">{model}</span>
+            {/* The workspace behind the sidebar's folder icon, so it does not run into the model. */}
+            {workspace && (
+              <>
+                <span className="flex size-3.5 shrink-0 items-center justify-center opacity-80">
+                  <Folder className="size-3" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 truncate">{workspace}</span>
+              </>
+            )}
+            {extras.map((part) => (
+              <span key={part} className="shrink-0">
                 {part}
               </span>
             ))}

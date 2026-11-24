@@ -190,12 +190,20 @@ function MachineBanner({
       <LoaderCircle className="size-4 shrink-0 animate-spin" aria-hidden="true" />
       <span className="min-w-0 flex-1 truncate">
         <span className="font-semibold">
-          {machine ? `Setting up ${machine.name}` : "Setting up"}
+          {machine ? `Setting up ${machine.name}:` : "Setting up"}
         </span>
-        {/* Set apart from the name by weight and ink, not a separator. */}
-        {machine && <span className="text-muted-foreground"> {describeStatus(machine)}</span>}
+        {/* "Setting up build-agent: ordering server". The statuses all start with a plain word, so
+            lower-casing the first letter keeps a name later on ("waiting for OVH review") intact. */}
+        {machine && (
+          <span className="text-muted-foreground"> {sentenceTail(describeStatus(machine))}</span>
+        )}
       </span>
       <span className="shrink-0 text-xs text-muted-foreground">usually a few minutes</span>
     </div>
   );
+}
+
+/** A status read on from a colon: its first letter lower-cased, as the rest of the sentence. */
+function sentenceTail(status: string | undefined) {
+  return status ? status.charAt(0).toLowerCase() + status.slice(1) : "";
 }
