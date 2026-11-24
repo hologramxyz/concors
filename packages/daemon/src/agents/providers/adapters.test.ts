@@ -5,7 +5,7 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { createServer, type ServerResponse } from "node:http";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, open, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
@@ -361,6 +361,44 @@ it("leaves an unsaved Claude conversation to the caller and starts afresh after 
   );
   expect(thread["id"]).toBe(opened[2]!.sessionId);
   expect(thread["id"]).not.toBe("unsaved");
+});
+it("resumes a Claude chat whose transcript is too large to read back, without its replay", async () => {
+  const directory = await realpath(await mkdtemp(join(tmpdir(), "concors-claude-large-")));
+  const account = await realpath(await mkdtemp(join(tmpdir(), "concors-claude-account-")));
+  cleanup.push(() => rm(directory, { recursive: true, force: true }));
+  cleanup.push(() => rm(account, { recursive: true, force: true }));
+  await writeFile(join(directory, process.platform === "win32" ? "claude.cmd" : "claude"), "", {
+    mode: 0o755,
+  });
+  vi.stubEnv("PATH", directory);
+  // A long chat of screenshots, on a second account: 65 MB, sparse, so the test writes nothing.
+  const threadId = "4b8686b9-7634-432b-b0a8-91460c0dcb15";
+  const project = join(account, "projects", directory.replace(/[^a-zA-Z0-9]/g, "-"));
+  await mkdir(project, { recursive: true });
+  const transcript = await open(join(project, `${threadId}.jsonl`), "w");
+  await transcript.truncate(65 * 1024 * 1024);
+  await transcript.close();
+  const opened: Options[] = [];
+  const createQuery = vi.fn(({ options }: Parameters<typeof query>[0]) => {
+    opened.push(options!);
+    const messages = new PassThrough({ objectMode: true });
+    return Object.assign(messages, {
+      initializationResult: async () => ({
+        models: [{ value: "default", displayName: "Default" }],
+      }),
+      getContextUsage: async () => ({ model: "claude-sonnet-5" }),
+      close: () => {
+        messages.end();
+      },
+    }) as unknown as Query;
+  });
+  const provider = new ClaudeProvider(directory, vi.fn(), createQuery, launch, account);
+  await provider.initialize();
+  // Claude Code resumes from its own transcript; Concors only skips adding to the history it kept.
+  const resumed = object(await provider.request("thread/resume", { threadId }));
+  expect(object(resumed["thread"])).toMatchObject({ id: threadId, turns: [] });
+  expect(opened.at(-1)?.resume).toBe(threadId);
+  await provider.close();
 });
 it("offers only OpenCode conversations someone wrote in, in this directory", () => {
   const session = (id: string, extra: object = {}) => ({
