@@ -179,6 +179,16 @@ export class TriggerManager {
       if (e) return { triggerId: t.id, eventId, source: e.source };
     }
   }
+  private destination(t: TriggerDefinition, sessionId: string | null): string | null {
+    if (t.mode !== "same") return null;
+    if (t.target.kind === "session") return t.target.sessionId;
+    if (t.target.kind !== "supervisor") return sessionId;
+    const pane = this.workspace
+      .snapshot()
+      .supervisor?.tabs.flatMap((tab) => tab.nodes)
+      .find((node) => node.kind === "pane" && node.sessionId);
+    return pane?.kind === "pane" ? pane.sessionId : null;
+  }
   private validate(t: TriggerDefinition) {
     if (t.target.kind === "supervisor") return;
     if (!this.workspace.snapshot().projects.find((p) => p.id === t.projectId)?.directory)
@@ -248,10 +258,16 @@ export class TriggerManager {
             this.save({ ...t, secretHint: secret.slice(-4) }, digest(secret));
           } else {
             if (op.trigger.enabled) this.validate(op.trigger);
+            const sameTarget =
+              t.projectId === op.trigger.projectId &&
+              JSON.stringify(t.target) === JSON.stringify(op.trigger.target);
+            const destination = this.destination(t, t.sessionId);
+            const nextDestination = this.destination(op.trigger, sameTarget ? t.sessionId : null);
             const targetChanged =
-              t.projectId !== op.trigger.projectId ||
-              JSON.stringify(t.target) !== JSON.stringify(op.trigger.target) ||
-              t.mode !== op.trigger.mode;
+              t.mode !== op.trigger.mode ||
+              (destination !== null && nextDestination !== null
+                ? destination !== nextDestination
+                : !sameTarget);
             if (targetChanged) {
               const cancelled = new Set<string>();
               const admitted = new Set(
@@ -280,7 +296,7 @@ export class TriggerManager {
                 ? op.trigger.mode === "same" && op.trigger.target.kind === "session"
                   ? op.trigger.target.sessionId
                   : null
-                : t.sessionId,
+                : (nextDestination ?? t.sessionId),
             });
           }
         }

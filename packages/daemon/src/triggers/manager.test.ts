@@ -534,21 +534,14 @@ it.each(["same", "new"] as const)(
       if (queued.some((q) => q.id === event.id)) expect(event.status).toBe("queued");
     }
     if (mode === "new") {
-      const start = f.agents.startScheduled.bind(f.agents);
-      vi.spyOn(f.agents, "startScheduled").mockImplementation(async (...args) => {
-        await start(...args);
-        await f.agents.request({
-          type: "agent.request",
-          requestId: randomUUID(),
-          operation: { kind: "queue-pause", sessionId: args[0], paused: true },
-        });
-        await f.agents.request({
-          type: "agent.request",
-          requestId: randomUUID(),
-          operation: { kind: "queue-add", sessionId: args[0], text: "Interactive follow-up" },
-        });
-        return f.workspace.agent(args[0]);
-      });
+      const template = f.workspace.agent(nextSession);
+      vi.spyOn(f.agents, "startScheduled").mockImplementation(
+        async (id, projectId, provider, model) => {
+          const info = { ...template, id, projectId, provider, model };
+          f.workspace.createBackgroundAgent(info);
+          return info;
+        },
+      );
     }
     await f.restartTriggers();
     for (let i = 0; i < MAX_WAITING_EVENTS; i++) {
@@ -561,6 +554,47 @@ it.each(["same", "new"] as const)(
     expect(f.workspace.agent(oldSession).queue).toEqual(queued);
   },
 );
+
+it("keeps waiting events when a same-mode trigger explicitly selects its current chat", async () => {
+  let now = Date.parse("2026-11-25T00:00:00Z");
+  const f = await setup("same", () => new Date(now));
+  const first = await f.settled(f.accept().event.id);
+  const sessionId = first.sessionId!;
+  await expect.poll(() => f.workspace.agent(sessionId).status).toBe("done");
+  f.workspace.saveAgent({ ...f.workspace.agent(sessionId), status: "needs_input" });
+  for (let i = 0; i < MAX_WAITING_EVENTS; i++) {
+    if (i % 25 === 0) now += 61_000;
+    f.accept(`waiting-${i}`);
+  }
+  await expect.poll(() => f.store.pending(sessionId).length).toBe(MAX_WAITING_EVENTS - 20);
+  const pending = f.store.pending(sessionId);
+  const queue = f.workspace.agent(sessionId).queue;
+  expect(
+    f.request({
+      kind: "update",
+      id: f.id,
+      expectedRevision: f.manager.list()[0]!.revision,
+      trigger: { ...f.definition, target: { kind: "session", sessionId } },
+    }).outcome.status,
+  ).toBe("ok");
+  expect(f.manager.list()[0]!.sessionId).toBe(sessionId);
+  expect(f.store.pending(sessionId)).toEqual(pending);
+  expect(f.workspace.agent(sessionId).queue).toEqual(queue);
+  expect(f.store.list()[0]!.events.filter((event) => event.status === "queued")).toHaveLength(
+    MAX_WAITING_EVENTS,
+  );
+  now += 61_000;
+  expect(() => f.accept("still-full")).toThrow("Too many events waiting for the chat");
+  await f.agents.request({
+    type: "agent.request",
+    requestId: randomUUID(),
+    operation: { kind: "queue-remove", sessionId, id: queue![0]!.id },
+  });
+  await expect.poll(() => f.store.pending(sessionId).length).toBe(pending.length - 1);
+  expect(
+    f.workspace.agent(sessionId).queue?.some((entry) => entry.id === pending[0]!.eventId),
+  ).toBe(true);
+});
 
 it("does not deliver to a chat that runs without approvals", async () => {
   const f = await setup();
