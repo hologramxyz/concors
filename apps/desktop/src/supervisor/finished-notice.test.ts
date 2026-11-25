@@ -8,7 +8,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SupervisorReferences } from "./reference-context";
 import type { SupervisorReference } from "./reference-text";
 import { SessionLinkContext } from "./session-link";
-import { FINISHED_TITLE, finishedNotice, finishedRuns, finishedWord } from "./finished-notice";
+import {
+  FINISHED_TITLE,
+  finishedNotice,
+  finishedRuns,
+  finishedWord,
+  quoteImages,
+} from "./finished-notice";
 import { markFailureSeen } from "@/agents/seen-updates";
 import type { TimelineEntry } from "@/agents/thinking";
 
@@ -258,6 +264,19 @@ describe("the finished row", () => {
       .replace(/\s+/g, " ")
       .trim();
 
+  it("counts a reply's images instead of showing each as missing", () => {
+    const one = render(
+      notice(`${sentence()}\n\nAgent’s reply:\n\n${quoted("Here it is:\n![Chart](chart.png)")}`),
+    );
+    expect(one).not.toContain("Image not available");
+    expect(text(one)).toBe("Star Catcher / Game QA Finished Here it is: 1 image in the chat");
+    const only = render(
+      notice(`${sentence()}\n\nAgent’s reply:\n\n${quoted("![a](a.png) ![b](b.png)")}`),
+    );
+    expect(only).not.toContain("data-finished-quote");
+    expect(text(only)).toBe("Star Catcher / Game QA Finished 2 images in the chat");
+  });
+
   it("keeps a finished or stopped turn on one quiet line, with no action", () => {
     const done = render(notice(`${sentence()}\n\nAgent’s reply:\n\n> All good.`));
     expect(text(done)).toBe("Star Catcher / Game QA Finished All good.");
@@ -318,6 +337,25 @@ describe("the finished row", () => {
     markFailureSeen(seen);
     const html = render(failure(), [failedChat("2026-11-24T13:00:00.000Z")]);
     expect(text(html)).toContain("Open chat");
+  });
+});
+
+describe("quoteImages", () => {
+  it("takes a reply's images out and counts them", () => {
+    expect(quoteImages("Before\n![Chart](out/chart.png)\nAfter")).toEqual({
+      text: "Before\nAfter",
+      images: 1,
+    });
+    expect(quoteImages('See ![a](<a b.png> "A") and ![](b.png).')).toEqual({
+      text: "See  and .",
+      images: 2,
+    });
+  });
+
+  it("leaves images in a code block as text, and a reply with none as it was", () => {
+    const code = "```md\n![x](x.png)\n```";
+    expect(quoteImages(code)).toEqual({ text: code, images: 0 });
+    expect(quoteImages(haiku)).toEqual({ text: haiku, images: 0 });
   });
 });
 

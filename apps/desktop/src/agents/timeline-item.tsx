@@ -15,7 +15,13 @@ import { ApprovalReview, DiffLines } from "@/agents/pending-input";
 import { useHomePath } from "@/workspace/home-path";
 import { SidebarDot } from "@/workspace/sidebar-tabs";
 import { answeredNotice, answeredSummary, type AnsweredNotice } from "@/supervisor/answered-notice";
-import { finishedNotice, finishedWord, type FinishedNotice } from "@/supervisor/finished-notice";
+import {
+  finishedNotice,
+  finishedWord,
+  imagesLine,
+  quoteImages,
+  type FinishedNotice,
+} from "@/supervisor/finished-notice";
 import {
   pausedNotice,
   pausedWords,
@@ -899,6 +905,10 @@ function FinishedRow({
     observer.observe(element);
     return () => observer.disconnect();
   }, [open, notice.quote]);
+  const shown = useMemo(
+    () => (notice.quote === null ? null : quoteImages(notice.quote)),
+    [notice.quote],
+  );
   const failed = notice.state === "failed";
   const needed = failed && latest && agent?.status === "failed" && chatDot(agent) === "attention";
   // A failure dealt with keeps its error out of sight until asked for.
@@ -910,13 +920,19 @@ function FinishedRow({
     <div className="flex min-w-0 items-start gap-2">
       <div className="min-w-0 flex-1 py-0.5 text-muted-foreground">
         {/* Each line as the agent wrote it: Markdown would run a quote's lines together. */}
-        <div
-          ref={quote}
-          data-finished-quote
-          className={`[&_p]:whitespace-pre-line ${open ? "" : "line-clamp-6"}`}
-        >
-          <AgentMarkdown>{notice.quote}</AgentMarkdown>
-        </div>
+        {shown?.text && (
+          <div
+            ref={quote}
+            data-finished-quote
+            className={`[&_p]:whitespace-pre-line ${open ? "" : "line-clamp-6"}`}
+          >
+            <AgentMarkdown>{shown.text}</AgentMarkdown>
+          </div>
+        )}
+        {/* Images stay in the chat, which the row links to: counted here, never shown missing. */}
+        {!!shown?.images && (
+          <p className={shown.text ? "mt-2" : undefined}>{imagesLine(shown.images)}</p>
+        )}
         {notice.cut && <p className="mt-2">Read the original chat for the full reply.</p>}
       </div>
       <CopyButton label="Copy quote" text={notice.quote} />

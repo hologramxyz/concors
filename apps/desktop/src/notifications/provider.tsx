@@ -6,7 +6,7 @@ import { NotificationContext } from "./context";
 import { AttentionEngine, type Notice } from "./engine";
 import { claimNotification, getNotificationPreferences } from "./preferences";
 import { countdown } from "./countdown";
-import { noticePlace } from "./place";
+import { noticeChatName, noticePlace } from "./place";
 import { desktopNotice, notificationAccess, openNotificationSettings } from "./platform";
 import { errorMessage, firstNotificationProblem, notificationProblem } from "./access";
 import { isMac } from "@/shortcuts/bindings";
@@ -277,8 +277,9 @@ export function NotificationProvider({
       >
         {notices.map((notice) => (
           <NoticeCard key={notice.id} id={notice.id} onExpire={expire}>
+            {/* The whole card but its dismiss button opens the chat, so it reaches its edges. */}
             <button
-              className="min-w-0 flex-1 text-left"
+              className="min-w-0 flex-1 self-stretch p-3 pr-0 text-left"
               onClick={() => {
                 if (
                   connection?.agents.find((a) => a.id === notice.sessionId)?.attention?.id ===
@@ -316,17 +317,18 @@ export function NotificationProvider({
                 />
                 {notice.kind === "done" ? "Agent finished" : "Agent needs input"}
               </span>
-              <span
-                className="line-clamp-2 text-xs break-words text-muted-foreground"
-                title={notice.agent}
-              >
-                {notice.agent}
-              </span>
-              <span className="mt-1 block text-xs text-primary">Open conversation</span>
+              {noticeChatName(notice.agent, notice.place) && (
+                <span
+                  className="line-clamp-2 text-xs break-words text-muted-foreground"
+                  title={notice.agent}
+                >
+                  {notice.agent}
+                </span>
+              )}
             </button>
             <button
               aria-label="Dismiss notification"
-              className="text-muted-foreground"
+              className="py-3 pr-3 pl-2 text-muted-foreground"
               onClick={() => dismiss.current(notice.sessionId)}
             >
               ×
@@ -393,7 +395,7 @@ function NoticeCard({
   useEffect(() => (running ? run(() => onExpire(id)) : undefined), [run, running, onExpire, id]);
   return (
     <div
-      className="flex items-start gap-2 rounded-lg border bg-card p-3 shadow-lg"
+      className="flex items-start rounded-lg border bg-card shadow-lg"
       onPointerEnter={() => setPointer(true)}
       onPointerLeave={() => setPointer(false)}
       onFocus={() => setFocus(true)}

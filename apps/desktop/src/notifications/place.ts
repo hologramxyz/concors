@@ -22,3 +22,11 @@ export function noticePlace(
     tab: pane && !isDefaultTabName(pane.tab.name) ? pane.tab.name : "",
   };
 }
+
+/**
+ * The chat's name as a card shows it under "Agent finished", or null when the place line above
+ * already ends with it (a tab named as its chat is), so the card does not say it twice.
+ */
+export function noticeChatName(agent: string, place: Pick<NoticePlace, "tab">): string | null {
+  return agent.trim() && agent.trim() !== place.tab.trim() ? agent : null;
+}

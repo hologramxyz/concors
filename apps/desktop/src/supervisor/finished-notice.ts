@@ -89,3 +89,42 @@ export function finishedRuns<T extends AgentItem & { finishedLater?: true }>(
   }
   return out.reverse();
 }
+
+/** A Markdown image, `![alt](source "title")`, which a quoted reply can only name, never show. */
+const IMAGE = /!\[(?:[^\]\\]|\\.)*\]\((?:<[^>]*>|[^()\s]*)(?:\s+(?:"[^"]*"|'[^']*'))?\)/g;
+
+/**
+ * A quoted reply without its images, and how many it had. The images stay in the chat they came
+ * from, which the notice's row links to; the quote says how many there are instead of showing each
+ * as missing. Images in a code block are text, and stay.
+ */
+export function quoteImages(quote: string): { text: string; images: number } {
+  let images = 0;
+  let fence: string | null = null;
+  const lines: string[] = [];
+  for (const line of quote.split("\n")) {
+    const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+    if (fence) {
+      if (marker?.startsWith(fence)) fence = null;
+      lines.push(line);
+      continue;
+    }
+    if (marker) {
+      fence = marker;
+      lines.push(line);
+      continue;
+    }
+    const kept = line.replace(IMAGE, () => {
+      images++;
+      return "";
+    });
+    // A line that held only images goes with them, rather than leaving a gap.
+    if (kept === line || kept.trim()) lines.push(kept);
+  }
+  return { text: lines.join("\n").replace(/^\n+|\n+$/g, ""), images };
+}
+
+/** "1 image in the chat", "3 images in the chat". */
+export function imagesLine(images: number): string {
+  return `${images} ${images === 1 ? "image" : "images"} in the chat`;
+}
