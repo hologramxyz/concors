@@ -181,17 +181,18 @@ export function createAISharingPermission(
       if (result?.outcome.status === "error") throw new Error(result.outcome.message);
     }
   };
-  const describe = async (message: Gated) => {
+  /** The recipients a request would reach; without one, every service the machine has enabled. */
+  const describe = async (message?: Gated) => {
     const result = await context.requestProvider(
       { kind: "list", checkVersions: false },
       newRequestId(),
     );
     if (result.outcome.status !== "ok") throw new Error("Provider discovery failed");
-    const target = selected(message, context);
+    const target = message ? selected(message, context) : { provider: undefined, model: null };
     // Disclose the machine's configured recipients together: restoring several conversations
     // must not ask again for every agent or model using those same services.
     let providers = result.outcome.providers.filter((p) => p.enabled || p.id === target.provider);
-    if (message.type === "provider.request" && message.operation.kind === "save") {
+    if (message?.type === "provider.request" && message.operation.kind === "save") {
       const proposed = message.operation.config;
       providers = [
         {
@@ -236,7 +237,63 @@ export function createAISharingPermission(
       details: `Recipients: ${names.join("\n\n")}\nModels: those configured for these services on your machine\n\nOpening a conversation can resume its agent. Your prompts, code, attachments, conversation history and tool context may be sent from your connected machine to these AI services and configured tools. Their retention and training rules depend on your provider/account settings. Check custom endpoints and tool recipients on desktop before agreeing.\n\nAllow sharing with these services on this machine? Your choice is saved on this device for this account and machine. You will be asked again if the configuration changes. You can withdraw permission in Settings → Account → AI data sharing. Existing work on your machine keeps running until you stop it.`,
     };
   };
+  /** Shows the consent screen for these recipients, once however many ask together. */
+  const approve = (
+    disclosure: Awaited<ReturnType<typeof describe>>,
+    version: number,
+    /** The recipients again, as the same request or check sees them after the answer. */
+    recheck: () => ReturnType<typeof describe>,
+  ) => {
+    let approval = pending.get(disclosure.key);
+    if (!approval) {
+      approval = queue.then(async () => {
+        if (disposed || generation !== version) return false;
+        const question = () => ask({ summary: disclosure.summary, details: disclosure.details });
+        const allowed = await (store ? store.confirm(disclosure.key, question) : question());
+        if (!allowed || disposed || generation !== version) return false;
+        // Approval covers what was shown; a configuration that changed meanwhile asks again.
+        if ((await recheck()).key !== disclosure.key) return false;
+        await store?.write({ blocked: false, grant: disclosure.key });
+        if (disposed || generation !== version) return false;
+        blocked = false;
+        grants.add(disclosure.key);
+        changed("allowed");
+        return true;
+      });
+      pending.set(disclosure.key, approval);
+      queue = approval.catch(() => undefined);
+      void approval.finally(() => pending.delete(disclosure.key)).catch(() => undefined);
+    }
+    return approval;
+  };
+  const granted = async (key: string) => {
+    if (blocked) return false;
+    const saved = await store?.read();
+    if (saved?.blocked) return false;
+    return grants.has(key) || saved?.grant === key;
+  };
   return {
+    /**
+     * Run on connecting: asks right away, before anything is sent, if this machine's services are
+     * not allowed yet. Sharing is required to use agents, so it asks again on every launch until
+     * it is allowed. A machine with no services configured has nothing to ask about yet.
+     */
+    async ensure(): Promise<void> {
+      const version = generation;
+      let disclosure: Awaited<ReturnType<typeof describe>>;
+      try {
+        disclosure = await describe();
+      } catch {
+        return;
+      }
+      if (disposed || generation !== version) return;
+      if (await granted(disclosure.key)) {
+        changed("allowed");
+        return;
+      }
+      changed("ask");
+      await approve(disclosure, version, () => describe()).catch(() => false);
+    },
     async withdraw() {
       blocked = true;
       generation++;
@@ -251,6 +308,7 @@ export function createAISharingPermission(
       grants.clear();
       changed("ask");
       await store?.write({ blocked: false, grant: null });
+      await this.ensure();
     },
     dispose() {
       disposed = true;
@@ -259,63 +317,30 @@ export function createAISharingPermission(
     },
     async beforeSend(message: ClientMessage): Promise<DaemonMessage | null> {
       if (!gated(message)) return null;
-      if (disposed || blocked)
-        return rejected(
-          message,
-          "AI sharing is off. Review permission in Settings → Account → AI data sharing.",
-        );
+      if (disposed) return rejected(message, "AI sharing permission changed. Try again.");
       const version = generation;
       try {
         const disclosure = await describe(message);
-        const saved = await store?.read();
-        if (saved?.blocked) {
-          blocked = true;
-          changed("blocked");
-          await revokeSupervisor();
-        }
-        if (disposed || blocked || generation !== version)
+        if (disposed || generation !== version)
           return rejected(message, "AI sharing permission changed. Try again.");
         if (
-          (grants.has(disclosure.key) || saved?.grant === disclosure.key) &&
+          (await granted(disclosure.key)) &&
           !(message.type === "provider.request" && message.operation.kind === "save")
         ) {
           changed("allowed");
           if (message.type === "agent.request") message.sharing = disclosure.sharing;
           return null;
         }
-        let approval = pending.get(disclosure.key);
-        if (!approval) {
-          approval = queue.then(async () => {
-            if (disposed || blocked || generation !== version) return false;
-            const question = () =>
-              ask({ summary: disclosure.summary, details: disclosure.details });
-            const allowed = await (store ? store.confirm(disclosure.key, question) : question());
-            if (!allowed && !disposed && generation === version) {
-              blocked = true;
-              generation++;
-              grants.clear();
-              changed("blocked");
-              await store?.write({ blocked: true, grant: null });
-              await revokeSupervisor();
-            }
-            if (!allowed || disposed || blocked || generation !== version) return false;
-            const current = await describe(message);
-            if (current.key !== disclosure.key) return false;
-            await store?.write({ blocked: false, grant: disclosure.key });
-            if (disposed || blocked || generation !== version) return false;
-            grants.add(disclosure.key);
-            changed("allowed");
-            return true;
-          });
-          pending.set(disclosure.key, approval);
-          queue = approval.catch(() => undefined);
-          void approval.finally(() => pending.delete(disclosure.key)).catch(() => undefined);
-        }
-        if ((await approval) && !disposed && !blocked && version === generation) {
+        // Not allowed yet, or withdrawn: ask now, on the screen that only Allow leaves.
+        if (
+          (await approve(disclosure, version, () => describe(message))) &&
+          !disposed &&
+          version === generation
+        ) {
           if (message.type === "agent.request") message.sharing = disclosure.sharing;
           return null;
         }
-        return rejected(message, "AI sharing was not allowed. Your request was not sent.");
+        return rejected(message, "AI sharing permission changed. Try again.");
       } catch {
         return rejected(
           message,

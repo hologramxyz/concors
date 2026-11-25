@@ -1117,7 +1117,12 @@ function MobileWorkspaceContent({
                         Process CPU and RAM usage on the selected machine.
                       </DialogDescription>
                     </DialogHeader>
-                    {resourcesOpen && <ResourcesView />}
+                    {/* The sheet clips; its list scrolls here, under filter and sort. */}
+                    {resourcesOpen && (
+                      <div className="mobile-resources-body">
+                        <ResourcesView />
+                      </div>
+                    )}
                   </DialogContent>
                 </Dialog>
                 <SettingsDrawer

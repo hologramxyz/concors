@@ -1,53 +1,47 @@
-import { useRef, useState } from "react";
-import { BottomSheet, Group, Host, RNHostView } from "@expo/ui/swift-ui";
-import {
-  preferredColorScheme,
-  presentationBackground,
-  presentationDragIndicator,
-} from "@expo/ui/swift-ui/modifiers";
+import { useState } from "react";
+import { Modal, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../ui";
 import { AISharingContent, type AISharingDrawerProps } from "./ai-sharing-content";
 
+/**
+ * App Store consent, required to use agents from the phone: a full-screen modal with no close
+ * button, no swipe to dismiss and no decline. Closing it by accident left people locked out, with
+ * every request refused until they found the switch in Settings. Until Allow, it is shown again
+ * on every launch.
+ */
 export function AISharingDrawer({ disclosure, onAnswer }: AISharingDrawerProps) {
   const theme = useTheme();
-  const [open, setOpen] = useState(true);
-  const choice = useRef<boolean | null>(null);
-  const finished = useRef(false);
+  const insets = useSafeAreaInsets();
+  const [answered, setAnswered] = useState(false);
   return (
-    <Host
-      style={{ position: "absolute", width: "100%", height: 0 }}
-      colorScheme={theme.dark ? "dark" : "light"}
+    <Modal
+      testID="ai-sharing-required"
+      visible
+      animationType="slide"
+      presentationStyle="fullScreen"
+      // Android's back button and any system dismissal: there is nothing to go back to.
+      onRequestClose={() => undefined}
     >
-      <BottomSheet
-        isPresented={open}
-        onIsPresentedChange={setOpen}
-        fitToContents
-        onDismiss={() => {
-          if (finished.current) return;
-          finished.current = true;
-          onAnswer(choice.current === true);
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          backgroundColor: theme.background,
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
         }}
       >
-        <Group
-          modifiers={[
-            preferredColorScheme(theme.dark ? "dark" : "light"),
-            presentationBackground(theme.surface),
-            presentationDragIndicator("visible"),
-          ]}
-        >
-          <RNHostView matchContents={{ vertical: true }}>
-            <AISharingContent
-              disclosure={disclosure}
-              disabled={!open}
-              onAnswer={(allowed) => {
-                if (choice.current !== null) return;
-                choice.current = allowed;
-                setOpen(false);
-              }}
-            />
-          </RNHostView>
-        </Group>
-      </BottomSheet>
-    </Host>
+        <AISharingContent
+          disclosure={disclosure}
+          disabled={answered}
+          onAnswer={(allowed) => {
+            if (answered) return;
+            setAnswered(true);
+            onAnswer(allowed);
+          }}
+        />
+      </View>
+    </Modal>
   );
 }
