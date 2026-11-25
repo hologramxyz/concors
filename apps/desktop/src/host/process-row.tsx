@@ -6,11 +6,17 @@ import { formatMemory } from "./usage-display";
 /** Keep the running list scannable; maintenance actions live behind a disclosure. */
 export function ResourceProcessRow({
   item,
+  compact = false,
   canStop,
   onPreview,
   onStop,
 }: {
   item: MachineProcess;
+  /**
+   * A phone's narrow list: Preview joins Stop inside the row, so every row's readings line up
+   * at its edge instead of shifting left where a preview button sits beside them.
+   */
+  compact?: boolean;
   canStop: boolean;
   onPreview: () => void;
   onStop: () => void;
@@ -42,13 +48,22 @@ export function ResourceProcessRow({
             aria-hidden="true"
           />
         </summary>
-        <div className="space-y-2 pr-2 pb-3 pl-8 text-xs text-muted-foreground">
+        <div
+          className={`pr-2 pl-8 text-xs text-muted-foreground ${compact ? "space-y-1 pb-2" : "space-y-2 pb-3"}`}
+        >
           <p>
             PID {item.pid}, {item.state}
           </p>
           {item.directory && <p className="break-all">{item.directory}</p>}
           {item.stopBlocked && <p>{item.stopBlocked}</p>}
-          <div className="flex flex-wrap gap-1">
+          {/* On a phone the buttons' icons line up with the text above them. */}
+          <div className={`flex flex-wrap gap-1 ${compact ? "-ml-2.5 pt-1" : ""}`}>
+            {compact && item.previews.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={onPreview}>
+                <ExternalLink />
+                Preview
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -62,7 +77,7 @@ export function ResourceProcessRow({
           </div>
         </div>
       </details>
-      {item.previews.length > 0 && (
+      {!compact && item.previews.length > 0 && (
         <Button variant="ghost" size="sm" className="mt-1" onClick={onPreview}>
           <ExternalLink />
           Preview
