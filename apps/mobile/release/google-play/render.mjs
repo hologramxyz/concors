@@ -24,7 +24,9 @@ const shared = async (name, mime) =>
 const font = await shared("geist-latin.woff2", "font/woff2");
 const background = await shared("campaign-background.png", "image/png");
 const icon = await fs.readFile(path.resolve(root, "../../assets/icon.png"));
+// The favicon's light version: its dark-theme <style> would otherwise apply to this whole page.
 const logo = (await fs.readFile(path.resolve(root, "../../../desktop/public/favicon.svg"), "utf8"))
+  .replace(/<style[\s\S]*?<\/style>/, "")
   .replace(' color="#20211f"', "")
   .replace(/<rect[^>]*\/>/, "");
 const escape = (text) =>

@@ -417,8 +417,9 @@ in-memory drafts. Switching panes does not.
 - Billing/provisioning views are source-shared. **Store policy review is a release
   gate**, not an assumption that desktop checkout can ship unchanged in every store.
 
-`pnpm assets` builds the shared offline workspace and generates icons from the desktop
-SVG. Generated HTML and native `ios/`/`android/` projects are ignored. No mobile client
+`pnpm assets` builds the shared offline workspace. The app icon, launch marks and notification
+icon are checked in; `pnpm brand:apply` makes them from `brand/incoming/` (see its README).
+Generated HTML and native `ios/`/`android/` projects are ignored. No mobile client
 imports daemon or Tauri runtime implementations.
 
 ### Path-hosted private web previews

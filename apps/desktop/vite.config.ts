@@ -1,8 +1,10 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { readFileSync } from "node:fs";
 import { fileURLToPath, URL } from "node:url";
 import { loadEnv, type Plugin } from "vite";
 import { defineConfig } from "vitest/config";
+import { parseLogoMark } from "./src/brand/logo-mark.ts";
 
 // Set by `tauri dev` when developing against a physical mobile device; unused on desktop.
 const host = process.env["TAURI_DEV_HOST"];
@@ -26,6 +28,32 @@ function redirectNativeSignInPage(apiOrigin: string): Plugin {
   };
 }
 
+const logoMarkFile = fileURLToPath(
+  new URL("../../brand/incoming/sources/logo-mark.svg", import.meta.url),
+);
+const LOGO_MARK_SLOT = /<!-- concors:logo-mark\b[^>]*-->/;
+
+/** Writes the logo mark into index.html's startup screen, the same file `BrandMark` draws. */
+function startupLogoMark(): Plugin {
+  return {
+    name: "concors:startup-logo-mark",
+    transformIndexHtml(html) {
+      if (!LOGO_MARK_SLOT.test(html)) throw new Error("index.html lost its concors:logo-mark slot");
+      const mark = parseLogoMark(readFileSync(logoMarkFile, "utf8"));
+      return html.replace(
+        LOGO_MARK_SLOT,
+        `<svg class="concors-startup-mark" viewBox="${mark.viewBox}" fill="currentColor">${mark.body}</svg>`,
+      );
+    },
+    configureServer(server) {
+      server.watcher.add(logoMarkFile);
+      server.watcher.on("change", (file) => {
+        if (file === logoMarkFile) server.ws.send({ type: "full-reload" });
+      });
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   const root = fileURLToPath(new URL(".", import.meta.url));
   // Development only: forward `/api/*` to a real control-plane API so the browser talks to it
@@ -37,6 +65,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      startupLogoMark(),
       ...(apiProxyTarget ? [redirectNativeSignInPage(apiProxyTarget)] : []),
     ],
 
