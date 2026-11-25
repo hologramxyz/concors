@@ -7,6 +7,7 @@ import {
   type PendingNotice,
 } from "@/supervisor/pending-notice";
 import { useAgents } from "@/agents/context";
+import { chatDot } from "@/agents/agent-status";
 import { ProviderIcon } from "@/agents/provider-icon";
 import { approvalParts } from "@/agents/approval-summary";
 import { useHomePath } from "@/workspace/home-path";
@@ -688,7 +689,8 @@ function SupervisorNotice({ item }: { item: TimelineEntry }) {
   if (notice && chat) return <AnsweredRow notice={notice} chat={chat} />;
   const finished = finishedNotice(item);
   const finishedChat = finished && answeredChat(references, finished.sessionId);
-  if (finished && finishedChat) return <FinishedRow notice={finished} chat={finishedChat} />;
+  if (finished && finishedChat)
+    return <FinishedRow notice={finished} chat={finishedChat} latest={!item.finishedLater} />;
   const pending = pendingNotice(item);
   const pendingChat = pending && answeredChat(references, pending.sessionId);
   if (pending && pendingChat)
@@ -894,13 +896,24 @@ function OpenChatAction({ sessionId, label }: { sessionId: string; label: string
 
 /**
  * A chat's ended turn. "Finished" and "Stopped" are one quiet row: its chat, linked, then how the
- * turn ended in small muted text. "Failed" needs a person, so it reads as a block (see
- * `NeedsBlock`) with "Open chat" under the error. The agent's last reply, or the chat's error,
- * sits under the chat as a quiet quote with its line breaks kept and a copy button; past six lines
- * it is clamped, and the row opens it in place. Without a reply a quiet row stands alone, since
- * its link already opens the chat.
+ * turn ended in small muted text. A chat's most recent "Failed", while that chat is still failed
+ * and unseen (its sidebar dot, see `chatDot`), needs a person, so it reads as a block (see
+ * `NeedsBlock`) with "Open chat" under the error. Every other "Failed" is a quiet row too, the word
+ * in the error colour, its error folded until the row opens it. The agent's last reply, or the
+ * chat's error, sits under the chat as a quiet quote with its line breaks kept and a copy button;
+ * past six lines it is clamped, and the row opens it in place. Without a reply a quiet row stands
+ * alone, since its link already opens the chat.
  */
-function FinishedRow({ notice, chat }: { notice: FinishedNotice; chat: SupervisorReference }) {
+function FinishedRow({
+  notice,
+  chat,
+  latest,
+}: {
+  notice: FinishedNotice;
+  chat: SupervisorReference;
+  latest: boolean;
+}) {
+  const agent = useAgents().find((a) => a.id === notice.sessionId);
   const [open, setOpen] = useState(false);
   const [clamped, setClamped] = useState(false);
   const quote = useRef<HTMLDivElement>(null);
@@ -914,10 +927,14 @@ function FinishedRow({ notice, chat }: { notice: FinishedNotice; chat: Superviso
     observer.observe(element);
     return () => observer.disconnect();
   }, [open, notice.quote]);
-  const expandable = clamped || open;
+  const failed = notice.state === "failed";
+  const needed = failed && latest && agent?.status === "failed" && chatDot(agent) === "attention";
+  // A failure dealt with keeps its error out of sight until asked for.
+  const folded = failed && !needed;
+  const expandable = folded ? notice.quote !== null : clamped || open;
   const word = finishedWord(notice.state);
   const id = useId();
-  const body = notice.quote !== null && (
+  const body = notice.quote !== null && (!folded || open) && (
     <div className="flex min-w-0 items-start gap-2">
       <div className="min-w-0 flex-1 py-0.5 text-muted-foreground">
         {/* Each line as the agent wrote it: Markdown would run a quote's lines together. */}
@@ -933,7 +950,7 @@ function FinishedRow({ notice, chat }: { notice: FinishedNotice; chat: Superviso
       <CopyButton label="Copy quote" text={notice.quote} />
     </div>
   );
-  if (notice.state === "failed")
+  if (needed)
     return (
       <NeedsBlock
         label={`${chat.label} failed`}
@@ -961,7 +978,10 @@ function FinishedRow({ notice, chat }: { notice: FinishedNotice; chat: Superviso
         )}
         <RowProvider sessionId={notice.sessionId} />
         <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
-        <span id={`${id}-mark`} className="shrink-0 text-xs text-muted-foreground">
+        <span
+          id={`${id}-mark`}
+          className={`shrink-0 text-xs ${failed ? "text-destructive" : "text-muted-foreground"}`}
+        >
           {word}
         </span>
         {expandable && (

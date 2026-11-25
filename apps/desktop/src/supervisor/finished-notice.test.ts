@@ -8,7 +8,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { SupervisorReferences } from "./reference-context";
 import type { SupervisorReference } from "./reference-text";
 import { SessionLinkContext } from "./session-link";
-import { FINISHED_TITLE, finishedNotice, finishedWord } from "./finished-notice";
+import { FINISHED_TITLE, finishedNotice, finishedRuns, finishedWord } from "./finished-notice";
+import { markFailureSeen } from "@/agents/seen-updates";
+import type { TimelineEntry } from "@/agents/thinking";
 
 const SUPERVISOR = "11111111-1111-4111-8111-111111111111";
 const CHAT = "22222222-2222-4222-8222-222222222222";
@@ -227,15 +229,17 @@ describe("the finished row", () => {
   const known = [
     { id: CHAT, kind: "Agent", label: "Game QA", workspace: "Star Catcher" },
   ] as SupervisorReference[];
-  const agent = { id: CHAT, provider: "codex", pending: [] } as unknown as AgentInfo;
-  const render = (item: AgentItem) =>
+  const chatState = (more: Partial<AgentInfo> = {}) =>
+    ({ id: CHAT, provider: "codex", pending: [], ...more }) as unknown as AgentInfo;
+  const agent = chatState();
+  const render = (item: TimelineEntry, agents: AgentInfo[] = [agent]) =>
     renderToStaticMarkup(
       createElement(
         TooltipProvider,
         null,
         createElement(
           AgentsContext,
-          { value: [agent] },
+          { value: agents },
           createElement(
             SessionLinkContext,
             { value: () => undefined },
@@ -269,14 +273,79 @@ describe("the finished row", () => {
     expect(done).not.toContain("text-destructive");
   });
 
+  const failure = (turn = 1) =>
+    notice(`${sentence("failed")}\n\n> Provider exited with code 1`, {
+      id: `supervisor-watch:${SUPERVISOR}:${CHAT}:turn-${turn}:failed`,
+    });
+  const failedChat = (updatedAt = "2026-11-24T10:00:00.000Z") =>
+    chatState({ status: "failed", updatedAt });
+
   it("puts Failed first in the block, in the error colour, then the error, then Open chat", () => {
-    const html = render(
-      notice(`${sentence("failed")}\n\n> Provider exited with code 1`, {
-        id: `supervisor-watch:${SUPERVISOR}:${CHAT}:turn-1:failed`,
-      }),
-    );
+    const html = render(failure(), [failedChat()]);
     expect(text(html)).toBe("Star Catcher / Game QA Failed Provider exited with code 1 Open chat");
     expect(html).toMatch(/text-destructive">Failed</);
     expect(html).not.toContain("bg-destructive"); // no attention dot
+  });
+
+  it.each([
+    ["a later result of its chat", { finishedLater: true as const }, () => [failedChat()]],
+    ["its chat working again", {}, () => [chatState({ status: "working" })]],
+    ["its chat finishing since", {}, () => [chatState({ status: "done" })]],
+    ["a chat the app no longer lists", {}, () => []],
+    [
+      "its chat being opened",
+      {},
+      () => {
+        const seen = failedChat("2026-11-24T11:00:00.000Z");
+        markFailureSeen(seen);
+        return [seen];
+      },
+    ],
+  ])(
+    "is a quiet row after %s: Failed small in the error colour, its error folded",
+    (_, extra, agents) => {
+      const html = render({ ...failure(), ...extra }, agents());
+      expect(text(html)).toBe("Star Catcher / Game QA Failed");
+      expect(html).toMatch(/text-xs text-destructive">Failed</);
+      expect(html).not.toContain("font-semibold");
+      expect(html).toContain('aria-expanded="false"');
+      expect(html).not.toContain("Open chat");
+    },
+  );
+
+  it("keeps the block while a newer failure of the same chat is still unseen", () => {
+    const seen = failedChat("2026-11-24T12:00:00.000Z");
+    markFailureSeen(seen);
+    const html = render(failure(), [failedChat("2026-11-24T13:00:00.000Z")]);
+    expect(text(html)).toContain("Open chat");
+  });
+});
+
+describe("finishedRuns", () => {
+  const reply = { ...notice("Done."), id: "reply", title: "Codex", kind: "assistant" as const };
+  const ended = (turn: number, status = "failed", chat = CHAT) =>
+    notice(`${sentence(status === "done" ? "finished" : status)}\n\n> Out of credits`, {
+      id: `supervisor-watch:${SUPERVISOR}:${chat}:turn-${turn}:${status}`,
+    });
+  const later = (view: TimelineEntry[]) => finishedRuns(view).map((entry) => !!entry.finishedLater);
+
+  it("leaves only each chat's most recent result able to ask for a person", () => {
+    expect(later([ended(1), ended(2, "done"), ended(3)])).toEqual([true, true, false]);
+  });
+
+  it("looks past other rows and other chats' results", () => {
+    const OTHER = "33333333-3333-4333-8333-333333333333";
+    const other = {
+      ...ended(2),
+      id: `supervisor-watch:${SUPERVISOR}:${OTHER}:turn-2:failed`,
+      text: `**Star Catcher / [HUD](concors://session/${OTHER})** failed.\n\n> Out of credits`,
+    };
+    expect(later([ended(1), reply, other])).toEqual([false, false, false]);
+    expect(later([ended(1), other, ended(3)])).toEqual([true, false, false]);
+  });
+
+  it("keeps every notice in its place", () => {
+    const view = [ended(1), reply, ended(2)];
+    expect(finishedRuns(view).map((entry) => entry.id)).toEqual(view.map((entry) => entry.id));
   });
 });

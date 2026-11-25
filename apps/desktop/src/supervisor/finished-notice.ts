@@ -69,3 +69,23 @@ export function finishedNotice(
 export function finishedWord(state: FinishedState): string {
   return state === "done" ? "Finished" : state === "failed" ? "Failed" : "Stopped";
 }
+
+/**
+ * Marks each turn-ended notice that the same chat posts another after, anywhere later in the chat,
+ * so only a chat's most recent result can ask for a person. Every notice stays in place.
+ */
+export function finishedRuns<T extends AgentItem & { finishedLater?: true }>(
+  view: readonly T[],
+): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const entry of [...view].reverse()) {
+    const chat = finishedNotice(entry)?.sessionId;
+    if (chat && seen.has(chat)) out.push({ ...entry, finishedLater: true as const });
+    else {
+      if (chat) seen.add(chat);
+      out.push(entry);
+    }
+  }
+  return out.reverse();
+}
