@@ -9,22 +9,47 @@ import { approvalParts, field } from "./approval-summary";
  *
  * - `write`: a new file's whole content, drawn as the chat draws a created file.
  * - `edit`: the change to each file, drawn as the chat draws an edit.
- * - `command`: the command in full, with where it runs and how long it may take when the request
- *   says.
+ * - `command`: the command in full, with where it runs, how long it may take and what it reaches
+ *   when the request says. Where the card or row shows the whole command, only those facts.
  * - `input`: anything else, as the chat shows a tool's input: its own arguments, IDs left out.
  *
- * `repeats` says the card already shows all of it (a one-line command, a search's query), so
- * the details are worth offering only where the card had to cut its text short.
+ * `repeats` says the card's line can hold all of the request's main text (a one-line command, a
+ * search's query), so that text is worth showing again only where the line had to cut it short
+ * (see `reviewView`). `description` is what Claude Code says a command is for, which the card
+ * shows above it.
  */
 export type ApprovalView =
   | { kind: "write"; path: string; diff: string }
   | { kind: "edit"; files: { path: string; diff: string }[] }
-  | { kind: "command"; command: string; folder?: string; timeout?: string; network?: string }
+  | { kind: "command"; command?: string; folder?: string; timeout?: string; network?: string }
   | { kind: "input"; text: string };
 
 export interface ApprovalDetails {
   view: ApprovalView;
   repeats: boolean;
+  description?: string;
+}
+
+/**
+ * What the details show beside a card or row that already shows `whole` of the request's main
+ * text, or null when they would add nothing: a command it shows whole leaves only where it runs,
+ * how long it may take and what it reaches; anything else it shows whole leaves nothing.
+ */
+export function reviewView(details: ApprovalDetails | null, whole: boolean): ApprovalView | null {
+  if (!details) return null;
+  const { view } = details;
+  if (view.kind === "command") {
+    if (!whole) return view;
+    const { folder, timeout, network } = view;
+    if (!folder && !timeout && !network) return null;
+    return {
+      kind: "command",
+      ...(folder ? { folder } : {}),
+      ...(timeout ? { timeout } : {}),
+      ...(network ? { network } : {}),
+    };
+  }
+  return whole && details.repeats ? null : view;
 }
 
 type Fields = Record<string, unknown>;
@@ -164,7 +189,11 @@ function tool(input: unknown, raw: string, lead: string, target?: string): Appro
   const shell = text(args["command"] ?? args["cmd"]);
   if (shell) {
     const timeout = typeof args["timeout"] === "number" ? waitWords(args["timeout"]) : undefined;
-    return command(shell, text(args["cwd"] ?? args["workdir"]), timeout, undefined, lead);
+    const description = text(args["description"])?.trim();
+    return {
+      ...command(shell, text(args["cwd"] ?? args["workdir"]), timeout, undefined, lead),
+      ...(description ? { description } : {}),
+    };
   }
   // Anything else reads as the chat reads a tool's input; one field the card names says nothing new.
   const values = Object.values(args).filter((value) => value !== undefined && value !== null);
@@ -193,7 +222,7 @@ function command(
       ...(timeout ? { timeout } : {}),
       ...(network ? { network } : {}),
     },
-    repeats: whole && !folder && !timeout && !network,
+    repeats: whole,
   };
 }
 

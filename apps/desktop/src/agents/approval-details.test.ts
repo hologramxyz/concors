@@ -1,6 +1,12 @@
 import { expect, it } from "vitest";
 import type { AgentItem, AgentPending } from "@concors/protocol";
-import { approvalDetails, approvalItemId, shellCommand, waitWords } from "./approval-details";
+import {
+  approvalDetails,
+  approvalItemId,
+  reviewView,
+  shellCommand,
+  waitWords,
+} from "./approval-details";
 
 const IDS = { threadId: "thread-1", turnId: "turn-1", itemId: "item-1" };
 
@@ -128,7 +134,7 @@ it("shows a Codex command in full with its folder, unwrapped from its shell", ()
   );
   expect(details).toEqual({
     view: { kind: "command", command: "pnpm test", folder: "/work/star-catcher" },
-    repeats: false,
+    repeats: true,
   });
 });
 
@@ -157,7 +163,8 @@ it("says how long Claude Code's shell may run, in words", () => {
     approvalDetails(claude("Bash", { command: "pnpm test", timeout: 120000, description: "Test" })),
   ).toEqual({
     view: { kind: "command", command: "pnpm test", timeout: "Times out after 2 minutes" },
-    repeats: false,
+    repeats: true,
+    description: "Test",
   });
   expect(waitWords(1000)).toBe("Times out after 1 second");
   expect(waitWords(90000)).toBe("Times out after 1.5 minutes");
@@ -242,4 +249,64 @@ it("unwraps the shells agents wrap commands in", () => {
   expect(shellCommand("bash -lc 'pnpm test'")).toBe("pnpm test");
   expect(shellCommand(["pwsh", "-Command", "Get-ChildItem"])).toBe("Get-ChildItem");
   expect(shellCommand(["git", "status"])).toBe("git status");
+});
+
+it("leaves out a command the card shows whole, keeping only where it runs and how long", () => {
+  const folder = approvalDetails(
+    approval({ ...IDS, command: "pnpm test", cwd: "/work/star-catcher" }, "pnpm test"),
+  );
+  expect(reviewView(folder, true)).toEqual({ kind: "command", folder: "/work/star-catcher" });
+  // Cut short on the card (clamped at its width), the command comes back in full.
+  expect(reviewView(folder, false)).toEqual({
+    kind: "command",
+    command: "pnpm test",
+    folder: "/work/star-catcher",
+  });
+  const timeout = approvalDetails(claude("Bash", { command: "pnpm test", timeout: 60000 }));
+  expect(reviewView(timeout, true)).toEqual({
+    kind: "command",
+    timeout: "Times out after 1 minute",
+  });
+  const network = approvalDetails(
+    approval(
+      { ...IDS, command: "curl example.com", networkApprovalContext: { host: "example.com" } },
+      "curl example.com\nNetwork access: {}",
+    ),
+  );
+  expect(reviewView(network, true)).toEqual({ kind: "command", network: "example.com" });
+});
+
+it("offers no details for a command the card shows whole with nothing else to say", () => {
+  const plain = approvalDetails(approval({ ...IDS, command: "echo test" }, "echo test"));
+  expect(reviewView(plain, true)).toBeNull();
+  expect(reviewView(plain, false)).toEqual({ kind: "command", command: "echo test" });
+  // A long script the card cuts to three lines is always shown in full.
+  const script = "set -e\npnpm install\npnpm build\npnpm test";
+  const cut = approvalDetails(approval({ ...IDS, command: script }, script));
+  expect(cut?.repeats).toBe(false);
+  // The card passes whether it shows the command whole: `repeats`, unless its width clamps it.
+  expect(reviewView(cut, !!cut?.repeats)).toEqual({
+    kind: "command",
+    command: script,
+  });
+});
+
+it("keeps a file's content and anything the card does not quote", () => {
+  const write = approvalDetails(claude("Write", { file_path: "/w/a.txt", content: "a" }));
+  expect(reviewView(write, true)?.kind).toBe("write");
+  const search = approvalDetails(claude("WebSearch", { query: "vitest" }));
+  expect(reviewView(search, true)).toBeNull();
+  expect(reviewView(search, false)?.kind).toBe("input");
+  expect(reviewView(null, true)).toBeNull();
+});
+
+it("reads Claude Code's description of a command apart from the command", () => {
+  const details = approvalDetails(
+    claude("Bash", { command: "pnpm test", description: "  Run the unit tests " }),
+  );
+  expect(details?.description).toBe("Run the unit tests");
+  expect(reviewView(details, true)).toBeNull();
+  expect(approvalDetails(claude("Bash", { command: "ls", description: "" }))).not.toHaveProperty(
+    "description",
+  );
 });

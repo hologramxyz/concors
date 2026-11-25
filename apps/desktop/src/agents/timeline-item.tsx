@@ -10,6 +10,7 @@ import { useAgents } from "@/agents/context";
 import { chatDot } from "@/agents/agent-status";
 import { ProviderIcon } from "@/agents/provider-icon";
 import { approvalParts } from "@/agents/approval-summary";
+import { DiffLines } from "@/agents/pending-input";
 import { useHomePath } from "@/workspace/home-path";
 import { SidebarDot } from "@/workspace/sidebar-tabs";
 import { answeredNotice, answeredSummary, type AnsweredNotice } from "@/supervisor/answered-notice";
@@ -406,31 +407,6 @@ function ToolOutput({ item, running }: { item: AgentItem; running: boolean }) {
         </pre>
       )}
     </>
-  );
-}
-
-/**
- * A file's diff, a line each, added lines green and removed ones red. A created file is all added
- * lines, so it reads the same way. An approval card shows a change it asks about with it too.
- */
-export function DiffLines({ diff }: { diff: string }) {
-  return (
-    <pre className="overflow-x-auto font-mono">
-      {diff.split("\n").map((line, i) => (
-        <div
-          key={i}
-          className={
-            line.startsWith("+")
-              ? "bg-emerald-500/10 text-emerald-600"
-              : line.startsWith("-")
-                ? "bg-red-500/10 text-red-500"
-                : ""
-          }
-        >
-          {line || " "}
-        </div>
-      ))}
-    </pre>
   );
 }
 

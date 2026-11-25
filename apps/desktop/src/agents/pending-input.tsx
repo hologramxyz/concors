@@ -1,5 +1,5 @@
 import { approvalParts, leadPreview } from "./approval-summary";
-import { approvalDetails, type ApprovalDetails } from "./approval-details";
+import { approvalDetails, reviewView, type ApprovalView } from "./approval-details";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronRight, MessageCircleQuestionMark, ShieldAlert } from "lucide-react";
 import { Collapse } from "./collapse";
@@ -8,7 +8,6 @@ import type { AgentItem, AgentPending } from "@concors/protocol";
 import { AgentMarkdown } from "./markdown";
 import { Button } from "@/components/ui/button";
 import { useShortPath } from "./short-path";
-import { DiffLines } from "./timeline-item";
 export function PendingInput({
   pending,
   item,
@@ -40,7 +39,6 @@ export function PendingInput({
   const numbered = pending.questions.length > 1;
   const { lead, grants, tool, target, path } = approvalParts(pending);
   const short = useShortPath();
-  const [details, setDetails] = useState(false);
   const review = useMemo(() => approvalDetails(pending, item), [pending, item]);
   // Whether the header had to cut its text short, measured again as the card or the text changes.
   const [clipped, setClipped] = useState(false);
@@ -55,8 +53,10 @@ export function PendingInput({
     observer.observe(text);
     return () => observer.disconnect();
   }, []);
-  // Details that only repeat the header are worth offering only where it cut them short.
-  const reviewable = !!review && (!review.repeats || clipped);
+  // What the header shows whole, the details leave out; with nothing else to add there are none.
+  const view = reviewView(review, !!review?.repeats && !clipped);
+  const reviewable = !!view;
+  const command = review?.view.kind === "command" ? review.view.command?.trim() : undefined;
   // With neither a plan nor details, the header sits straight on the answers, as evenly spaced.
   const body = pending.plan !== undefined || reviewable;
   const section = useRef<HTMLElement>(null);
@@ -96,12 +96,22 @@ export function PendingInput({
             </p>
           ) : (
             lead && (
-              <p
-                ref={pending.kind === "approval" ? measure : undefined}
-                className={`text-xs break-words whitespace-pre-wrap text-muted-foreground ${pending.kind === "approval" ? "line-clamp-3" : ""}`}
-              >
-                {pending.kind === "approval" ? leadPreview(lead) : lead}
-              </p>
+              <>
+                {/* What Claude Code says a command is for, in words above it. */}
+                {review?.description && (
+                  <p className="text-xs break-words text-muted-foreground">{review.description}</p>
+                )}
+                <p
+                  ref={pending.kind === "approval" ? measure : undefined}
+                  className={`text-xs break-words whitespace-pre-wrap text-muted-foreground ${pending.kind === "approval" ? "line-clamp-3" : ""}`}
+                >
+                  {pending.kind === "approval" ? (
+                    <LeadText text={leadPreview(lead)} command={command} />
+                  ) : (
+                    lead
+                  )}
+                </p>
+              </>
             )
           )}
           {grants.map((grant) => (
@@ -120,28 +130,7 @@ export function PendingInput({
                   <AgentMarkdown>{pending.plan}</AgentMarkdown>
                 </div>
               )}
-              {reviewable && review && (
-                <>
-                  <button
-                    type="button"
-                    aria-expanded={details}
-                    onClick={() => setDetails((open) => !open)}
-                    className="mobile-hit-area flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    <ChevronRight
-                      aria-hidden
-                      className={`size-3 transition-transform motion-reduce:transition-none ${details ? "rotate-90" : ""}`}
-                    />
-                    Review request details
-                  </button>
-                  {/* In a short pane the details give up their height first; only they scroll. */}
-                  <Collapse open={details} className="min-h-0 shrink">
-                    <div className="flex min-h-0 flex-col">
-                      <ApprovalDetailsView details={review} />
-                    </div>
-                  </Collapse>
-                </>
-              )}
+              {view && <ApprovalReview view={view} />}
             </div>
           )}
           <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t bg-muted/50 px-4 py-2.5">
@@ -419,12 +408,62 @@ function revealIn(element: HTMLElement) {
 }
 
 /**
- * An approval's details, in the panel that scrolls inside the card: the file a write would make or
- * the change an edit would make, as the chat draws them, with its whole path; a command in full,
- * then where it runs and how long it may take, when the request says. See `approvalDetails`.
+ * A command as the card leads with it: in the monospace commands have elsewhere, and any reason
+ * after it in the card's own font. A command cut short by the preview is monospace up to the cut.
  */
-export function ApprovalDetailsView({ details }: { details: ApprovalDetails }) {
-  const { view } = details;
+function LeadText({ text, command }: { text: string; command: string | undefined }) {
+  if (!command) return <>{text}</>;
+  if (text.startsWith(command))
+    return (
+      <>
+        <span className="font-mono">{command}</span>
+        {text.slice(command.length)}
+      </>
+    );
+  return command.startsWith(text.replace(/ …$/, "")) ? (
+    <span className="font-mono">{text}</span>
+  ) : (
+    <>{text}</>
+  );
+}
+
+/**
+ * "Review request details", closed at first, and the details it opens (see
+ * `ApprovalDetailsView`). The approval card and the Supervisor chat's pending block both use it.
+ * In a short pane the details give up their height first; only they scroll.
+ */
+export function ApprovalReview({ view }: { view: ApprovalView }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => setOpen((value) => !value)}
+        className="mobile-hit-area flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+      >
+        <ChevronRight
+          aria-hidden
+          className={`size-3 transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
+        />
+        Review request details
+      </button>
+      <Collapse open={open} className="min-h-0 shrink">
+        <div className="flex min-h-0 flex-col">
+          <ApprovalDetailsView view={view} />
+        </div>
+      </Collapse>
+    </>
+  );
+}
+
+/**
+ * An approval's details, in the panel that scrolls inside the card: the file a write would make or
+ * the change an edit would make, as the chat draws them, with its whole path; a command in full
+ * when the card cut it short, then where it runs, how long it may take and what it reaches, when
+ * the request says. See `approvalDetails` and `reviewView`.
+ */
+export function ApprovalDetailsView({ view }: { view: ApprovalView }) {
   return (
     <OverlayScroll className="chat-scroll max-h-40 min-h-0 overflow-auto rounded-lg border bg-background px-3 py-2 text-xs">
       {view.kind === "write" ? (
@@ -442,8 +481,10 @@ export function ApprovalDetailsView({ details }: { details: ApprovalDetails }) {
           ))}
         </div>
       ) : view.kind === "command" ? (
-        <>
-          <pre className="font-mono break-words whitespace-pre-wrap">{view.command}</pre>
+        <div className="space-y-2">
+          {view.command && (
+            <pre className="font-mono break-words whitespace-pre-wrap">{view.command}</pre>
+          )}
           {[
             view.folder && `Runs in ${view.folder}`,
             view.timeout,
@@ -451,14 +492,39 @@ export function ApprovalDetailsView({ details }: { details: ApprovalDetails }) {
           ]
             .filter(Boolean)
             .map((line) => (
-              <p key={line} className="mt-2 break-words text-muted-foreground">
+              <p key={line} className="break-words text-muted-foreground">
                 {line}
               </p>
             ))}
-        </>
+        </div>
       ) : (
         <pre className="font-mono break-words whitespace-pre-wrap">{view.text}</pre>
       )}
     </OverlayScroll>
+  );
+}
+
+/**
+ * A file's diff, a line each, added lines green and removed ones red. A created file is all added
+ * lines, so it reads the same way. An approval card shows a change it asks about with it too.
+ */
+export function DiffLines({ diff }: { diff: string }) {
+  return (
+    <pre className="overflow-x-auto font-mono">
+      {diff.split("\n").map((line, i) => (
+        <div
+          key={i}
+          className={
+            line.startsWith("+")
+              ? "bg-emerald-500/10 text-emerald-600"
+              : line.startsWith("-")
+                ? "bg-red-500/10 text-red-500"
+                : ""
+          }
+        >
+          {line || " "}
+        </div>
+      ))}
+    </pre>
   );
 }
