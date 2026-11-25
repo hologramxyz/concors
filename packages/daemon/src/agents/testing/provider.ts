@@ -565,15 +565,6 @@ export class TestAgentProvider implements AgentProvider {
           },
         });
       }
-      if (text.includes("show-image")) {
-        this.emit("item/completed", {
-          item: {
-            id: `image-${this.turnId}`,
-            type: "agentMessage",
-            text: "Here is the page:\n\n![The pricing page](shot.png)\n\nAnd ![a missing one](gone.png).",
-          },
-        });
-      }
       if (text.includes("generate-image")) {
         // Codex's image generation sends the picture inline and names the file it saved, which
         // sits outside the project and may have spaces in its path.
@@ -681,7 +672,11 @@ export class TestAgentProvider implements AgentProvider {
             item: {
               id: `message-${this.turnId}`,
               type: "agentMessage",
-              text: "Hello from Codex",
+              // The images are the turn's last reply, so Supervisor's notice of it quotes them;
+              // the second sits in a sentence.
+              text: text.includes("show-image")
+                ? "Here is the page:\n\n![The pricing page](shot.png)\n\nAnd ![a missing one](gone.png)."
+                : "Hello from Codex",
             },
           });
           this.finish();
