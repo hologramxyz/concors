@@ -130,6 +130,17 @@ export function TriggerForm({
         ]}
         onChange={setTarget}
       />
+      {target === "supervisor" && (
+        // It can direct other chats, so outside text that steers it reaches further than one chat.
+        <p
+          role="note"
+          className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs"
+        >
+          The Supervisor can start and direct other chats. Only point a webhook at it from sources
+          you trust: event bodies are marked as untrusted, but a cleverly written one can still try
+          to steer it.
+        </p>
+      )}
       {target !== "supervisor" && (
         <ScheduleSelect
           label="Workspace"
@@ -185,7 +196,8 @@ export function TriggerForm({
         />
         <span className="text-xs text-muted-foreground">
           Your instructions go here. Event bodies are framed as untrusted data. Normal chat
-          permissions and human approvals still apply.
+          permissions and human approvals still apply, and chats that run without approvals (Bypass
+          permissions or Full access) don&rsquo;t receive webhook events.
         </span>
       </label>
       <label className="flex items-center gap-2">

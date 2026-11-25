@@ -10,7 +10,14 @@ import { AgentManager } from "../agents/manager.ts";
 import { ProviderRegistry } from "../agents/providers/registry.ts";
 import { TestAgentProvider } from "../agents/testing/provider.ts";
 import { TriggerStore } from "./store.ts";
-import { TriggerManager, sourceLabel, webhookPrompt } from "./manager.ts";
+import {
+  MAX_WAITING_EVENTS,
+  TriggerHttpError,
+  TriggerManager,
+  UNATTENDED_REFUSAL,
+  sourceLabel,
+  webhookPrompt,
+} from "./manager.ts";
 import { registerTriggerHttp } from "./http.ts";
 
 const cleanups: (() => Promise<unknown>)[] = [];
@@ -18,7 +25,7 @@ afterEach(async () => {
   for (const fn of cleanups.splice(0).reverse()) await fn();
   vi.restoreAllMocks();
 });
-async function setup(mode: "same" | "new" = "same") {
+async function setup(mode: "same" | "new" = "same", clock?: () => Date) {
   const directory = await mkdtemp(join(tmpdir(), "concors-triggers-"));
   const workspace = new WorkspaceStore(join(directory, "workspace.sqlite"));
   const registry = new ProviderRegistry(join(directory, "providers"));
@@ -34,7 +41,7 @@ async function setup(mode: "same" | "new" = "same") {
     registry,
   );
   let store = new TriggerStore(join(directory, "triggers.sqlite"));
-  manager = new TriggerManager(store, workspace, agents, registry, () => undefined);
+  manager = new TriggerManager(store, workspace, agents, registry, () => undefined, clock);
   agents.triggerLabel = (id) => manager.label(id);
   const projectId = randomUUID();
   workspace.execute({
@@ -457,6 +464,79 @@ it("queues beyond the interactive follow-up limit without dropping accepted even
     .toBe(22);
   expect(f.store.pending(first.sessionId!)).toHaveLength(0);
   expect(f.workspace.agent(first.sessionId!).queue).toHaveLength(0);
+});
+
+it("stops accepting events once a stalled chat has the most waiting", async () => {
+  // Past the per-minute limit too: a minute passes every 25 events.
+  let now = Date.parse("2026-11-25T00:00:00Z");
+  const f = await setup("same", () => new Date(now));
+  const first = await f.settled(f.accept().event.id);
+  await expect.poll(() => f.workspace.agent(first.sessionId!).status).toBe("done");
+  // Waiting on an approval nobody gives: nothing it is sent runs.
+  f.workspace.saveAgent({ ...f.workspace.agent(first.sessionId!), status: "needs_input" });
+  for (let i = 0; i < MAX_WAITING_EVENTS; i++) {
+    if (i % 25 === 0) now += 61_000;
+    f.accept(`wait-${i}`);
+  }
+  now += 61_000;
+  let refused: unknown;
+  try {
+    f.accept("one-too-many");
+  } catch (error) {
+    refused = error;
+  }
+  expect(refused).toBeInstanceOf(TriggerHttpError);
+  expect(refused).toMatchObject({
+    statusCode: 429,
+    message: "Too many events waiting for the chat",
+  });
+  await expect
+    .poll(() => f.manager.list()[0]!.events.filter((e) => e.status === "received").length)
+    .toBe(0);
+  expect(f.store.pending(first.sessionId!).length).toBe(MAX_WAITING_EVENTS - 20);
+});
+
+it("does not deliver to a chat that runs without approvals", async () => {
+  const f = await setup();
+  const first = await f.settled(f.accept().event.id);
+  expect(first.status).toBe("delivered");
+  const sessionId = first.sessionId!;
+  await expect.poll(() => f.workspace.agent(sessionId).status).toBe("done");
+  const agent = f.workspace.agent(sessionId);
+  // Codex's Full access: outside text would run unseen.
+  f.workspace.saveAgent({
+    ...agent,
+    settings: { model: null, effort: null, ...agent.settings, mode: "full-access" },
+  });
+  const refused = await f.settled(f.accept("full-access").event.id);
+  expect(refused).toMatchObject({ status: "failed", message: UNATTENDED_REFUSAL });
+  const prompts = () =>
+    f.workspace.agentMessages(sessionId).filter((m) => m.kind === "user").length;
+  const before = prompts();
+  expect(before).toBeGreaterThan(0);
+
+  // An event already waiting is refused too if its chat switches to Claude's Bypass permissions.
+  f.workspace.saveAgent({
+    ...f.workspace.agent(sessionId),
+    status: "needs_input",
+    settings: { model: null, effort: null, mode: "default" },
+  });
+  const events = Array.from({ length: 21 }, (_, i) => f.accept(`wait-${i}`).event);
+  await f.settled(events.at(-1)!.id);
+  expect(f.store.pending(sessionId)).toHaveLength(1);
+  const waiting = f.store.pending(sessionId)[0]!.eventId;
+  f.workspace.saveAgent({
+    ...f.workspace.agent(sessionId),
+    status: "idle",
+    queue: [],
+    settings: { model: null, effort: null, mode: "default", nativeMode: "bypassPermissions" },
+  });
+  f.manager.observe(f.workspace.agent(sessionId));
+  await expect
+    .poll(() => f.manager.list()[0]!.events.find((e) => e.id === waiting))
+    .toMatchObject({ status: "failed", message: UNATTENDED_REFUSAL });
+  expect(f.store.pending(sessionId)).toHaveLength(0);
+  expect(prompts()).toBe(before);
 });
 
 it("copies the provider and model of a session target into new chats", async () => {

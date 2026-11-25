@@ -35,7 +35,11 @@ preserved to avoid expansion from deeply nested data. All other payloads are tex
 and defaults to the trigger name. Labels are sanitized to 40 characters. The prompt is followed
 by an explicitly untrusted, fence-neutralized data block. This framing is defense in depth, not a
 guarantee against prompt injection: only connect trusted senders, review their payloads and keep
-normal human approval requirements. Webhooks never elevate the chat's permissions.
+normal human approval requirements. Webhooks never elevate the chat's permissions, and they are
+not delivered to chats that run without approvals (Claude's Bypass permissions, Codex's Full
+access): such an event fails with a message saying so, checked when it is delivered, since a
+chat's mode can change after its trigger was made. The Supervisor can be a target, with a warning
+in the form: it can start and direct other chats, so only trusted senders should reach it.
 
 Accepted events return `202 {eventId,status,sessionId}` before asynchronous delivery. Busy chats
 receive a queued follow-up, not an interrupt. Prompt items show `Webhook · <source>` and carry
@@ -46,6 +50,8 @@ daemon-only trigger/event metadata. Inspect `trigger.list` for the latest 50 eve
 
 - 64 triggers per machine; 64 KiB raw body (`413` above this).
 - 30 events per minute per trigger (`429` above this).
+- 100 events waiting for a chat per trigger (`429` above this), so a chat that stopped taking
+  prompts, waiting on an approval say, cannot have events pile up without bound.
 - Idempotency keys: up to 256 characters, last 200 keys within 24 hours per trigger. Repeated keys
   return `200` with the original event ID and current result; a changed body does not run again.
 - Unknown IDs and incorrect secrets both return `401`; disabled triggers return `409`.
