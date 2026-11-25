@@ -11,8 +11,9 @@ const approvalCommand = (text: string) =>
       : "echo test";
 
 /**
- * A file request as Claude Code sends one: the tool's input as the command, the tool as the
- * reason. The haiku prompts ask to write a file or to edit one; any other asks to run a command.
+ * A tool request as Claude Code sends one: the tool's input as the command, the tool as the
+ * reason. The haiku prompts ask to write a file or to edit one, the described command to run its
+ * shell tool with a description and a timeout; any other asks to run a command as Codex does.
  */
 const fileRequest = (text: string, cwd: string) => {
   const file_path = `${cwd}/haiku.txt`;
@@ -25,6 +26,15 @@ const fileRequest = (text: string, cwd: string) => {
       : text === "Please approve the haiku edit"
         ? { file_path, old_string: "dusk arrives sooner", new_string: "night arrives sooner" }
         : null;
+  if (text === "Please approve the described command")
+    return {
+      reason: "Bash",
+      command: JSON.stringify({
+        command: "pnpm --filter @concors/desktop test",
+        description: "Run the desktop unit tests",
+        timeout: 120000,
+      }),
+    };
   if (!input) return null;
   return { reason: "content" in input ? "Write" : "Edit", command: JSON.stringify(input) };
 };
@@ -272,6 +282,11 @@ export class TestAgentProvider implements AgentProvider {
     ) {
       const turnId = this.turnId;
       void this.supervisorDelegationFixture(turnId).catch(() => this.finish("failed", turnId));
+      return { turn: { id: turnId, status: "inProgress", items: [] } };
+    }
+    if (this.tools?.env?.CONCORS_CONTROL_URL && text === "Send the approval samples") {
+      const turnId = this.turnId;
+      void this.supervisorApprovalSamples(turnId).catch(() => this.finish("failed", turnId));
       return { turn: { id: turnId, status: "inProgress", items: [] } };
     }
     if (this.tools?.env?.CONCORS_CONTROL_URL && text === "primitive-control-run") {
@@ -683,6 +698,25 @@ export class TestAgentProvider implements AgentProvider {
       turnId,
       "I sent work to **Game QA**, **HUD polish**, and the **Release editor**. I’ll bring blockers and results back here.",
     );
+  }
+  /**
+   * Supervisor sends the fixture's workers one approval each: a file to write, a file to edit and
+   * a long command, so its chat shows a pending request of every shape the approval card draws.
+   */
+  private async supervisorApprovalSamples(turnId: string) {
+    const { sessions } = (await this.supervisorControl({ kind: "sessions" })) as {
+      sessions: { id: string; name: string }[];
+    };
+    for (const [name, text] of [
+      ["Game QA", "Please approve the haiku write"],
+      ["HUD polish", "Please approve the haiku edit"],
+      ["Release editor", "Please approve the long command"],
+    ] as const) {
+      const target = sessions.find((session) => session.name === name);
+      if (!target) throw new Error("Fixture worker not found");
+      await this.supervisorControl({ kind: "send", sessionId: target.id, text });
+    }
+    this.reply(turnId, "I asked **Game QA**, **HUD polish** and the **Release editor** to start.");
   }
   /**
    * Supervisor's calls as Claude Code reports them, on the fixture's real chats: shown, not run,
