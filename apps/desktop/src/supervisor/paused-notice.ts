@@ -2,10 +2,10 @@ import type { AgentItem } from "@concors/protocol";
 
 /**
  * Supervisor's note that a chat it watches holds queued instructions it will not send until
- * someone resumes its queue: one sentence naming the chat and how many are paused, then the
- * daemon's fixed advice to review the queue, quoted. The chat draws it as one row. It is read by
- * its title, its ID and the daemon's fixed wording; when the chat's error takes the advice's
- * place, or anything else is not in that shape, it is drawn as the daemon wrote it.
+ * someone resumes its queue: one sentence naming the chat and how many are paused, then quoted,
+ * either the daemon's fixed advice to review the queue or the chat's error. It is read by its
+ * title, its ID and the daemon's fixed wording; anything not in that shape is drawn as the daemon
+ * wrote it.
  */
 export const PAUSED_TITLE = "Queued work paused";
 
@@ -20,6 +20,8 @@ export interface PausedNotice {
   sessionId: string;
   /** How many instructions are paused, or null when the daemon's number cannot be read. */
   count: number | null;
+  /** The chat's error, quoted in the advice's place, or null when the advice is there. */
+  error: string | null;
 }
 
 export function pausedNotice(
@@ -30,32 +32,55 @@ export function pausedNotice(
   if (!sessionId) return null;
   // "**Workspace / [Chat](concors://session/<id>)** has 2 paused instruction(s)."
   const gap = item.text.indexOf("\n\n");
-  if (gap < 0 || item.text.slice(gap + 2) !== ADVICE) return null;
+  if (gap < 0) return null;
+  const body = item.text.slice(gap + 2);
+  const error = body === ADVICE ? null : unquote(body);
+  if (body !== ADVICE && error === null) return null;
   const sentence = item.text.slice(0, gap);
   if (!sentence.startsWith("**") || !sentence.includes(`(concors://session/${sessionId})**`))
     return null;
   const match = PAUSED.exec(sentence);
   if (!match) return null;
   const count = Number(match[1]);
-  return { sessionId, count: Number.isSafeInteger(count) && count > 0 ? count : null };
+  return { sessionId, count: Number.isSafeInteger(count) && count > 0 ? count : null, error };
 }
 
-/** The state that ends the row: "1 instruction paused", "3 instructions paused", or "Queue paused". */
+/** A Markdown quote's text, or null when a line is not quoted or nothing is in it. */
+function unquote(text: string): string | null {
+  const lines = text.split("\n");
+  if (!lines.every((line) => line.startsWith(">"))) return null;
+  const quoted = lines
+    .map((line) => line.replace(/^> ?/, ""))
+    .join("\n")
+    .trim();
+  return quoted || null;
+}
+
+/** A quiet row's state: "1 instruction paused", "3 instructions paused", or "Queue paused". */
 export function pausedWords(count: number | null): string {
   if (count === null) return "Queue paused";
   return `${count} ${count === 1 ? "instruction" : "instructions"} paused`;
 }
 
+/** What a paused queue holds, under its state: "1 instruction waiting", "3 instructions waiting". */
+export function waitingWords(count: number): string {
+  return `${count} ${count === 1 ? "instruction" : "instructions"} waiting`;
+}
+
 /**
- * Marks each paused-queue notice that the same chat's next paused notice follows directly, so only
- * the last of such a run offers "Review queue". Every notice stays in place.
+ * Marks each paused-queue notice that the same chat posts another after, anywhere later in the
+ * chat, so only a chat's most recent one can ask for a person. Every notice stays in place.
  */
 export function pausedRuns<T extends AgentItem & { pausedLater?: true }>(view: readonly T[]): T[] {
-  return view.map((entry, i) => {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const entry of [...view].reverse()) {
     const chat = pausedNotice(entry)?.sessionId;
-    const next = view[i + 1];
-    return chat && next && pausedNotice(next)?.sessionId === chat
-      ? { ...entry, pausedLater: true as const }
-      : entry;
-  });
+    if (chat && seen.has(chat)) out.push({ ...entry, pausedLater: true as const });
+    else {
+      if (chat) seen.add(chat);
+      out.push(entry);
+    }
+  }
+  return out.reverse();
 }

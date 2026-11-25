@@ -1,5 +1,13 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { AgentItem } from "@concors/protocol";
+import type { AgentInfo, AgentItem } from "@concors/protocol";
+import { AgentsContext } from "@/agents/context";
+import { TimelineItem } from "@/agents/timeline-item";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { SupervisorReferences } from "./reference-context";
+import type { SupervisorReference } from "./reference-text";
+import { SessionLinkContext } from "./session-link";
 import { FINISHED_TITLE, finishedNotice, finishedWord } from "./finished-notice";
 
 const SUPERVISOR = "11111111-1111-4111-8111-111111111111";
@@ -212,5 +220,63 @@ describe("the daemon's finished notice", () => {
   it("is read when the chat was interrupted", async () => {
     const item = await ended({ status: "interrupted" });
     expect(finishedNotice(item!)).toMatchObject({ state: "interrupted", quote: null });
+  });
+});
+
+describe("the finished row", () => {
+  const known = [
+    { id: CHAT, kind: "Agent", label: "Game QA", workspace: "Star Catcher" },
+  ] as SupervisorReference[];
+  const agent = { id: CHAT, provider: "codex", pending: [] } as unknown as AgentInfo;
+  const render = (item: AgentItem) =>
+    renderToStaticMarkup(
+      createElement(
+        TooltipProvider,
+        null,
+        createElement(
+          AgentsContext,
+          { value: [agent] },
+          createElement(
+            SessionLinkContext,
+            { value: () => undefined },
+            createElement(
+              SupervisorReferences,
+              { value: known },
+              createElement(TimelineItem, { item, live: false }),
+            ),
+          ),
+        ),
+      ),
+    );
+  const text = (html: string) =>
+    html
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  it("keeps a finished or stopped turn on one quiet line, with no action", () => {
+    const done = render(notice(`${sentence()}\n\nAgent’s reply:\n\n> All good.`));
+    expect(text(done)).toBe("Star Catcher / Game QA Finished All good.");
+    const stopped = render(
+      notice(
+        `${sentence("interrupted")}\n\nNo final text reply was saved. Open the chat for its tool output.`,
+        {
+          id: `supervisor-watch:${SUPERVISOR}:${CHAT}:turn-1:interrupted`,
+        },
+      ),
+    );
+    expect(text(stopped)).toBe("Star Catcher / Game QA Stopped");
+    expect(done).not.toContain("text-destructive");
+  });
+
+  it("puts Failed first in the block, in the error colour, then the error, then Open chat", () => {
+    const html = render(
+      notice(`${sentence("failed")}\n\n> Provider exited with code 1`, {
+        id: `supervisor-watch:${SUPERVISOR}:${CHAT}:turn-1:failed`,
+      }),
+    );
+    expect(text(html)).toBe("Star Catcher / Game QA Failed Provider exited with code 1 Open chat");
+    expect(html).toMatch(/text-destructive">Failed</);
+    expect(html).not.toContain("bg-destructive"); // no attention dot
   });
 });

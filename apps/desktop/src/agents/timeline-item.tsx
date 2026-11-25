@@ -13,7 +13,13 @@ import { useHomePath } from "@/workspace/home-path";
 import { SidebarDot } from "@/workspace/sidebar-tabs";
 import { answeredNotice, answeredSummary, type AnsweredNotice } from "@/supervisor/answered-notice";
 import { finishedNotice, finishedWord, type FinishedNotice } from "@/supervisor/finished-notice";
-import { pausedNotice, pausedWords, type PausedNotice } from "@/supervisor/paused-notice";
+import {
+  pausedNotice,
+  pausedWords,
+  waitingWords,
+  type PausedNotice,
+} from "@/supervisor/paused-notice";
+import { Button } from "@/components/ui/button";
 import { SupervisorReferences, type SupervisorReference } from "@/supervisor/reference-context";
 import { SessionLinkContext } from "@/supervisor/session-link";
 import { MessageAttachments } from "./attachment-preview";
@@ -690,7 +696,7 @@ function SupervisorNotice({ item }: { item: TimelineEntry }) {
   const paused = pausedNotice(item);
   const pausedChat = paused && answeredChat(references, paused.sessionId);
   if (paused && pausedChat)
-    return <PausedRow notice={paused} chat={pausedChat} review={!item.pausedLater} />;
+    return <PausedRow notice={paused} chat={pausedChat} latest={!item.pausedLater} />;
   return (
     <article className="text-sm text-muted-foreground">
       <AgentMarkdown>{item.text}</AgentMarkdown>
@@ -813,11 +819,86 @@ function NoticeChat({
 }
 
 /**
- * A chat's ended turn as one row shaped as an answered request's: its chat, linked, then how the
- * turn ended ("Finished", "Failed", "Stopped"; only a failure in the error colour). The agent's
- * last reply, or the chat's error, sits under it as a quiet quote with its line breaks kept and a
- * copy button; past six lines it is clamped, and the row opens it in place. Without a reply the
- * row stands alone, since its link already opens the chat.
+ * A row that needs a person: its chat's line, then, in a ruled block under it, the state as the
+ * block's first line ("Needs your approval" in stronger ink beside the attention dot, as Overview
+ * marks what needs you, or "Failed" in the error colour), what it is about, and what can be done.
+ * When the content is cut short, the state line opens it in place, its chevron after the words.
+ */
+function NeedsBlock({
+  label,
+  chat,
+  sessionId,
+  state,
+  failed = false,
+  toggle,
+  children,
+}: {
+  label: string;
+  chat: SupervisorReference;
+  sessionId: string;
+  state: string;
+  failed?: boolean;
+  toggle: { open: boolean; onToggle: () => void } | null;
+  children: React.ReactNode;
+}) {
+  const id = useId();
+  return (
+    <article aria-label={label} className="text-sm">
+      <div className="mobile-tap-target relative flex w-full min-w-0 items-center gap-2 py-0.5">
+        <RowProvider sessionId={sessionId} />
+        <NoticeChat chat={chat} sessionId={sessionId} className="shrink" />
+      </div>
+      <div className="ml-[7px] min-w-0 border-l pl-4">
+        <div className="mobile-tap-target relative flex min-w-0 items-center gap-1.5 py-0.5">
+          {toggle && (
+            <button
+              type="button"
+              onClick={toggle.onToggle}
+              aria-expanded={toggle.open}
+              aria-labelledby={`${id}-mark`}
+              className="absolute inset-0 rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            />
+          )}
+          {!failed && <SidebarDot dot="attention" />}
+          <span
+            id={`${id}-mark`}
+            className={`text-xs font-semibold ${failed ? "text-destructive" : "text-foreground"}`}
+          >
+            {state}
+          </span>
+          {toggle && (
+            // Rotated, it would sit above the toggle and take its clicks.
+            <ChevronRight
+              className={`pointer-events-none size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${toggle.open ? "rotate-90" : ""}`}
+            />
+          )}
+        </div>
+        {children}
+      </div>
+    </article>
+  );
+}
+
+/** "Open chat" or "Review queue" under a row that needs a person: it opens the chat, as its name does. */
+function OpenChatAction({ sessionId, label }: { sessionId: string; label: string }) {
+  const openSession = useContext(SessionLinkContext);
+  if (!openSession) return null;
+  return (
+    <div className="mt-2 flex">
+      <Button size="xs" variant="outline" onClick={() => openSession(sessionId)}>
+        {label}
+      </Button>
+    </div>
+  );
+}
+
+/**
+ * A chat's ended turn. "Finished" and "Stopped" are one quiet row: its chat, linked, then how the
+ * turn ended in small muted text. "Failed" needs a person, so it reads as a block (see
+ * `NeedsBlock`) with "Open chat" under the error. The agent's last reply, or the chat's error,
+ * sits under the chat as a quiet quote with its line breaks kept and a copy button; past six lines
+ * it is clamped, and the row opens it in place. Without a reply a quiet row stands alone, since
+ * its link already opens the chat.
  */
 function FinishedRow({ notice, chat }: { notice: FinishedNotice; chat: SupervisorReference }) {
   const [open, setOpen] = useState(false);
@@ -834,9 +915,38 @@ function FinishedRow({ notice, chat }: { notice: FinishedNotice; chat: Superviso
     return () => observer.disconnect();
   }, [open, notice.quote]);
   const expandable = clamped || open;
-  const failed = notice.state === "failed";
   const word = finishedWord(notice.state);
   const id = useId();
+  const body = notice.quote !== null && (
+    <div className="flex min-w-0 items-start gap-2">
+      <div className="min-w-0 flex-1 py-0.5 text-muted-foreground">
+        {/* Each line as the agent wrote it: Markdown would run a quote's lines together. */}
+        <div
+          ref={quote}
+          data-finished-quote
+          className={`[&_p]:whitespace-pre-line ${open ? "" : "line-clamp-6"}`}
+        >
+          <AgentMarkdown>{notice.quote}</AgentMarkdown>
+        </div>
+        {notice.cut && <p className="mt-2">Read the original chat for the full reply.</p>}
+      </div>
+      <CopyButton label="Copy quote" text={notice.quote} />
+    </div>
+  );
+  if (notice.state === "failed")
+    return (
+      <NeedsBlock
+        label={`${chat.label} failed`}
+        chat={chat}
+        sessionId={notice.sessionId}
+        state={word}
+        failed
+        toggle={expandable ? { open, onToggle: () => setOpen((v) => !v) } : null}
+      >
+        {body}
+        <OpenChatAction sessionId={notice.sessionId} label="Open chat" />
+      </NeedsBlock>
+    );
   return (
     <article aria-label={`${chat.label} ${word.toLowerCase()}`} className="text-sm">
       <div className="mobile-tap-target relative flex w-full min-w-0 items-center gap-2 py-0.5">
@@ -851,10 +961,7 @@ function FinishedRow({ notice, chat }: { notice: FinishedNotice; chat: Superviso
         )}
         <RowProvider sessionId={notice.sessionId} />
         <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
-        <span
-          id={`${id}-mark`}
-          className={`shrink-0 text-xs ${failed ? "text-destructive" : "text-muted-foreground"}`}
-        >
+        <span id={`${id}-mark`} className="shrink-0 text-xs text-muted-foreground">
           {word}
         </span>
         {expandable && (
@@ -864,43 +971,51 @@ function FinishedRow({ notice, chat }: { notice: FinishedNotice; chat: Superviso
           />
         )}
       </div>
-      {notice.quote !== null && (
-        <div className="ml-[7px] flex min-w-0 items-start gap-2 border-l pl-4">
-          <div className="min-w-0 flex-1 py-0.5 text-muted-foreground">
-            {/* Each line as the agent wrote it: Markdown would run a quote's lines together. */}
-            <div
-              ref={quote}
-              data-finished-quote
-              className={`[&_p]:whitespace-pre-line ${open ? "" : "line-clamp-6"}`}
-            >
-              <AgentMarkdown>{notice.quote}</AgentMarkdown>
-            </div>
-            {notice.cut && <p className="mt-2">Read the original chat for the full reply.</p>}
-          </div>
-          <CopyButton label="Copy quote" text={notice.quote} />
-        </div>
-      )}
+      {body && <div className="ml-[7px] min-w-0 border-l pl-4">{body}</div>}
     </article>
   );
 }
 
 /**
- * A chat's paused queue as one row shaped as a finished turn's: its chat, linked, then how many
- * instructions are paused ("1 instruction paused", or "Queue paused" when the daemon's number
- * cannot be read) in the row's usual ink. Nothing here waits on an answer, so it has no attention
- * dot. "Review queue" opens the chat, as its name does, where the queue is reviewed and resumed;
- * only the last of a chat's paused rows in a row offers it (see `pausedRuns`).
+ * A chat's paused queue. A chat's most recent paused notice, while the app still holds that
+ * chat's queue paused with something in it, needs a person: a block (see `NeedsBlock`) reading
+ * "Queue paused", then how many instructions wait in normal ink, the chat's error muted when the
+ * daemon gave one, and "Review queue", which opens the chat where the queue is resumed. Every
+ * other paused notice, and this one once the queue is resumed or emptied, is one quiet row: its
+ * chat, linked, then "1 instruction paused" (or "Queue paused" when the daemon's number cannot be
+ * read) in small muted text.
  */
 function PausedRow({
   notice,
   chat,
-  review,
+  latest,
 }: {
   notice: PausedNotice;
   chat: SupervisorReference;
-  review: boolean;
+  latest: boolean;
 }) {
-  const openSession = useContext(SessionLinkContext);
+  const agent = useAgents().find((a) => a.id === notice.sessionId);
+  if (latest && agent?.queuePaused && agent.queue?.length) {
+    return (
+      <NeedsBlock
+        label={`${chat.label} queue paused`}
+        chat={chat}
+        sessionId={notice.sessionId}
+        state="Queue paused"
+        toggle={null}
+      >
+        {notice.count !== null && (
+          <p className="py-0.5 leading-5 text-foreground">{waitingWords(notice.count)}</p>
+        )}
+        {notice.error && (
+          <p className="py-0.5 leading-5 break-words whitespace-pre-line text-muted-foreground">
+            {notice.error}
+          </p>
+        )}
+        <OpenChatAction sessionId={notice.sessionId} label="Review queue" />
+      </NeedsBlock>
+    );
+  }
   const word = pausedWords(notice.count);
   return (
     <article aria-label={`${chat.label} ${word.toLowerCase()}`} className="text-sm">
@@ -908,15 +1023,6 @@ function PausedRow({
         <RowProvider sessionId={notice.sessionId} />
         <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
         <span className="shrink-0 text-xs text-muted-foreground">{word}</span>
-        {review && openSession && (
-          <button
-            type="button"
-            onClick={() => openSession(notice.sessionId)}
-            className="mobile-hit-area relative ml-auto shrink-0 rounded-sm text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          >
-            Review queue
-          </button>
-        )}
       </div>
     </article>
   );
@@ -936,14 +1042,13 @@ function RowProvider({ sessionId }: { sessionId: string }) {
 }
 
 /**
- * A request a chat is waiting on, as one block shaped as an answered row: its chat, linked, then
- * what it needs ("Needs your approval", "Needs your answer") in stronger ink beside the attention
- * dot, as Overview marks what needs you; a request is not an error. Under it, what the request is
- * for as Overview's approval line reads (a command in monospace, a file request as its tool beside
- * the shortened path), clamped to two lines that the row opens in place, then Allow once and
- * Decline where the request can be answered here. A question, a plan or a mode change has no
- * buttons: its link opens the chat where it is answered. Once answered, the daemon rewrites the
- * same item, and it becomes an answered row in the same place.
+ * A request a chat is waiting on, as a block (see `NeedsBlock`): "Needs your approval" or "Needs
+ * your answer", then what the request is for in normal ink as Overview's approval line reads it (a
+ * command in monospace, a file request as its tool beside the shortened path), clamped to two lines
+ * that the state line opens in place, then how many instructions are queued behind it, small and
+ * muted. Last, Allow once and Decline where the request can be answered here; a question, a plan
+ * or a mode change has "Open chat" instead. Once answered, the daemon rewrites the same item, and
+ * it becomes an answered row in the same place.
  */
 function PendingBlock({
   itemId,
@@ -986,48 +1091,30 @@ function PendingBlock({
       : { text: notice.action };
   const expandable = clamped || open;
   const word = pendingWord(notice.kind);
-  const id = useId();
   return (
-    <article aria-label={`${chat.label} ${word.toLowerCase()}`} className="text-sm">
-      <div className="mobile-tap-target relative flex w-full min-w-0 items-center gap-2 py-0.5">
-        {expandable && (
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
-            aria-labelledby={`${id}-mark`}
-            className="absolute inset-0 rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-          />
-        )}
-        <RowProvider sessionId={notice.sessionId} />
-        <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
-        <span className="flex shrink-0 items-center gap-1.5">
-          <SidebarDot dot="attention" />
-          <span id={`${id}-mark`} className="text-xs font-semibold text-foreground">
-            {word}
-          </span>
-        </span>
-        {expandable && (
-          // Rotated, it would sit above the toggle and take its clicks.
-          <ChevronRight
-            className={`pointer-events-none size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
-          />
-        )}
+    <NeedsBlock
+      label={`${chat.label} ${word.toLowerCase()}`}
+      chat={chat}
+      sessionId={notice.sessionId}
+      state={word}
+      toggle={expandable ? { open, onToggle: () => setOpen((v) => !v) } : null}
+    >
+      <div
+        ref={text}
+        data-pending-action
+        className={`py-0.5 leading-5 break-words text-foreground ${open ? "" : "line-clamp-2"}`}
+      >
+        <ApprovalAction needs={needs} short={short} ink="text-foreground" />
       </div>
-      <div className="ml-[7px] min-w-0 border-l pl-4">
-        <div
-          ref={text}
-          data-pending-action
-          className={`py-0.5 leading-5 break-words text-muted-foreground ${open ? "" : "line-clamp-2"}`}
-        >
-          <ApprovalAction needs={needs} short={short} ink="text-foreground/90" />
-        </div>
-        {notice.queued && (
-          <p className="text-xs text-muted-foreground">{queuedWords(notice.queued)}</p>
-        )}
-        {notice.answerable && <WatchedApproval itemId={itemId} />}
-      </div>
-    </article>
+      {notice.queued && (
+        <p className="text-xs text-muted-foreground">{queuedWords(notice.queued)}</p>
+      )}
+      {notice.answerable ? (
+        <WatchedApproval itemId={itemId} />
+      ) : (
+        <OpenChatAction sessionId={notice.sessionId} label="Open chat" />
+      )}
+    </NeedsBlock>
   );
 }
 

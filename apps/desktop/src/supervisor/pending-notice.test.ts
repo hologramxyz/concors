@@ -1,5 +1,14 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { AgentItem, AgentPending } from "@concors/protocol";
+import type { AgentInfo, AgentItem, AgentPending } from "@concors/protocol";
+import { AgentsContext } from "@/agents/context";
+import { TimelineItem } from "@/agents/timeline-item";
+import type { DaemonConnection } from "@concors/daemon-client";
+import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { SupervisorReferences } from "./reference-context";
+import type { SupervisorReference } from "./reference-text";
+import { SessionLinkContext } from "./session-link";
 import { ANSWERED_TITLE, answeredNotice } from "./answered-notice";
 import { PENDING_TITLE, pendingNotice, pendingWord, queuedWords } from "./pending-notice";
 
@@ -112,9 +121,9 @@ describe("pendingNotice", () => {
  */
 describe("queuedWords", () => {
   it.each([
-    ["1 follow-up instruction(s) are queued behind it.", "1 instruction queued"],
-    ["2 follow-up instruction(s) are queued behind it.", "2 instructions queued"],
-    ["12 follow-up instruction(s) are queued behind it.", "12 instructions queued"],
+    ["1 follow-up instruction(s) are queued behind it.", "1 instruction queued behind this"],
+    ["2 follow-up instruction(s) are queued behind it.", "2 instructions queued behind this"],
+    ["12 follow-up instruction(s) are queued behind it.", "12 instructions queued behind this"],
   ])("reads %s as %s", (sentence, words) => expect(queuedWords(sentence)).toBe(words));
 
   it.each([
@@ -277,12 +286,12 @@ describe("the daemon's pending notice", () => {
   it("is read with instructions queued behind it", async () => {
     const { open } = await posted(request("pnpm test"), { queue: [{ id: "q-1" }, { id: "q-2" }] });
     expect(pendingNotice(open!)?.queued).toBe("2 follow-up instruction(s) are queued behind it.");
-    expect(queuedWords(pendingNotice(open!)!.queued!)).toBe("2 instructions queued");
+    expect(queuedWords(pendingNotice(open!)!.queued!)).toBe("2 instructions queued behind this");
   });
 
   it("is read with one instruction queued behind it", async () => {
     const { open } = await posted(request("pnpm test"), { queue: [{ id: "q-1" }] });
-    expect(queuedWords(pendingNotice(open!)!.queued!)).toBe("1 instruction queued");
+    expect(queuedWords(pendingNotice(open!)!.queued!)).toBe("1 instruction queued behind this");
   });
 
   it("becomes the answered notice under the same ID once answered", async () => {
@@ -293,5 +302,78 @@ describe("the daemon's pending notice", () => {
       expect(pendingNotice(answered!)).toBeNull();
       expect(answeredNotice(answered!)?.sessionId).toBe(CHAT);
     }
+  });
+});
+
+describe("the pending block", () => {
+  const known = [
+    { id: CHAT, kind: "Agent", label: "Game QA", workspace: "Star Catcher" },
+  ] as SupervisorReference[];
+  const pending = {
+    id: "approval-1",
+    turnId: "turn-1",
+    kind: "approval",
+    title: "Allow?",
+    summary: "pnpm test",
+    detail: "{}",
+    decisions: ["accept", "decline", "cancel"],
+    questions: [],
+  } as unknown as AgentPending;
+  const agent = {
+    id: CHAT,
+    provider: "codex",
+    directory: "/w",
+    pending: [pending],
+  } as unknown as AgentInfo;
+  const connection = { state: { status: "ready" } } as unknown as DaemonConnection;
+  const render = (item: AgentItem) =>
+    renderToStaticMarkup(
+      createElement(
+        TerminalConnectionContext,
+        { value: connection },
+        createElement(
+          AgentsContext,
+          { value: [agent] },
+          createElement(
+            SessionLinkContext,
+            { value: () => undefined },
+            createElement(
+              SupervisorReferences,
+              { value: known },
+              createElement(TimelineItem, { item, live: false }),
+            ),
+          ),
+        ),
+      ),
+    );
+  const text = (html: string) =>
+    html
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  it("reads the chat, then the state, then the command, then Allow once and Decline", () => {
+    const html = render(notice(approval("pnpm test")));
+    expect(text(html)).toBe(
+      "Star Catcher / Game QA Needs your approval pnpm test Allow once Decline",
+    );
+    expect(html).toContain('aria-label="Game QA needs your approval"');
+  });
+
+  it("puts the instructions queued behind it under the command, above the buttons", () => {
+    const tail = "Answer it here or in that chat. 2 follow-up instruction(s) are queued behind it.";
+    expect(text(render(notice(approval("pnpm test", tail))))).toBe(
+      "Star Catcher / Game QA Needs your approval pnpm test 2 instructions queued behind this Allow once Decline",
+    );
+  });
+
+  it("offers Open chat under a question, as under a plan or mode approval", () => {
+    const question = `${chat} needs your input.\n\n> Which color?\n\nOpen that chat to respond.`;
+    expect(text(render(notice(question)))).toBe(
+      "Star Catcher / Game QA Needs your answer Which color? Open chat",
+    );
+    expect(text(render(notice(approval("Ship the HUD", "Open that chat to respond."))))).toBe(
+      "Star Catcher / Game QA Needs your approval Ship the HUD Open chat",
+    );
   });
 });

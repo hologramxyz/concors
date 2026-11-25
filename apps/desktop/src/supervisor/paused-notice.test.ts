@@ -1,12 +1,13 @@
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import type { AgentItem } from "@concors/protocol";
+import type { AgentInfo, AgentItem } from "@concors/protocol";
 import { TimelineItem } from "@/agents/timeline-item";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SupervisorReferences } from "./reference-context";
 import type { SupervisorReference } from "./reference-text";
-import { PAUSED_TITLE, pausedNotice, pausedRuns, pausedWords } from "./paused-notice";
+import { PAUSED_TITLE, pausedNotice, pausedRuns, pausedWords, waitingWords } from "./paused-notice";
+import { AgentsContext } from "@/agents/context";
 import { SessionLinkContext } from "./session-link";
 import type { TimelineEntry } from "@/agents/thinking";
 
@@ -38,17 +39,30 @@ const paused = (count: string | number) =>
 
 describe("pausedNotice", () => {
   it("reads the chat and how many instructions are paused", () => {
-    expect(pausedNotice(notice(paused(2)))).toEqual({ sessionId: CHAT, count: 2 });
+    expect(pausedNotice(notice(paused(2)))).toEqual({ sessionId: CHAT, count: 2, error: null });
   });
 
   it("reads a notice whose turn left no ID", () => {
     const id = `supervisor-watch:${SUPERVISOR}:${CHAT}:paused:undefined:q-1`;
-    expect(pausedNotice(notice(paused(1), { id }))).toEqual({ sessionId: CHAT, count: 1 });
+    expect(pausedNotice(notice(paused(1), { id }))).toEqual({
+      sessionId: CHAT,
+      count: 1,
+      error: null,
+    });
   });
 
   it("reads a number it cannot use as no number", () => {
-    expect(pausedNotice(notice(paused("some")))).toEqual({ sessionId: CHAT, count: null });
+    expect(pausedNotice(notice(paused("some")))?.count).toBeNull();
     expect(pausedNotice(notice(paused(0)))?.count).toBeNull();
+  });
+
+  it("reads the chat's error in the advice's place, every line of it", () => {
+    const text = `${chat} has 2 paused instruction(s).\n\n> Provider exited\n> with code 1`;
+    expect(pausedNotice(notice(text))).toEqual({
+      sessionId: CHAT,
+      count: 2,
+      error: "Provider exited\nwith code 1",
+    });
   });
 
   describe("leaves to the notice as written", () => {
@@ -61,42 +75,47 @@ describe("pausedNotice", () => {
         "a link to another chat",
         notice(paused(2).replace(CHAT, "33333333-3333-4333-8333-333333333333")),
       ],
-      [
-        "the chat's error in place of the advice",
-        notice(`${chat} has 2 paused instruction(s).\n\n> Provider exited`),
-      ],
       ["other wording", notice(`${chat} has 2 queued instructions.\n\n${ADVICE}`)],
       ["no advice", notice(`${chat} has 2 paused instruction(s).`)],
+      ["an unquoted line", notice(`${chat} has 2 paused instruction(s).\n\nProvider exited`)],
+      ["an empty quote", notice(`${chat} has 2 paused instruction(s).\n\n> `)],
       ["more after the advice", notice(`${paused(2)}\n\nResume it soon.`)],
     ])("%s", (_, item) => expect(pausedNotice(item)).toBeNull());
   });
 });
 
-describe("pausedWords", () => {
+describe("pausedWords and waitingWords", () => {
   it.each([
     [1, "1 instruction paused"],
     [3, "3 instructions paused"],
     [null, "Queue paused"],
   ])("says %s as %s", (count, words) => expect(pausedWords(count)).toBe(words));
+
+  it.each([
+    [1, "1 instruction waiting"],
+    [3, "3 instructions waiting"],
+  ])("says %s as %s", (count, words) => expect(waitingWords(count)).toBe(words));
 });
 
+const OTHER = "33333333-3333-4333-8333-333333333333";
+const other = `**Star Catcher / [HUD polish](concors://session/${OTHER})**`;
+const at = (n: number, sessionId = CHAT, error?: string) =>
+  notice(
+    `${sessionId === CHAT ? chat : other} has ${n} paused instruction(s).\n\n${error ? `> ${error}` : ADVICE}`,
+    { id: `supervisor-watch:${SUPERVISOR}:${sessionId}:paused:turn-${n}:q-${n}` },
+  );
+
 describe("pausedRuns", () => {
-  const OTHER = "33333333-3333-4333-8333-333333333333";
-  const other = `**Star Catcher / [HUD polish](concors://session/${OTHER})**`;
-  const at = (n: number, sessionId = CHAT) =>
-    notice(`${sessionId === CHAT ? chat : other} has ${n} paused instruction(s).\n\n${ADVICE}`, {
-      id: `supervisor-watch:${SUPERVISOR}:${sessionId}:paused:turn-${n}:q-${n}`,
-    });
   const reply = { ...notice("Done."), id: "reply", title: "Codex", kind: "assistant" as const };
   const later = (view: TimelineEntry[]) => pausedRuns(view).map((entry) => !!entry.pausedLater);
 
-  it("leaves the review on only the last of a chat's paused notices in a row", () => {
+  it("leaves only each chat's most recent paused notice able to ask for a person", () => {
     expect(later([at(1), at(2), at(3)])).toEqual([true, true, false]);
   });
 
-  it("keeps it on each when something else, or another chat's, sits between them", () => {
-    expect(later([at(1), reply, at(2)])).toEqual([false, false, false]);
-    expect(later([at(1), at(2, OTHER), at(3)])).toEqual([false, false, false]);
+  it("looks past other rows and other chats' notices between them", () => {
+    expect(later([at(1), reply, at(2)])).toEqual([true, false, false]);
+    expect(later([at(1), at(2, OTHER), at(3)])).toEqual([true, false, false]);
   });
 
   it("keeps every notice in its place", () => {
@@ -109,80 +128,80 @@ describe("the paused row", () => {
   const known: SupervisorReference[] = [
     { id: CHAT, kind: "Agent", label: "Game QA", workspace: "Star Catcher" } as SupervisorReference,
   ];
-  const render = (item: AgentItem, references = known) =>
+  const chatState = (more: Partial<AgentInfo> = {}) =>
+    ({
+      id: CHAT,
+      provider: "codex",
+      queuePaused: true,
+      queue: [{ id: "q-1" }],
+      ...more,
+    }) as unknown as AgentInfo;
+  const render = (item: TimelineEntry, { references = known, agents = [chatState()] } = {}) =>
     renderToStaticMarkup(
       createElement(
         TooltipProvider,
         null,
         createElement(
-          SupervisorReferences,
-          { value: references },
-          createElement(TimelineItem, { item, live: false }),
+          AgentsContext,
+          { value: agents },
+          createElement(
+            SessionLinkContext,
+            { value: () => undefined },
+            createElement(
+              SupervisorReferences,
+              { value: references },
+              createElement(TimelineItem, { item, live: false }),
+            ),
+          ),
         ),
       ),
     );
   const text = (html: string) =>
     html
-      .replace(/<[^>]+>/g, "")
+      .replace(/<[^>]+>/g, " ")
       .replace(/\s+/g, " ")
       .trim();
 
-  it("is one row: the chat, then how many instructions are paused", () => {
-    const html = render(notice(paused(1)));
-    expect(text(html)).toBe("Star Catcher / Game QA1 instruction paused");
-    expect(html).toContain('aria-label="Game QA 1 instruction paused"');
+  it("asks for a person while its chat's queue is still paused: state, what waits, Review queue", () => {
+    const html = render(at(2));
+    expect(text(html)).toBe(
+      "Star Catcher / Game QA Queue paused 2 instructions waiting Review queue",
+    );
+    expect(html).toContain('aria-label="Game QA queue paused"');
+    expect(html).toContain("bg-destructive"); // the attention dot
     expect(html).not.toContain("review its queue");
     expect(html).not.toContain("<blockquote");
-    expect(html).not.toContain("text-destructive");
   });
 
-  it("offers Review queue, which opens the chat as its name does", () => {
-    const opened: string[] = [];
-    const html = renderToStaticMarkup(
-      createElement(
-        SessionLinkContext,
-        { value: (id: string) => opened.push(id) },
-        createElement(
-          SupervisorReferences,
-          { value: known },
-          createElement(TimelineItem, { item: notice(paused(1)), live: false }),
-        ),
-      ),
+  it("shows the chat's error, muted, under what waits", () => {
+    const html = render(at(1, CHAT, "Provider exited"));
+    expect(text(html)).toBe(
+      "Star Catcher / Game QA Queue paused 1 instruction waiting Provider exited Review queue",
     );
-    expect(text(html)).toBe("Star Catcher / Game QA1 instruction pausedReview queue");
   });
 
-  it("leaves Review queue to the chat's next paused notice", () => {
-    const item: TimelineEntry = { ...notice(paused(1)), pausedLater: true };
-    const html = renderToStaticMarkup(
-      createElement(
-        SessionLinkContext,
-        { value: () => undefined },
-        createElement(
-          SupervisorReferences,
-          { value: known },
-          createElement(TimelineItem, { item, live: false }),
-        ),
-      ),
+  it("says only that the queue is paused when the daemon's number cannot be read", () => {
+    expect(text(render(notice(paused("some"))))).toBe(
+      "Star Catcher / Game QA Queue paused Review queue",
     );
-    expect(text(html)).toBe("Star Catcher / Game QA1 instruction paused");
   });
 
-  it("says the queue is paused when the number cannot be read", () => {
-    expect(text(render(notice(paused("some"))))).toBe("Star Catcher / Game QAQueue paused");
+  it.each([
+    ["a later paused notice of its chat", { pausedLater: true as const }, [chatState()]],
+    ["a resumed queue", {}, [chatState({ queuePaused: false })]],
+    ["an emptied queue", {}, [chatState({ queue: [] })]],
+    ["a chat whose queue state is not known", {}, [chatState({ queuePaused: undefined })]],
+  ])("is one quiet row after %s, with no action", (_, extra, agents) => {
+    const html = render({ ...at(2), ...extra }, { agents });
+    expect(text(html)).toBe("Star Catcher / Game QA 2 instructions paused");
+    expect(html).not.toContain("bg-destructive");
   });
 
   it("is drawn as written when its chat is unknown", () => {
-    const html = render(notice(paused(2)), []);
+    const html = render(at(2), { references: [] });
     expect(html).toContain("<blockquote");
     expect(text(html)).toContain("has 2 paused instruction(s).");
     expect(text(html)).toContain("Open the target chat to review its queue before resuming.");
-  });
-
-  it("is drawn as written when the chat's error takes the advice's place", () => {
-    const html = render(notice(`${chat} has 2 paused instruction(s).\n\n> Provider exited`));
-    expect(text(html)).toContain("has 2 paused instruction(s).");
-    expect(text(html)).toContain("Provider exited");
   });
 });
 
@@ -258,7 +277,7 @@ describe("the daemon's paused notice", () => {
       queue: [{ id: "q-1" }],
     });
     expect(item).toBeDefined();
-    expect(pausedNotice(item!)).toEqual({ sessionId: CHAT, count: 1 });
+    expect(pausedNotice(item!)).toEqual({ sessionId: CHAT, count: 1, error: null });
     expect(pausedWords(pausedNotice(item!)!.count)).toBe("1 instruction paused");
   });
 
@@ -271,14 +290,17 @@ describe("the daemon's paused notice", () => {
     expect(pausedWords(pausedNotice(item!)!.count)).toBe("3 instructions paused");
   });
 
-  it("is drawn as written when the chat's error takes the advice's place", async () => {
+  it("is read with the chat's error in the advice's place", async () => {
     const item = await pausedItem({
       status: "failed",
       queuePaused: true,
       queue: [{ id: "q-1" }],
       error: "Provider exited with code 1",
     });
-    expect(item?.text).toContain("Provider exited with code 1");
-    expect(pausedNotice(item!)).toBeNull();
+    expect(pausedNotice(item!)).toEqual({
+      sessionId: CHAT,
+      count: 1,
+      error: "Provider exited with code 1",
+    });
   });
 });
