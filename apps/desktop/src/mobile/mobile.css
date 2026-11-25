@@ -1048,6 +1048,15 @@ body {
 .mobile-main:has(.mobile-notice) [aria-label="Chat timeline"] {
   padding-top: 16px;
 }
+/* A step's line is the only way to see what it ran, so each one is a fingertip tall on a phone.
+   The rows sit too close for an invisible hit area, so the lines themselves grow. Cards (which
+   carry aria-busy) keep their own padding; the row is its article's first child, not its details. */
+.mobile-pane article[aria-label="Tool call"]:not([aria-busy]) > :first-child,
+.mobile-pane article[aria-label="Tool calls"]:not([aria-busy]) > button,
+.mobile-pane article[aria-label="Thinking summary"] > button,
+.mobile-pane [data-live-line] > button {
+  min-height: 44px;
+}
 .mobile-pane [data-agent-composer] {
   font-size: 16px;
   max-height: 128px;

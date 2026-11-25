@@ -1,4 +1,4 @@
-import type { AgentItem } from "@concors/protocol";
+import type { AgentActivityStep, AgentItem } from "@concors/protocol";
 
 /**
  * How a tool call reads in the timeline. CLIs name tools for the model, not for people:
@@ -246,4 +246,16 @@ export function toolGroupKey(item: AgentItem): string | undefined {
     (type === "files" && item.presentation?.fileOperation === "read");
   if (!groupable) return undefined;
   return `${item.turnId}\0${type ?? ""}\0${toolDisplayName(item.title)}`;
+}
+
+/**
+ * A sub-agent's step as its card's line reads it, where the step is a command it reports by its
+ * text alone: Codex-style children name it "Run command" beside the command as run, so it reads
+ * "Running a command" or "Ran a command" as a step row does. Anything else, such as Claude Code's
+ * Bash with its description, is undefined: the line keeps the step's own words. The command
+ * stays in the card's opened list of steps.
+ */
+export function quietSubAgentStep(step: Pick<AgentActivityStep, "title" | "status">) {
+  if (step.title.trim() !== "Run command") return undefined;
+  return step.status === "running" ? "Running a command" : "Ran a command";
 }

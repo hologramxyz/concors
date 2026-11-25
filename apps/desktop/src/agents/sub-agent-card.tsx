@@ -8,7 +8,7 @@ import { stepCount, subAgentLabel } from "./running-sub-agents";
 import { LIVE_SUB_AGENT, SubAgentViewContext } from "./sub-agent-context";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { useElapsed } from "./use-elapsed";
-import { toolDisplayName } from "./tool-label";
+import { quietSubAgentStep, toolDisplayName } from "./tool-label";
 
 const LIVE = LIVE_SUB_AGENT;
 
@@ -93,10 +93,16 @@ export function SubAgentCard({
               <span
                 data-sub-agent-current
                 className="truncate text-xs text-muted-foreground"
-                title={`${toolDisplayName(current.title)} ${current.text}`}
+                title={
+                  quietSubAgentStep(current) ?? `${toolDisplayName(current.title)} ${current.text}`
+                }
               >
-                {toolDisplayName(current.title)}
-                {current.text ? ` ${current.text}` : ""}
+                {quietSubAgentStep(current) ?? (
+                  <>
+                    {toolDisplayName(current.title)}
+                    {current.text ? ` ${current.text}` : ""}
+                  </>
+                )}
               </span>
             )}
           </span>

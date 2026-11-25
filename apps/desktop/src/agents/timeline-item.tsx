@@ -621,7 +621,7 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
           ) : (
             <span
               ref={target}
-              className={`min-w-0 truncate ${running ? "agent-shimmer" : ""}`}
+              className={`min-w-0 truncate ${kind === "command" ? "text-muted-foreground" : ""} ${running ? "agent-shimmer" : ""}`}
               title={stepPaths(item, kind)}
             >
               {control ? control.target : stepTarget(item, kind, short)}
@@ -1195,7 +1195,11 @@ export function LiveLine({
           {!waiting && kind && kind !== "thinking" && (!control || control.target) && (
             <>
               {" "}
-              <span className="text-foreground" title={stepPaths(step, kind)}>
+              {/* What it acts on in full ink; "a command" stays as quiet as its verb. */}
+              <span
+                className={kind === "command" ? "" : "text-foreground"}
+                title={stepPaths(step, kind)}
+              >
                 {control ? control.target : stepTarget(step, kind, short)}
               </span>
             </>

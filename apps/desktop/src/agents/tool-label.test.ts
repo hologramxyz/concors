@@ -8,6 +8,7 @@ import {
   parseToolTitle,
   toolDisplayName,
   toolSummary,
+  quietSubAgentStep,
 } from "./tool-label";
 import { timelineView } from "./thinking";
 
@@ -215,5 +216,20 @@ describe("tool runs", () => {
   it("keeps a run live while any call in it is running", () => {
     const [run] = timelineView([item("c1"), item("c2", { status: "running" })]);
     expect(run?.status).toBe("running");
+  });
+});
+
+describe("quietSubAgentStep", () => {
+  it("names a Codex-style sub-agent's command as a command, running or done", () => {
+    expect(quietSubAgentStep({ title: "Run command", status: "running" })).toBe(
+      "Running a command",
+    );
+    expect(quietSubAgentStep({ title: "Run command", status: "completed" })).toBe("Ran a command");
+    expect(quietSubAgentStep({ title: "Run command", status: "failed" })).toBe("Ran a command");
+  });
+
+  it("leaves other steps, and Claude Code's described Bash, to their own words", () => {
+    expect(quietSubAgentStep({ title: "Bash", status: "running" })).toBeUndefined();
+    expect(quietSubAgentStep({ title: "Read file", status: "running" })).toBeUndefined();
   });
 });
