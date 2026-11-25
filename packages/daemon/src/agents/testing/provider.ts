@@ -10,6 +10,25 @@ const approvalCommand = (text: string) =>
       ? 'cd "/tmp/concors-fixture/star-catcher" && for i in $(seq 1 60); do if [ -s haiku.txt ]; then echo READY; exit 0; fi; sleep 10; done; echo TIMEOUT'
       : "echo test";
 
+/**
+ * A file request as Claude Code sends one: the tool's input as the command, the tool as the
+ * reason. The haiku prompts ask to write a file or to edit one; any other asks to run a command.
+ */
+const fileRequest = (text: string, cwd: string) => {
+  const file_path = `${cwd}/haiku.txt`;
+  const input =
+    text === "Please approve the haiku write"
+      ? {
+          file_path,
+          content: "Maple leaves let go\ndrifting on the cooling wind\ndusk arrives sooner\n",
+        }
+      : text === "Please approve the haiku edit"
+        ? { file_path, old_string: "dusk arrives sooner", new_string: "night arrives sooner" }
+        : null;
+  if (!input) return null;
+  return { reason: "content" in input ? "Write" : "Edit", command: JSON.stringify(input) };
+};
+
 /** Deterministic provider used only by integration tests and the acceptance-test server. */
 export class TestAgentProvider implements AgentProvider {
   static turns = 0;
@@ -361,21 +380,25 @@ export class TestAgentProvider implements AgentProvider {
       });
       this.finish();
     } else if (text.includes("approve")) {
-      this.emit("item/started", {
-        item: {
-          id: `tool-${this.turnId}`,
-          type: "commandExecution",
-          command: approvalCommand(text),
-          status: "inProgress",
-        },
-      });
+      const file = fileRequest(text, this.cwd);
+      if (!file)
+        this.emit("item/started", {
+          item: {
+            id: `tool-${this.turnId}`,
+            type: "commandExecution",
+            command: approvalCommand(text),
+            status: "inProgress",
+          },
+        });
       void this.onRequest(
         "item/commandExecution/requestApproval",
         {
           threadId: this.threadId,
           turnId: this.turnId,
           itemId: `tool-${this.turnId}`,
-          command: approvalCommand(text),
+          ...(file ?? { command: approvalCommand(text) }),
+          // A command runs in a folder, which the long one's details say.
+          ...(text === "Please approve the long command" ? { cwd: this.cwd } : {}),
         },
         "approval-1",
       )
