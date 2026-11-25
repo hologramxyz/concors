@@ -6,7 +6,9 @@ import { TimelineItem } from "@/agents/timeline-item";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SupervisorReferences } from "./reference-context";
 import type { SupervisorReference } from "./reference-text";
-import { PAUSED_TITLE, pausedNotice, pausedWords } from "./paused-notice";
+import { PAUSED_TITLE, pausedNotice, pausedRuns, pausedWords } from "./paused-notice";
+import { SessionLinkContext } from "./session-link";
+import type { TimelineEntry } from "@/agents/thinking";
 
 const SUPERVISOR = "11111111-1111-4111-8111-111111111111";
 const CHAT = "22222222-2222-4222-8222-222222222222";
@@ -78,6 +80,31 @@ describe("pausedWords", () => {
   ])("says %s as %s", (count, words) => expect(pausedWords(count)).toBe(words));
 });
 
+describe("pausedRuns", () => {
+  const OTHER = "33333333-3333-4333-8333-333333333333";
+  const other = `**Star Catcher / [HUD polish](concors://session/${OTHER})**`;
+  const at = (n: number, sessionId = CHAT) =>
+    notice(`${sessionId === CHAT ? chat : other} has ${n} paused instruction(s).\n\n${ADVICE}`, {
+      id: `supervisor-watch:${SUPERVISOR}:${sessionId}:paused:turn-${n}:q-${n}`,
+    });
+  const reply = { ...notice("Done."), id: "reply", title: "Codex", kind: "assistant" as const };
+  const later = (view: TimelineEntry[]) => pausedRuns(view).map((entry) => !!entry.pausedLater);
+
+  it("leaves the review on only the last of a chat's paused notices in a row", () => {
+    expect(later([at(1), at(2), at(3)])).toEqual([true, true, false]);
+  });
+
+  it("keeps it on each when something else, or another chat's, sits between them", () => {
+    expect(later([at(1), reply, at(2)])).toEqual([false, false, false]);
+    expect(later([at(1), at(2, OTHER), at(3)])).toEqual([false, false, false]);
+  });
+
+  it("keeps every notice in its place", () => {
+    const view = [at(1), reply, at(2), at(3)];
+    expect(pausedRuns(view).map((entry) => entry.id)).toEqual(view.map((entry) => entry.id));
+  });
+});
+
 describe("the paused row", () => {
   const known: SupervisorReference[] = [
     { id: CHAT, kind: "Agent", label: "Game QA", workspace: "Star Catcher" } as SupervisorReference,
@@ -107,6 +134,38 @@ describe("the paused row", () => {
     expect(html).not.toContain("review its queue");
     expect(html).not.toContain("<blockquote");
     expect(html).not.toContain("text-destructive");
+  });
+
+  it("offers Review queue, which opens the chat as its name does", () => {
+    const opened: string[] = [];
+    const html = renderToStaticMarkup(
+      createElement(
+        SessionLinkContext,
+        { value: (id: string) => opened.push(id) },
+        createElement(
+          SupervisorReferences,
+          { value: known },
+          createElement(TimelineItem, { item: notice(paused(1)), live: false }),
+        ),
+      ),
+    );
+    expect(text(html)).toBe("Star Catcher / Game QA1 instruction pausedReview queue");
+  });
+
+  it("leaves Review queue to the chat's next paused notice", () => {
+    const item: TimelineEntry = { ...notice(paused(1)), pausedLater: true };
+    const html = renderToStaticMarkup(
+      createElement(
+        SessionLinkContext,
+        { value: () => undefined },
+        createElement(
+          SupervisorReferences,
+          { value: known },
+          createElement(TimelineItem, { item, live: false }),
+        ),
+      ),
+    );
+    expect(text(html)).toBe("Star Catcher / Game QA1 instruction paused");
   });
 
   it("says the queue is paused when the number cannot be read", () => {

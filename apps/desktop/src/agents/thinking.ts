@@ -6,7 +6,8 @@ import { toolGroupKey } from "./tool-label";
  * `steps` is a run of quiet steps shown as one summary line, `quiet` a step shown as a plain row,
  * `approval` the permission granted for a step, `live` the run the turn in progress is on now
  * (see `stepGroups`), and `answered` a run of Supervisor's answered-request notices folded into
- * one line (see `answeredRuns`).
+ * one line (see `answeredRuns`). `pausedLater` marks a paused-queue notice that the same chat's
+ * next one follows directly (see `pausedRuns`).
  */
 export type TimelineEntry = AgentItem & {
   group?: AgentItem[];
@@ -15,6 +16,7 @@ export type TimelineEntry = AgentItem & {
   approval?: string;
   live?: true;
   answered?: TimelineEntry[];
+  pausedLater?: true;
 };
 
 /**

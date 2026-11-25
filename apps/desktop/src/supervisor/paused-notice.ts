@@ -45,3 +45,17 @@ export function pausedWords(count: number | null): string {
   if (count === null) return "Queue paused";
   return `${count} ${count === 1 ? "instruction" : "instructions"} paused`;
 }
+
+/**
+ * Marks each paused-queue notice that the same chat's next paused notice follows directly, so only
+ * the last of such a run offers "Review queue". Every notice stays in place.
+ */
+export function pausedRuns<T extends AgentItem & { pausedLater?: true }>(view: readonly T[]): T[] {
+  return view.map((entry, i) => {
+    const chat = pausedNotice(entry)?.sessionId;
+    const next = view[i + 1];
+    return chat && next && pausedNotice(next)?.sessionId === chat
+      ? { ...entry, pausedLater: true as const }
+      : entry;
+  });
+}

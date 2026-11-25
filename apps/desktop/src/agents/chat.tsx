@@ -9,6 +9,7 @@ import { LiveLine, TimelineItem } from "./timeline-item";
 import { HIDE_NATIVE_SCROLLBAR, OverlayScrollbar } from "./overlay-scrollbar";
 import { liveStep, stepGroups } from "./step-groups";
 import { answeredRuns } from "@/supervisor/answered-notice";
+import { pausedRuns } from "@/supervisor/paused-notice";
 import { SupervisorReferences, type SupervisorReference } from "@/supervisor/reference-context";
 import { useViewedAgent } from "@/notifications/context";
 import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
@@ -914,7 +915,7 @@ function useTimelineRows(
     const waiting = new Set(pending?.flatMap((p) => (p.sourceItemId ? [p.sourceItemId] : [])));
     const chats = new Set(references.flatMap((ref) => (ref.kind === "Agent" ? [ref.id] : [])));
     return {
-      view: answeredRuns(stepGroups(view, live, waiting), (id) => chats.has(id)),
+      view: pausedRuns(answeredRuns(stepGroups(view, live, waiting), (id) => chats.has(id))),
       step: liveStep(view, live, waiting),
     };
   }, [items, hidden, status, turnId, pending, references]);

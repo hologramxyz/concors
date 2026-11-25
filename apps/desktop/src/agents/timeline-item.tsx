@@ -7,6 +7,7 @@ import {
   type PendingNotice,
 } from "@/supervisor/pending-notice";
 import { useAgents } from "@/agents/context";
+import { ProviderIcon } from "@/agents/provider-icon";
 import { approvalParts } from "@/agents/approval-summary";
 import { useHomePath } from "@/workspace/home-path";
 import { SidebarDot } from "@/workspace/sidebar-tabs";
@@ -21,24 +22,14 @@ import { FileLinkContext } from "@/files/context";
 import { formatDuration } from "./duration";
 import { extractToolCallFilePath } from "./paseo/extract-tool-call-file-path";
 import { useState } from "react";
-import {
-  Check,
-  ChevronRight,
-  FileCode,
-  GitFork,
-  Pause,
-  Square,
-  Terminal,
-  Wrench,
-  XCircle,
-} from "lucide-react";
+import { Check, ChevronRight, FileCode, GitFork, Terminal, Wrench, XCircle } from "lucide-react";
 import { AgentMarkdown, CopyButton } from "./markdown";
 import { PlanProgress } from "./plan-progress";
 import { SubAgentCard } from "./sub-agent-card";
 import { BrailleSpinner, Elapsed } from "./activity";
 import { Collapse } from "./collapse";
 import { OverlayScroll } from "./overlay-scrollbar";
-import { Brain, Eye, Globe, MessageCircle, Search, Pencil } from "lucide-react";
+import { Brain, Eye, Globe, Search, Pencil } from "lucide-react";
 import { resolveToolCallIconName } from "./paseo/tool-call-icon-name";
 import type { AgentItem } from "@concors/protocol";
 import { buildToolCallDisplayModel } from "./paseo/tool-call-display";
@@ -684,7 +675,7 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
  * chat and its shape can be read (see `pendingNotice`, `answeredNotice`, `finishedNotice` and
  * `pausedNotice`).
  */
-function SupervisorNotice({ item }: { item: AgentItem }) {
+function SupervisorNotice({ item }: { item: TimelineEntry }) {
   const references = useContext(SupervisorReferences);
   const notice = answeredNotice(item);
   const chat = notice && answeredChat(references, notice.sessionId);
@@ -698,7 +689,8 @@ function SupervisorNotice({ item }: { item: AgentItem }) {
     return <PendingBlock itemId={item.id} notice={pending} chat={pendingChat} />;
   const paused = pausedNotice(item);
   const pausedChat = paused && answeredChat(references, paused.sessionId);
-  if (paused && pausedChat) return <PausedRow notice={paused} chat={pausedChat} />;
+  if (paused && pausedChat)
+    return <PausedRow notice={paused} chat={pausedChat} review={!item.pausedLater} />;
   return (
     <article className="text-sm text-muted-foreground">
       <AgentMarkdown>{item.text}</AgentMarkdown>
@@ -729,7 +721,6 @@ function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: Superviso
   const target = useRef<HTMLSpanElement>(null);
   const cut = useCutOff(target, true);
   const expandable = cut || line !== action;
-  const Icon = notice.kind === "question" ? MessageCircle : command ? Terminal : Pencil;
   const id = useId();
   return (
     <article aria-label="Answered request" className="text-sm">
@@ -743,7 +734,7 @@ function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: Superviso
           aria-labelledby={`${id}-action ${id}-mark`}
           className="absolute inset-0 rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         />
-        <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+        <RowProvider sessionId={notice.sessionId} />
         <NoticeChat chat={chat} sessionId={notice.sessionId} className="max-w-1/2 shrink-0" />
         <span
           ref={target}
@@ -844,7 +835,6 @@ function FinishedRow({ notice, chat }: { notice: FinishedNotice; chat: Superviso
   }, [open, notice.quote]);
   const expandable = clamped || open;
   const failed = notice.state === "failed";
-  const Icon = failed ? XCircle : notice.state === "interrupted" ? Square : Check;
   const word = finishedWord(notice.state);
   const id = useId();
   return (
@@ -859,9 +849,7 @@ function FinishedRow({ notice, chat }: { notice: FinishedNotice; chat: Superviso
             className="absolute inset-0 rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           />
         )}
-        <Icon
-          className={`size-3.5 shrink-0 ${failed ? "text-destructive" : "text-muted-foreground"}`}
-        />
+        <RowProvider sessionId={notice.sessionId} />
         <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
         <span
           id={`${id}-mark`}
@@ -900,18 +888,50 @@ function FinishedRow({ notice, chat }: { notice: FinishedNotice; chat: Superviso
  * A chat's paused queue as one row shaped as a finished turn's: its chat, linked, then how many
  * instructions are paused ("1 instruction paused", or "Queue paused" when the daemon's number
  * cannot be read) in the row's usual ink. Nothing here waits on an answer, so it has no attention
- * dot; the link opens the chat, where the queue is reviewed and resumed.
+ * dot. "Review queue" opens the chat, as its name does, where the queue is reviewed and resumed;
+ * only the last of a chat's paused rows in a row offers it (see `pausedRuns`).
  */
-function PausedRow({ notice, chat }: { notice: PausedNotice; chat: SupervisorReference }) {
+function PausedRow({
+  notice,
+  chat,
+  review,
+}: {
+  notice: PausedNotice;
+  chat: SupervisorReference;
+  review: boolean;
+}) {
+  const openSession = useContext(SessionLinkContext);
   const word = pausedWords(notice.count);
   return (
     <article aria-label={`${chat.label} ${word.toLowerCase()}`} className="text-sm">
       <div className="mobile-tap-target relative flex w-full min-w-0 items-center gap-2 py-0.5">
-        <Pause className="size-3.5 shrink-0 text-muted-foreground" />
+        <RowProvider sessionId={notice.sessionId} />
         <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
         <span className="shrink-0 text-xs text-muted-foreground">{word}</span>
+        {review && openSession && (
+          <button
+            type="button"
+            onClick={() => openSession(notice.sessionId)}
+            className="mobile-hit-area relative ml-auto shrink-0 rounded-sm text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          >
+            Review queue
+          </button>
+        )}
       </div>
     </article>
+  );
+}
+
+/**
+ * The chat a notice is about, by its provider's mark as Overview's rows show it. A chat the app
+ * no longer lists keeps the slot empty, so the row's text still lines up with the others.
+ */
+function RowProvider({ sessionId }: { sessionId: string }) {
+  const agent = useAgents().find((a) => a.id === sessionId);
+  return (
+    <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground opacity-80">
+      {agent && <ProviderIcon provider={agent.provider} size={12} />}
+    </span>
   );
 }
 
@@ -965,7 +985,6 @@ function PendingBlock({
         : { verb: notice.file.tool, text: notice.file.name }
       : { text: notice.action };
   const expandable = clamped || open;
-  const Icon = notice.kind === "question" ? MessageCircle : notice.command ? Terminal : Pencil;
   const word = pendingWord(notice.kind);
   const id = useId();
   return (
@@ -980,7 +999,7 @@ function PendingBlock({
             className="absolute inset-0 rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           />
         )}
-        <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+        <RowProvider sessionId={notice.sessionId} />
         <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
         <span className="flex shrink-0 items-center gap-1.5">
           <SidebarDot dot="attention" />
