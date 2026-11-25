@@ -340,8 +340,9 @@ function OverviewItem({
   const paused = row.needs?.action === "Queue paused";
   const extras = [row.queued && !paused ? `${row.queued} queued` : "", outcome].filter(Boolean);
   // The latest update leads; before a session has said anything, what it was asked stands in,
-  // quieter, since it is the request rather than anything the session said.
-  const said = approval ? "" : row.update || (row.group === "Done" ? "" : task);
+  // quieter, since it is the request rather than anything the session said. An approval or a
+  // paused queue says what it needs and nothing more, as the Supervisor chat's rows do.
+  const said = approval || paused ? "" : row.update || (row.group === "Done" ? "" : task);
   const asked = !row.update;
   return (
     <li className="group/row rounded-md hover:bg-sidebar-accent/70 has-[:focus-visible]:bg-sidebar-accent/70">
@@ -356,7 +357,14 @@ function OverviewItem({
         )}
       >
         <span className="flex h-5 shrink-0 items-center">
-          <RowDot state={state === "working" ? undefined : state} status={chatAgentStatus(agent)} />
+          {/* Everything under Needs you waits on a person, so it wears the attention dot even when
+              the chat's own state is quiet, as a paused queue behind a failure already seen is. */}
+          <RowDot
+            state={
+              row.group === "Needs you" ? "attention" : state === "working" ? undefined : state
+            }
+            status={chatAgentStatus(agent)}
+          />
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex h-5 min-w-0 items-center gap-2">
@@ -445,7 +453,8 @@ function OverviewItem({
       )}
       {paused && (
         <div className="flex pr-2 pb-2 pl-9">
-          <Button size="xs" variant="secondary" onClick={onOpen}>
+          {/* Outlined as the Supervisor chat's "Review queue" and the approval card's Decline. */}
+          <Button size="xs" variant="outline" onClick={onOpen}>
             Review queue
           </Button>
         </div>
