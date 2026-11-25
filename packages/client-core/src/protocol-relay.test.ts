@@ -28,6 +28,12 @@ function setup(beforeSend?: Parameters<typeof createProtocolRelay>[2]) {
     subscribeWorkspace: vi.fn(() => off),
     onAgent: vi.fn(() => off),
     onSchedules: vi.fn(() => off),
+    onTriggers: vi.fn(() => off),
+    requestTrigger: vi.fn<RelayConnection["requestTrigger"]>(async (_, requestId) => ({
+      type: "trigger.result",
+      requestId,
+      outcome: { status: "ok", triggers: [] },
+    })),
     requestSupervisor: vi.fn<RelayConnection["requestSupervisor"]>(async (_, requestId) => ({
       type: "supervisor.result",
       requestId,
@@ -224,7 +230,7 @@ describe("offline UI protocol relay", () => {
     expect(off).toHaveBeenCalledOnce();
     await relay.receive({ type: "host.subscribe", enabled: true });
     relay.dispose();
-    expect(off).toHaveBeenCalledTimes(9);
+    expect(off).toHaveBeenCalledTimes(10);
     const count = messages.length;
     listener(null);
     expect(messages).toHaveLength(count);
@@ -279,7 +285,7 @@ describe("offline UI protocol relay", () => {
     expect(connection.sendTerminalInput).toHaveBeenCalledOnce();
     relay.dispose();
     relay.dispose();
-    expect(off).toHaveBeenCalledTimes(7);
+    expect(off).toHaveBeenCalledTimes(8);
     expect(connection.requestTerminal).toHaveBeenLastCalledWith(
       { kind: "detach", sessionId: id },
       expect.any(String),
@@ -345,6 +351,34 @@ it("relays an upload's requests, chunks and progress, and cancels it when dispos
     { kind: "cancel", uploadId },
     expect.any(String),
   );
+});
+
+it("relays trigger updates and one-time mutation results through the native connection", async () => {
+  const { connection, relay, messages } = setup();
+  await relay.receive(hello);
+  const listener = vi.mocked(connection.onTriggers).mock.calls[0]?.[0];
+  expect(listener).toBeDefined();
+  listener?.([]);
+  expect(messages.at(-1)).toEqual({ type: "trigger.list", triggers: [] });
+  vi.mocked(connection.requestTrigger).mockResolvedValueOnce({
+    type: "trigger.result",
+    requestId: id,
+    outcome: { status: "ok", triggers: [], secret: "once" },
+  });
+  await relay.receive({
+    type: "trigger.request",
+    requestId: id,
+    operation: { kind: "rotate", id, expectedRevision: 1 },
+  });
+  expect(connection.requestTrigger).toHaveBeenCalledWith(
+    { kind: "rotate", id, expectedRevision: 1 },
+    id,
+  );
+  expect(messages.at(-1)).toMatchObject({ type: "trigger.result", outcome: { secret: "once" } });
+  relay.dispose();
+  const count = messages.length;
+  listener?.([]);
+  expect(messages).toHaveLength(count);
 });
 
 it("relays schedule updates and mutations through the native connection", async () => {

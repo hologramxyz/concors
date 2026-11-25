@@ -155,7 +155,11 @@ export function createPersistentGateway(
         return;
       }
       let principal: Principal | undefined;
-      if (req.method !== "GET" || req.url !== "/health") {
+      const webhook =
+        req.method === "POST" &&
+        /^\/hooks\/[A-Za-z0-9_-]+(?:\?|$)/.test(req.url ?? "") &&
+        ownHost(req);
+      if (!webhook && (req.method !== "GET" || req.url !== "/health")) {
         try {
           principal = await authenticate(req);
         } catch {
@@ -167,13 +171,15 @@ export function createPersistentGateway(
         res.writeHead(403).end();
         return;
       }
-      if (principal) {
-        const expiry = setTimeout(
-          () => res.destroy(),
-          Math.max(0, principal.expiresAt - Date.now()),
-        );
-        expiry.unref();
-        res.once("close", () => clearTimeout(expiry));
+      if (principal || webhook) {
+        if (principal) {
+          const expiry = setTimeout(
+            () => res.destroy(),
+            Math.max(0, principal.expiresAt - Date.now()),
+          );
+          expiry.unref();
+          res.once("close", () => clearTimeout(expiry));
+        }
         let path: string;
         try {
           path = publicPath(req);
@@ -188,7 +194,7 @@ export function createPersistentGateway(
         try {
           const runtime = await host();
           if (closing || res.destroyed) return;
-          logConnection(principal, res);
+          if (principal) logConnection(principal, res);
           const upstream = httpRequest(
             {
               host: "127.0.0.1",
@@ -413,6 +419,13 @@ function managedHeaders(req: IncomingMessage, runtime: HostDescriptor) {
     host: `127.0.0.1:${runtime.port}`,
     authorization: `Bearer ${runtime.token}`,
   };
+  if (req.method === "POST" && /^\/hooks\/[A-Za-z0-9_-]+(?:\?|$)/.test(req.url ?? "")) {
+    headers["x-concors-webhook-secret"] = req.headers.authorization ?? "";
+    for (const name of ["idempotency-key", "x-concors-source"]) {
+      const value = req.headers[name];
+      if (value !== undefined) headers[name] = value;
+    }
+  }
   for (const name of [
     "content-type",
     "content-length",
