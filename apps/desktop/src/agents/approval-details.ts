@@ -88,6 +88,17 @@ export function rowReviewView(
 }
 
 /**
+ * What a row that quotes a command says it is for, in words above it as the card does: Claude
+ * Code's description of a command, where the row's action is that command. Nothing otherwise.
+ */
+export function rowDescription(
+  details: ApprovalDetails | null,
+  command: boolean,
+): string | undefined {
+  return command && details?.view.kind === "command" ? details.description : undefined;
+}
+
+/**
  * The request as the agent sent it. Its details are cut at 16,000 characters, so a large file's
  * content can leave them unparseable; what leads them is then read field by field, up to the cut.
  */

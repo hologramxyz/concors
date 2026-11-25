@@ -10,7 +10,7 @@ import { useAgents } from "@/agents/context";
 import { chatDot } from "@/agents/agent-status";
 import { ProviderIcon } from "@/agents/provider-icon";
 import { approvalParts } from "@/agents/approval-summary";
-import { approvalDetails, rowReviewView } from "@/agents/approval-details";
+import { approvalDetails, rowDescription, rowReviewView } from "@/agents/approval-details";
 import { ApprovalReview, DiffLines } from "@/agents/pending-input";
 import { useHomePath } from "@/workspace/home-path";
 import { SidebarDot } from "@/workspace/sidebar-tabs";
@@ -1050,7 +1050,8 @@ function RowProvider({ sessionId }: { sessionId: string }) {
 
 /**
  * A request a chat is waiting on, as a block (see `NeedsBlock`): "Needs your approval" or "Needs
- * your answer", then what the request is for in normal ink as Overview's approval line reads it (a
+ * your answer", then, above a command, what Claude Code says it is for, as the approval card has it,
+ * then what the request is for in normal ink as Overview's approval line reads it (a
  * command in monospace, a file request as its tool beside the shortened path), clamped to two lines
  * that the state line opens in place, then how many instructions are queued behind it, small and
  * muted. Then "Review request details" where they add to the action (see `rowReviewView`),
@@ -1101,10 +1102,9 @@ function PendingBlock({
   const word = pendingWord(notice.kind);
   // What the request would write, change or run, beyond what the action line quotes. A Codex file
   // change keeps its diff in the worker chat's timeline, which this chat does not have: none.
-  const review = useMemo(
-    () => (request ? rowReviewView(approvalDetails(request), notice.action) : null),
-    [request, notice.action],
-  );
+  const details = useMemo(() => (request ? approvalDetails(request) : null), [request]);
+  const review = useMemo(() => rowReviewView(details, notice.action), [details, notice.action]);
+  const description = rowDescription(details, notice.command);
   return (
     <NeedsBlock
       label={`${chat.label} ${word.toLowerCase()}`}
@@ -1113,6 +1113,8 @@ function PendingBlock({
       state={word}
       toggle={expandable ? { open, onToggle: () => setOpen((v) => !v) } : null}
     >
+      {/* What Claude Code says the command is for, in words above it as the card has it. */}
+      {description && <p className="text-xs break-words text-muted-foreground">{description}</p>}
       <div
         ref={text}
         data-pending-action

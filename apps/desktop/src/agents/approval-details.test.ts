@@ -4,6 +4,7 @@ import {
   approvalDetails,
   approvalItemId,
   reviewView,
+  rowDescription,
   rowReviewView,
   shellCommand,
   waitWords,
@@ -348,4 +349,15 @@ it("offers the Supervisor's block nothing for a Codex file change, whose diff it
     title: "Allow file changes?",
   });
   expect(rowReviewView(approvalDetails(change), "Update the HUD")).toBeNull();
+});
+
+it("puts Claude Code's description above a command the Supervisor's block quotes", () => {
+  const described = approvalDetails(
+    claude("Bash", { command: "pnpm test", description: "Run the unit tests" }),
+  );
+  expect(rowDescription(described, true)).toBe("Run the unit tests");
+  // A row whose action is not that command keeps to its action.
+  expect(rowDescription(described, false)).toBeUndefined();
+  expect(rowDescription(approvalDetails(claude("Bash", { command: "ls" })), true)).toBeUndefined();
+  expect(rowDescription(null, true)).toBeUndefined();
 });
