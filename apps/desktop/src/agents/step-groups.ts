@@ -75,12 +75,17 @@ export function createdPaths(item: AgentItem): ReadonlySet<string> {
   );
 }
 
-/** "Allowed once" for a permission the user granted; nothing for one declined or cancelled. */
+/**
+ * "Allowed once" for a permission the user granted, "Declined" for one they turned down (the
+ * daemon saves the Decline button's label, or "Dismissed"); nothing for a cancelled turn, which
+ * stays a line of its own.
+ */
 export function approvalMark(item: AgentItem): string | undefined {
   if (item.kind !== "system" || item.title !== "Permission") return undefined;
   const text = item.text.trim();
   const allow = /^Allow\s+(.+)$/i.exec(text);
   if (allow) return `Allowed ${allow[1]}`;
+  if (/^(Decline|Dismiss)/i.test(text)) return "Declined";
   return /^(Approve|Apply)/i.test(text) ? "Approved" : undefined;
 }
 

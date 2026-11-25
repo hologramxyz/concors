@@ -285,10 +285,26 @@ describe("approvals", () => {
     ]);
   });
 
-  it("keeps declined and cancelled answers as lines", () => {
-    const declined = permission("Decline");
-    const rows = stepGroups([command("a"), declined, command("b")], null);
-    expect(rows.map((row) => row.id)).toContain(declined.id);
+  it("shows a declined permission on its step, beside one allowed", () => {
+    for (const text of ["Decline", "Dismissed"]) {
+      const declined = permission(text);
+      const rows = stepGroups(
+        [command("a"), declined, command("b"), permission(), command("c")],
+        null,
+      );
+      expect(rows.map((row) => row.id)).not.toContain(declined.id);
+      expect(marks(rows)).toEqual([
+        ["Run command", "Declined"],
+        ["Run command", "Allowed once"],
+        ["Run command", null],
+      ]);
+    }
+  });
+
+  it("keeps a cancelled turn's answer as a line", () => {
+    const cancelled = permission("Turn canceled");
+    const rows = stepGroups([command("a"), cancelled, command("b")], null);
+    expect(rows.map((row) => row.id)).toContain(cancelled.id);
   });
 
   it("does not let a granted permission split a run", () => {
