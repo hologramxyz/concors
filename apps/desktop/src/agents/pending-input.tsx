@@ -1,16 +1,22 @@
-import { approvalSummary } from "./approval-summary";
-import { useState } from "react";
-import { Check, MessageCircleQuestionMark, ShieldAlert } from "lucide-react";
+import { approvalParts, leadPreview } from "./approval-summary";
+import { useEffect, useRef, useState } from "react";
+import { Check, ChevronRight, MessageCircleQuestionMark, ShieldAlert } from "lucide-react";
+import { Collapse } from "./collapse";
+import { OverlayScroll } from "./overlay-scrollbar";
 import type { AgentPending } from "@concors/protocol";
 import { AgentMarkdown } from "./markdown";
 import { Button } from "@/components/ui/button";
+import { useShortPath } from "./short-path";
 export function PendingInput({
   pending,
   disabled,
+  reveal = false,
   onRespond,
 }: {
   pending: AgentPending;
   disabled: boolean;
+  /** Scroll the request fully into view when it appears: the reader is at the chat's bottom. */
+  reveal?: boolean;
   onRespond: (value: {
     decision?: "accept" | "decline" | "cancel";
     actionId?: string;
@@ -27,44 +33,90 @@ export function PendingInput({
   const Icon = pending.kind === "approval" ? ShieldAlert : MessageCircleQuestionMark;
   // A lone question needs no "Question 1" label; several are numbered so answers can be matched.
   const numbered = pending.questions.length > 1;
-  const summary = approvalSummary(pending);
+  const { lead, grants, tool, target, path } = approvalParts(pending);
+  const short = useShortPath();
+  const [details, setDetails] = useState(false);
+  const section = useRef<HTMLElement>(null);
+  // Only when it appears: a reader who scrolled away keeps their place.
+  const [revealOnce] = useState(reveal);
+  useEffect(() => {
+    if (!revealOnce) return;
+    const frame = requestAnimationFrame(() => section.current && revealIn(section.current));
+    return () => cancelAnimationFrame(frame);
+  }, [revealOnce]);
   return (
     <section
+      ref={section}
       aria-label={pending.title}
       // Sits below the timeline, outside its selectable area: what it asks is worth copying too.
-      className="selectable min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm"
+      data-pending-input
+      // An approval stays whole above the composer, its answers always in view: it is capped to
+      // the room the chat can give it, and its details scroll inside it, never the dock around it.
+      className={`selectable min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm ${pending.kind === "approval" ? "flex max-h-[max(calc(100cqh-12rem),12rem)] flex-col" : ""}`}
     >
-      <header className="flex items-start gap-2.5 px-4 pt-3.5">
+      <header className="flex shrink-0 items-start gap-2.5 px-4 pt-3.5">
         <span className="mt-px flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
           <Icon className="size-3.5" aria-hidden />
         </span>
         <div className="min-w-0 space-y-0.5">
           <h3 className="text-[length:var(--text-ui)] leading-6 font-medium">{pending.title}</h3>
-          {summary && (
-            <p className="text-xs break-words whitespace-pre-wrap text-muted-foreground">
-              {summary}
+          {target ? (
+            // The tool and what it acts on sit side by side, set apart by space and ink, as a
+            // step row's verb and target are.
+            <p className="flex min-w-0 gap-1.5 text-xs text-muted-foreground">
+              {tool && <span className="shrink-0">{tool}</span>}
+              <span className="min-w-0 truncate text-foreground" title={target}>
+                {path ? short(target) : target}
+              </span>
             </p>
+          ) : (
+            lead && (
+              <p
+                className={`text-xs break-words whitespace-pre-wrap text-muted-foreground ${pending.kind === "approval" ? "line-clamp-3" : ""}`}
+              >
+                {pending.kind === "approval" ? leadPreview(lead) : lead}
+              </p>
+            )
           )}
+          {grants.map((grant) => (
+            <p key={grant} className="text-xs break-words text-muted-foreground">
+              {grant}
+            </p>
+          ))}
         </div>
       </header>
       {pending.kind === "approval" ? (
         <>
-          <div className="space-y-3 px-4 pt-3 pb-4">
+          <div className="flex min-h-0 flex-col gap-3 px-4 pt-3 pb-4">
             {pending.plan && (
-              <div className="chat-markdown chat-scroll max-h-80 overflow-auto rounded-lg border bg-background px-3 py-2 text-sm">
+              <div className="chat-markdown chat-scroll max-h-80 min-h-0 overflow-auto rounded-lg border bg-background px-3 py-2 text-sm">
                 <AgentMarkdown>{pending.plan}</AgentMarkdown>
               </div>
             )}
-            <details className="group">
-              <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
-                Review request details
-              </summary>
-              <pre className="chat-scroll mt-2 max-h-40 overflow-auto rounded-lg border bg-background px-3 py-2 font-mono text-xs break-words whitespace-pre-wrap">
-                {pending.detail}
-              </pre>
-            </details>
+            <button
+              type="button"
+              aria-expanded={details}
+              onClick={() => setDetails((open) => !open)}
+              className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+            >
+              <ChevronRight
+                aria-hidden
+                className={`size-3 transition-transform motion-reduce:transition-none ${details ? "rotate-90" : ""}`}
+              />
+              Review request details
+            </button>
+            {/* In a short pane the details give up their height first; only they scroll. */}
+            <Collapse open={details} className="min-h-0 shrink">
+              <div className="flex min-h-0 flex-col">
+                <OverlayScroll className="chat-scroll max-h-40 min-h-0 overflow-auto rounded-lg border bg-background px-3 py-2">
+                  <pre className="font-mono text-xs break-words whitespace-pre-wrap">
+                    {pending.detail}
+                  </pre>
+                </OverlayScroll>
+              </div>
+            </Collapse>
           </div>
-          <footer className="flex flex-wrap justify-end gap-2 border-t bg-muted/50 px-4 py-2.5">
+          <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t bg-muted/50 px-4 py-2.5">
             {(pending.actions
               ? pending.actions.map((action) => ({
                   key: action.id,
@@ -322,4 +374,18 @@ export function PendingInput({
       )}
     </section>
   );
+}
+
+/**
+ * Scrolls the chat timeline so all of the request shows, its answers first when it is taller than
+ * the room. Only the timeline: above the composer the request already sits in view, and the page
+ * has one scroller.
+ */
+function revealIn(element: HTMLElement) {
+  const timeline = element.closest<HTMLElement>('[role="log"]');
+  if (!timeline) return;
+  const box = element.getBoundingClientRect();
+  const view = timeline.getBoundingClientRect();
+  if (box.bottom > view.bottom) timeline.scrollTop += box.bottom - view.bottom;
+  else if (box.top < view.top) timeline.scrollTop -= view.top - box.top;
 }

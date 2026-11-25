@@ -1,5 +1,5 @@
 import { seedProject } from "./support/projects.ts";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
@@ -112,20 +112,32 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
       "animation-name",
       "agent-working-fade",
     );
-    const runningTools = page.locator('[data-tool-status="running"]');
-    await expect(runningTools).toHaveCount(3);
-    for (const tool of await runningTools.all()) {
-      // Running labels breathe in opacity, which WebKit animates without repainting their text.
-      const label = tool.locator("button .agent-shimmer").first();
-      await expect(label).toHaveCSS("animation-name", "agent-working-fade");
-      await expect(label).toHaveCSS("background-image", "none");
-      const opacity = await label.evaluate((el) => getComputedStyle(el).opacity);
-      await expect
-        .poll(() => label.evaluate((el) => getComputedStyle(el).opacity))
-        .not.toBe(opacity);
-    }
+    // One live line says what the turn is on now, with the turn's time.
+    const liveLine = page.getByRole("log").locator("[data-live-line]");
+    await expect(liveLine).toHaveCount(1);
+    await expect(liveLine).toContainText("Running echo fixture");
+    // The edit it made is done, so it reads as a quiet row, as it will once the turn ends.
+    const edited = page
+      .getByRole("article", { name: "Tool call", exact: true })
+      .filter({ hasText: "example.ts" });
+    await expect(edited).toHaveAttribute("data-tool-status", "completed");
+    // The live label breathes in opacity, which WebKit animates without repainting its text.
+    const label = liveLine.locator(".agent-shimmer").first();
+    await expect(label).toHaveCSS("animation-name", "agent-working-fade");
+    await expect(label).toHaveCSS("background-image", "none");
+    const opacity = await label.evaluate((el) => getComputedStyle(el).opacity);
+    await expect.poll(() => label.evaluate((el) => getComputedStyle(el).opacity)).not.toBe(opacity);
     await expect(page.locator('[data-tool-status="completed"] .agent-shimmer')).toHaveCount(0);
-    const elapsed = page.getByLabel("Elapsed time", { exact: true });
+    // One spinner for the turn's steps, the live line's. (A working sub-agent and the plan's
+    // current step keep their own on their cards.)
+    await expect(
+      page
+        .getByRole("log")
+        .locator('article[aria-label="Tool call"], article[aria-label="Tool calls"]')
+        .locator(".braille-frames"),
+    ).toHaveCount(0);
+    await expect(liveLine.locator(".braille-frames")).toHaveCount(1);
+    const elapsed = liveLine.getByLabel("Elapsed time", { exact: true });
     await expect(elapsed).toBeVisible();
     const initialElapsed = await elapsed.innerText();
     await expect(elapsed).not.toHaveText(initialElapsed);
@@ -168,15 +180,14 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
       "none",
     );
     await page.emulateMedia({ reducedMotion: "no-preference" });
-    await page.getByRole("button", { name: /^Shell/ }).click();
-    await expect(
-      page
-        .getByRole("button", { name: /^Shell/ })
-        .locator(".agent-shimmer")
-        .first(),
-    ).toHaveCSS("animation-name", "agent-working-fade");
-    await expect(page.getByLabel("Tool call").filter({ hasText: "fixture output" })).toBeVisible();
-    await page.getByRole("button", { name: /^Edit/ }).click();
+    // The live line opens to the running command's output as it streams.
+    await liveLine.getByRole("button", { name: /^Running echo fixture/ }).click();
+    await expect(liveLine.locator(".agent-shimmer").first()).toHaveCSS(
+      "animation-name",
+      "agent-working-fade",
+    );
+    await expect(liveLine).toContainText("fixture output");
+    await edited.getByRole("button", { name: /^Edited example\.ts/ }).click();
     await expect(page.getByText("+new line", { exact: true })).toBeVisible();
     await page.getByRole("textbox", { name: "Message Codex" }).fill("queued follow-up");
     // Enter would steer the running turn; ⌘/Ctrl+Enter queues the follow-up instead.
@@ -294,6 +305,49 @@ test("an unconfirmed message can stop retrying, to edit it or remove its attachm
     await page.getByRole("button", { name: "Send message", exact: true }).click();
     await expect(page.getByRole("log")).toContainText("Just the text");
     await expect(page.getByRole("log").getByRole("button", { name: "spec.pdf" })).toHaveCount(0);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("an edit's path opens its file, and the rest of its row opens the step", async ({ page }) => {
+  const directory = await mkdtemp(join(tmpdir(), "concors-edit-path-"));
+  try {
+    await writeFile(join(directory, "example.ts"), "export const fromDisk = true;\n");
+    await signedIn(page);
+    await page.goto("/");
+    await seedProject(page, "Edit paths", directory);
+    await page.getByRole("button", { name: "New tab options", exact: true }).click();
+    await page.getByRole("menuitem", { name: "New chat", exact: true }).click();
+    await chooseProvider(page);
+    // Held, the turn keeps its finished edit as a row of its own (see the journey above).
+    await page.getByRole("textbox", { name: "Message Codex" }).fill("rich hold");
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    await expect(page.getByRole("log").locator("[data-live-line]")).toContainText("Running");
+    const edited = page
+      .getByRole("log")
+      .getByRole("article", { name: "Tool call", exact: true })
+      .filter({ hasText: "example.ts" });
+    const toggle = edited.getByRole("button", { name: /^Edited example\.ts/ });
+    const path = edited.getByRole("button", { name: "example.ts", exact: true });
+    await expect(path).toHaveAttribute("title", "example.ts");
+    // Anywhere on the row but its path opens and closes the step: here, its icon.
+    const icon = { position: { x: 6, y: 8 } };
+    await toggle.click(icon);
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByText("+new line", { exact: true })).toBeVisible();
+    await toggle.click(icon);
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    // The path is a control of its own, reached by keyboard, and opens the file without the step.
+    await path.focus();
+    await expect(path).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("textbox", { name: "Code editor: example.ts" })).toBeVisible();
+    // The chat is behind the file now, but its row is still there, and still closed.
+    await expect(page.locator("button[aria-labelledby][aria-expanded]")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

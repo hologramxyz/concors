@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ChevronRight, ListChecks, MessageCircle, X } from "lucide-react";
+import { ChevronRight, Folder, ListChecks, MessageCircle, X } from "lucide-react";
 import {
   agentProviderName,
   modelName,
@@ -28,6 +28,8 @@ import { chatState, useMinuteClock } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
 import { overviewGroups, overviewRows, workspaceAgents, type OverviewRow } from "./overview-model";
 import { QuickApproval } from "./quick-approval";
+import { shortPath } from "@/agents/short-path";
+import { useHomePath } from "@/workspace/home-path";
 import { supervisorAgentName } from "./reference-context";
 import { useSupervisorBriefs, useSupervisorDeliveries } from "./use-overview";
 
@@ -292,6 +294,12 @@ function OverviewItem({
   canAsk: boolean;
 }) {
   const { agent } = row;
+  const home = useHomePath();
+  // A file the request names, written from the session's folder, else with "~" for home.
+  const short = (path: string) => {
+    const relative = shortPath(path, [agent.directory], null);
+    return relative === path ? home(path) : relative;
+  };
   // An approval is answered here as in its chat; anything else is answered by opening it.
   const request = agent.pending[0]?.kind === "approval" ? agent.pending[0] : undefined;
   const name = supervisorAgentName(agent);
@@ -303,14 +311,10 @@ function OverviewItem({
       : row.group === "Done" && agent.status === "interrupted"
         ? "Stopped"
         : "";
-  const meta = [
-    agent.model
-      ? modelName(agent.model)
-      : (agent.providerLabel ?? agentProviderName(agent.provider)),
-    workspace,
-    row.queued ? `${row.queued} queued` : "",
-    outcome,
-  ].filter(Boolean);
+  const model = agent.model
+    ? modelName(agent.model)
+    : (agent.providerLabel ?? agentProviderName(agent.provider));
+  const extras = [row.queued ? `${row.queued} queued` : "", outcome].filter(Boolean);
   // The latest update leads; before a session has said anything, what it was asked stands in,
   // quieter, since it is the request rather than anything the session said.
   const said = row.update || (row.group === "Done" ? "" : task);
@@ -342,15 +346,47 @@ function OverviewItem({
             <span className="flex size-3.5 shrink-0 items-center justify-center opacity-80">
               <ProviderIcon provider={agent.provider} size={12} />
             </span>
-            <span className="min-w-0 truncate">{meta.join(" · ")}</span>
+            <span className="min-w-0 truncate">{model}</span>
+            {/* The workspace behind the sidebar's folder icon, so it does not run into the model. */}
+            {workspace && (
+              <>
+                <span className="flex size-3.5 shrink-0 items-center justify-center opacity-80">
+                  <Folder className="size-3" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 truncate">{workspace}</span>
+              </>
+            )}
+            {extras.map((part) => (
+              <span key={part} className="shrink-0">
+                {part}
+              </span>
+            ))}
           </span>
           {row.needs && (
-            <span className="mt-1 block leading-5 break-words">
-              <span className="font-medium text-destructive">{row.needs.action}:</span>{" "}
+            // The action leads in full ink; what it is about follows a step quieter. Only a
+            // failure keeps the error colour: a request is not an error.
+            <span className="mt-1 block leading-5 break-words text-muted-foreground">
+              <span
+                className={
+                  row.needs.action === "Failed"
+                    ? "font-medium text-destructive"
+                    : "font-semibold text-sidebar-foreground"
+                }
+              >
+                {row.needs.action}:
+              </span>{" "}
               {row.needs.code ? (
                 <code className="rounded bg-sidebar-accent px-1 py-px font-mono text-[12px] break-all">
                   {row.needs.text}
                 </code>
+              ) : row.needs.verb ? (
+                // The tool in muted ink beside what it acts on, as the approval card shows them.
+                <>
+                  <span>{row.needs.verb}</span>{" "}
+                  <span className="text-sidebar-foreground/90" title={row.needs.text}>
+                    {row.needs.path ? short(row.needs.text) : row.needs.text}
+                  </span>
+                </>
               ) : (
                 row.needs.text
               )}

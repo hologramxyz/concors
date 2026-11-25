@@ -498,7 +498,7 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                       <ul aria-label={`${project.name} tabs`} className="space-y-0.5">
                         {listed.map(renderRow)}
                         {folded.length > 0 && (
-                          // Closed chats, apart and folded: they are history, not work in hand.
+                          // Closed chats and idle CLIs, folded apart: history, not work in hand.
                           <li>
                             <button
                               type="button"
@@ -519,12 +519,12 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
                                   />
                                 )}
                               </span>
-                              {/* No count: how many chats were closed tells nobody anything. */}
-                              <span className="flex-1">Closed chats</span>
+                              {/* No count: how many were closed tells nobody anything. */}
+                              <span className="flex-1">Closed</span>
                             </button>
                             {closedOpen && (
                               <ul
-                                aria-label={`${project.name} closed chats`}
+                                aria-label={`${project.name} closed`}
                                 className="mt-0.5 ml-[17px] space-y-0.5 border-l border-sidebar-border pl-1"
                               >
                                 {folded.map(renderRow)}

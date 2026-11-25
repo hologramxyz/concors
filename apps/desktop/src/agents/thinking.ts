@@ -1,8 +1,19 @@
 import type { AgentItem } from "@concors/protocol";
 import { toolGroupKey } from "./tool-label";
 
-/** A timeline row: one item, or a run of similar tool calls folded under the first one's id. */
-export type TimelineEntry = AgentItem & { group?: AgentItem[] };
+/**
+ * A timeline row: one item, or a run of similar tool calls folded under the first one's id.
+ * `steps` is a run of quiet steps shown as one summary line, `quiet` a step shown as a plain row,
+ * `approval` the permission granted for a step, and `live` the run the turn in progress is on now
+ * (see `stepGroups`).
+ */
+export type TimelineEntry = AgentItem & {
+  group?: AgentItem[];
+  steps?: TimelineEntry[];
+  quiet?: true;
+  approval?: string;
+  live?: true;
+};
 
 /**
  * Codex summaries are bold headings, one per part. Older daemons glued the parts together
