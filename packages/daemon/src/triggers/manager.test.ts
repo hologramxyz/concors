@@ -92,7 +92,7 @@ async function setup(mode: "same" | "new" = "same", clock?: () => Date) {
     restartTriggers: async () => {
       await manager.close();
       store = new TriggerStore(join(directory, "triggers.sqlite"));
-      manager = new TriggerManager(store, workspace, agents, registry, () => undefined);
+      manager = new TriggerManager(store, workspace, agents, registry, () => undefined, clock);
     },
     workspace,
     agents,
@@ -495,6 +495,72 @@ it("stops accepting events once a stalled chat has the most waiting", async () =
     .toBe(0);
   expect(f.store.pending(first.sessionId!).length).toBe(MAX_WAITING_EVENTS - 20);
 });
+
+it.each(["same", "new"] as const)(
+  "retargets a full trigger without stranding overflow or charging old chat queues to its %s target",
+  async (mode) => {
+    let now = Date.parse("2026-11-25T00:00:00Z");
+    const f = await setup("same", () => new Date(now));
+    const first = await f.settled(f.accept().event.id);
+    const oldSession = first.sessionId!;
+    await expect.poll(() => f.workspace.agent(oldSession).status).toBe("done");
+    f.workspace.saveAgent({ ...f.workspace.agent(oldSession), status: "needs_input" });
+    for (let i = 0; i < MAX_WAITING_EVENTS; i++) {
+      if (i % 25 === 0) now += 61_000;
+      f.accept(`old-${i}`);
+    }
+    await expect.poll(() => f.store.pending(oldSession).length).toBe(MAX_WAITING_EVENTS - 20);
+    const queued = f.workspace.agent(oldSession).queue!;
+    const overflow = f.store.pending(oldSession).map((p) => p.eventId);
+    const nextSession = randomUUID();
+    await f.agents.startScheduled(nextSession, f.definition.projectId!, "codex", "fixture");
+    f.workspace.saveAgent({ ...f.workspace.agent(nextSession), status: "needs_input" });
+    expect(
+      f.request({
+        kind: "update",
+        id: f.id,
+        expectedRevision: f.manager.list()[0]!.revision,
+        trigger: { ...f.definition, mode, target: { kind: "session", sessionId: nextSession } },
+      }).outcome.status,
+    ).toBe("ok");
+    expect(f.store.pending(oldSession)).toHaveLength(0);
+    expect(f.workspace.agent(oldSession).queue).toEqual(queued);
+    for (const event of f.store.list()[0]!.events) {
+      if (overflow.includes(event.id))
+        expect(event).toMatchObject({
+          status: "failed",
+          message: "Trigger target changed before delivery",
+        });
+      if (queued.some((q) => q.id === event.id)) expect(event.status).toBe("queued");
+    }
+    if (mode === "new") {
+      const start = f.agents.startScheduled.bind(f.agents);
+      vi.spyOn(f.agents, "startScheduled").mockImplementation(async (...args) => {
+        await start(...args);
+        await f.agents.request({
+          type: "agent.request",
+          requestId: randomUUID(),
+          operation: { kind: "queue-pause", sessionId: args[0], paused: true },
+        });
+        await f.agents.request({
+          type: "agent.request",
+          requestId: randomUUID(),
+          operation: { kind: "queue-add", sessionId: args[0], text: "Interactive follow-up" },
+        });
+        return f.workspace.agent(args[0]);
+      });
+    }
+    await f.restartTriggers();
+    for (let i = 0; i < MAX_WAITING_EVENTS; i++) {
+      if (i % 25 === 0) now += 61_000;
+      const event = f.accept(`new-${i}`).event;
+      expect(await f.settled(event.id)).toMatchObject({ status: "queued" });
+    }
+    now += 61_000;
+    expect(() => f.accept("one-too-many")).toThrow("Too many events waiting for the chat");
+    expect(f.workspace.agent(oldSession).queue).toEqual(queued);
+  },
+);
 
 it("does not deliver to a chat that runs without approvals", async () => {
   const f = await setup();

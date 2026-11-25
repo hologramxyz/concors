@@ -15,6 +15,7 @@ export class TriggerStore {
       CREATE TABLE IF NOT EXISTS triggers (id TEXT PRIMARY KEY, value TEXT NOT NULL, hash TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS receipts (id TEXT PRIMARY KEY, request TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS pending (event_id TEXT PRIMARY KEY, trigger_id TEXT NOT NULL, session_id TEXT NOT NULL, text TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS event_targets (event_id TEXT PRIMARY KEY, trigger_id TEXT NOT NULL, target TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS keys (trigger_id TEXT NOT NULL, key TEXT NOT NULL, received_at TEXT NOT NULL, event_id TEXT NOT NULL, PRIMARY KEY(trigger_id,key));`);
   }
   list(): AgentTrigger[] {
@@ -34,6 +35,11 @@ export class TriggerStore {
       this.db
         .prepare("UPDATE triggers SET value=? WHERE id=?")
         .run(JSON.stringify(AgentTriggerSchema.parse(trigger)), trigger.id);
+    this.db
+      .prepare(
+        "DELETE FROM event_targets WHERE trigger_id=? AND event_id NOT IN (SELECT json_extract(value,'$.id') FROM json_each(?,'$.events'))",
+      )
+      .run(trigger.id, JSON.stringify(trigger));
   }
   hash(id: string): string | undefined {
     return this.db.prepare("SELECT hash FROM triggers WHERE id=?").get(id)?.hash as
@@ -41,6 +47,7 @@ export class TriggerStore {
   }
   remove(id: string) {
     this.db.prepare("DELETE FROM pending WHERE trigger_id=?").run(id);
+    this.db.prepare("DELETE FROM event_targets WHERE trigger_id=?").run(id);
     this.db.prepare("DELETE FROM triggers WHERE id=?").run(id);
     this.db.prepare("DELETE FROM keys WHERE trigger_id=?").run(id);
   }
@@ -83,6 +90,19 @@ export class TriggerStore {
         .all(id)
         .map((r) => String(r.event_id)),
     );
+  }
+  eventTargets(id: string): Map<string, string> {
+    return new Map(
+      this.db
+        .prepare("SELECT event_id,target FROM event_targets WHERE trigger_id=?")
+        .all(id)
+        .map((row) => [String(row.event_id), String(row.target)]),
+    );
+  }
+  rememberTarget(triggerId: string, eventId: string, target: string) {
+    this.db
+      .prepare("INSERT OR IGNORE INTO event_targets VALUES(?,?,?)")
+      .run(eventId, triggerId, target);
   }
   defer(triggerId: string, eventId: string, sessionId: string, text: string) {
     this.db.prepare("INSERT INTO pending VALUES(?,?,?,?)").run(eventId, triggerId, sessionId, text);

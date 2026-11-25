@@ -15,6 +15,7 @@ import type { ProviderRegistry } from "../agents/providers/registry.ts";
 import type { TriggerStore } from "./store.ts";
 
 const digest = (secret: string) => createHash("sha256").update(secret).digest("hex");
+const targetKey = (t: TriggerDefinition) => JSON.stringify([t.projectId, t.mode, t.target]);
 const busy = (a: AgentInfo) =>
   ["starting", "working", "needs_input"].includes(a.status) ||
   !!a.queue?.length ||
@@ -251,6 +252,27 @@ export class TriggerManager {
               t.projectId !== op.trigger.projectId ||
               JSON.stringify(t.target) !== JSON.stringify(op.trigger.target) ||
               t.mode !== op.trigger.mode;
+            if (targetChanged) {
+              const cancelled = new Set<string>();
+              const admitted = new Set(
+                this.workspace.agents().flatMap((agent) => agent.queue?.map((q) => q.id) ?? []),
+              );
+              for (const pending of this.store.pending().filter((p) => p.triggerId === t.id)) {
+                this.store.removePending(pending.eventId);
+                if (
+                  !admitted.has(pending.eventId) &&
+                  !this.workspace.triggerPrompt(pending.sessionId, pending.eventId)
+                )
+                  cancelled.add(pending.eventId);
+              }
+              for (const event of t.events) {
+                this.store.rememberTarget(t.id, event.id, targetKey(t));
+                if (cancelled.has(event.id)) {
+                  event.status = "failed";
+                  event.message = "Trigger target changed before delivery";
+                }
+              }
+            }
             this.save({
               ...t,
               ...op.trigger,
@@ -326,10 +348,15 @@ export class TriggerManager {
       throw new TriggerHttpError(429, "Too many events");
     // A chat that stopped taking prompts (waiting on an approval, say) must not let events pile up
     // without bound, each up to 64 KB, on disk and in every save of the trigger.
-    if (
-      t.events.filter((e) => e.status === "queued" || e.status === "received").length >=
-      MAX_WAITING_EVENTS
-    )
+    const targets = this.store.eventTargets(id);
+    const target = targetKey(t);
+    const waiting = t.events.filter((e) => {
+      if (e.status !== "queued" && e.status !== "received") return false;
+      if (t.mode === "same" && e.sessionId !== null && t.sessionId !== null)
+        return e.sessionId === t.sessionId;
+      return (targets.get(e.id) ?? target) === target;
+    });
+    if (waiting.length >= MAX_WAITING_EVENTS)
       throw new TriggerHttpError(429, "Too many events waiting for the chat");
     const event: TriggerEvent = {
       id: randomUUID(),
@@ -342,6 +369,7 @@ export class TriggerManager {
       bytes,
     };
     this.store.transaction(() => {
+      this.store.rememberTarget(id, event.id, target);
       if (key) this.store.rememberKey(id, key, event.id, event.receivedAt, cutoff);
       t.events = this.retain(id, [event, ...t.events]);
       this.save(t);
