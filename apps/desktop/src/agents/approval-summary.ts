@@ -91,7 +91,7 @@ function lead(
  * A string field of JSON text, read without parsing the whole, which may be cut off: a value cut
  * off too is read up to the cut, and marked as continuing.
  */
-function field(text: string, key: string): string | undefined {
+export function field(text: string, key: string): string | undefined {
   const match = new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)(")?`).exec(text);
   if (!match) return undefined;
   let body = match[1] ?? "";

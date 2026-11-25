@@ -1,5 +1,6 @@
 import { sessionProjects } from "@concors/protocol";
 import { PendingInput } from "./pending-input";
+import { approvalItemId } from "./approval-details";
 import { AgentAccountPrompt } from "./account-prompt";
 import { AgentLimitPrompt } from "./limit-prompt";
 import { completedTurnFooters } from "./duration";
@@ -610,6 +611,7 @@ export function Chat({
     <PendingInput
       key={pending.id}
       pending={pending}
+      item={conversation.items.find((item) => item.id === approvalItemId(pending))}
       disabled={!connected || busy}
       reveal={atBottom}
       onRespond={(value) =>

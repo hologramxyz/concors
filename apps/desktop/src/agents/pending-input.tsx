@@ -1,19 +1,24 @@
 import { approvalParts, leadPreview } from "./approval-summary";
-import { useEffect, useRef, useState } from "react";
+import { approvalDetails, type ApprovalDetails } from "./approval-details";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronRight, MessageCircleQuestionMark, ShieldAlert } from "lucide-react";
 import { Collapse } from "./collapse";
 import { OverlayScroll } from "./overlay-scrollbar";
-import type { AgentPending } from "@concors/protocol";
+import type { AgentItem, AgentPending } from "@concors/protocol";
 import { AgentMarkdown } from "./markdown";
 import { Button } from "@/components/ui/button";
 import { useShortPath } from "./short-path";
+import { DiffLines } from "./timeline-item";
 export function PendingInput({
   pending,
+  item,
   disabled,
   reveal = false,
   onRespond,
 }: {
   pending: AgentPending;
+  /** The timeline item the request is about, which holds a Codex file change's diff. */
+  item?: AgentItem | undefined;
   disabled: boolean;
   /** Scroll the request fully into view when it appears: the reader is at the chat's bottom. */
   reveal?: boolean;
@@ -36,6 +41,24 @@ export function PendingInput({
   const { lead, grants, tool, target, path } = approvalParts(pending);
   const short = useShortPath();
   const [details, setDetails] = useState(false);
+  const review = useMemo(() => approvalDetails(pending, item), [pending, item]);
+  // Whether the header had to cut its text short, measured again as the card or the text changes.
+  const [clipped, setClipped] = useState(false);
+  const measure = useCallback((text: HTMLElement | null) => {
+    if (!text) return;
+    const check = () =>
+      setClipped(
+        text.scrollHeight > text.clientHeight + 1 || text.scrollWidth > text.clientWidth + 1,
+      );
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(text);
+    return () => observer.disconnect();
+  }, []);
+  // Details that only repeat the header are worth offering only where it cut them short.
+  const reviewable = !!review && (!review.repeats || clipped);
+  // With neither a plan nor details, the header sits straight on the answers, as evenly spaced.
+  const body = pending.plan !== undefined || reviewable;
   const section = useRef<HTMLElement>(null);
   // Only when it appears: a reader who scrolled away keeps their place.
   const [revealOnce] = useState(reveal);
@@ -54,7 +77,9 @@ export function PendingInput({
       // the room the chat can give it, and its details scroll inside it, never the dock around it.
       className={`selectable min-w-0 overflow-hidden rounded-xl border bg-card shadow-sm ${pending.kind === "approval" ? "flex max-h-[max(calc(100cqh-12rem),12rem)] flex-col" : ""}`}
     >
-      <header className="flex shrink-0 items-start gap-2.5 px-4 pt-3.5">
+      <header
+        className={`flex shrink-0 items-start gap-2.5 px-4 pt-3.5 ${pending.kind === "approval" && !body ? "pb-3.5" : ""}`}
+      >
         <span className="mt-px flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
           <Icon className="size-3.5" aria-hidden />
         </span>
@@ -65,13 +90,14 @@ export function PendingInput({
             // step row's verb and target are.
             <p className="flex min-w-0 gap-1.5 text-xs text-muted-foreground">
               {tool && <span className="shrink-0">{tool}</span>}
-              <span className="min-w-0 truncate text-foreground" title={target}>
+              <span ref={measure} className="min-w-0 truncate text-foreground" title={target}>
                 {path ? short(target) : target}
               </span>
             </p>
           ) : (
             lead && (
               <p
+                ref={pending.kind === "approval" ? measure : undefined}
                 className={`text-xs break-words whitespace-pre-wrap text-muted-foreground ${pending.kind === "approval" ? "line-clamp-3" : ""}`}
               >
                 {pending.kind === "approval" ? leadPreview(lead) : lead}
@@ -87,35 +113,37 @@ export function PendingInput({
       </header>
       {pending.kind === "approval" ? (
         <>
-          <div className="flex min-h-0 flex-col gap-3 px-4 pt-3 pb-4">
-            {pending.plan && (
-              <div className="chat-markdown chat-scroll max-h-80 min-h-0 overflow-auto rounded-lg border bg-background px-3 py-2 text-sm">
-                <AgentMarkdown>{pending.plan}</AgentMarkdown>
-              </div>
-            )}
-            <button
-              type="button"
-              aria-expanded={details}
-              onClick={() => setDetails((open) => !open)}
-              className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-            >
-              <ChevronRight
-                aria-hidden
-                className={`size-3 transition-transform motion-reduce:transition-none ${details ? "rotate-90" : ""}`}
-              />
-              Review request details
-            </button>
-            {/* In a short pane the details give up their height first; only they scroll. */}
-            <Collapse open={details} className="min-h-0 shrink">
-              <div className="flex min-h-0 flex-col">
-                <OverlayScroll className="chat-scroll max-h-40 min-h-0 overflow-auto rounded-lg border bg-background px-3 py-2">
-                  <pre className="font-mono text-xs break-words whitespace-pre-wrap">
-                    {pending.detail}
-                  </pre>
-                </OverlayScroll>
-              </div>
-            </Collapse>
-          </div>
+          {body && (
+            <div className="flex min-h-0 flex-col gap-3 px-4 pt-3 pb-4">
+              {pending.plan && (
+                <div className="chat-markdown chat-scroll max-h-80 min-h-0 overflow-auto rounded-lg border bg-background px-3 py-2 text-sm">
+                  <AgentMarkdown>{pending.plan}</AgentMarkdown>
+                </div>
+              )}
+              {reviewable && review && (
+                <>
+                  <button
+                    type="button"
+                    aria-expanded={details}
+                    onClick={() => setDetails((open) => !open)}
+                    className="mobile-hit-area flex shrink-0 items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <ChevronRight
+                      aria-hidden
+                      className={`size-3 transition-transform motion-reduce:transition-none ${details ? "rotate-90" : ""}`}
+                    />
+                    Review request details
+                  </button>
+                  {/* In a short pane the details give up their height first; only they scroll. */}
+                  <Collapse open={details} className="min-h-0 shrink">
+                    <div className="flex min-h-0 flex-col">
+                      <ApprovalDetailsView details={review} />
+                    </div>
+                  </Collapse>
+                </>
+              )}
+            </div>
+          )}
           <footer className="flex shrink-0 flex-wrap justify-end gap-2 border-t bg-muted/50 px-4 py-2.5">
             {(pending.actions
               ? pending.actions.map((action) => ({
@@ -388,4 +416,49 @@ function revealIn(element: HTMLElement) {
   const view = timeline.getBoundingClientRect();
   if (box.bottom > view.bottom) timeline.scrollTop += box.bottom - view.bottom;
   else if (box.top < view.top) timeline.scrollTop -= view.top - box.top;
+}
+
+/**
+ * An approval's details, in the panel that scrolls inside the card: the file a write would make or
+ * the change an edit would make, as the chat draws them, with its whole path; a command in full,
+ * then where it runs and how long it may take, when the request says. See `approvalDetails`.
+ */
+export function ApprovalDetailsView({ details }: { details: ApprovalDetails }) {
+  const { view } = details;
+  return (
+    <OverlayScroll className="chat-scroll max-h-40 min-h-0 overflow-auto rounded-lg border bg-background px-3 py-2 text-xs">
+      {view.kind === "write" ? (
+        <>
+          <p className="mb-2 font-mono break-words text-muted-foreground">{view.path}</p>
+          <DiffLines diff={view.diff} />
+        </>
+      ) : view.kind === "edit" ? (
+        <div className="space-y-3">
+          {view.files.map((file) => (
+            <div key={file.path}>
+              <p className="mb-2 font-mono break-words text-muted-foreground">{file.path}</p>
+              <DiffLines diff={file.diff} />
+            </div>
+          ))}
+        </div>
+      ) : view.kind === "command" ? (
+        <>
+          <pre className="font-mono break-words whitespace-pre-wrap">{view.command}</pre>
+          {[
+            view.folder && `Runs in ${view.folder}`,
+            view.timeout,
+            view.network && `Connects to ${view.network}`,
+          ]
+            .filter(Boolean)
+            .map((line) => (
+              <p key={line} className="mt-2 break-words text-muted-foreground">
+                {line}
+              </p>
+            ))}
+        </>
+      ) : (
+        <pre className="font-mono break-words whitespace-pre-wrap">{view.text}</pre>
+      )}
+    </OverlayScroll>
+  );
 }
