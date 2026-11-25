@@ -22,8 +22,7 @@ import {
   supervisorReferences,
 } from "./reference-context";
 import { supervisorPane } from "./pane";
-import { approvalParts } from "@/agents/approval-summary";
-import { shortPath } from "@/agents/short-path";
+import { askQuestion } from "./ask-question";
 import { useHomePath } from "@/workspace/home-path";
 
 /** The ordinary unified chat, including its provider picker and native mobile composer. */
@@ -105,19 +104,10 @@ export function SupervisorPage({
         .slice(0, MAX_SUPERVISOR_REFERENCES - 1),
       reference,
     ]);
-    // The tool and its file in plain words ("Edit src/a.ts"), never the summary's separator; the
-    // file as Overview writes it, from the session's folder, so a long path is not cut short.
-    const { lead, tool, target, path } = approvalParts(pending);
-    const file = (value: string) => {
-      const relative = shortPath(value, [worker.directory], null);
-      return relative === value ? home(value) : relative;
-    };
-    const action = (
-      tool && target ? `${tool} ${path ? file(target) : target}` : lead.split("\n")[0]
-    )?.slice(0, 120);
-    const question = action
-      ? `Should I approve @${label}’s request “${action}”?`
-      : `What should I do about @${label}’s pending request?`;
+    // The tool and its file in plain words ("Edit src/a.ts"), never the summary's separator.
+    const workspaceRoot = projects.find((project) => project.id === worker.projectId)?.directory;
+    const roots = workspaceRoot ? [worker.directory, workspaceRoot] : [worker.directory];
+    const question = askQuestion(label, pending, roots, home);
     draft.setDraft((text) => (text.trim() ? `${text.trimEnd()}\n\n${question}` : question));
   };
   // The phone app's native field has no textarea here; it is focused natively.
