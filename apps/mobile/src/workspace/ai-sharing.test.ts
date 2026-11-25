@@ -217,7 +217,7 @@ describe("AI sharing permission at the native protocol boundary", () => {
     expect(await newRequest).toBeNull();
     expect(ask).toHaveBeenCalledOnce();
   });
-  it("keeps withdrawal after reconnect until permission is explicitly reviewed", async () => {
+  it("asks again after a withdrawal, on the next request, across reconnects", async () => {
     const { context, ask } = setup();
     let saved: string | null = null;
     const store = createAISharingStore({
@@ -231,11 +231,10 @@ describe("AI sharing permission at the native protocol boundary", () => {
     await first.withdraw();
     first.dispose();
     const next = createAISharingPermission(context, ask, undefined, store);
-    expect(await next.beforeSend(send)).toMatchObject({ outcome: { status: "error" } });
-    expect(ask).toHaveBeenCalledOnce();
-    await next.review();
+    // Not refused with a pointer to Settings: the request asks, and goes once allowed.
     expect(await next.beforeSend(send)).toBeNull();
     expect(ask).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(saved!)).toMatchObject({ blocked: false, grant: expect.any(String) });
   });
   it("writes withdrawal after an approval that is still being saved", async () => {
     const { context, ask } = setup();
@@ -266,8 +265,9 @@ describe("AI sharing permission at the native protocol boundary", () => {
         write,
       }),
     );
-    expect(await next.beforeSend(send)).toMatchObject({ outcome: { status: "error" } });
-    expect(ask).toHaveBeenCalledOnce();
+    // The withdrawal held; the next request asks before anything is sent.
+    expect(await next.beforeSend(send)).toBeNull();
+    expect(ask).toHaveBeenCalledTimes(2);
   });
   it("asks again after the persisted configuration changes", async () => {
     const { context, ask, provider } = setup();
@@ -290,14 +290,17 @@ describe("AI sharing permission at the native protocol boundary", () => {
     expect(await next.beforeSend(send)).toBeNull();
     expect(ask).toHaveBeenCalledTimes(2);
   });
-  it("settles the original request with an error when permission is declined", async () => {
+  it("fails a request whose prompt went unanswered, without saving a refusal", async () => {
     const { permission, ask } = setup();
-    ask.mockResolvedValue(false);
+    // Only a connection that went away ends a prompt without Allow; there is no decline.
+    ask.mockResolvedValueOnce(false);
     expect(await permission.beforeSend(send)).toMatchObject({
       type: "agent.result",
       requestId: id,
       outcome: { status: "error" },
     });
+    expect(await permission.beforeSend(send)).toBeNull();
+    expect(ask).toHaveBeenCalledTimes(2);
   });
   it("withdraws permission immediately, including an approval still in flight", async () => {
     const { permission, ask, changed } = setup();
@@ -312,13 +315,13 @@ describe("AI sharing permission at the native protocol boundary", () => {
     await vi.waitFor(() => expect(ask).toHaveBeenCalledOnce());
     await permission.withdraw();
     approve(true);
+    // The approval given before the withdrawal does not count.
     expect(await waiting).toMatchObject({ outcome: { status: "error" } });
-    expect(await permission.beforeSend(send)).toMatchObject({ outcome: { status: "error" } });
-    expect(ask).toHaveBeenCalledOnce();
     expect(changed).toHaveBeenCalledWith("blocked");
-    await permission.review();
     ask.mockResolvedValue(true);
     expect(await permission.beforeSend(send)).toBeNull();
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(changed).toHaveBeenLastCalledWith("allowed");
   });
   it("does not approve a request after the account or machine connection was disposed", async () => {
     const { permission, ask } = setup();
@@ -363,6 +366,78 @@ describe("AI sharing permission at the native protocol boundary", () => {
         operation: { kind: "delete", id, expectedRevision: 1 },
       } as ClientMessage),
     ).toBeNull();
+  });
+});
+
+describe("AI sharing required on connecting", () => {
+  const memory = () => {
+    let saved: string | null = null;
+    return {
+      get saved() {
+        return saved;
+      },
+      set saved(value) {
+        saved = value;
+      },
+      store: () =>
+        createAISharingStore({
+          read: async () => saved,
+          write: async (value) => {
+            saved = value;
+          },
+        }),
+    };
+  };
+  it("asks as soon as it connects, before anything is sent, until it is allowed", async () => {
+    const { context, ask, changed } = setup();
+    const device = memory();
+    ask.mockResolvedValueOnce(false);
+    const first = createAISharingPermission(context, ask, changed, device.store());
+    await first.ensure();
+    expect(ask).toHaveBeenCalledOnce();
+    expect(changed).toHaveBeenLastCalledWith("ask");
+    first.dispose();
+    // Not answered (the app was closed): the next launch asks again.
+    const second = createAISharingPermission(context, ask, changed, device.store());
+    await second.ensure();
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(changed).toHaveBeenLastCalledWith("allowed");
+    second.dispose();
+    // Allowed: later launches and requests go straight through.
+    const third = createAISharingPermission(context, ask, changed, device.store());
+    await third.ensure();
+    expect(await third.beforeSend(send)).toBeNull();
+    expect(ask).toHaveBeenCalledTimes(2);
+    expect(changed).toHaveBeenLastCalledWith("allowed");
+  });
+  it("asks people whose refusal an older version saved, instead of leaving them stuck", async () => {
+    const { context, ask } = setup();
+    const device = memory();
+    // What "Don't allow", or swiping the old sheet away, saved.
+    device.saved = JSON.stringify({ blocked: true, grant: null });
+    const permission = createAISharingPermission(context, ask, undefined, device.store());
+    await permission.ensure();
+    expect(ask).toHaveBeenCalledOnce();
+    expect(JSON.parse(device.saved!)).toMatchObject({ blocked: false, grant: expect.any(String) });
+    const result = await permission.beforeSend(send);
+    expect(result).toBeNull();
+  });
+  it("has nothing to ask while the machine has no AI service configured", async () => {
+    const { context, ask, changed } = setup();
+    context.requestProvider.mockResolvedValue({
+      type: "provider.result",
+      requestId: id,
+      outcome: { status: "ok", revision: 1, providers: [] },
+    });
+    const permission = createAISharingPermission(context, ask, changed);
+    await permission.ensure();
+    expect(ask).not.toHaveBeenCalled();
+  });
+  it("never points a refused request at Settings", async () => {
+    const { permission, ask } = setup();
+    ask.mockResolvedValueOnce(false);
+    const result = await permission.beforeSend(send);
+    expect(JSON.stringify(result)).not.toMatch(/Settings/);
   });
 });
 

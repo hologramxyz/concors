@@ -8,7 +8,11 @@ export interface AISharingDrawerProps {
   onAnswer(allowed: boolean): void;
 }
 
-/** Keep the recipients and data visible before approval; the longer explanation is optional. */
+/**
+ * Keep the recipients and data visible before approval; the longer explanation is optional.
+ * Agents cannot work from the phone without it, so Allow is the only way on: there is nothing to
+ * decline into but an app that cannot do anything (permission can be withdrawn in Settings).
+ */
 export function AISharingContent({
   disclosure,
   onAnswer,
@@ -33,6 +37,9 @@ export function AISharingContent({
         contentContainerStyle={{ gap: 14 }}
       >
         <Copy size={15}>{disclosure.summary}</Copy>
+        <Copy size={14} muted>
+          Concors needs this to run agents from your iPhone.
+        </Copy>
         {expanded && (
           <Copy size={14} muted>
             {disclosure.details}
@@ -50,18 +57,9 @@ export function AISharingContent({
           {expanded ? "Hide details" : "Details"}
         </Copy>
       </Pressable>
-      <View style={{ flexDirection: "row", gap: 12 }}>
-        <View style={{ flex: 1 }}>
-          <Button secondary disabled={disabled} onPress={() => onAnswer(false)}>
-            Don't allow
-          </Button>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Button disabled={disabled} onPress={() => onAnswer(true)}>
-            Allow sharing
-          </Button>
-        </View>
-      </View>
+      <Button disabled={disabled} onPress={() => onAnswer(true)}>
+        Allow sharing
+      </Button>
     </View>
   );
 }
