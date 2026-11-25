@@ -553,6 +553,9 @@ it.each(["same", "new"] as const)(
     expect(() => f.accept("one-too-many")).toThrow("Too many events waiting for the chat");
     expect(f.workspace.agent(oldSession).queue).toEqual(queued);
   },
+  // Two hundred events, each saved before the next: about a second here, past twenty seconds on
+  // Windows, where every commit waits for the disk.
+  120_000,
 );
 
 it("keeps waiting events when a same-mode trigger explicitly selects its current chat", async () => {
