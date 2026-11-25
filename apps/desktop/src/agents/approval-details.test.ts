@@ -4,6 +4,7 @@ import {
   approvalDetails,
   approvalItemId,
   reviewView,
+  rowReviewView,
   shellCommand,
   waitWords,
 } from "./approval-details";
@@ -309,4 +310,42 @@ it("reads Claude Code's description of a command apart from the command", () => 
   expect(approvalDetails(claude("Bash", { command: "ls", description: "" }))).not.toHaveProperty(
     "description",
   );
+});
+
+it("gives the Supervisor's pending block only what its quoted action leaves out", () => {
+  // A command the block quotes whole, which its state line opens in place: only its facts.
+  const long = 'cd "/w" && for i in $(seq 1 60); do sleep 10; done';
+  const withFolder = approvalDetails(approval({ ...IDS, command: long, cwd: "/w" }, long));
+  expect(rowReviewView(withFolder, long)).toEqual({ kind: "command", folder: "/w" });
+  expect(
+    rowReviewView(approvalDetails(approval({ ...IDS, command: long }, long)), long),
+  ).toBeNull();
+  // A quote cut short leaves the command to the details.
+  expect(rowReviewView(withFolder, 'cd "/w" && for i in')).toEqual({
+    kind: "command",
+    command: long,
+    folder: "/w",
+  });
+  // A file request quotes its tool and file; the details hold what it would write or change.
+  const write = approvalDetails(claude("Write", { file_path: "/w/haiku.txt", content: "a\nb" }));
+  expect(rowReviewView(write, "Write haiku.txt")).toEqual({
+    kind: "write",
+    path: "/w/haiku.txt",
+    diff: "+a\n+b",
+  });
+  const edit = approvalDetails(
+    claude("Edit", { file_path: "/w/haiku.txt", old_string: "a", new_string: "b" }),
+  );
+  expect(rowReviewView(edit, "Edit haiku.txt")?.kind).toBe("edit");
+  // A search the block quotes says nothing more in details.
+  expect(
+    rowReviewView(approvalDetails(claude("WebSearch", { query: "vitest" })), "vitest"),
+  ).toBeNull();
+});
+
+it("offers the Supervisor's block nothing for a Codex file change, whose diff it does not have", () => {
+  const change = approval({ ...IDS, reason: "Update the HUD" }, "Update the HUD", {
+    title: "Allow file changes?",
+  });
+  expect(rowReviewView(approvalDetails(change), "Update the HUD")).toBeNull();
 });

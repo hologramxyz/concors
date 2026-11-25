@@ -75,6 +75,19 @@ const INTERNAL = new Set([
 const ON_CARD = new Set(["reason", "grantRoot", "networkApprovalContext"]);
 
 /**
+ * The same for a row that opens its action in place, as the Supervisor chat's pending block does:
+ * a command it quotes in full is shown there, so the details add only its facts; anything else
+ * it quotes is shown there too.
+ */
+export function rowReviewView(
+  details: ApprovalDetails | null,
+  quoted: string,
+): ApprovalView | null {
+  const command = details?.view.kind === "command" ? details.view.command?.trim() : undefined;
+  return reviewView(details, command ? quoted.trim().startsWith(command) : true);
+}
+
+/**
  * The request as the agent sent it. Its details are cut at 16,000 characters, so a large file's
  * content can leave them unparseable; what leads them is then read field by field, up to the cut.
  */

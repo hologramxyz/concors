@@ -10,7 +10,8 @@ import { useAgents } from "@/agents/context";
 import { chatDot } from "@/agents/agent-status";
 import { ProviderIcon } from "@/agents/provider-icon";
 import { approvalParts } from "@/agents/approval-summary";
-import { DiffLines } from "@/agents/pending-input";
+import { approvalDetails, rowReviewView } from "@/agents/approval-details";
+import { ApprovalReview, DiffLines } from "@/agents/pending-input";
 import { useHomePath } from "@/workspace/home-path";
 import { SidebarDot } from "@/workspace/sidebar-tabs";
 import { answeredNotice, answeredSummary, type AnsweredNotice } from "@/supervisor/answered-notice";
@@ -1052,7 +1053,8 @@ function RowProvider({ sessionId }: { sessionId: string }) {
  * your answer", then what the request is for in normal ink as Overview's approval line reads it (a
  * command in monospace, a file request as its tool beside the shortened path), clamped to two lines
  * that the state line opens in place, then how many instructions are queued behind it, small and
- * muted. Last, Allow once and Decline where the request can be answered here; a question, a plan
+ * muted. Then "Review request details" where they add to the action (see `rowReviewView`),
+ * closed at first. Last, Allow once and Decline where the request can be answered here; a question, a plan
  * or a mode change has "Open chat" instead. Once answered, the daemon rewrites the same item, and
  * it becomes an answered row in the same place.
  */
@@ -1097,6 +1099,12 @@ function PendingBlock({
       : { text: notice.action };
   const expandable = clamped || open;
   const word = pendingWord(notice.kind);
+  // What the request would write, change or run, beyond what the action line quotes. A Codex file
+  // change keeps its diff in the worker chat's timeline, which this chat does not have: none.
+  const review = useMemo(
+    () => (request ? rowReviewView(approvalDetails(request), notice.action) : null),
+    [request, notice.action],
+  );
   return (
     <NeedsBlock
       label={`${chat.label} ${word.toLowerCase()}`}
@@ -1114,6 +1122,12 @@ function PendingBlock({
       </div>
       {notice.queued && (
         <p className="text-xs text-muted-foreground">{queuedWords(notice.queued)}</p>
+      )}
+      {review && (
+        // Capped as the card's are, so open details scroll and the answers stay in reach.
+        <div className="mt-1 flex min-h-0 flex-col gap-1">
+          <ApprovalReview view={review} />
+        </div>
       )}
       {notice.answerable ? (
         <WatchedApproval itemId={itemId} />
