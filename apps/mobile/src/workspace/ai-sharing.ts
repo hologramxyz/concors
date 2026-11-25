@@ -18,10 +18,11 @@ export interface AISharingDisclosure {
 }
 
 type Context = Pick<DaemonConnection, "agents" | "schedules" | "requestProvider"> &
+  Partial<Pick<DaemonConnection, "triggers">> &
   Partial<Pick<DaemonConnection, "state" | "requestSupervisor">>;
 type Gated = Extract<
   ClientMessage,
-  { type: "agent.request" | "provider.request" | "schedule.request" }
+  { type: "agent.request" | "provider.request" | "schedule.request" | "trigger.request" }
 >;
 const READ_ONLY = new Set(["list-messages", "seen", "pin", "delete", "interrupt", "queue-remove"]);
 
@@ -38,6 +39,8 @@ function gated(message: ClientMessage): message is Gated {
     return !["list", "remove"].includes(message.operation.kind);
   if (message.type === "schedule.request")
     return !["list", "delete"].includes(message.operation.kind);
+  if (message.type === "trigger.request")
+    return message.operation.kind === "create" || message.operation.kind === "update";
   return false;
 }
 function rejected(message: Gated, text: string): DaemonMessage {
@@ -46,6 +49,8 @@ function rejected(message: Gated, text: string): DaemonMessage {
     return { type: "agent.result", requestId: message.requestId, outcome };
   if (message.type === "provider.request")
     return { type: "provider.result", requestId: message.requestId, outcome };
+  if (message.type === "trigger.request")
+    return { type: "trigger.result", requestId: message.requestId, outcome };
   return { type: "schedule.result", requestId: message.requestId, outcome };
 }
 function selected(message: Gated, context: Context) {
@@ -65,11 +70,15 @@ function selected(message: Gated, context: Context) {
     };
   }
   const schedule =
-    "schedule" in op
-      ? op.schedule
-      : "id" in op
-        ? context.schedules?.find((item) => item.id === op.id)
-        : undefined;
+    "trigger" in op
+      ? op.trigger
+      : "schedule" in op
+        ? op.schedule
+        : "id" in op
+          ? (message.type === "trigger.request" ? context.triggers : context.schedules)?.find(
+              (item) => item.id === op.id,
+            )
+          : undefined;
   const target = schedule?.target;
   const agent =
     target?.kind === "session"

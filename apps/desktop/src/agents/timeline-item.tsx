@@ -23,6 +23,7 @@ import { thinkingExpandable, thinkingPreview, thinkingText } from "./thinking";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import type { TimelineEntry } from "./thinking";
 import { commandSummary, toolDisplayName, toolSummary } from "./tool-label";
+import { promptSourceLabel } from "./prompt-source";
 import { useShortPath } from "./short-path";
 import {
   commandLine,
@@ -69,8 +70,8 @@ export const TimelineItem = memo(function TimelineItem({
             : "py-1"
         }
       >
-        {item.kind === "user" && item.origin && (
-          <p className="mb-1 text-xs text-muted-foreground">From Supervisor</p>
+        {promptSourceLabel(item) && (
+          <p className="mb-1 text-xs text-muted-foreground">{promptSourceLabel(item)}</p>
         )}
         {item.kind === "user" && <MessageAttachments item={item} className="mb-2" />}
         <div className="chat-markdown break-words">

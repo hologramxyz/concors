@@ -13,6 +13,13 @@ import {
   type ScheduleResult,
 } from "@concors/protocol";
 import { ThemeRequestSchema, type ThemeResult } from "@concors/protocol";
+import {
+  WEBHOOK_TRIGGERS_CAPABILITY,
+  TriggerRequestSchema,
+  type AgentTrigger,
+  type TriggerRequest,
+  type TriggerResult,
+} from "@concors/protocol";
 import { AUTH_REFRESH_CAPABILITY } from "@concors/protocol";
 import { PREVIEW_LOGIN_CAPABILITY, PREVIEW_LOGIN_PATH } from "@concors/protocol";
 import {
@@ -557,6 +564,16 @@ export class DaemonConnection {
   #projectSetups: ProjectSetup[] = [];
   #agents: AgentInfo[] = [];
   #schedules: AgentSchedule[] | null = null;
+  #triggers: AgentTrigger[] | null = null;
+  readonly #triggerListeners = new Set<(triggers: AgentTrigger[] | null) => void>();
+  readonly #triggerRequests = new Map<
+    string,
+    {
+      resolve: (result: TriggerResult) => void;
+      reject: (error: Error) => void;
+      timer: ReturnType<typeof setTimeout>;
+    }
+  >();
   readonly #scheduleListeners = new Set<(schedules: AgentSchedule[] | null) => void>();
   readonly #scheduleRequests = new Map<
     string,
@@ -988,6 +1005,46 @@ export class DaemonConnection {
   get schedules(): AgentSchedule[] | null {
     return this.#schedules;
   }
+  get triggers(): AgentTrigger[] | null {
+    return this.#triggers;
+  }
+  onTriggers(listener: (triggers: AgentTrigger[] | null) => void): () => void {
+    this.#triggerListeners.add(listener);
+    listener(this.#triggers);
+    return () => {
+      this.#triggerListeners.delete(listener);
+    };
+  }
+  requestTrigger(
+    operation: TriggerRequest["operation"],
+    requestId: string,
+  ): Promise<TriggerResult> {
+    if (this.#state.status !== "ready" || !this.#workspace)
+      return Promise.reject(new Error("Machine is disconnected"));
+    if (!this.#state.daemon.capabilities?.includes(WEBHOOK_TRIGGERS_CAPABILITY))
+      return Promise.reject(new Error("Update the daemon on this machine to use webhooks"));
+    const request = TriggerRequestSchema.parse({ type: "trigger.request", requestId, operation });
+    if (this.#triggerRequests.has(requestId))
+      return Promise.reject(new Error("Request is already pending"));
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.#triggerRequests.delete(requestId);
+        reject(
+          new Error(
+            "Webhook request timed out. Check Webhooks before retrying. Rotate again if the secret was lost.",
+          ),
+        );
+      }, 15000);
+      this.#triggerRequests.set(requestId, { resolve, reject, timer });
+      try {
+        this.#socket?.send(JSON.stringify(request));
+      } catch (error) {
+        clearTimeout(timer);
+        this.#triggerRequests.delete(requestId);
+        reject(error);
+      }
+    });
+  }
   onSchedules(listener: (schedules: AgentSchedule[] | null) => void): () => void {
     this.#scheduleListeners.add(listener);
     listener(this.#schedules);
@@ -1271,6 +1328,7 @@ export class DaemonConnection {
           capabilities: [
             "agent-providers-v2",
             SCHEDULES_CAPABILITY,
+            WEBHOOK_TRIGGERS_CAPABILITY,
             DICTATION_CAPABILITY,
             ATTACHMENT_UPLOADS_CAPABILITY,
             SUPERVISOR_CAPABILITY,
@@ -1352,6 +1410,21 @@ export class DaemonConnection {
               for (const listener of this.#scheduleListeners) listener(this.#schedules);
             }
             break;
+          case "trigger.list":
+            if (this.#state.status === "ready") {
+              this.#triggers = message.triggers;
+              for (const listener of this.#triggerListeners) listener(this.#triggers);
+            }
+            break;
+          case "trigger.result": {
+            const pending = this.#triggerRequests.get(message.requestId);
+            if (pending) {
+              clearTimeout(pending.timer);
+              this.#triggerRequests.delete(message.requestId);
+              pending.resolve(message);
+            }
+            break;
+          }
           case "schedule.result": {
             const pending = this.#scheduleRequests.get(message.requestId);
             if (pending) {
@@ -1717,6 +1790,17 @@ export class DaemonConnection {
         pending.reject(new Error("Machine disconnected. Check schedules before retrying."));
       }
       this.#scheduleRequests.clear();
+      for (const pending of this.#triggerRequests.values()) {
+        clearTimeout(pending.timer);
+        pending.reject(
+          new Error(
+            "Machine disconnected. Check Webhooks before retrying. Rotate again if the secret was lost.",
+          ),
+        );
+      }
+      this.#triggerRequests.clear();
+      this.#triggers = null;
+      for (const listener of this.#triggerListeners) listener(null);
       for (const pending of this.#supervisorRequests.values()) {
         clearTimeout(pending.timer);
         pending.reject(new Error("Machine disconnected. Check Supervisor before retrying."));

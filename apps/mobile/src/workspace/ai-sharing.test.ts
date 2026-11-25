@@ -344,6 +344,37 @@ describe("AI sharing permission at the native protocol boundary", () => {
     expect(await permission.beforeSend(send)).toMatchObject({ outcome: { status: "error" } });
     expect(ask).not.toHaveBeenCalled();
   });
+  it("guards webhook creation while allowing read and secret-management operations", async () => {
+    const { permission, ask } = setup();
+    ask.mockResolvedValue(false);
+    const message = {
+      type: "trigger.request",
+      requestId: id,
+      operation: {
+        kind: "create",
+        trigger: {
+          name: "CI",
+          projectId: null,
+          prompt: "Review",
+          enabled: true,
+          mode: "same",
+          target: { kind: "supervisor" },
+        },
+      },
+    } as const;
+    expect(await permission.beforeSend(message)).toMatchObject({
+      type: "trigger.result",
+      outcome: { status: "error" },
+    });
+    for (const kind of ["list", "rotate", "delete"] as const)
+      expect(
+        await permission.beforeSend({
+          type: "trigger.request",
+          requestId: id,
+          operation: kind === "list" ? { kind } : { kind, id, expectedRevision: 1 },
+        }),
+      ).toBeNull();
+  });
   it("guards scheduled work and queue resumption, while permitting schedule deletion", async () => {
     const { permission, ask } = setup();
     ask.mockResolvedValue(false);
