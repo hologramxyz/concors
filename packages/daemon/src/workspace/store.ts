@@ -1050,6 +1050,28 @@ export class WorkspaceStore {
       .get(id, sessionId);
     return row ? (JSON.parse(String(row["request"])) as AgentRequest) : null;
   }
+  rejectQueued(sessionId: string, id: string, message: string): AgentInfo {
+    this.#db.exec("BEGIN IMMEDIATE");
+    try {
+      const info = this.agent(sessionId);
+      const next = {
+        ...info,
+        queue: info.queue?.filter((entry) => entry.id !== id),
+        revision: info.revision + 1,
+        updatedAt: new Date().toISOString(),
+      };
+      this.#db
+        .prepare("DELETE FROM agent_queue WHERE id = ? AND session_id = ?")
+        .run(id, sessionId);
+      this.saveAgentActionError(id, message);
+      this.saveAgent(next);
+      this.#db.exec("COMMIT");
+      return next;
+    } catch (error) {
+      this.#db.exec("ROLLBACK");
+      throw error;
+    }
+  }
   reserveAgentAction(
     request: AgentRequest,
     info: AgentInfo,

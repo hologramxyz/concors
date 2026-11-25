@@ -539,6 +539,58 @@ it("does not deliver to a chat that runs without approvals", async () => {
   expect(prompts()).toBe(before);
 });
 
+it.each(["full-access", "bypassPermissions", "controls"] as const)(
+  "refuses queued webhooks when approvals change before drain (%s), but still sends interactive items",
+  async (mode) => {
+    const f = await setup();
+    const first = await f.settled(f.accept().event.id);
+    const sessionId = first.sessionId!;
+    await expect.poll(() => f.workspace.agent(sessionId).status).toBe("done");
+    f.workspace.saveAgent({ ...f.workspace.agent(sessionId), status: "needs_input" });
+    const events = [f.accept("queued-one").event, f.accept("queued-two").event];
+    await expect.poll(() => f.workspace.agent(sessionId).queue?.length).toBe(2);
+    await f.agents.request({
+      type: "agent.request",
+      requestId: randomUUID(),
+      operation: { kind: "queue-add", sessionId, text: "Interactive follow-up" },
+    });
+    const info = f.workspace.agent(sessionId);
+    f.workspace.saveAgent({
+      ...info,
+      status: "idle",
+      settings: {
+        ...info.settings!,
+        mode: mode === "full-access" ? "full-access" : "default",
+        ...(mode === "bypassPermissions" ? { nativeMode: mode } : {}),
+      },
+      ...(mode === "controls"
+        ? { controls: { ...info.controls!, currentMode: "bypassPermissions" } }
+        : {}),
+    });
+    await f.agents.request({
+      type: "agent.request",
+      requestId: randomUUID(),
+      operation: { kind: "queue-pause", sessionId, paused: false },
+    });
+    for (const event of events) {
+      await expect
+        .poll(() => f.manager.list()[0]!.events.find((e) => e.id === event.id))
+        .toMatchObject({ status: "failed", message: UNATTENDED_REFUSAL });
+      expect(f.workspace.queuedRequest(event.id, sessionId)).toBeNull();
+      expect(f.workspace.triggerPrompt(sessionId, event.id)).toBeNull();
+    }
+    await expect
+      .poll(() =>
+        f.workspace
+          .agentMessages(sessionId)
+          .filter((item) => item.kind === "user")
+          .map((item) => item.text),
+      )
+      .toContain("Interactive follow-up");
+    await expect.poll(() => f.workspace.agent(sessionId).queue?.length).toBe(0);
+  },
+);
+
 it("copies the provider and model of a session target into new chats", async () => {
   const f = await setup();
   const first = await f.settled(f.accept().event.id);

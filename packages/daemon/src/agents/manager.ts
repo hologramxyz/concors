@@ -1,4 +1,5 @@
 import { sessionProjects } from "@concors/protocol";
+import { runsUnattended, UNATTENDED_REFUSAL } from "../triggers/manager.ts";
 import { questionAnswers } from "./questions.ts";
 import { NativeSessions } from "./native-sessions.ts";
 import type { ProviderRequest, ProviderResult } from "@concors/protocol";
@@ -287,10 +288,13 @@ export class AgentManager {
     this.draining.add(id);
     this.deliveries.set(request.requestId, head.id);
     try {
-      const result = await this.request(
-        request,
-        this.triggerLabel?.(head.id) ? "webhook" : "local",
-      );
+      const trigger = this.triggerLabel?.(head.id);
+      if (trigger && runsUnattended(info)) {
+        const next = this.#store.rejectQueued(id, head.id, UNATTENDED_REFUSAL);
+        this.#emit({ type: "agent.state", agent: next });
+        return;
+      }
+      const result = await this.request(request, trigger ? "webhook" : "local");
       if (result.outcome.status === "error")
         this.update(id, { queuePaused: true, error: result.outcome.message });
     } finally {

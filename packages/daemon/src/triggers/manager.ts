@@ -542,7 +542,7 @@ export class TriggerManager {
             ? null
             : prompt
               ? (agent.error ?? "Delivery interrupted")
-              : "Queued event was removed",
+              : (this.workspace.agentActionError(e.id) ?? "Queued event was removed"),
         });
       }
     if (deferred.size) void this.pump(agent.id);
