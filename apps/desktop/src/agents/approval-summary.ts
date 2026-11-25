@@ -11,7 +11,25 @@ const TARGETS = ["file_path", "notebook_path", "path", "url", "query", "pattern"
  * never blank for a tool's request: at the least it names the tool.
  */
 export function approvalSummary(pending: AgentPending): string {
-  if (pending.kind !== "approval") return pending.summary;
+  const { lead, grants } = approvalParts(pending);
+  return [lead, ...grants].filter(Boolean).join("\n");
+}
+
+/**
+ * The summary's two parts: what is asked for (the command, the path) and what it would widen.
+ * When the lead names a tool and what it acts on, `tool` and `target` hold them apart, so a card
+ * can set them side by side without a separator; `path` says the target is a file.
+ */
+export interface ApprovalParts {
+  lead: string;
+  grants: string[];
+  tool?: string;
+  target?: string;
+  path?: boolean;
+}
+
+export function approvalParts(pending: AgentPending): ApprovalParts {
+  if (pending.kind !== "approval") return { lead: pending.summary, grants: [] };
   const lines = pending.summary.split("\n");
   const grants = lines
     .filter((line) => GRANT.test(line))
@@ -20,18 +38,33 @@ export function approvalSummary(pending: AgentPending): string {
   // A tool's input can be too long for the summary, which then loses the tool's name after it.
   // The request's details name it first, so it survives there even when they are cut off too.
   const reason = reasons.join("\n") || field(pending.detail, "reason") || "";
-  return [lead(first, reason), ...grants].filter(Boolean).join("\n");
+  return { ...lead(first, reason), grants };
 }
 
-function lead(first: string, reason: string): string {
+/**
+ * The first `max` lines of a request's lead, so its answers stay in view under a long script;
+ * the whole of it is in the request's details. "…" marks lines left out.
+ */
+export function leadPreview(lead: string, max = 3): string {
+  const lines = lead.split("\n");
+  return lines.length > max ? `${lines.slice(0, max).join("\n")} …` : lead;
+}
+
+/** Fields that name a file, which a card may write shorter. */
+const PATHS = new Set(["file_path", "notebook_path", "path"]);
+
+function lead(
+  first: string,
+  reason: string,
+): { lead: string; tool?: string; target?: string; path?: boolean } {
   const line = first.trim();
   if (!/^\{\s*"|^\[\s*"/.test(line))
-    return [first, reason].filter(Boolean).join("\n").slice(0, 600);
+    return { lead: [first, reason].filter(Boolean).join("\n").slice(0, 600) };
   let input: Record<string, unknown> | null = null;
   try {
     const raw: unknown = JSON.parse(line);
     if (Array.isArray(raw) && raw.every((entry) => typeof entry === "string"))
-      return raw.join(", ").slice(0, 400);
+      return { lead: raw.join(", ").slice(0, 400) };
     if (raw && typeof raw === "object" && !Array.isArray(raw))
       input = raw as Record<string, unknown>;
   } catch {
@@ -40,10 +73,18 @@ function lead(first: string, reason: string): string {
   const value = (key: string) =>
     input ? (typeof input[key] === "string" ? input[key] : undefined) : field(line, key);
   const command = value("command");
-  if (command) return command.slice(0, 600);
+  if (command) return { lead: command.slice(0, 600) };
   const tool = reason && !/^(?:\{|\[)/.test(reason.trim()) ? reason.slice(0, 200) : "";
-  const target = TARGETS.map(value).find(Boolean);
-  return target ? [tool, target].filter(Boolean).join(" · ").slice(0, 600) : tool;
+  const key = TARGETS.find((name) => value(name));
+  const target = key && value(key);
+  if (!target) return { lead: tool };
+  // The joined form stays for plain-text uses (the Supervisor reads its verb and path from it).
+  return {
+    lead: [tool, target].filter(Boolean).join(" · ").slice(0, 600),
+    ...(tool ? { tool } : {}),
+    target: target.slice(0, 600),
+    path: PATHS.has(key),
+  };
 }
 
 /**

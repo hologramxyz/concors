@@ -13,7 +13,9 @@ const escape = (text) =>
   text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll('"', "&quot;");
 const font = await data("geist-latin.woff2", "font/woff2");
 const background = await data("campaign-background.png", "image/png");
+// The favicon's light version: its dark-theme <style> would otherwise apply to this whole page.
 const logo = (await fs.readFile(path.resolve(root, "../../../desktop/public/favicon.svg"), "utf8"))
+  .replace(/<style[\s\S]*?<\/style>/, "")
   .replace(' color="#20211f"', "")
   .replace(/<rect[^>]*\/>/, "");
 const styles = `

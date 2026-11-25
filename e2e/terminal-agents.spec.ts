@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { tab } from "./support/tabs.ts";
+import { showClosedChats } from "./support/closed-chats.ts";
 import type { Page } from "@playwright/test";
 
 /**
@@ -232,8 +233,10 @@ test("Codex terminal profiles appear across clients and agent clicks focus the o
     ).toHaveCount(0);
     await panes.last().getByRole("button", { name: "Start new session" }).click();
     await expect(agents.getByRole("button", { name: /Open in terminal.*Codex/ })).toHaveCount(1);
-    // Closing its pane leaves the running agent listed under its workspace, muted, until stopped.
+    // Closing its pane leaves the running agent under its workspace, in "Closed", until stopped.
     await panes.last().getByRole("button", { name: "Close pane" }).click();
+    await showClosedChats(page, "Terminal agents");
+    await showClosedChats(second, "Terminal agents");
     const background = agents.locator("[data-background-terminal]", { hasText: "Codex" });
     await expect(background).toHaveCount(1);
     await expect(

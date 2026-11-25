@@ -1,0 +1,188 @@
+name: Mobile iOS store build
+
+# Invoked by Mobile iOS native. Uses the same Expo configuration on a GitHub Mac
+# when cloud build quota is unavailable. It only returns an IPA; it never submits.
+on:
+  workflow_call:
+    inputs:
+      source_ref:
+        type: string
+        required: true
+      build_number:
+        type: string
+        required: true
+    secrets:
+      CONCORS_IOS_SIGNING:
+        description: Concors-only distribution certificate, password and App Store profile JSON
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    name: Signed iPhone IPA
+    runs-on: macos-26
+    timeout-minutes: 50
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      APP_VARIANT: production
+      EAS_BUILD_PROFILE: candidate
+      EAS_BUILD_PLATFORM: ios
+      EXPO_PUBLIC_DEMO: "false"
+      EXPO_PUBLIC_API_URL: https://api.concors.dev
+      EXPO_PUBLIC_EAS_PROJECT_ID: b928233e-14cd-4e58-95e5-b19d8101bcb6
+      EXPO_OWNER: guitong35
+      EXPO_NO_TELEMETRY: "1"
+      CI: "1"
+      SHARP_IGNORE_GLOBAL_LIBVIPS: "1"
+      STORE_SOURCE_REF: ${{ inputs.source_ref }}
+      STORE_BUILD_NUMBER: ${{ inputs.build_number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate immutable source and build number
+        run: |
+          [[ "$STORE_SOURCE_REF" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$STORE_BUILD_NUMBER" =~ ^[1-9][0-9]*$ ]]
+          test "$(git rev-parse HEAD)" = "$STORE_SOURCE_REF"
+          git merge-base --is-ancestor HEAD origin/main
+          test -d "$DEVELOPER_DIR"
+          node apps/mobile/scripts/release-check.mjs --candidate --platform=ios --json
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @concors/mobile assets
+      - name: Generate production iPhone project
+        working-directory: apps/mobile
+        run: pnpm exec expo prebuild --platform ios --no-install
+      - name: Install native dependencies
+        working-directory: apps/mobile/ios
+        run: pod install
+      - name: Install Concors signing in a temporary keychain
+        env:
+          CONCORS_IOS_SIGNING: ${{ secrets.CONCORS_IOS_SIGNING }}
+        run: |
+          umask 077
+          python3 - <<'PY'
+          import base64, json, os, pathlib, plistlib, secrets, subprocess
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'concors-signing'
+          root.mkdir(mode=0o700)
+          signing = json.loads(os.environ['CONCORS_IOS_SIGNING'])
+          cert = root / 'distribution.p12'
+          cert.write_bytes(base64.b64decode(signing['certificateP12']))
+          profile = root / 'profile.mobileprovision'
+          profile.write_bytes(base64.b64decode(signing['provisioningProfile']))
+          raw = subprocess.check_output(['security', 'cms', '-D', '-i', str(profile)])
+          data = plistlib.loads(raw)
+          assert data['TeamIdentifier'] == ['9WN4P724M2']
+          assert data['Entitlements']['application-identifier'] == '9WN4P724M2.xyz.hologram.concors'
+          assert data['Entitlements']['get-task-allow'] is False
+          assert data['Entitlements']['aps-environment'] == 'production'
+          assert not data.get('ProvisionedDevices') and not data.get('ProvisionsAllDevices')
+          profile_dir = pathlib.Path.home() / 'Library/MobileDevice/Provisioning Profiles'
+          profile_dir.mkdir(parents=True, exist_ok=True)
+          installed = profile_dir / (data['UUID'] + '.mobileprovision')
+          installed.write_bytes(profile.read_bytes())
+          keychain = root / 'build.keychain-db'
+          password = secrets.token_hex(24)
+          commands = [
+            ['security', 'create-keychain', '-p', password, str(keychain)],
+            ['security', 'set-keychain-settings', '-lut', '21600', str(keychain)],
+            ['security', 'unlock-keychain', '-p', password, str(keychain)],
+            ['security', 'import', str(cert), '-P', signing['certificatePassword'], '-A', '-t', 'cert', '-f', 'pkcs12', '-k', str(keychain)],
+            ['security', 'set-key-partition-list', '-S', 'apple-tool:,apple:,codesign:', '-s', '-k', password, str(keychain)],
+            ['security', 'list-keychains', '-d', 'user', '-s', str(keychain), str(pathlib.Path.home() / 'Library/Keychains/login.keychain-db')],
+          ]
+          for command in commands:
+            result = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if result.returncode:
+              raise SystemExit('Temporary signing-keychain preparation failed')
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+            env.write('STORE_PROFILE_UUID=' + data['UUID'] + '\n')
+            env.write('STORE_PROFILE_PATH=' + str(installed) + '\n')
+          cert.unlink()
+          PY
+      - name: Configure signing only for the application target
+        working-directory: apps/mobile/ios
+        run: |
+          ruby - <<'RUBY'
+          require 'xcodeproj'
+          require 'json'
+          project = Xcodeproj::Project.open(Dir.glob('*.xcodeproj').fetch(0))
+          app = project.targets.find { |target| target.product_type == 'com.apple.product-type.application' }
+          raise 'Expected application target' unless app
+          app.build_configurations.each do |config|
+            config.build_settings['CODE_SIGN_STYLE'] = 'Manual'
+            config.build_settings['DEVELOPMENT_TEAM'] = '9WN4P724M2'
+            config.build_settings['PROVISIONING_PROFILE_SPECIFIER'] = ENV.fetch('STORE_PROFILE_UUID')
+            config.build_settings['CODE_SIGN_IDENTITY[sdk=iphoneos*]'] = 'Apple Distribution'
+            config.build_settings['CURRENT_PROJECT_VERSION'] = ENV.fetch('STORE_BUILD_NUMBER')
+          end
+          project.save
+          info = Dir.glob('*/Info.plist').reject { |path| path.start_with?('Pods/') }
+          raise 'Expected one app Info.plist' unless info.length == 1
+          system('/usr/libexec/PlistBuddy', '-c', "Set :CFBundleVersion #{ENV.fetch('STORE_BUILD_NUMBER')}", info.first) or abort 'Build number failed'
+          version = JSON.parse(File.read('../package.json')).fetch('version')
+          options = {'method'=>'app-store-connect','teamID'=>'9WN4P724M2','signingStyle'=>'manual','manageAppVersionAndBuildNumber'=>false,'provisioningProfiles'=>{'xyz.hologram.concors'=>ENV.fetch('STORE_PROFILE_UUID')}}
+          File.write(ENV.fetch('RUNNER_TEMP') + '/concors-export.json', JSON.generate(options))
+          RUBY
+          plutil -convert xml1 -o "$RUNNER_TEMP/concors-export.plist" "$RUNNER_TEMP/concors-export.json"
+      - name: Archive and export the signed IPA
+        timeout-minutes: 35
+        working-directory: apps/mobile/ios
+        run: |
+          set -o pipefail
+          workspace=$(find . -maxdepth 1 -name '*.xcworkspace' -print -quit)
+          scheme=$(basename "$workspace" .xcworkspace)
+          xcodebuild -workspace "$workspace" -scheme "$scheme" \
+            -configuration Release -destination 'generic/platform=iOS' -jobs 4 \
+            -archivePath "$RUNNER_TEMP/Concors.xcarchive" \
+            COMPILER_INDEX_STORE_ENABLE=NO archive > "$RUNNER_TEMP/concors-archive.log" 2>&1 || { tail -80 "$RUNNER_TEMP/concors-archive.log"; exit 1; }
+          mkdir -p "$GITHUB_WORKSPACE/store-ipa"
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Concors.xcarchive" \
+            -exportPath "$GITHUB_WORKSPACE/store-ipa" \
+            -exportOptionsPlist "$RUNNER_TEMP/concors-export.plist" \
+            > "$RUNNER_TEMP/concors-export.log" 2>&1 || { tail -80 "$RUNNER_TEMP/concors-export.log"; exit 1; }
+      - name: Verify signed identity and push entitlement
+        run: |
+          app=$(find "$RUNNER_TEMP/Concors.xcarchive/Products/Applications" -maxdepth 1 -name '*.app' -print -quit)
+          codesign --verify --deep --strict "$app"
+          codesign -d --entitlements :- "$app" > "$RUNNER_TEMP/concors-entitlements.plist" 2>/dev/null
+          python3 - <<'PY'
+          import glob, hashlib, json, os, pathlib, plistlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP'])
+          app = next((root / 'Concors.xcarchive/Products/Applications').glob('*.app'))
+          info = plistlib.loads((app / 'Info.plist').read_bytes())
+          expected = json.loads(pathlib.Path('apps/mobile/package.json').read_text())['version']
+          assert info['CFBundleIdentifier'] == 'xyz.hologram.concors'
+          assert info['CFBundleShortVersionString'] == expected
+          assert info['CFBundleVersion'] == os.environ['STORE_BUILD_NUMBER']
+          entitlements = plistlib.loads((root / 'concors-entitlements.plist').read_bytes())
+          assert entitlements['application-identifier'] == '9WN4P724M2.xyz.hologram.concors'
+          assert entitlements['aps-environment'] == 'production'
+          assert entitlements.get('get-task-allow', False) is False
+          ipa = pathlib.Path(glob.glob('store-ipa/*.ipa')[0])
+          report = {'version':expected,'buildNumber':info['CFBundleVersion'],'revision':os.environ['STORE_SOURCE_REF'],'sha256':hashlib.sha256(ipa.read_bytes()).hexdigest(),'productionPushSigned':True,'submitted':False}
+          pathlib.Path('store-ipa/build.json').write_text(json.dumps(report, indent=2) + '\n')
+          print(json.dumps(report))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: concors-ios-store
+          path: |
+            store-ipa/*.ipa
+            store-ipa/build.json
+          retention-days: 14
+      - name: Remove signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/concors-signing/build.keychain-db" 2>/dev/null || true
+          if [ -n "${STORE_PROFILE_PATH:-}" ]; then rm -f "$STORE_PROFILE_PATH"; fi
+          rm -rf "$RUNNER_TEMP/concors-signing"

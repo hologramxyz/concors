@@ -129,13 +129,8 @@ export function BrailleSpinner() {
   );
 }
 
-export function Activity({
-  children,
-  startedAt,
-}: {
-  children: React.ReactNode;
-  startedAt?: string | null;
-}) {
+/** How long since `startedAt`, ticking once a second; nothing without a start. */
+export function Elapsed({ startedAt }: { startedAt?: string | null | undefined }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!startedAt) return;
@@ -143,14 +138,25 @@ export function Activity({
     return () => clearInterval(timer);
   }, [startedAt]);
   const elapsed = startedAt ? (now - Date.parse(startedAt)) / 1000 : null;
+  if (elapsed === null || !Number.isFinite(elapsed)) return null;
+  return (
+    <span aria-label="Elapsed time" className="shrink-0 text-xs text-muted-foreground tabular-nums">
+      {formatDuration(elapsed)}
+    </span>
+  );
+}
+
+export function Activity({
+  children,
+  startedAt,
+}: {
+  children: React.ReactNode;
+  startedAt?: string | null;
+}) {
   return (
     <div role="status" className="flex items-center gap-2 py-3 text-sm text-muted-foreground">
       <BrailleSpinner />
-      {elapsed !== null && Number.isFinite(elapsed) && (
-        <span aria-label="Elapsed time" className="text-xs text-muted-foreground tabular-nums">
-          {formatDuration(elapsed)}
-        </span>
-      )}
+      <Elapsed startedAt={startedAt} />
       <span className="agent-shimmer">{children}</span>
     </div>
   );

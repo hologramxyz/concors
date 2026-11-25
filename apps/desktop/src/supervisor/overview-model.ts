@@ -4,7 +4,7 @@ import type {
   SupervisorDelivery,
   WorkspaceSnapshot,
 } from "@concors/protocol";
-import { approvalSummary } from "@/agents/approval-summary";
+import { approvalParts, approvalSummary } from "@/agents/approval-summary";
 import { chatState } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
 
@@ -30,9 +30,11 @@ export interface OverviewRow {
   group: OverviewGroup;
   /**
    * What the person must do, in full: approve a request, answer a question, look at a failure.
-   * `code` marks a command, shown as code rather than prose.
+   * `code` marks a command, shown as code rather than prose. A request a tool makes on a file or
+   * address has `verb` (the tool) apart from `text` (what it acts on, in full), so the two can be
+   * set side by side without a separator; `path` says `text` is a file, which the row shortens.
    */
-  needs: { action: string; text: string; code?: boolean } | null;
+  needs: { action: string; text: string; code?: boolean; verb?: string; path?: boolean } | null;
   /** The gist of its latest reply: progress while it works, the outcome once it is done. */
   update: string;
   /**
@@ -57,21 +59,15 @@ export function workspaceAgents(agents: readonly AgentInfo[], workspace: Workspa
 
 const firstLine = (text: string) => text.trim().split("\n")[0]?.trim() ?? "";
 
-/** A path inside the session's folder, as it would be written there. */
-function relative(path: string, directory: string) {
-  const root = directory.replace(/\/+$/, "") + "/";
-  return path.startsWith(root) ? path.slice(root.length) : path;
-}
-
 function needs(agent: AgentInfo): OverviewRow["needs"] {
   const pending = agent.pending[0];
   if (pending?.kind === "approval") {
     const summary = approvalSummary(pending);
     if (!summary) return { action: "Approve", text: pending.title };
     // A file operation reads as its verb and the file, e.g. "Edit src/app.ts".
-    const [verb, path] = firstLine(summary).split(" · ");
-    if (path && verb && /^[A-Z][a-z]+(?: [a-z]+)*$/.test(verb))
-      return { action: "Approve", text: `${verb} ${relative(path, agent.directory)}` };
+    const { tool, target, path } = approvalParts(pending);
+    if (tool && target)
+      return { action: "Approve", verb: tool, text: target, ...(path ? { path: true } : {}) };
     return { action: "Approve", text: firstLine(summary), code: true };
   }
   if (pending?.kind === "questions")

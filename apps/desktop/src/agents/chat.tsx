@@ -5,7 +5,9 @@ import { AgentLimitPrompt } from "./limit-prompt";
 import { completedTurnFooters } from "./duration";
 import { canFork, forkReplies, useForkChat } from "./fork";
 import { AgentComposer } from "./composer";
-import { TimelineItem } from "./timeline-item";
+import { LiveLine, TimelineItem } from "./timeline-item";
+import { HIDE_NATIVE_SCROLLBAR, OverlayScrollbar } from "./overlay-scrollbar";
+import { liveStep, stepGroups } from "./step-groups";
 import { useViewedAgent } from "@/notifications/context";
 import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
 import {
@@ -22,6 +24,7 @@ import { ArrowDown, ArrowUp, Bot, Brain, MessageSquare, Mic, Plus } from "lucide
 import {
   findAgentModel,
   type AgentInfo,
+  type AgentItem,
   type AgentOperation,
   type LayoutNode,
   type ProviderStatus,
@@ -29,7 +32,6 @@ import {
   type WorkspaceTab,
 } from "@concors/protocol";
 import { TerminalConnectionContext } from "@/terminal/connection-context";
-import { Activity } from "./activity";
 import { PlanProgress } from "./plan-progress";
 import { useAgents } from "./context";
 import { useConversation } from "./conversation";
@@ -503,10 +505,7 @@ export function Chat({
     ? undefined
     : conversation.items.findLast((item) => item.kind === "assistant")?.id;
   const forkChat = useForkChat();
-  const view = useMemo(
-    () => timelineView(conversation.items, footers.hidden),
-    [conversation.items, footers.hidden],
-  );
+  const { view, step } = useTimelineRows(conversation.items, footers.hidden, agent);
   const subAgentRows = useMemo(
     () => knownSubAgentRows(conversation.items, conversation.subAgents),
     [conversation.items, conversation.subAgents],
@@ -607,6 +606,7 @@ export function Chat({
       key={pending.id}
       pending={pending}
       disabled={!connected || busy}
+      reveal={atBottom}
       onRespond={(value) =>
         run(() => perform({ kind: "respond", sessionId, pendingId: pending.id, ...value }))
       }
@@ -675,6 +675,20 @@ export function Chat({
       history={sent}
     />
   );
+  const showLive = !!active && !conversation.hasNewer;
+  const liveLine = showLive && (
+    <LiveLine
+      step={step}
+      waiting={
+        agent.status !== "needs_input"
+          ? undefined
+          : agent.pending.some((pending) => pending.kind === "approval")
+            ? "Waiting for your approval"
+            : "Waiting for your input"
+      }
+      startedAt={agent.turnStartedAt}
+    />
+  );
   return (
     <SubAgentViewContext value={agent?.controls?.childHistory ? setSubAgent : null}>
       <div ref={root} className="chat-with-sub-agent relative flex min-h-0 min-w-0 flex-1">
@@ -692,7 +706,7 @@ export function Chat({
               role="log"
               aria-label="Chat timeline"
               aria-live="off"
-              className={`chat-scroll selectable min-h-0 min-w-0 flex-1 overflow-y-auto ${compact ? "px-3" : "px-[24px]"} py-4 [overflow-anchor:none]`}
+              className={`chat-scroll selectable min-h-0 min-w-0 flex-1 overflow-y-auto ${compact ? "px-3" : "px-[24px]"} py-4 [overflow-anchor:none] ${HIDE_NATIVE_SCROLLBAR}`}
               onScroll={onScroll}
             >
               <div className="mx-auto max-w-chat space-y-5">
@@ -748,8 +762,11 @@ export function Chat({
                           : undefined
                       }
                     />
+                    {/* The run the turn is on ends in its live line, which becomes its ✓ in place. */}
+                    {item.live && showLive && <div className="mt-1">{liveLine}</div>}
                   </div>
                 ))}
+                {showLive && !view.at(-1)?.live && liveLine}
                 {conversation.hasNewer && (
                   <div className="h-5 text-center text-xs text-muted-foreground" role="status">
                     {conversation.loading === "newer" ? "Loading newer messages…" : ""}
@@ -762,13 +779,10 @@ export function Chat({
                   />
                 )}
                 {compact && feedback}
-                {active && !conversation.hasNewer && (
-                  <Activity startedAt={agent.turnStartedAt}>
-                    {agent?.status === "needs_input" ? "Waiting for your input" : "Working…"}
-                  </Activity>
-                )}
               </div>
             </div>
+            {/* Its thumb floats over the edge, so the chat never moves when it starts to scroll. */}
+            <OverlayScrollbar target={scroll} />
             <MessageNavigation
               entries={messageIndex.entries}
               viewport={scroll}
@@ -784,19 +798,27 @@ export function Chat({
               }
               hasNewer={conversation.hasNewer}
             />
-            {/* Floats so showing it never resizes the timeline under a pinned reader. */}
-            {!atBottom && (
+          </div>
+          {/*
+           * In the gap above the prompts and composer, not over the messages or an approval card.
+           * It shows only once the reader has left the bottom, so the room it takes from the
+           * timeline's foot never moves what they are reading.
+           */}
+          {!atBottom && (
+            <div
+              data-chat-latest
+              className={`flex shrink-0 justify-center pt-2 ${compact ? "px-3" : "px-[24px]"}`}
+            >
               <Button
-                data-chat-latest
                 variant="outline"
-                className="absolute bottom-2 left-1/2 z-10 -translate-x-1/2 bg-background/80 shadow backdrop-blur-md hover:bg-raised-opaque dark:hover:bg-none"
+                className="bg-popover text-popover-foreground shadow-md hover:bg-raised-opaque dark:hover:bg-none"
                 onClick={latest}
               >
                 <ArrowDown className="size-3" />
                 Latest
               </Button>
-            )}
-          </div>
+            </div>
+          )}
           {start && fresh && <StartHeading provider={agent.provider} />}
           {compact ? (
             <div data-chat-footer className="shrink-0 px-3 pt-2 pb-3">
@@ -810,9 +832,10 @@ export function Chat({
               {/*
                * In a short pane the timeline gives up its room first, then the prompts and notices
                * above the composer scroll, and the composer stays whole and pinned. When there is
-               * not even room for those, the conversation itself scrolls behind the composer.
+               * not even room for those, the conversation itself scrolls behind the composer. An
+               * approval may take the timeline's room down to its least, so it shows whole.
                */}
-              <div className="chat-prompts flex max-h-[max(calc(55cqh-8.5rem),3rem)] min-h-12 shrink overflow-y-auto px-[24px] pt-2 has-[>div:empty]:hidden">
+              <div className="chat-prompts flex max-h-[max(calc(55cqh-8.5rem),3rem)] min-h-12 shrink overflow-y-auto px-[24px] pt-2 has-[[data-pending-input]]:max-h-[max(calc(100cqh-11.5rem),3rem)] has-[>div:empty]:hidden">
                 <div className="mx-auto h-fit w-full max-w-chat space-y-3">{prompts}</div>
               </div>
               <div
@@ -865,4 +888,25 @@ function HistoryError({ message, onRetry }: { message: string; onRetry: () => vo
       </Button>
     </div>
   );
+}
+
+/**
+ * What the timeline shows: `timelineView`, with each run of quiet steps folded into a summary
+ * line, and the step the turn in progress is on, which its live line shows. A call an open request
+ * names keeps its own card.
+ */
+function useTimelineRows(
+  items: AgentItem[],
+  hidden: ReadonlySet<string>,
+  agent: AgentInfo | undefined,
+) {
+  const status = agent?.status;
+  const turnId = agent?.turnId ?? null;
+  const pending = agent?.pending;
+  return useMemo(() => {
+    const view = timelineView(items, hidden);
+    const live = status === "working" || status === "needs_input" ? turnId : null;
+    const waiting = new Set(pending?.flatMap((p) => (p.sourceItemId ? [p.sourceItemId] : [])));
+    return { view: stepGroups(view, live, waiting), step: liveStep(view, live, waiting) };
+  }, [items, hidden, status, turnId, pending]);
 }

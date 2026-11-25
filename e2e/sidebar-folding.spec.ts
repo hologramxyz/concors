@@ -171,12 +171,12 @@ test("closed chats fold apart, one that needs attention surfaces, and the group 
     await page.mouse.move(700, 400);
 
     const closed = list.locator("button[data-agent-closed]");
-    const group = list.getByRole("button", { name: /^Closed chats/ });
+    const group = list.getByRole("button", { name: /^Closed$/ });
     // Closed chats are kept apart, folded: the open tabs are all the list shows.
     await expect(closed).toHaveCount(0);
     await expect(group).toHaveAttribute("aria-expanded", "false");
     // Just its name: how many chats were closed is not worth a number.
-    await expect(group).toHaveText("Closed chats");
+    await expect(group).toHaveText("Closed");
     await expect(list.locator("> li").first().locator("button[data-sidebar-tab-id]")).toHaveCount(
       1,
     );
@@ -202,9 +202,7 @@ test("closed chats fold apart, one that needs attention surfaces, and the group 
     await group.click();
     await expect(group).toHaveAttribute("aria-expanded", "true");
     await expect(
-      list
-        .getByRole("list", { name: "Closed tabs closed chats" })
-        .locator("button[data-agent-closed]"),
+      list.getByRole("list", { name: "Closed tabs closed" }).locator("button[data-agent-closed]"),
     ).toHaveCount(4);
     await expect(closed).toHaveCount(5);
     await page.screenshot({ path: test.info().outputPath("closed-chats-open.png") });

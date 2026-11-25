@@ -22,7 +22,9 @@ import {
   supervisorReferences,
 } from "./reference-context";
 import { supervisorPane } from "./pane";
-import { approvalSummary } from "@/agents/approval-summary";
+import { approvalParts } from "@/agents/approval-summary";
+import { shortPath } from "@/agents/short-path";
+import { useHomePath } from "@/workspace/home-path";
 
 /** The ordinary unified chat, including its provider picker and native mobile composer. */
 export function SupervisorPage({
@@ -88,6 +90,7 @@ export function SupervisorPage({
   const canAsk = !!agent?.threadId && connected && !draft.busy && !draft.uncertain;
   // Asking about an approval drafts a question that mentions the agent, for the person to send.
   // The answer is still given in the agent's own chat.
+  const home = useHomePath();
   const ask = (worker: AgentInfo, pending: AgentPending) => {
     const label = referenceLabel(supervisorAgentName(worker));
     const reference = {
@@ -102,7 +105,16 @@ export function SupervisorPage({
         .slice(0, MAX_SUPERVISOR_REFERENCES - 1),
       reference,
     ]);
-    const action = approvalSummary(pending).split("\n")[0]?.slice(0, 120);
+    // The tool and its file in plain words ("Edit src/a.ts"), never the summary's separator; the
+    // file as Overview writes it, from the session's folder, so a long path is not cut short.
+    const { lead, tool, target, path } = approvalParts(pending);
+    const file = (value: string) => {
+      const relative = shortPath(value, [worker.directory], null);
+      return relative === value ? home(value) : relative;
+    };
+    const action = (
+      tool && target ? `${tool} ${path ? file(target) : target}` : lead.split("\n")[0]
+    )?.slice(0, 120);
     const question = action
       ? `Should I approve @${label}’s request “${action}”?`
       : `What should I do about @${label}’s pending request?`;

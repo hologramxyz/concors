@@ -140,7 +140,7 @@ function SignedInWhere({
                   >
                     <span className="block text-sm font-semibold">{sizeName(candidate.id)}</span>
                     <span className="text-muted-foreground">
-                      {candidate.vcpus} vCPU · {candidate.ramGb} GB
+                      {candidate.vcpus} vCPU, {candidate.ramGb} GB
                     </span>
                     <span className="mt-1 block font-medium">
                       {formatMonthly(price(candidate.id))}

@@ -20,7 +20,7 @@ import {
 import { AgentControlsSchema } from "@concors/protocol";
 import { claudeMcp } from "./mcp.ts";
 import type { McpServer } from "@concors/protocol";
-import { claudeStore } from "./claude-store.ts";
+import { claudeStore, TranscriptTooLargeError } from "./claude-store.ts";
 import { claudeHistory, claudeThinkingItems } from "./history.ts";
 import { launch } from "./launch.ts";
 import { AGENT_INSTRUCTIONS } from "../instructions.ts";
@@ -552,15 +552,7 @@ export class ClaudeProvider extends EventProvider {
           id: this.threadId,
           turns:
             method === "thread/resume"
-              ? this.restoredHistory(
-                  claudeHistory(
-                    await getSessionMessages(this.threadId, {
-                      dir: this.cwd,
-                      includeSystemMessages: true,
-                      ...(this.transcriptStore ? { sessionStore: this.transcriptStore } : {}),
-                    }),
-                  ),
-                )
+              ? this.restoredHistory(claudeHistory(await this.resumedMessages()))
               : [],
         },
       };
@@ -668,6 +660,24 @@ export class ClaudeProvider extends EventProvider {
    * claude.ai and needs no answer; another server's page returns to a port Claude Code listens on,
    * which only a browser on this machine reaches, so elsewhere the address is handed over instead.
    */
+  /**
+   * What the transcript adds to the history Concors kept, read when a chat's session resumes.
+   * Claude Code resumes from its own transcript whatever this returns, so one too large to read
+   * here only means nothing is added; the chat must not fail to resume over it.
+   */
+  private async resumedMessages() {
+    try {
+      return await getSessionMessages(this.threadId, {
+        dir: this.cwd,
+        includeSystemMessages: true,
+        ...(this.transcriptStore ? { sessionStore: this.transcriptStore } : {}),
+      });
+    } catch (error) {
+      if (error instanceof TranscriptTooLargeError) return [];
+      throw error;
+    }
+  }
+
   private async mcpAuth(
     session: McpAuthQuery,
     method: string,
