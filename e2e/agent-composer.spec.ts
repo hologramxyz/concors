@@ -115,7 +115,9 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     // One live line says what the turn is on now, with the turn's time.
     const liveLine = page.getByRole("log").locator("[data-live-line]");
     await expect(liveLine).toHaveCount(1);
-    await expect(liveLine).toContainText("Running echo fixture");
+    // It says a command is running, not which: the command waits in its opened details.
+    await expect(liveLine).toContainText("Running a command");
+    await expect(liveLine).not.toContainText("echo fixture");
     // The edit it made is done, so it reads as a quiet row, as it will once the turn ends.
     const edited = page
       .getByRole("article", { name: "Tool call", exact: true })
@@ -181,7 +183,8 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     );
     await page.emulateMedia({ reducedMotion: "no-preference" });
     // The live line opens to the running command's output as it streams.
-    await liveLine.getByRole("button", { name: /^Running echo fixture/ }).click();
+    await liveLine.getByRole("button", { name: /^Running a command/ }).click();
+    await expect(liveLine).toContainText("echo fixture");
     await expect(liveLine.locator(".agent-shimmer").first()).toHaveCSS(
       "animation-name",
       "agent-working-fade",

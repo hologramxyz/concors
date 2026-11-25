@@ -1,6 +1,6 @@
 import type { AgentItem } from "@concors/protocol";
 import type { TimelineEntry } from "./thinking";
-import { parseToolTitle } from "./tool-label";
+import { parseToolTitle, toolDisplayName } from "./tool-label";
 
 /**
  * A finished turn's quiet steps, folded into one summary line each run. A quiet step is a call
@@ -353,4 +353,27 @@ export function shellOutput(detail: string): string {
 export function commandLine(command: string): string {
   const [first = "", ...rest] = command.trim().split("\n");
   return rest.length ? `${first.trimEnd()} …` : first;
+}
+
+/** A command step's words beside its verb: "Ran a command", "Running a command". */
+const COMMAND_TARGET = "a command";
+
+/**
+ * What a step acted on: the file, the query, or the tool's name. A command reads "a command":
+ * someone scanning the chat needs to know one ran and how it ended, not its text, which the row
+ * shows once opened. A file is written as `short` writes it (see `useShortPath`).
+ */
+export function stepTarget(
+  item: AgentItem,
+  kind: StepKind,
+  short: (path: string) => string = (path) => path,
+): string {
+  if (kind === "command") return COMMAND_TARGET;
+  if (kind === "read" || kind === "edit" || kind === "create") {
+    const files = item.presentation?.files ?? [];
+    if (files.length > 1) return `${short(files[0]?.path ?? "")} and ${files.length - 1} more`;
+    return short(files[0]?.path ?? item.text);
+  }
+  if (kind === "tool") return toolDisplayName(item.title);
+  return item.text;
 }

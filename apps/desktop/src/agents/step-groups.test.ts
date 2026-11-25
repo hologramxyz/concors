@@ -10,6 +10,7 @@ import {
   stepGroups,
   stepKind,
   stepSummary,
+  stepTarget,
 } from "./step-groups";
 import { timelineView } from "./thinking";
 
@@ -478,5 +479,37 @@ describe("step details", () => {
   it("shows a command's first line, marking that more follow", () => {
     expect(commandLine("pnpm test")).toBe("pnpm test");
     expect(commandLine("cat > a.js <<'EOF'\nconst a = 1;\nEOF")).toBe("cat > a.js <<'EOF' …");
+  });
+});
+
+describe("stepTarget", () => {
+  it("names a command as a command, keeping its text for the opened row", () => {
+    const git = item({
+      title: "Run command",
+      text: "git fetch -q origin $(git ls-remote origin refs/heads/main)",
+      presentation: { type: "shell", command: "git fetch -q origin $(git ls-remote origin)" },
+    });
+    expect(stepTarget(git, "command")).toBe("a command");
+    // Whatever the command, failed or running, its line does not quote it.
+    const script = item({
+      text: "export PATH=$HOME/.bun/bin:$PATH TMPDIR=/dev/shm\nbun test",
+      status: "failed",
+      presentation: { type: "shell", command: "export PATH=$HOME/.bun/bin:$PATH\nbun test" },
+    });
+    expect(stepTarget(script, "command")).toBe("a command");
+  });
+
+  it("keeps the words other steps already read in", () => {
+    const read = item({
+      text: "/w/src/app.ts",
+      presentation: {
+        type: "files",
+        fileOperation: "read",
+        files: [{ path: "/w/src/app.ts", diff: "" }],
+      },
+    });
+    expect(stepTarget(read, "read", (path) => path.replace("/w/", ""))).toBe("src/app.ts");
+    expect(stepTarget(item({ text: "vitest config" }), "search")).toBe("vitest config");
+    expect(stepTarget(item({ title: "mcp__github__create_issue" }), "tool")).toBe("Create issue");
   });
 });

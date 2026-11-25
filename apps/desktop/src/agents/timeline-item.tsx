@@ -63,6 +63,7 @@ import {
   shellOutput,
   stepKind,
   stepSummary,
+  stepTarget,
   type StepKind,
 } from "./step-groups";
 
@@ -303,7 +304,11 @@ function StepDetails({
 }: {
   item: AgentItem;
   running: boolean;
-  /** The command as the step's line shows it; null when the step is not a command. */
+  /**
+   * What the step's line says of its command ("a command", or the command on a card that quotes
+   * it); null when the step is not a command. The command is shown in full above the output
+   * unless the line already shows all of it.
+   */
   shown: string | null;
   /** Whether the step's line is cut off with an ellipsis. */
   cut: boolean;
@@ -444,26 +449,6 @@ const LIVE_VERBS: Record<StepKind, string> = {
   web: "Searching the web for",
   thinking: "Thinking",
 };
-
-/**
- * What a step acted on: the command as run, the file, the query, or the tool's name. A file is
- * written as `short` writes it (see `useShortPath`).
- */
-function stepTarget(
-  item: AgentItem,
-  kind: StepKind,
-  short: (path: string) => string = (path) => path,
-): string {
-  if (kind === "command")
-    return commandLine(commandSummary(item.presentation?.command ?? item.text));
-  if (kind === "read" || kind === "edit" || kind === "create") {
-    const files = item.presentation?.files ?? [];
-    if (files.length > 1) return `${short(files[0]?.path ?? "")} and ${files.length - 1} more`;
-    return short(files[0]?.path ?? item.text);
-  }
-  if (kind === "tool") return toolDisplayName(item.title);
-  return item.text;
-}
 
 /** A file step's paths in full, one a line, for the tooltip of its shortened target. */
 function stepPaths(item: AgentItem, kind: StepKind): string | undefined {
@@ -636,7 +621,7 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
           ) : (
             <span
               ref={target}
-              className={`min-w-0 truncate ${kind === "command" ? "font-mono text-ui" : ""} ${running ? "agent-shimmer" : ""}`}
+              className={`min-w-0 truncate ${running ? "agent-shimmer" : ""}`}
               title={stepPaths(item, kind)}
             >
               {control ? control.target : stepTarget(item, kind, short)}
@@ -1174,7 +1159,7 @@ function AnsweredGroup({ items }: { items: AgentItem[] }) {
 
 /**
  * What the turn in progress is doing now, as one line: the step it is on in the present tense
- * ("Running pnpm test"), or what it waits for, with the turn's time. It takes the place of the
+ * ("Running a command", "Editing app.ts"), or what it waits for, with the turn's time. It takes the place of the
  * step's own row, which joins its run's summary once it is done, and opens to the step's output.
  */
 export function LiveLine({
@@ -1210,10 +1195,7 @@ export function LiveLine({
           {!waiting && kind && kind !== "thinking" && (!control || control.target) && (
             <>
               {" "}
-              <span
-                className={`text-foreground ${kind === "command" ? "font-mono text-ui" : ""}`}
-                title={stepPaths(step, kind)}
-              >
+              <span className="text-foreground" title={stepPaths(step, kind)}>
                 {control ? control.target : stepTarget(step, kind, short)}
               </span>
             </>
