@@ -347,8 +347,31 @@ describe("quoteImages", () => {
       images: 1,
     });
     expect(quoteImages('See ![a](<a b.png> "A") and ![](b.png).')).toEqual({
-      text: "See  and .",
+      text: "",
       images: 2,
+    });
+  });
+
+  it("leaves no stray fragment where an image sat in a sentence, and keeps all real text", () => {
+    // The fixture's reply: "And ." would be all that is left of its second sentence.
+    expect(
+      quoteImages(
+        "Here is the page:\n\n![The pricing page](shot.png)\n\nAnd ![a missing one](gone.png).",
+      ),
+    ).toEqual({ text: "Here is the page:", images: 2 });
+    expect(quoteImages("Done. And here is ![it](a.png). Ship it?")).toEqual({
+      text: "Done. Ship it?",
+      images: 1,
+    });
+    expect(
+      quoteImages("The header in ![shot](a.png) still overlaps the logo ![b](b.png)."),
+    ).toEqual({
+      text: "The header in still overlaps the logo.",
+      images: 2,
+    });
+    expect(quoteImages("- See ![a](a.png) for the layout")).toEqual({
+      text: "- See for the layout",
+      images: 1,
     });
   });
 

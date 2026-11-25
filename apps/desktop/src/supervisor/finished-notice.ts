@@ -114,14 +114,58 @@ export function quoteImages(quote: string): { text: string; images: number } {
       lines.push(line);
       continue;
     }
-    const kept = line.replace(IMAGE, () => {
-      images++;
-      return "";
+    let found = 0;
+    const marked = line.replace(IMAGE, () => {
+      found++;
+      return HOLE;
     });
+    if (!found) {
+      lines.push(line);
+      continue;
+    }
+    images += found;
+    const kept = withoutHoles(marked);
     // A line that held only images goes with them, rather than leaving a gap.
-    if (kept === line || kept.trim()) lines.push(kept);
+    if (kept) lines.push(kept);
   }
   return { text: lines.join("\n").replace(/^\n+|\n+$/g, ""), images };
+}
+
+/** Where an image stood in a line, until the line is tidied. */
+const HOLE = "\u0000";
+/** Words that only join or point at what was beside them: "And", "see", "here is". */
+const CONNECTING = new Set(
+  "a an and also as at below above but for here in is it its of on or plus see so the then there this these to with".split(
+    " ",
+  ),
+);
+
+/**
+ * A line with its images taken out and no stray fragment left: a sentence that held an image and
+ * has only connecting words and punctuation without it ("And ![x](x.png).") goes, and so do the
+ * doubled spaces and the space before a full stop that its removal left. All other words stay.
+ */
+function withoutHoles(line: string): string {
+  const indent = /^\s*/.exec(line)?.[0] ?? "";
+  const sentences = line.slice(indent.length).split(/(?<=[.!?])\s+/);
+  const kept = sentences.filter((sentence) => {
+    if (!sentence.includes(HOLE)) return true;
+    const words =
+      sentence
+        .split(HOLE)
+        .join(" ")
+        .toLowerCase()
+        .match(/[\p{L}\p{N}']+/gu) ?? [];
+    return words.some((word) => !CONNECTING.has(word));
+  });
+  const text = kept
+    .join(" ")
+    .split(HOLE)
+    .join("")
+    .replace(/ {2,}/g, " ")
+    .replace(/ +([.,;:!?])/g, "$1")
+    .trim();
+  return text ? indent + text : "";
 }
 
 /** "1 image in the chat", "3 images in the chat". */

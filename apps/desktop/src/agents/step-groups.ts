@@ -75,6 +75,9 @@ export function createdPaths(item: AgentItem): ReadonlySet<string> {
   );
 }
 
+/** The mark of a request the person turned down, which its step row reads as its verb. */
+export const DECLINED = "Declined";
+
 /**
  * "Allowed once" for a permission the user granted, "Declined" for one they turned down (the
  * daemon saves the Decline button's label, or "Dismissed"); nothing for a cancelled turn, which
@@ -85,7 +88,7 @@ export function approvalMark(item: AgentItem): string | undefined {
   const text = item.text.trim();
   const allow = /^Allow\s+(.+)$/i.exec(text);
   if (allow) return `Allowed ${allow[1]}`;
-  if (/^(Decline|Dismiss)/i.test(text)) return "Declined";
+  if (/^(Decline|Dismiss)/i.test(text)) return DECLINED;
   return /^(Approve|Apply)/i.test(text) ? "Approved" : undefined;
 }
 

@@ -62,6 +62,7 @@ import {
 } from "./tool-label";
 import { shortPath, useShortPath } from "./short-path";
 import {
+  DECLINED,
   commandLine,
   diffStat,
   exitCode,
@@ -509,13 +510,17 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
   const kind = stepKind(item) ?? "tool";
   const Icon = STEP_ICONS[kind];
   const short = useShortPath();
-  const failed = item.status === "failed";
+  // A request the person turned down did not run: the row says so in its verb ("Declined a
+  // command"), in the row's quiet ink, and leaves out what only a call that ran has (an exit code,
+  // a diff's counts, a file to open). It still opens to what was asked for.
+  const declined = item.approval === DECLINED;
+  const failed = item.status === "failed" && !declined;
   // Running only while its turn is: a finished turn has nothing left running, even when the
   // client's copy of a call never heard it end (it would read "Editing" for good).
   const running = live && item.status === "running";
   const hasDetails = hasMeaningfulToolCallDetail(toolDetail(item));
   const stat =
-    kind === "edit" || kind === "create"
+    !declined && (kind === "edit" || kind === "create")
       ? (item.presentation?.files ?? []).reduce(
           (sum, file) => {
             const { added, removed } = diffStat(file.diff);
@@ -536,7 +541,7 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
   const id = useId();
   // An edit's file opens from its row once the step is done, as a file link in the chat does.
   const files = kind === "edit" || kind === "create" ? (item.presentation?.files ?? []) : [];
-  const file = !running ? files[0]?.path : undefined;
+  const file = !running && !declined ? files[0]?.path : undefined;
   const opens = !!file && !!openFile?.(file);
   const more = files.length > 1 && (
     <span className="shrink-0" title={stepPaths(item, kind)}>
@@ -551,14 +556,14 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
       )}
       <span className={`shrink-0 text-muted-foreground ${running ? "agent-shimmer" : ""}`}>
-        {control?.verb ?? (running ? LIVE_VERBS : STEP_VERBS)[kind]}
+        {declined ? DECLINED : (control?.verb ?? (running ? LIVE_VERBS : STEP_VERBS)[kind])}
       </span>
     </>
   );
   const rest = (
     <>
       {extra && <span className="min-w-0 truncate text-muted-foreground">{extra}</span>}
-      {item.approval && (
+      {item.approval && !declined && (
         <span className="shrink-0 text-xs text-muted-foreground">{item.approval}</span>
       )}
       {/* A side with nothing to count is left out: a new file reads "+4", not "+4 −0". */}
@@ -573,7 +578,7 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
           {code === undefined ? "Failed" : `Exit code ${code}`}
         </span>
       )}
-      {item.status === "interrupted" && (
+      {item.status === "interrupted" && !declined && (
         <span className="shrink-0 text-xs text-muted-foreground">Stopped</span>
       )}
       {hasDetails && (

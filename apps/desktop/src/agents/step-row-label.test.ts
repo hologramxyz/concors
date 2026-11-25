@@ -51,3 +51,37 @@ describe("a step row's verb", () => {
     expect(row(step("Edit", "running"), true)).toContain("Editing");
   });
 });
+
+describe("a declined request's row", () => {
+  const command: TimelineEntry = {
+    ...step("Edit", "completed"),
+    id: "tool-command",
+    title: "Run command",
+    text: "pnpm test",
+    detail: "",
+    presentation: { type: "shell", command: "pnpm test" },
+  };
+  const text = (html: string) => html.replace(/\s+/g, " ").trim();
+
+  it("says it declined a command, with no mark after it and no run's failure", () => {
+    for (const status of ["completed", "failed"] as const) {
+      const line = text(row({ ...command, status, approval: "Declined" }, false));
+      expect(line).toBe("Declined a command");
+    }
+    expect(text(row({ ...command, approval: "Allowed once" }, false))).toBe(
+      "Ran a command Allowed once",
+    );
+  });
+
+  it("names a declined file by its path, with no counts and no link to open it", () => {
+    const html = renderToStaticMarkup(
+      createElement(TimelineItem, {
+        item: { ...step("Write", "failed"), approval: "Declined" },
+        live: false,
+      }),
+    );
+    expect(text(html.replace(/<[^>]+>/g, " "))).toBe("Declined /work/concors-test/math.js");
+    expect(html).not.toContain("text-destructive");
+    expect(html).not.toContain("+1");
+  });
+});
