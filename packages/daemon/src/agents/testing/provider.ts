@@ -394,6 +394,21 @@ export class TestAgentProvider implements AgentProvider {
         },
       });
       this.finish();
+    } else if (text === "primitive-failed-command") {
+      // A command that exits non-zero with an error line, as a failed test run reports one.
+      this.emit("item/completed", {
+        item: {
+          id: `failed-${this.turnId}`,
+          type: "commandExecution",
+          command: "pnpm --filter @concors/desktop test src/agents/step-groups.test.ts",
+          cwd: this.cwd,
+          aggregatedOutput:
+            "FAIL src/agents/step-groups.test.ts\nError: expected 'Ran a command' to be 'Ran pnpm test'\nTests  1 failed | 35 passed (36)",
+          exitCode: 1,
+          status: "failed",
+        },
+      });
+      this.reply(this.turnId, "The step-groups test failed; I will look at it.");
     } else if (text.includes("approve")) {
       const file = fileRequest(text, this.cwd);
       if (!file)
