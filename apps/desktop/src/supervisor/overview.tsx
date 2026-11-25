@@ -26,15 +26,18 @@ import { shortAge } from "@/lib/format-date";
 import { RowDot, RowWorking, SidebarDot } from "@/workspace/sidebar-tabs";
 import { chatState, useMinuteClock } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
-import { overviewGroups, overviewRows, workspaceAgents, type OverviewRow } from "./overview-model";
+import {
+  needsYou,
+  overviewGroups,
+  overviewRows,
+  workspaceAgents,
+  type OverviewRow,
+} from "./overview-model";
 import { ApprovalAction, QuickApproval } from "./quick-approval";
 import { shortPath } from "@/agents/short-path";
 import { useHomePath } from "@/workspace/home-path";
 import { supervisorAgentName } from "./reference-context";
 import { useSupervisorBriefs, useSupervisorDeliveries } from "./use-overview";
-
-const needsYou = (agent: AgentInfo) =>
-  !agent.supervisor && (agent.pending.length > 0 || chatState(agent) === "attention");
 
 /**
  * Opens Overview. It counts what needs you, in the destructive colour the sidebar's dots use; a
@@ -276,7 +279,8 @@ export function SupervisorOverview({
 /**
  * One session, laid out as a sidebar row that goes on: its dot, name and age (a spinner while it
  * works), then which model in which workspace, then its one-liners, because they are the reason to
- * look: what it needs from you, what it is doing or what it did. An approval says only what it
+ * look: what it needs from you, what it is doing or what it did. A paused queue offers "Review
+ * queue", which opens the session where it is resumed. An approval says only what it
  * would do, in at most two lines so several fit at once; a longer one unfolds in place, as Earlier
  * does, since nobody should approve what they cannot read in full.
  */
@@ -332,7 +336,9 @@ function OverviewItem({
   const model = agent.model
     ? modelName(agent.model)
     : (agent.providerLabel ?? agentProviderName(agent.provider));
-  const extras = [row.queued ? `${row.queued} queued` : "", outcome].filter(Boolean);
+  // A paused queue says what waits in its own line, with the action that resumes it.
+  const paused = row.needs?.action === "Queue paused";
+  const extras = [row.queued && !paused ? `${row.queued} queued` : "", outcome].filter(Boolean);
   // The latest update leads; before a session has said anything, what it was asked stands in,
   // quieter, since it is the request rather than anything the session said.
   const said = approval ? "" : row.update || (row.group === "Done" ? "" : task);
@@ -435,6 +441,13 @@ function OverviewItem({
               <NeedsText needs={approval} short={short} />
             </span>
           </button>
+        </div>
+      )}
+      {paused && (
+        <div className="flex pr-2 pb-2 pl-9">
+          <Button size="xs" variant="secondary" onClick={onOpen}>
+            Review queue
+          </Button>
         </div>
       )}
       {onAsk && (

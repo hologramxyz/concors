@@ -7,13 +7,15 @@ import type {
 import { approvalParts, approvalSummary } from "@/agents/approval-summary";
 import { chatState } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
+import { waitingWords } from "./paused-notice";
 
 /**
  * Overview lists sessions, not tasks: one row each, under the group a person acts on, saying what
  * it needs and what it last said, so nobody has to open sessions one by one to triage them. A
- * question, approval or unseen failure needs you; a reply in progress or queued work is in
- * progress; everything else that has replied, in an open tab or sent work by Supervisor, is done.
- * Chats that never replied stay out.
+ * question, approval, unseen failure or paused queue with instructions waiting needs you, as the
+ * Supervisor chat marks them; a reply in progress or queued work is in progress; everything else
+ * that has replied, in an open tab or sent work by Supervisor, is done. Chats that never replied
+ * stay out.
  */
 export type OverviewGroup = "Needs you" | "In progress" | "Done";
 export const overviewGroups: readonly OverviewGroup[] = ["Needs you", "In progress", "Done"];
@@ -59,6 +61,14 @@ export function workspaceAgents(agents: readonly AgentInfo[], workspace: Workspa
 
 const firstLine = (text: string) => text.trim().split("\n")[0]?.trim() ?? "";
 
+/** A queue held paused with instructions in it, which waits on someone to resume it. */
+export const queuePaused = (agent: AgentInfo) => !!agent.queuePaused && !!agent.queue?.length;
+
+/** Whether a session belongs under Needs you, which the Overview button also counts. */
+export const needsYou = (agent: AgentInfo) =>
+  !agent.supervisor &&
+  (agent.pending.length > 0 || chatState(agent) === "attention" || queuePaused(agent));
+
 function needs(agent: AgentInfo): OverviewRow["needs"] {
   const pending = agent.pending[0];
   if (pending?.kind === "approval") {
@@ -76,9 +86,12 @@ function needs(agent: AgentInfo): OverviewRow["needs"] {
       text: pending.questions.map((q) => q.question).join(" ") || pending.title,
     };
   if (pending) return { action: "Respond", text: pending.summary || pending.title };
-  if (agent.status === "failed")
+  // A failure already seen needs nothing more; its paused queue, if any, still does.
+  if (agent.status === "failed" && chatState(agent) === "attention")
     return { action: "Failed", text: firstLine(agent.error ?? "") || "The turn failed." };
   if (agent.status === "needs_input") return { action: "Respond", text: "It is waiting for you." };
+  if (queuePaused(agent))
+    return { action: "Queue paused", text: waitingWords(agent.queue?.length ?? 0) };
   return null;
 }
 
@@ -103,14 +116,13 @@ export function overviewRows(
     const state = chatState(agent);
     const delivery = asked.get(agent.id);
     const queued = agent.queue?.length ?? 0;
-    const group: OverviewGroup | null =
-      agent.pending.length || state === "attention"
-        ? "Needs you"
-        : state === "working" || queued
-          ? "In progress"
-          : delivery || state === "done" || (shown.has(agent.id) && agent.turnId)
-            ? "Done"
-            : null;
+    const group: OverviewGroup | null = needsYou(agent)
+      ? "Needs you"
+      : state === "working" || queued
+        ? "In progress"
+        : delivery || state === "done" || (shown.has(agent.id) && agent.turnId)
+          ? "Done"
+          : null;
     if (!group) return [];
     // A brief describes one turn; an earlier turn's says nothing about the current one.
     const brief = briefs?.get(agent.id);

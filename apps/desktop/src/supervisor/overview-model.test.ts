@@ -1,11 +1,12 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type {
   AgentInfo,
   AgentPending,
   SupervisorBrief,
   SupervisorDelivery,
 } from "@concors/protocol";
-import { DONE_LIMIT, overviewRows, workspaceAgents } from "./overview-model";
+import { DONE_LIMIT, needsYou, overviewRows, workspaceAgents } from "./overview-model";
+import { markFailureSeen } from "@/agents/seen-updates";
 
 let next = 0;
 const id = () => `00000000-0000-4000-8000-${String(++next).padStart(12, "0")}`;
@@ -124,6 +125,78 @@ it("says what a failure was until it is seen, then lists it under Done", () => {
   expect(
     overviewRows([stopped], [delivered(stopped, "Write docs", "interrupted")])[0],
   ).toMatchObject({ group: "Done", task: "Write docs" });
+});
+
+describe("a paused queue with instructions waiting", () => {
+  const waiting = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: id(),
+      text: `Step ${i}`,
+      attachments: [],
+      queuedAt: "2026-11-18T10:00:00.000Z",
+    }));
+  const paused = (patch: Partial<AgentInfo> = {}) =>
+    agent("Game QA", {
+      status: "idle",
+      turnId: "turn-1",
+      queuePaused: true,
+      queue: waiting(2),
+      ...patch,
+    });
+
+  it("needs you, saying how many instructions wait, and counts on the Overview button", () => {
+    const qa = paused();
+    expect(overviewRows([qa], [delivered(qa, "Run QA", "done")])[0]).toMatchObject({
+      group: "Needs you",
+      needs: { action: "Queue paused", text: "2 instructions waiting" },
+      queued: 2,
+    });
+    expect(needsYou(qa)).toBe(true);
+  });
+
+  it("needs you while the chat still works, rather than sitting under In progress", () => {
+    const qa = paused({ status: "working" });
+    expect(overviewRows([qa], [])[0]?.group).toBe("Needs you");
+  });
+
+  it("shows an open request instead, in one row", () => {
+    const qa = paused({ status: "needs_input", pending: [approval] });
+    const rows = overviewRows([qa], []);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      group: "Needs you",
+      needs: { action: "Approve", text: "pnpm test" },
+    });
+    expect(needsYou(qa)).toBe(true);
+  });
+
+  it("names the paused queue once its chat's failure is seen", () => {
+    const qa = paused({
+      status: "failed",
+      error: "Provider exited",
+      updatedAt: "2026-11-18T11:00:00.000Z",
+    });
+    expect(overviewRows([qa], [])[0]?.needs?.action).toBe("Failed");
+    markFailureSeen(qa);
+    expect(overviewRows([qa], [])[0]).toMatchObject({
+      group: "Needs you",
+      needs: { action: "Queue paused", text: "2 instructions waiting" },
+    });
+  });
+
+  it.each([
+    ["resumed", { queuePaused: false }, "In progress"],
+    ["emptied", { queue: [] }, "Done"],
+    ["resumed while working", { queuePaused: false, status: "working" as const }, "In progress"],
+  ])("goes back where it belongs once %s", (_, patch, group) => {
+    const qa = paused(patch);
+    expect(overviewRows([qa], [delivered(qa, "Run QA", "done")])[0]?.group).toBe(group);
+    expect(needsYou(qa)).toBe(false);
+  });
+
+  it("leaves the Supervisor itself out of the count", () => {
+    expect(needsYou(paused({ supervisor: true } as Partial<AgentInfo>))).toBe(false);
+  });
 });
 
 it("lists open sessions that replied, with the prompt of a session nobody delegated", () => {
