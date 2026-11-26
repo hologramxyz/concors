@@ -468,7 +468,13 @@ export class TestAgentProvider implements AgentProvider {
         .then(() => this.finish())
         .catch(() => undefined);
     } else if (text.includes("fail")) this.finish("failed");
-    else if (text.includes("haiku") || text.includes("long-reply")) {
+    else if (text.includes("long-summary")) {
+      // One long opening sentence, which Overview keeps whole and clamps at two lines.
+      this.reply(
+        this.turnId,
+        "Reviewed the release notes for 2.4, fixed three broken links, tightened the upgrade section and flagged the pricing table, which still lists last year's plans and needs a decision from you.",
+      );
+    } else if (text.includes("haiku") || text.includes("long-reply")) {
       // A final reply over several lines, as Supervisor's notice of a finished chat quotes it.
       const haiku = "Maple leaves let go\ndrifting on the cooling wind\ndusk arrives sooner";
       const steps = Array.from({ length: 10 }, (_, i) => `${i + 1}. Checked step ${i + 1}.`);
