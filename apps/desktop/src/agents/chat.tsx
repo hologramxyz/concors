@@ -9,7 +9,7 @@ import { AgentComposer } from "./composer";
 import { LiveLine, TimelineItem } from "./timeline-item";
 import { genericLive, useLiveVoice } from "./live-voice";
 import { HIDE_NATIVE_SCROLLBAR, OverlayScrollbar } from "./overlay-scrollbar";
-import { liveStep, stepGroups } from "./step-groups";
+import { liveLineRow, liveStep, stepGroups } from "./step-groups";
 import { answeredRuns } from "@/supervisor/answered-notice";
 import { finishedRuns } from "@/supervisor/finished-notice";
 import { pausedRuns } from "@/supervisor/paused-notice";
@@ -684,6 +684,8 @@ export function Chat({
     />
   );
   const showLive = !!active && !conversation.hasNewer;
+  // One live line, after the last row: notices that cut the turn's runs do not add more.
+  const liveRow = liveLineRow(view);
   const waitingFor = !active
     ? undefined
     : agent.status !== "needs_input"
@@ -770,10 +772,10 @@ export function Chat({
                       }
                     />
                     {/* The run the turn is on ends in its live line, which becomes its ✓ in place. */}
-                    {item.live && showLive && <div className="mt-1">{liveLine}</div>}
+                    {showLive && item.id === liveRow && <div className="mt-1">{liveLine}</div>}
                   </div>
                 ))}
-                {showLive && !view.at(-1)?.live && liveLine}
+                {showLive && liveRow === undefined && liveLine}
                 {conversation.hasNewer && (
                   <div className="h-5 text-center text-xs text-muted-foreground" role="status">
                     {conversation.loading === "newer" ? "Loading newer messages…" : ""}

@@ -149,6 +149,16 @@ export function liveStep(
 }
 
 /**
+ * The row the turn in progress's live line follows, or undefined when it follows the whole
+ * timeline. Only the timeline's last row can hold it: a run that a Supervisor notice cut off is
+ * marked live as well, and the line is shown once, after everything.
+ */
+export function liveLineRow(view: readonly TimelineEntry[]): string | undefined {
+  const last = view.at(-1);
+  return last?.live ? last.id : undefined;
+}
+
+/**
  * `liveTurn` is the turn still in progress, if any. `waiting` holds the calls an open request
  * names (its `sourceItemId`), which never fold out of sight.
  */
