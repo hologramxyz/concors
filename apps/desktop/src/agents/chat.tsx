@@ -7,6 +7,7 @@ import { completedTurnFooters } from "./duration";
 import { canFork, forkReplies, useForkChat } from "./fork";
 import { AgentComposer } from "./composer";
 import { LiveLine, TimelineItem } from "./timeline-item";
+import { genericLive, useLiveVoice } from "./live-voice";
 import { HIDE_NATIVE_SCROLLBAR, OverlayScrollbar } from "./overlay-scrollbar";
 import { liveStep, stepGroups } from "./step-groups";
 import { answeredRuns } from "@/supervisor/answered-notice";
@@ -683,18 +684,17 @@ export function Chat({
     />
   );
   const showLive = !!active && !conversation.hasNewer;
+  const waitingFor = !active
+    ? undefined
+    : agent.status !== "needs_input"
+      ? undefined
+      : agent.pending.some((pending) => pending.kind === "approval")
+        ? "Waiting for your approval"
+        : "Waiting for your input";
+  // Kept by the chat, not the line, so the line moving between runs keeps its words.
+  const voice = useLiveVoice(showLive && genericLive(step, waitingFor));
   const liveLine = showLive && (
-    <LiveLine
-      step={step}
-      waiting={
-        agent.status !== "needs_input"
-          ? undefined
-          : agent.pending.some((pending) => pending.kind === "approval")
-            ? "Waiting for your approval"
-            : "Waiting for your input"
-      }
-      startedAt={agent.turnStartedAt}
-    />
+    <LiveLine step={step} waiting={waitingFor} voice={voice} startedAt={agent.turnStartedAt} />
   );
   return (
     <SubAgentViewContext value={agent?.controls?.childHistory ? setSubAgent : null}>

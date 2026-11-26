@@ -55,6 +55,7 @@ import { hasMeaningfulToolCallDetail } from "./paseo/tool-call-detail-state";
 import { thinkingExpandable, thinkingPreview, thinkingText } from "./thinking";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import type { TimelineEntry } from "./thinking";
+import type { Voice } from "./live-voice";
 import {
   commandSummary,
   controlStep,
@@ -1341,11 +1342,14 @@ function AnsweredGroup({ items }: { items: AgentItem[] }) {
 export function LiveLine({
   step,
   waiting,
+  voice,
   startedAt,
 }: {
   step?: AgentItem | undefined;
   /** Set while the turn waits on the user: what the line says instead of the step. */
   waiting?: string | undefined;
+  /** What the line says while it has nothing specific to: the chat's own words (`useLiveVoice`). */
+  voice?: Voice | undefined;
   startedAt?: string | null | undefined;
 }) {
   const [open, setOpen] = useState(false);
@@ -1367,7 +1371,19 @@ export function LiveLine({
       >
         <BrailleSpinner />
         <span ref={line} className="agent-shimmer min-w-0 truncate">
-          {waiting ?? control?.verb ?? (kind ? LIVE_VERBS[kind] : "Working…")}
+          {waiting ??
+            control?.verb ??
+            (kind && kind !== "thinking" ? (
+              LIVE_VERBS[kind]
+            ) : voice ? (
+              <>
+                {/* Read out once a wait: the rotation shows, the status says its first line. */}
+                <span aria-hidden="true">{voice.line}…</span>
+                <span className="sr-only">{voice.first}…</span>
+              </>
+            ) : (
+              "Working…"
+            ))}
           {!waiting && kind && kind !== "thinking" && (!control || control.target) && (
             <>
               {" "}
