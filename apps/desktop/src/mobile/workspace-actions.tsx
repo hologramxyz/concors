@@ -110,6 +110,18 @@ export function WorkspaceActions({
     !!connection.state.daemon.capabilities?.includes(PANE_RENAME_CAPABILITY);
   const renaming = renameTarget(tab, pane, canRenamePanes);
   const canRename = !!renaming;
+  /** What saving this name sends; null when it would change nothing. */
+  const renameTo = (value: string) =>
+    renaming &&
+    renameOperation(
+      project,
+      tab,
+      renaming,
+      value,
+      tabTitle(tab, agents, terminals),
+      agents,
+      terminals,
+    );
   const onDelete =
     menu?.canDelete && chat
       ? () => setDeleting({ chat: { id: chat.id, name: chatName(chat) }, open: true })
@@ -156,7 +168,7 @@ export function WorkspaceActions({
               immediate={!!onStep}
               onSelect={() => begin("rename")}
             >
-              Rename tab
+              Rename
             </RowMenuItem>
           )}
           {fork && (
@@ -239,27 +251,21 @@ export function WorkspaceActions({
       />
       {rename && renaming && (
         <FormDialog
-          title="Rename tab"
+          title="Rename"
           description={<span className="sr-only">The name updates on every connected client.</span>}
           fields={[
             {
               name: "name",
-              label: "Tab name",
+              label: "Name",
               value:
                 renaming.kind === "pane" ? paneTitle(renaming.pane, agents, terminals) : tab.name,
             },
           ]}
+          // An empty name would clear a pane's back to its automatic one; the phone asks for a name.
+          canSubmit={(values) => !!values["name"]?.trim() && !!renameTo(values["name"])}
           onClose={() => setRename(false)}
           onSubmit={async (values) => {
-            const operation = renameOperation(
-              project,
-              tab,
-              renaming,
-              values["name"] ?? "",
-              tabTitle(tab, agents, terminals),
-              agents,
-              terminals,
-            );
+            const operation = renameTo(values["name"] ?? "");
             if (operation) await execute(operation);
             onComplete?.();
           }}

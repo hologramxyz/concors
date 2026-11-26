@@ -274,7 +274,7 @@ export function SidebarTabRow({
           )}
           {onRename && (
             <RowMenuItem icon={<Pencil />} onSelect={() => setRename(title)}>
-              Rename tab
+              Rename
             </RowMenuItem>
           )}
           {onFork && (
