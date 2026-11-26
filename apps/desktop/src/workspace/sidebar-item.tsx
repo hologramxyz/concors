@@ -204,6 +204,8 @@ export function WorkspaceSidebarItem({
       data-drop-workspace={project.id}
       data-workspace-row={project.id}
       data-drop-target={dropTarget || undefined}
+      // Read by the icon's attention badge, which matches the row's fill (styles.css).
+      data-selected={selected || undefined}
       className={cn(
         // Keyboard focus shows, but a clicked row does not stay filled once selection moves on.
         // An open menu is matched by `aria-expanded`, as the tooltip around its trigger keeps
@@ -317,14 +319,16 @@ export function AttentionBadge({
       aria-label={label}
       data-workspace-attention={attention.kind}
       // Above the chevron that replaces the icon on hover, which still takes the click.
-      className="pointer-events-none absolute -right-1 -bottom-1 z-20 flex size-3 items-center justify-center rounded-full bg-sidebar ring-1 ring-sidebar"
+      // Cut out of whatever the row is filled with (`workspace-badge-surface`), in whole pixels so
+      // it stays round.
+      className="workspace-badge-surface pointer-events-none absolute -right-1 -bottom-1 z-20 flex size-[10px] items-center justify-center rounded-full"
     >
       {attention.kind === "working" ? (
         <AgentLoadingIcon className="size-3" />
       ) : (
         <span
           className={cn(
-            "size-2 rounded-full",
+            "size-[6px] rounded-full",
             AGENT_DOT_COLOR[attention.kind === "done" ? "done" : "attention"],
           )}
         />

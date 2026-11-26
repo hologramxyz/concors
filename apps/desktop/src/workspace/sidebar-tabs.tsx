@@ -68,7 +68,7 @@ export function RowDot({
       className="flex size-[20px] shrink-0 items-center justify-center"
     >
       {state === "running" ? (
-        <span aria-hidden="true" className="size-1.5 rounded-full bg-muted-foreground" />
+        <span aria-hidden="true" className="size-[5px] rounded-full bg-muted-foreground" />
       ) : (
         (state === "attention" || state === "done") && <SidebarDot dot={state} />
       )}
@@ -85,8 +85,14 @@ export function RowWorking() {
   );
 }
 
+/**
+ * A status dot, in whole pixels: the browser paints a box on whole pixels, so a dot sized in rem
+ * (4.875px at the app's 13px root) came out 4 wide and 5 tall wherever its row fell between them.
+ */
 export function SidebarDot({ dot }: { dot: AgentDot }) {
-  return <span aria-hidden="true" className={cn("size-1.5 rounded-full", AGENT_DOT_COLOR[dot])} />;
+  return (
+    <span aria-hidden="true" className={cn("size-[5px] rounded-full", AGENT_DOT_COLOR[dot])} />
+  );
 }
 
 /**

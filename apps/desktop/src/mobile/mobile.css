@@ -279,6 +279,17 @@ body {
 .mobile-pane-row:has([aria-current="page"]) {
   background: var(--accent);
 }
+/* A workspace icon's badge is cut out of the row it is on: the sheet, the selected row's fill, or
+   a pressed row's fill laid over either (see .workspace-badge-surface). */
+.mobile-pane-row {
+  --badge-base: var(--popover);
+}
+.mobile-pane-row:has([aria-current="page"]) {
+  --badge-base: var(--accent);
+}
+.mobile-pane-choice:active {
+  --badge-overlay: var(--muted);
+}
 .mobile-pane-choice {
   min-width: 0;
   display: flex;
