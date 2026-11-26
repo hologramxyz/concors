@@ -107,7 +107,8 @@ const pinnedHeaders = (ground: "bg-sidebar" | "bg-popover") =>
     "[&>section>div:first-child]:sticky [&>section>div:first-child]:top-0 [&>section>div:first-child]:z-10",
     ground === "bg-sidebar"
       ? "[--header-tint:color-mix(in_oklab,var(--sidebar-accent)_70%,transparent)] [&>section>div:first-child]:bg-sidebar [&>section>div:first-child:has(:focus-visible:not([data-pointer-focus]))]:[background-image:linear-gradient(var(--header-tint),var(--header-tint))] [&>section>div:first-child:hover]:[background-image:linear-gradient(var(--header-tint),var(--header-tint))]"
-      : "[&>section>div:first-child]:bg-popover",
+      : // Square on a phone, where it has no hover tint, so rows do not show at its corners.
+        "[&>section>div:first-child]:rounded-none [&>section>div:first-child]:bg-popover",
   );
 
 /**
@@ -179,7 +180,7 @@ export function SupervisorOverview({
     onOpenAgent(agent.id);
   };
   const list = (
-    // Groups stand further apart than the rows in them, which a hairline divides.
+    // Rows stand apart by space alone, and groups further apart than rows.
     <div className={cn("space-y-3", pinnedHeaders(compact ? "bg-popover" : "bg-sidebar"))}>
       {warning && <SidebarEmpty tone="alert">{warning}</SidebarEmpty>}
       {!rows.length && (
@@ -228,7 +229,7 @@ export function SupervisorOverview({
                 )
               }
             >
-              <ul className="divide-y">
+              <ul className="space-y-2">
                 {inView.map(item)}
                 {earlier.length > 0 && (!more || doneAll) && (
                   // Finishes from past days, folded as the sidebar folds closed chats: history,
@@ -266,7 +267,7 @@ export function SupervisorOverview({
                       aria-expanded={doneAll}
                       onClick={() => setDoneAll(!doneAll)}
                       className={cn(
-                        "flex w-full items-center pr-2 pl-8 text-left text-xs text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-foreground",
+                        "flex w-full items-center rounded-md pr-2 pl-8 text-left text-xs text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-foreground",
                         compact ? "min-h-[44px]" : "h-7",
                       )}
                     >
@@ -403,13 +404,13 @@ function OverviewItem({
   // spans the row and the row's own controls sit above it.
   const control = "pointer-events-auto";
   return (
-    <li className="relative hover:bg-sidebar-accent/70 has-[:focus-visible]:bg-sidebar-accent/70">
+    <li className="relative rounded-md hover:bg-sidebar-accent/70 has-[:focus-visible]:bg-sidebar-accent/70">
       <button
         type="button"
         onClick={onOpen}
         aria-label={`Open ${name}`}
         data-overview-row={row.group}
-        className="absolute inset-0 outline-none"
+        className="absolute inset-0 rounded-md outline-none"
       />
       <div className="pointer-events-none relative flex min-w-0 items-start gap-2 px-2 py-2 text-ui">
         <span className="flex h-5 shrink-0 items-center">
