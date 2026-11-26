@@ -668,7 +668,7 @@ function AppContent() {
                           >
                             <span
                               aria-hidden="true"
-                              className="size-1.5 shrink-0 animate-pulse rounded-full bg-warning"
+                              className="size-[5px] shrink-0 animate-pulse rounded-full bg-warning"
                             />
                             <span className="min-w-0 flex-1 truncate">
                               Reconnecting to {selectedHost.label}…

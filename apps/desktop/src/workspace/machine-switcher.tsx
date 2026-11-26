@@ -183,7 +183,7 @@ export function MachineSwitcher({
                 ) : (
                   !isSelected && (
                     <span
-                      className={`size-1.5 shrink-0 rounded-full ${machineState === "connectable" ? "bg-emerald-500" : machineState === "provisioning" ? "bg-amber-500" : "bg-muted-foreground/50"}`}
+                      className={`size-[5px] shrink-0 rounded-full ${machineState === "connectable" ? "bg-emerald-500" : machineState === "provisioning" ? "bg-amber-500" : "bg-muted-foreground/50"}`}
                     />
                   )
                 )}
