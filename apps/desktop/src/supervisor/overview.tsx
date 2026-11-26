@@ -444,7 +444,13 @@ function OverviewItem({
               </span>
             ) : (
               <span className="ml-auto flex shrink-0 items-center gap-2">
-                {state === "done" && <SidebarDot dot="done" />}
+                {state === "done" && (
+                  // Level with the middle of the time's lowercase letters, not its capitals: it
+                  // rests on the time's baseline, raised by half the x-height less half its size.
+                  <span className="mb-[calc(0.5ex-2.5px)] flex self-end text-xs">
+                    <SidebarDot dot="done" />
+                  </span>
+                )}
                 <span className="text-xs text-muted-foreground tabular-nums [text-box:trim-both_cap_alphabetic]">
                   {shortAge(row.updatedAt, now)}
                 </span>
