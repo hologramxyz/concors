@@ -27,10 +27,12 @@ import { RowWorking, SidebarDot } from "@/workspace/sidebar-tabs";
 import { chatState, useMinuteClock } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
 import {
+  doneInView,
   needsYou,
   overviewGroups,
   overviewRows,
   workspaceAgents,
+  unseenDone,
   type OverviewRow,
 } from "./overview-model";
 import { ApprovalAction, QuickApproval } from "./quick-approval";
@@ -92,6 +94,22 @@ export function SupervisorOverviewButton({
   );
 }
 
+/** Whether Done lists every row: kept while the app is open, as the panel opens and closes. */
+let doneAllKept = false;
+
+/**
+ * Pins each group's header to the top of the scroll area while its rows scroll under it, over the
+ * panel's own background (`ground`) so rows do not show through; the header's hover and focus tint
+ * is laid over that ground as an image, since the tint alone is see-through.
+ */
+const pinnedHeaders = (ground: "bg-sidebar" | "bg-popover") =>
+  cn(
+    "[&>section>div:first-child]:sticky [&>section>div:first-child]:top-0 [&>section>div:first-child]:z-10",
+    ground === "bg-sidebar"
+      ? "[--header-tint:color-mix(in_oklab,var(--sidebar-accent)_70%,transparent)] [&>section>div:first-child]:bg-sidebar [&>section>div:first-child:has(:focus-visible:not([data-pointer-focus]))]:[background-image:linear-gradient(var(--header-tint),var(--header-tint))] [&>section>div:first-child:hover]:[background-image:linear-gradient(var(--header-tint),var(--header-tint))]"
+      : "[&>section>div:first-child]:bg-popover",
+  );
+
 /**
  * Every session at a glance, beside the Supervisor chat on desktop and in a drawer on a phone: what
  * needs you, what is in progress and what is done, each saying what it needs and what it last said,
@@ -142,6 +160,11 @@ export function SupervisorOverview({
   );
   const now = useMinuteClock();
   const [earlierOpen, setEarlierOpen] = useState(false);
+  const [doneAll, setDoneAllState] = useState(doneAllKept);
+  const setDoneAll = (next: boolean) => {
+    doneAllKept = next;
+    setDoneAllState(next);
+  };
   const listed = overviewRows(known, deliveries, shown, null, now);
   // Folded rows need no gist until Earlier is opened.
   const briefs = useSupervisorBriefs(
@@ -156,7 +179,8 @@ export function SupervisorOverview({
     onOpenAgent(agent.id);
   };
   const list = (
-    <div className="space-y-1">
+    // Groups stand further apart than the rows in them, which a hairline divides.
+    <div className={cn("space-y-3", pinnedHeaders(compact ? "bg-popover" : "bg-sidebar"))}>
       {warning && <SidebarEmpty tone="alert">{warning}</SidebarEmpty>}
       {!rows.length && (
         <SidebarEmpty>
@@ -167,6 +191,11 @@ export function SupervisorOverview({
         const grouped = rows.filter((row) => row.group === group);
         const recent = grouped.filter((row) => !row.earlier);
         const earlier = grouped.filter((row) => row.earlier);
+        // Done shows its latest few and every unopened finish until it is asked for all; the rest,
+        // Earlier included, wait behind "Show all", which then reads "Show fewer".
+        const folded = group === "Done" ? doneInView(recent, false) : { shown: recent, hidden: 0 };
+        const more = folded.hidden > 0;
+        const inView = more && doneAll ? recent : folded.shown;
         const item = (row: OverviewRow) => (
           <OverviewItem
             key={row.agent.id}
@@ -199,9 +228,9 @@ export function SupervisorOverview({
                 )
               }
             >
-              <ul className="space-y-1">
-                {recent.map(item)}
-                {earlier.length > 0 && (
+              <ul className="divide-y">
+                {inView.map(item)}
+                {earlier.length > 0 && (!more || doneAll) && (
                   // Finishes from past days, folded as the sidebar folds closed chats: history,
                   // not work in hand.
                   <li>
@@ -229,6 +258,22 @@ export function SupervisorOverview({
                     )}
                   </li>
                 )}
+                {more && (
+                  <li>
+                    {/* Quiet as the Earlier fold, in the rows' text column; a full tap on a phone. */}
+                    <button
+                      type="button"
+                      aria-expanded={doneAll}
+                      onClick={() => setDoneAll(!doneAll)}
+                      className={cn(
+                        "flex w-full items-center pr-2 pl-8 text-left text-xs text-muted-foreground hover:bg-sidebar-accent/70 hover:text-sidebar-foreground",
+                        compact ? "min-h-[44px]" : "h-7",
+                      )}
+                    >
+                      {doneAll ? "Show fewer" : "Show all"}
+                    </button>
+                  </li>
+                )}
               </ul>
             </SidebarSection>
           )
@@ -241,18 +286,28 @@ export function SupervisorOverview({
     return (
       <Dialog open onOpenChange={(next) => !next && onClose()}>
         <DialogContent
-          className="gap-3"
+          // The close button stays above the strip that keeps rows out of the drawer's top padding.
+          className="gap-3 [&>[data-slot=dialog-actions]]:z-30"
           onCloseAutoFocus={(event) => {
             if (!asked.current) return;
             event.preventDefault();
             focusComposer();
           }}
         >
-          <DialogHeader>
+          <DialogHeader className="relative z-20">
             <DialogTitle>Overview</DialogTitle>
             <DialogDescription className="sr-only">Your sessions by status</DialogDescription>
           </DialogHeader>
-          <div className="-mx-2">{list}</div>
+          <div className="-mx-2">
+            {/* The drawer scrolls inside its 34px top padding (mobile.css), where pinned headers
+                stop short; this strip of its background rests there so rows do not show above
+                them. It takes no room: it starts 34px above the list. */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none sticky -top-[34px] z-10 -mt-[34px] h-[34px] bg-popover"
+            />
+            {list}
+          </div>
         </DialogContent>
       </Dialog>
     );
@@ -348,15 +403,15 @@ function OverviewItem({
   // spans the row and the row's own controls sit above it.
   const control = "pointer-events-auto";
   return (
-    <li className="relative rounded-md hover:bg-sidebar-accent/70 has-[:focus-visible]:bg-sidebar-accent/70">
+    <li className="relative hover:bg-sidebar-accent/70 has-[:focus-visible]:bg-sidebar-accent/70">
       <button
         type="button"
         onClick={onOpen}
         aria-label={`Open ${name}`}
         data-overview-row={row.group}
-        className="absolute inset-0 rounded-md outline-none"
+        className="absolute inset-0 outline-none"
       />
-      <div className="pointer-events-none relative flex min-w-0 items-start gap-2 px-2 py-1.5 text-ui">
+      <div className="pointer-events-none relative flex min-w-0 items-start gap-2 px-2 py-2 text-ui">
         <span className="flex h-5 shrink-0 items-center">
           <RowWorkspace sessionId={agent.id} />
         </span>
@@ -441,14 +496,16 @@ function OverviewItem({
             <span
               className={cn(
                 "block leading-5 break-words text-muted-foreground",
-                row.needs ? "text-xs" : "line-clamp-2",
+                // Needs you keeps its small print; an unopened finish keeps two lines, as it is news;
+                // the rest say their gist in one.
+                row.needs ? "text-xs" : unseenDone(row) ? "line-clamp-2" : "truncate",
               )}
             >
               {said}
             </span>
           )}
           {paused && (
-            <div className="mt-1.5 mb-1 flex">
+            <div className="my-2.5 flex">
               {/* Outlined as the Supervisor chat's "Review queue" and the approval card's Decline. */}
               <Button size="xs" variant="outline" className={control} onClick={onOpen}>
                 Review queue
@@ -456,7 +513,9 @@ function OverviewItem({
             </div>
           )}
           {onAsk && (
-            <div className="mt-1.5 mb-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            // Further from the answers than they are from each other, so asking reads as its own,
+            // quieter choice.
+            <div className="my-2.5 flex flex-wrap items-center gap-x-5 gap-y-2">
               {request && <QuickApproval agent={agent} pending={request} className={control} />}
               <button
                 type="button"

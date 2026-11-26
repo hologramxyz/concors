@@ -5,7 +5,15 @@ import type {
   SupervisorBrief,
   SupervisorDelivery,
 } from "@concors/protocol";
-import { DONE_LIMIT, needsYou, overviewRows, workspaceAgents } from "./overview-model";
+import {
+  DONE_LIMIT,
+  DONE_SHOWN,
+  doneInView,
+  needsYou,
+  overviewRows,
+  unseenDone,
+  workspaceAgents,
+} from "./overview-model";
 import { markFailureSeen } from "@/agents/seen-updates";
 
 let next = 0;
@@ -247,6 +255,50 @@ it("keeps only the most recent finished sessions, and every one not yet opened",
   );
   expect(withUnread).toHaveLength(DONE_LIMIT + 1);
   expect(withUnread.at(-1)?.agent.name).toBe("Unread");
+});
+
+describe("Done in view", () => {
+  // Nine finishes, newest first as overviewRows orders them; two of the older ones never opened.
+  const unseen = (at: string) => ({
+    status: "done" as const,
+    attention: { id: id(), kind: "done" as const, seen: false, createdAt: at },
+  });
+  const finished = Array.from({ length: 9 }, (_, index) => {
+    const at = `2026-11-18T10:${String(index).padStart(2, "0")}:00.000Z`;
+    return agent(`Agent ${index}`, { updatedAt: at, ...(index < 2 ? unseen(at) : {}) });
+  });
+  const rows = overviewRows(
+    finished,
+    finished.map((item) => delivered(item, "Task", "done")),
+  );
+  const names = (list: readonly { agent: AgentInfo }[]) => list.map((row) => row.agent.name);
+
+  it("shows the five most recent, in order, and every finish not yet opened", () => {
+    expect(rows.every((row) => row.group === "Done")).toBe(true);
+    const { shown, hidden } = doneInView(rows, false);
+    expect(DONE_SHOWN).toBe(5);
+    expect(names(shown)).toEqual([
+      "Agent 8",
+      "Agent 7",
+      "Agent 6",
+      "Agent 5",
+      "Agent 4",
+      "Agent 1",
+      "Agent 0",
+    ]);
+    expect(shown.filter(unseenDone).map((row) => row.agent.name)).toEqual(["Agent 1", "Agent 0"]);
+    expect(hidden).toBe(2);
+  });
+
+  it("shows every row once expanded, and folds back to the same rows", () => {
+    expect(doneInView(rows, true)).toEqual({ shown: rows, hidden: 0 });
+    expect(names(doneInView(rows, false).shown)).toHaveLength(7);
+  });
+
+  it("hides nothing when there are five or fewer", () => {
+    expect(doneInView(rows.slice(0, 5), false)).toEqual({ shown: rows.slice(0, 5), hidden: 0 });
+    expect(doneInView([], false)).toEqual({ shown: [], hidden: 0 });
+  });
 });
 
 it("names a file approval by its verb and the file inside the workspace, a command as code", () => {

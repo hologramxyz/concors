@@ -148,3 +148,21 @@ export function overviewRows(
     .slice(DONE_LIMIT);
   return rows.filter((row) => !done.includes(row));
 }
+
+/** How many of Done's rows show until it is expanded: enough for a glance at what just finished. */
+export const DONE_SHOWN = 5;
+
+/** A finish nobody has opened yet, which keeps its dot. */
+export const unseenDone = (row: OverviewRow) =>
+  row.group === "Done" && chatState(row.agent) === "done";
+
+/**
+ * The Done rows in view, in the order given: the most recent few until `all` is asked for, plus
+ * every finish nobody has opened, however far down, since those are news. `hidden` counts the rest.
+ */
+export function doneInView(rows: readonly OverviewRow[], all: boolean) {
+  const shown = all
+    ? [...rows]
+    : rows.filter((row, index) => index < DONE_SHOWN || unseenDone(row));
+  return { shown, hidden: rows.length - shown.length };
+}
