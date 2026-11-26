@@ -10,7 +10,8 @@ import {
 import { cn } from "cn";
 import { useAgents } from "@/agents/context";
 import { useListedAgents } from "@/notifications/context";
-import { NoticeChat, RowProvider } from "@/agents/timeline-item";
+import { NoticeChat, RowWorkspace } from "@/agents/timeline-item";
+import { ProviderIcon } from "@/agents/provider-icon";
 import { Button } from "@/components/ui/button";
 import { SidebarEmpty, SidebarSection } from "@/components/sidebar-section";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
@@ -357,7 +358,7 @@ function OverviewItem({
       />
       <div className="pointer-events-none relative flex min-w-0 items-start gap-2 px-2 py-1.5 text-ui">
         <span className="flex h-5 shrink-0 items-center">
-          <RowProvider sessionId={agent.id} />
+          <RowWorkspace sessionId={agent.id} />
         </span>
         <div className="min-w-0 flex-1">
           {/* The Supervisor chat's notice line: "Workspace / Chat", then how it ended or what waits. */}
@@ -471,8 +472,12 @@ function OverviewItem({
               </button>
             </div>
           )}
-          <span className="block truncate text-[11px] leading-4 text-muted-foreground">
-            {model}
+          {/* The provider's mark before the model's name, as the composer's model picker has them. */}
+          <span className="flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
+            <span className="flex size-3.5 shrink-0 items-center justify-center opacity-80">
+              <ProviderIcon provider={agent.provider} size={12} />
+            </span>
+            <span className="min-w-0 truncate">{model}</span>
           </span>
         </div>
       </div>

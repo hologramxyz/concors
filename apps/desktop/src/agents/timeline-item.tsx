@@ -8,7 +8,8 @@ import {
 } from "@/supervisor/pending-notice";
 import { useAgents } from "@/agents/context";
 import { chatDot } from "@/agents/agent-status";
-import { ProviderIcon } from "@/agents/provider-icon";
+import { ProjectImage } from "@/workspace/project-image";
+import { WorkspaceImageContext } from "@/workspace/use-project-icons";
 import { approvalParts } from "@/agents/approval-summary";
 import { approvalDetails, rowDescription, rowReviewView } from "@/agents/approval-details";
 import { ApprovalReview, DiffLines } from "@/agents/pending-input";
@@ -725,7 +726,7 @@ function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: Superviso
           aria-labelledby={`${id}-action ${id}-mark`}
           className="absolute inset-0 rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         />
-        <RowProvider sessionId={notice.sessionId} />
+        <RowWorkspace sessionId={notice.sessionId} />
         <NoticeChat chat={chat} sessionId={notice.sessionId} className="max-w-1/2 shrink-0" />
         <span
           ref={target}
@@ -921,7 +922,7 @@ function NeedsBlock({
   return (
     <article aria-label={label} className="text-sm">
       <div className="mobile-tap-target relative flex w-full min-w-0 items-center gap-2 py-0.5">
-        <RowProvider sessionId={sessionId} />
+        <RowWorkspace sessionId={sessionId} />
         <NoticeChat chat={chat} sessionId={sessionId} className="shrink" />
       </div>
       <div className="ml-[7px] min-w-0 border-l pl-4">
@@ -1060,7 +1061,7 @@ function FinishedRow({
             className="absolute inset-0 rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           />
         )}
-        <RowProvider sessionId={notice.sessionId} />
+        <RowWorkspace sessionId={notice.sessionId} />
         <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
         <span
           id={`${id}-mark`}
@@ -1124,7 +1125,7 @@ function PausedRow({
   return (
     <article aria-label={`${chat.label} ${word.toLowerCase()}`} className="text-sm">
       <div className="mobile-tap-target relative flex w-full min-w-0 items-center gap-2 py-0.5">
-        <RowProvider sessionId={notice.sessionId} />
+        <RowWorkspace sessionId={notice.sessionId} />
         <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
         <span className="shrink-0 text-xs text-muted-foreground">{word}</span>
       </div>
@@ -1133,14 +1134,22 @@ function PausedRow({
 }
 
 /**
- * The chat a notice is about, by its provider's mark as Overview's rows show it. A chat the app
- * no longer lists keeps the slot empty, so the row's text still lines up with the others.
+ * The workspace a notice's chat is in, by the image the sidebar gives that workspace (see
+ * `ProjectImage`), since the row names it first: "Workspace / Chat". A chat the app no longer
+ * lists, or a workspace it does not know, shows the plain folder, so every row lines up.
  */
-export function RowProvider({ sessionId }: { sessionId: string }) {
+export function RowWorkspace({ sessionId }: { sessionId: string }) {
   const agent = useAgents().find((a) => a.id === sessionId);
+  const image = useContext(WorkspaceImageContext)(agent?.projectId ?? "");
   return (
     <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground opacity-80">
-      {agent && <ProviderIcon provider={agent.provider} size={12} />}
+      <ProjectImage
+        key={image?.source ?? "fallback"}
+        source={image?.source ?? null}
+        isGit={image?.isGit ?? false}
+        name={image?.name ?? ""}
+        size={14}
+      />
     </span>
   );
 }
