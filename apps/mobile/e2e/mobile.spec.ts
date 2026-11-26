@@ -1033,6 +1033,25 @@ test("flat tab actions configure and close inactive leaves without changing the 
   await paneCount(ui, 2);
 });
 
+test("a phone tab that shares its desktop tab renames itself, leaving its sibling's name", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const strip = ui.locator(".mobile-tab-strip");
+  const label = (value: string) => strip.locator(`[data-tab-id="${value}"]`);
+  const chatLabel = await label(activeChat).innerText();
+  await tabActions(ui, activeTerminal);
+  await ui.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
+  const dialog = ui.getByRole("dialog", { name: "Rename tab", exact: true });
+  await dialog.getByRole("textbox", { name: "Tab name", exact: true }).fill("Dev logs");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(label(activeTerminal)).toContainText("Dev logs");
+  // The chat beside it on desktop keeps its own name.
+  await expect(label(activeChat)).toHaveText(chatLabel);
+  await page.screenshot({ path: test.info().outputPath("mobile-pane-renamed.png") });
+});
+
 test("tab menus pin, fork and delete chats with desktop's actions, and undo a delete", async ({
   page,
 }) => {
@@ -1047,9 +1066,10 @@ test("tab menus pin, fork and delete chats with desktop's actions, and undo a de
   const chat = await picker.getAttribute("data-value");
   if (!chat) throw new Error("New chat was not selected");
 
-  // A terminal has no chat to pin, fork or delete.
+  // A terminal has no chat to pin, fork or delete. It shares a desktop tab with the demo's first
+  // chat, so renaming names this pane alone.
   await tabActions(ui, activeTerminal);
-  expect(await menuItems()).toEqual(["Close tab…"]);
+  expect(await menuItems()).toEqual(["Rename tab", "Close tab…"]);
   await ui.locator('[role="menu"]').press("Escape");
 
   await tabActions(ui, chat);
@@ -1733,7 +1753,7 @@ test("holding a strip tab opens its menu sheet, which a screen reader reaches to
   const sheet = ui.getByRole("dialog", { name: "Mobile launch 2", exact: true });
   await expect(sheet).toBeVisible();
   // The row menu the Tabs sheet had: a terminal has no chat to pin, fork or delete.
-  expect(await menuItems()).toEqual(["Close tab…"]);
+  expect(await menuItems()).toEqual(["Rename tab", "Close tab…"]);
   await expect(sheet.getByRole("group", { name: "Tab type" })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("mobile-tab-long-press.png") });
   // Holding is not a tap: the shown tab stays the chat.

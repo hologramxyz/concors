@@ -1,7 +1,13 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { useCommand } from "@/shortcuts/context";
 import { Ellipsis, GitFork, Pencil, Pin, PinOff, Trash2, X } from "lucide-react";
-import type { WorkspaceOperation, WorkspaceProject, WorkspaceTab } from "@concors/protocol";
+import {
+  PANE_RENAME_CAPABILITY,
+  type WorkspaceOperation,
+  type WorkspaceProject,
+  type WorkspaceTab,
+} from "@concors/protocol";
+import { TerminalConnectionContext } from "@/terminal/connection-context";
 import type { MobileTarget } from "@concors/client-core";
 import {
   RowMenuGroup,
@@ -91,8 +97,15 @@ export function WorkspaceActions({
   );
   const onPin = menu?.pin(chat);
   const fork = menu?.fork(chat);
-  // Only desktop tabs have saved names. Do not rename split siblings together.
-  const canRename = tabPanes(tab).length === 1;
+  // A phone tab is one pane. Alone in its desktop tab, renaming it renames that tab, as desktop's
+  // tab strip does. One of a split tab's panes gets a name of its own instead, which its phone tab
+  // shows, so its siblings keep theirs; daemons too old to keep pane names cannot rename those.
+  const connection = useContext(TerminalConnectionContext);
+  const split = tabPanes(tab).length > 1;
+  const canRename =
+    !split ||
+    (connection?.state.status === "ready" &&
+      !!connection.state.daemon.capabilities?.includes(PANE_RENAME_CAPABILITY));
   const onDelete =
     menu?.canDelete && chat
       ? () => setDeleting({ chat: { id: chat.id, name: chatName(chat) }, open: true })
@@ -224,16 +237,22 @@ export function WorkspaceActions({
         <FormDialog
           title="Rename tab"
           description={<span className="sr-only">The name updates on every connected client.</span>}
-          fields={[{ name: "name", label: "Tab name", value: tab.name }]}
+          fields={[
+            { name: "name", label: "Tab name", value: split ? (pane.name ?? title) : tab.name },
+          ]}
           onClose={() => setRename(false)}
           onSubmit={(values) =>
-            execute({
-              kind: "tab.rename",
-              projectId: project.id,
-              expectedVersion: project.version,
-              tabId: tab.id,
-              name: values["name"] ?? "",
-            }).then(() => onComplete?.())
+            execute(
+              split
+                ? { kind: "pane.rename", ...target, name: values["name"] ?? "" }
+                : {
+                    kind: "tab.rename",
+                    projectId: project.id,
+                    expectedVersion: project.version,
+                    tabId: tab.id,
+                    name: values["name"] ?? "",
+                  },
+            ).then(() => onComplete?.())
           }
         />
       )}
