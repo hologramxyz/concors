@@ -1006,7 +1006,8 @@ test("flat tab actions configure and close inactive leaves without changing the 
   if (!selected) throw new Error("New tab was not selected");
   await tabActions(ui, activeTerminal);
   await expect(ui.getByRole("dialog", { name: "Mobile launch 2", exact: true })).toBeVisible();
-  await expect(ui.getByRole("menuitem", { name: "Rename tab", exact: true })).toHaveCount(0);
+  // It shares a desktop tab with the demo's chat: Rename names this pane, nothing splits or moves.
+  await expect(ui.getByRole("menuitem", { name: "Rename tab", exact: true })).toBeVisible();
   await expect(ui.getByRole("menuitem", { name: /Add pane|Move tab|Split/ })).toHaveCount(0);
   await ui.getByRole("menuitemradio", { name: "OpenCode", exact: true }).click();
   await expect(picker).toHaveAttribute("data-value", selected);
