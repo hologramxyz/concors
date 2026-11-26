@@ -20,7 +20,7 @@ test("mobile keeps previews in the sidebar and process inspection in computer Re
   const confirmation = dialog.message();
   await dialog.dismiss();
   await clickPromise;
-  expect(confirmation).toContain("preview-5173.example.invalid");
+  expect(confirmation).toContain("https://concors.dev/");
   expect(confirmation).not.toContain("access_token");
   await page.screenshot({ path: "test-results/mobile-previews-sidebar.png" });
   await ui.getByRole("combobox", { name: "Machine", exact: true }).click();
