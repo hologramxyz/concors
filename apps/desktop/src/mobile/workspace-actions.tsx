@@ -1,7 +1,12 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { useCommand } from "@/shortcuts/context";
 import { Ellipsis, GitFork, Pencil, Pin, PinOff, Trash2, X } from "lucide-react";
-import type { WorkspaceOperation, WorkspaceProject, WorkspaceTab } from "@concors/protocol";
+import {
+  PANE_RENAME_CAPABILITY,
+  type WorkspaceOperation,
+  type WorkspaceProject,
+  type WorkspaceTab,
+} from "@concors/protocol";
 import type { MobileTarget } from "@concors/client-core";
 import {
   RowMenuGroup,
@@ -22,11 +27,15 @@ import { FormDialog } from "@/workspace/form-dialog";
 import { Button } from "@/components/ui/button";
 import { paneProfiles } from "@/workspace/tab-profiles";
 import { useTerminalProfiles } from "@/terminal/profiles-context";
+import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
+import { renameOperation, renameTarget } from "@/workspace/tab-rename";
+import { paneTitle, tabTitle } from "@/workspace/tab-title";
 import { useAgents } from "@/agents/context";
 import { chatName } from "@/agents/chat-actions";
 import { DeleteChatDialog, type ChatToDelete } from "@/agents/chat-limit";
 import { useChatMenu } from "./chat-menu-context";
-import { tabPanes, type PaneNode } from "./selection";
+import type { PaneNode } from "./selection";
 
 /** A menu item that opens a dialog of its own. */
 export type TabStep = "rename" | "close" | "delete";
@@ -84,15 +93,23 @@ export function WorkspaceActions({
   const [error, setError] = useState<string | null>(null);
   // Desktop's chat row actions, offered when its sidebar would offer them for this tab's chat.
   const menu = useChatMenu();
-  const chat = useAgents().find((agent) => agent.id === pane.sessionId);
+  const agents = useAgents();
+  const terminals = useTerminalSessions();
+  const chat = agents.find((agent) => agent.id === pane.sessionId);
   // The chat stays set while its dialog closes, so it can ease out under the same name.
   const [deleting, setDeleting] = useState<{ chat: ChatToDelete; open: boolean } | null>(() =>
     step === "delete" && chat ? { chat: { id: chat.id, name: chatName(chat) }, open: true } : null,
   );
   const onPin = menu?.pin(chat);
   const fork = menu?.fork(chat);
-  // Only desktop tabs have saved names. Do not rename split siblings together.
-  const canRename = tabPanes(tab).length === 1;
+  // As desktop renames: a split tab's pane, or a tab nobody named, by its pane, so split siblings
+  // are never renamed together; a daemon without pane names can rename only a tab of one pane.
+  const connection = useContext(TerminalConnectionContext);
+  const canRenamePanes =
+    connection?.state.status === "ready" &&
+    !!connection.state.daemon.capabilities?.includes(PANE_RENAME_CAPABILITY);
+  const renaming = renameTarget(tab, pane, canRenamePanes);
+  const canRename = !!renaming;
   const onDelete =
     menu?.canDelete && chat
       ? () => setDeleting({ chat: { id: chat.id, name: chatName(chat) }, open: true })
@@ -220,21 +237,32 @@ export function WorkspaceActions({
           )
         }
       />
-      {rename && (
+      {rename && renaming && (
         <FormDialog
           title="Rename tab"
           description={<span className="sr-only">The name updates on every connected client.</span>}
-          fields={[{ name: "name", label: "Tab name", value: tab.name }]}
+          fields={[
+            {
+              name: "name",
+              label: "Tab name",
+              value:
+                renaming.kind === "pane" ? paneTitle(renaming.pane, agents, terminals) : tab.name,
+            },
+          ]}
           onClose={() => setRename(false)}
-          onSubmit={(values) =>
-            execute({
-              kind: "tab.rename",
-              projectId: project.id,
-              expectedVersion: project.version,
-              tabId: tab.id,
-              name: values["name"] ?? "",
-            }).then(() => onComplete?.())
-          }
+          onSubmit={async (values) => {
+            const operation = renameOperation(
+              project,
+              tab,
+              renaming,
+              values["name"] ?? "",
+              tabTitle(tab, agents, terminals),
+              agents,
+              terminals,
+            );
+            if (operation) await execute(operation);
+            onComplete?.();
+          }}
         />
       )}
       <Dialog

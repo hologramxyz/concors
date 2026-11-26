@@ -197,17 +197,32 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     await ui.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
     await ui.getByLabel("Tab name", { exact: true }).fill("Mobile review");
     await ui.getByRole("button", { name: "Save", exact: true }).click();
-    await expect
-      .poll(() => project().tabs.find((tab) => tab.id === added.id)?.name)
-      .toBe("Mobile review");
+    // As desktop's sidebar does, a tab nobody named is renamed by its pane, and keeps its own name.
+    const paneName = (tabId: string, paneId: string) => {
+      const node = project()
+        .tabs.find((tab) => tab.id === tabId)
+        ?.nodes.find((node) => node.id === paneId);
+      return node?.kind === "pane" ? node.name : null;
+    };
+    await expect.poll(() => paneName(added.id, added.root)).toBe("Mobile review");
+    expect(project().tabs.find((tab) => tab.id === added.id)?.name).toBe("Tab 3");
+    await expect(tab(`${added.id}:${added.root}`)).toContainText("Mobile review");
     // Renaming does not change the tab/pane identity shared with desktop.
     await expect(picker).toHaveAttribute("data-value", `${added.id}:${added.root}`);
     await tab(`${tabId}:${paneId}`).click();
     await expect(input).toHaveValue("Keep this draft while switching tabs");
 
     // An inactive tab changes only its own leaf, not the active view or sibling sessions.
+    // One pane of a split tab is renamed alone: the tab and its siblings keep their names.
     await actions(`${tabId}:${second}`);
-    await expect(ui.getByRole("menuitem", { name: "Rename tab", exact: true })).toHaveCount(0);
+    await ui.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
+    await ui.getByLabel("Tab name", { exact: true }).fill("Side notes");
+    await ui.getByRole("button", { name: "Save", exact: true }).click();
+    await expect.poll(() => paneName(tabId, second)).toBe("Side notes");
+    expect(splitTab().name).toBe("Renamed on desktop");
+    expect(paneName(tabId, paneId)).toBeUndefined();
+    await expect(tab(`${tabId}:${second}`)).toContainText("Side notes");
+    await actions(`${tabId}:${second}`);
     await ui.getByRole("menuitemradio", { name: "OpenCode", exact: true }).click();
     await expect
       .poll(() => {

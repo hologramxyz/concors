@@ -7,7 +7,6 @@ import {
   type DragEvent as ReactDragEvent,
 } from "react";
 import {
-  isDefaultTabName,
   CHAT_MOVE_CAPABILITY,
   PANE_RENAME_CAPABILITY,
   PANE_TRANSFER_WORKSPACE_CAPABILITY,
@@ -48,7 +47,8 @@ import {
   type OpenTabRow,
   type SidebarRow,
 } from "./sidebar-rows";
-import { defaultPaneTitle, mainPane } from "./tab-title";
+import { mainPane } from "./tab-title";
+import { renameOperation, renameTarget } from "./tab-rename";
 import { paneTransfer } from "./pane-transfer";
 
 export interface WorkspaceTreeProps {
@@ -175,39 +175,22 @@ export function WorkspaceTree(props: WorkspaceTreeProps) {
   const removesWorkspaces =
     connection?.state.status === "ready" &&
     !connection.state.daemon.capabilities?.includes(PROJECT_CLOSE_CAPABILITY);
-  /**
-   * A tab nobody named shows its main pane's title, so renaming its row names that pane, as the
-   * pane's own menu does: the tab, the pane and the chat once closed all keep the name, and
-   * clearing it returns to the automatic one. A tab that has a name of its own is renamed itself.
-   */
+  /** Renames the row's tab, or its main pane when nobody named the tab (see `renameTarget`). */
   const rename = (project: WorkspaceProject, row: OpenTabRow) => {
     if (!props.canEdit) return undefined;
     const tab = project.tabs.find((item) => item.id === row.tabId);
-    const pane = tab && mainPane(tab);
-    if (tab && pane && isDefaultTabName(tab.name) && canRenamePanes)
-      return (value: string) => {
-        const name = value.trim().slice(0, 120);
-        const next = name && name !== defaultPaneTitle(pane, chats, terminals) ? name : null;
-        if (next === (pane.name ?? null)) return;
-        props.onCommand({
-          kind: "pane.rename",
-          projectId: project.id,
-          expectedVersion: project.version,
-          tabId: row.tabId,
-          paneId: pane.id,
-          name: next,
-        });
-      };
+    const target = (tab && renameTarget(tab, undefined, canRenamePanes)) ?? { kind: "tab" };
     return (value: string) => {
-      const name = value.trim().slice(0, 120);
-      if (!name || name === row.title) return;
-      props.onCommand({
-        kind: "tab.rename",
-        projectId: project.id,
-        expectedVersion: project.version,
-        tabId: row.tabId,
-        name,
-      });
+      const operation = renameOperation(
+        project,
+        { id: row.tabId },
+        target,
+        value,
+        row.title,
+        chats,
+        terminals,
+      );
+      if (operation) props.onCommand(operation);
     };
   };
   const { schedules } = useSchedules();
