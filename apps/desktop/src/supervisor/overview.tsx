@@ -262,7 +262,7 @@ export function SupervisorOverview({
       className="flex w-[340px] shrink-0 flex-col border-l bg-sidebar text-ui text-sidebar-foreground"
     >
       {/* The Files panel's close button with its tooltip; the toolbar's button already names it. */}
-      <div className="m-2 flex h-9 shrink-0 items-center justify-end px-1 select-none">
+      <div className="mx-2 mt-2 flex h-7 shrink-0 items-center justify-end px-1 select-none">
         <SidebarTooltip place="title-bar" content="Close overview">
           <Button size="icon-sm" variant="ghost" aria-label="Close overview" onClick={onClose}>
             <X className="size-4" />
@@ -366,19 +366,21 @@ function OverviewItem({
               title
               chat={{ workspace, label: name }}
               sessionId={agent.id}
-              className="shrink"
-            />
-            {extras.map((part) => (
-              <span
-                key={part}
-                className={cn(
-                  "shrink-0 text-xs",
-                  part === "Failed" ? "text-destructive" : "text-muted-foreground",
-                )}
-              >
-                {part}
-              </span>
-            ))}
+              className="flex-1"
+            >
+              {extras.length > 0 &&
+                extras.map((part) => (
+                  <span
+                    key={part}
+                    className={cn(
+                      "text-xs",
+                      part === "Failed" ? "text-destructive" : "text-muted-foreground",
+                    )}
+                  >
+                    {part}
+                  </span>
+                ))}
+            </NoticeChat>
             {row.group === "In progress" && state === "working" ? (
               <span className="ml-auto flex shrink-0">
                 <RowWorking />

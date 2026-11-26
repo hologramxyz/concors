@@ -770,38 +770,58 @@ function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: Superviso
  * The chat a notice is about, as Supervisor's notice links it: "Workspace / Chat", the chat's name
  * opening it. On a phone the workspace's name gives way (mobile.css).
  *
- * Overview's rows lead with the same line, as `title`: there the whole row opens the chat, so the
- * name is plain text in the stronger weight, and it keeps its width while the workspace gives way
- * first, on a phone too, since the row has no other place that names the workspace.
+ * Overview's rows lead with the same line, as `title`, filling the room their line gives it: there
+ * the whole row opens the chat, so the name is plain text in the stronger weight, followed by
+ * `children` (how the chat ended, what is queued). The name keeps its width while the workspace
+ * gives way first, on a phone too, since the row has no other place that names the workspace.
  */
 export function NoticeChat({
   chat,
   sessionId,
   className,
   title = false,
+  children,
 }: {
   chat: Pick<SupervisorReference, "workspace" | "label">;
   sessionId: string;
   className: string;
   title?: boolean;
+  children?: React.ReactNode;
 }) {
   const openSession = useContext(SessionLinkContext);
+  const { line, name, rest, workspace } = useFittedWorkspace(
+    chat,
+    title,
+    children != null && children !== false,
+  );
+  if (title)
+    return (
+      <span ref={line} className={`flex min-w-0 items-center text-muted-foreground ${className}`}>
+        {workspace && (
+          <span className="flex shrink-0 items-center whitespace-pre">
+            {workspace}
+            {" / "}
+          </span>
+        )}
+        <span ref={name} className="min-w-0 truncate font-medium text-sidebar-foreground">
+          {chat.label}
+        </span>
+        {children && (
+          <span ref={rest} className="ml-2 flex shrink-0 items-center gap-2">
+            {children}
+          </span>
+        )}
+      </span>
+    );
   return (
     <span className={`flex min-w-0 items-center text-muted-foreground ${className}`}>
       {chat.workspace && (
-        <span
-          data-answered-workspace={title ? undefined : true}
-          className={`flex min-w-0 items-center ${title ? "overflow-hidden" : ""}`}
-        >
+        <span data-answered-workspace className="flex min-w-0 items-center">
           <span className="min-w-0 truncate">{chat.workspace}</span>
           <span className="shrink-0 whitespace-pre"> / </span>
         </span>
       )}
-      {title ? (
-        <span className="max-w-full shrink-0 truncate font-medium text-sidebar-foreground">
-          {chat.label}
-        </span>
-      ) : openSession ? (
+      {openSession ? (
         <button
           type="button"
           onClick={() => openSession(sessionId)}
@@ -814,6 +834,64 @@ export function NoticeChat({
       )}
     </span>
   );
+}
+
+/**
+ * The workspace's name cut to the room Overview's line leaves it beside the whole chat name, with
+ * the ellipsis right after the last letter kept. CSS's own ellipsis keeps a trailing space and the
+ * unused end of its box, which would widen the gap before " / " only when the name is cut. The room
+ * is the line's width, which the row sets, less what follows the workspace at full width, so cutting
+ * cannot change it. Null when not even one letter fits: the workspace and its slash give way whole.
+ */
+function useFittedWorkspace(
+  chat: Pick<SupervisorReference, "workspace" | "label">,
+  active: boolean,
+  /** Whether anything follows the name, which the line must also leave room for. */
+  followed: boolean,
+) {
+  const line = useRef<HTMLSpanElement>(null);
+  const name = useRef<HTMLSpanElement>(null);
+  const rest = useRef<HTMLSpanElement>(null);
+  // The cut, with the name it was cut from, so a renamed workspace never shows the old one's cut.
+  const [fitted, setFitted] = useState<{ full: string; shown: string | null } | null>(null);
+  useLayoutEffect(() => {
+    const element = line.current;
+    const full = chat.workspace;
+    if (!active || !element || !full) return;
+    const context = document.createElement("canvas").getContext("2d");
+    if (!context) return;
+    const setWorkspace = (shown: string | null) => setFitted({ full, shown });
+    const fit = () => {
+      // Built from its parts: the computed shorthand can be empty.
+      const style = getComputedStyle(element);
+      context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      const width = (text: string) => context.measureText(text).width;
+      // A little to spare, as the canvas and the page round text widths apart.
+      const room =
+        element.clientWidth -
+        (name.current?.scrollWidth ?? 0) -
+        (rest.current ? rest.current.offsetWidth + 8 : 0) -
+        width(" / ") -
+        2;
+      if (width(full) <= room) return setWorkspace(full);
+      let kept = 0;
+      for (let high = full.length - 1; kept < high;) {
+        const mid = Math.ceil((kept + high) / 2);
+        if (width(`${full.slice(0, mid).trimEnd()}…`) <= room) kept = mid;
+        else high = mid - 1;
+      }
+      const cut = full.slice(0, kept).trimEnd();
+      setWorkspace(cut ? `${cut}…` : null);
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    for (const part of [element, name.current, rest.current]) if (part) observer.observe(part);
+    void document.fonts.ready.then(fit);
+    return () => observer.disconnect();
+  }, [active, followed, chat.workspace, chat.label]);
+  const workspace =
+    active && fitted && fitted.full === chat.workspace ? fitted.shown : chat.workspace || null;
+  return { line, name, rest, workspace };
 }
 
 /**
