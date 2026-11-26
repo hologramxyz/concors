@@ -505,11 +505,7 @@ function AppContent() {
             }}
           >
             <FilesProvider beforeLeaveRef={beforeLeaveFiles}>
-              <NotificationProvider
-                connection={connection.transport}
-                onOpen={openAgent}
-                besideOverview={view === "supervisor" && supervisorOverview}
-              >
+              <NotificationProvider connection={connection.transport} onOpen={openAgent}>
                 <AgentsProvider connection={connection.transport} onStarted={openAgent}>
                   <TooltipProvider>
                     <div

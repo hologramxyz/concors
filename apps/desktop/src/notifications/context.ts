@@ -11,8 +11,8 @@ export function useViewedAgent(id: string, visible = true): void {
   useEffect(() => (visible ? view(id) : undefined), [id, view, visible]);
 }
 /**
- * Sessions whose state is on screen without their chat open, as Overview shows them. A card or
- * banner would only repeat what is in view, so none is shown; the session stays unread.
+ * Sessions whose state is on screen without their chat open, as Overview shows them. A banner
+ * would only repeat what is in view, so none is shown; the session stays unread.
  */
 export function useListedAgents(ids: readonly string[], visible = true): void {
   const { list } = useContext(NotificationContext);

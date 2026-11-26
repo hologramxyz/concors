@@ -6,9 +6,6 @@ export interface Notice {
   /** A desktop notification's title and text, which carry the workspace and tab as plain text. */
   title: string;
   body: string;
-  /** Where the agent is, which the in-app card shows apart from what it says. */
-  place: NoticePlace;
-  agent: string;
 }
 /** The workspace and tab an agent's pane is in; empty when it is not open in one. */
 export interface NoticePlace {
@@ -68,8 +65,6 @@ export class AttentionEngine {
       kind: attention.kind,
       title: place.workspace ? `${title} in ${place.workspace}` : title,
       body: place.tab && place.tab !== agent.name ? `${agent.name} in ${place.tab}` : agent.name,
-      place,
-      agent: agent.name,
     };
     if (focused) {
       if (attention.kind === "needs_input")

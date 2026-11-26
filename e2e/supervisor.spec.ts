@@ -325,11 +325,13 @@ test("a notification from the Supervisor names it as the place, and opens it", a
     );
     expect(result.outcome.status).toBe("ok");
     await expect.poll(titles).toEqual(["Agent finished in Supervisor"]);
-    const card = page.getByRole("complementary", { name: "Agent notifications" });
-    await expect(card.locator("[data-notice-place]")).toHaveText("Supervisor");
-    // The card itself opens the chat; it has no separate link.
-    await expect(card.getByText("Open conversation", { exact: true })).toHaveCount(0);
-    await card.getByRole("button", { name: /Agent finished/ }).click();
+    // No card in the app: the banner opens the chat.
+    await expect(page.getByRole("complementary", { name: "Agent notifications" })).toHaveCount(0);
+    await page.evaluate(() =>
+      (
+        Notification as unknown as { records: { onclick: (() => void) | null }[] }
+      ).records[0]?.onclick?.(),
+    );
     await expect(supervisor.getByRole("log")).toContainText("report back when you are done");
     await expect
       .poll(() => control.agents.find((agent) => agent.id === sessionId)?.attention?.seen)

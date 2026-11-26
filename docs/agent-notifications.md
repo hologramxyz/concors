@@ -27,13 +27,13 @@ inside the existing agent JSON record.
   attention ID for that machine/epoch/profile. Without Web Locks, concurrent-window deduplication
   is best effort; without storage, only the current connection can deduplicate. Different
   devices can each notify until shared attention is acknowledged.
-- Clicking a browser/native notification or in-app card opens the agent's global conversation.
-  Switching machines or resuming work invalidates old click targets. Dismissing a card closes
-  its browser notification but does not mark the conversation read.
-- A card nobody answers goes away by itself after five seconds, as a macOS or Windows banner
-  does. Only time it could be read counts: the window in front, and neither the pointer nor
-  keyboard focus on the card. Expiry only hides the card; the conversation stays unread and its
-  OS notification stays in the notification center.
+- Clicking a browser/native notification opens the agent's global conversation. Switching
+  machines or resuming work invalidates old click targets.
+- Agent events get no card inside the app: the banner, the sound, the sidebar's dot and the
+  unread state say them. Only a notice about notifications themselves, such as "Notifications are
+  off for Concors" when macOS blocks the banners, shows in the app, as a card at the bottom of the
+  sidebar (hidden while the sidebar is collapsed) until it is dismissed. The phone shows it over
+  the page.
 
 ## Agent CLIs in terminals
 

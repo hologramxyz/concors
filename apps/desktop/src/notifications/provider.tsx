@@ -1,56 +1,58 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { ChevronRight, Network } from "lucide-react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { X } from "lucide-react";
 import type { DaemonConnection } from "@concors/daemon-client";
-import type { ProjectIcon, TerminalInfo } from "@concors/protocol";
+import type { TerminalInfo } from "@concors/protocol";
 import { NotificationContext } from "./context";
 import { AttentionEngine, type Notice } from "./engine";
 import { claimNotification, getNotificationPreferences } from "./preferences";
-import { countdown } from "./countdown";
-import { noticeChatName, noticePlace } from "./place";
+import { noticePlace } from "./place";
 import { desktopNotice, notificationAccess, openNotificationSettings } from "./platform";
 import { errorMessage, firstNotificationProblem, notificationProblem } from "./access";
 import { isMac } from "@/shortcuts/bindings";
 import { isTauri } from "@/tauri";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { SidebarTooltip } from "@/components/sidebar-tooltip";
 import { playAgentSound, unlockAudio } from "./sound";
 import { terminalAgentSound } from "./terminal";
 import { paneNames } from "@/agents/visible-sessions";
 import { forgetTerminalTurn, markFailureSeen, markTerminalTurnSeen } from "@/agents/seen-updates";
-import { ProjectImage } from "@/workspace/project-image";
-import { projectIconKey, projectIcons } from "@/workspace/project-icons";
 
-/** How long an unanswered card stays readable, as long as a macOS or Windows banner does. */
-const CARD_TIMEOUT_MS = 5_000;
-/** Cards shown at once; older ones give way, so a burst never covers the window's controls. */
-const MAX_CARDS = 3;
+interface Problem {
+  message: string;
+  settings?: boolean;
+}
 
 export function NotificationProvider({
   connection,
   onOpen,
   children,
   inAppOnly = false,
-  cards = true,
-  besideOverview = false,
+  sidebar = true,
 }: {
   connection: DaemonConnection | null;
   onOpen: (id: string) => void;
   children: React.ReactNode;
   inAppOnly?: boolean;
   /**
-   * Show a card for each notice. Mobile does not, as Paseo does not: a phone has no room for
-   * small pop-ups, and the Agents list already marks what finished or needs input.
+   * The app shows a notice about notifications themselves ("Notifications are off for Concors")
+   * in its sidebar, with `SidebarNotice`. The phone has none, so the notice shows over the page.
+   * Agent events get no in-app card anywhere: the banner, the sound, the sidebar's dot and the
+   * unread state already say them.
    */
-  cards?: boolean;
-  /** Supervisor's Overview panel is open at the window's right edge; cards keep to its left. */
-  besideOverview?: boolean;
+  sidebar?: boolean;
 }) {
   const views = useRef(new Map<string, number>());
   const lists = useRef(new Map<string, number>());
-  const dismiss = useRef<(id: string) => void>(() => undefined);
   const acknowledge = useRef<() => void>(() => undefined);
-  const [notices, setNotices] = useState<Notice[]>([]);
-  const [problem, setProblem] = useState<{ message: string; settings?: boolean } | null>(null);
+  const [problem, setProblem] = useState<Problem | null>(null);
   const view = useCallback((id: string) => {
     views.current.set(id, (views.current.get(id) ?? 0) + 1);
     acknowledge.current();
@@ -62,8 +64,6 @@ export function NotificationProvider({
   }, []);
   const list = useCallback((ids: readonly string[]) => {
     for (const id of ids) lists.current.set(id, (lists.current.get(id) ?? 0) + 1);
-    // What came in view needs no card any more; the session stays unread.
-    setNotices((current) => current.filter((n) => !ids.includes(n.sessionId)));
     return () => {
       for (const id of ids) {
         const count = lists.current.get(id) ?? 0;
@@ -71,10 +71,6 @@ export function NotificationProvider({
         else lists.current.set(id, count - 1);
       }
     };
-  }, []);
-  // Only the card goes: the agent stays unread and its OS notification stays in the list.
-  const expire = useCallback((id: string) => {
-    setNotices((current) => current.filter((n) => n.id !== id));
   }, []);
   useEffect(() => {
     if (!connection) return;
@@ -86,9 +82,7 @@ export function NotificationProvider({
     const clear = (id: string) => {
       closes.get(id)?.close();
       closes.delete(id);
-      setNotices((current) => current.filter((n) => n.sessionId !== id));
     };
-    dismiss.current = clear;
     const sound = (kind: Notice["kind"]) => {
       void playAgentSound(kind).catch((cause: unknown) => {
         if (disposed) return;
@@ -116,10 +110,6 @@ export function NotificationProvider({
       clear,
       sound,
       show: (notice) => {
-        if (cards)
-          setNotices((current) =>
-            [...current.filter((n) => n.sessionId !== notice.sessionId), notice].slice(-MAX_CARDS),
-          );
         const open = () => {
           if (disposed) return;
           const agent = connection.agents.find((a) => a.id === notice.sessionId);
@@ -246,7 +236,6 @@ export function NotificationProvider({
     return () => {
       disposed = true;
       acknowledge.current = () => undefined;
-      dismiss.current = () => undefined;
       engine.dispose();
       stopTerminalSounds();
       offTerminal();
@@ -258,84 +247,16 @@ export function NotificationProvider({
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
     };
-  }, [connection, onOpen, inAppOnly, cards]);
+  }, [connection, onOpen, inAppOnly]);
+  const notice = useMemo(() => ({ problem, dismiss: () => setProblem(null) }), [problem]);
   return (
     <NotificationContext value={{ view, list }}>
-      {children}
-      {/*
-        Top right, below the tab bar and the pane's title row, where macOS shows its banners too:
-        a chat's approval card and composer grow up from the bottom, and a card there hid their
-        buttons. Beside Overview the cards sit left of its 340px panel (plus the surface's 0.5rem
-        margin and border), so they never cover its rows' Allow once and Decline.
-      */}
-      <aside
-        aria-label="Agent notifications"
-        className={cn(
-          "fixed top-24 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2",
-          besideOverview ? "right-[calc(340px+1.5rem+1px)]" : "right-4",
-        )}
-      >
-        {notices.map((notice) => (
-          <NoticeCard key={notice.id} id={notice.id} onExpire={expire}>
-            {/* The whole card but its dismiss button opens the chat, so it reaches its edges. */}
-            <button
-              className="min-w-0 flex-1 self-stretch p-3 pr-0 text-left"
-              onClick={() => {
-                if (
-                  connection?.agents.find((a) => a.id === notice.sessionId)?.attention?.id ===
-                  notice.id
-                )
-                  onOpen(notice.sessionId);
-                dismiss.current(notice.sessionId);
-              }}
-            >
-              {notice.place.workspace && (
-                <span
-                  data-notice-place
-                  className="mb-1.5 flex min-w-0 items-center gap-1.5 text-xs"
-                  title={[notice.place.workspace, notice.place.tab].filter(Boolean).join(" › ")}
-                >
-                  <NoticeWorkspaceIcon connection={connection} notice={notice} />
-                  <span className="truncate font-semibold text-foreground">
-                    {notice.place.workspace}
-                  </span>
-                  {notice.place.tab && (
-                    <>
-                      <ChevronRight
-                        aria-hidden="true"
-                        className="size-3 shrink-0 text-muted-foreground"
-                      />
-                      <span className="truncate text-muted-foreground">{notice.place.tab}</span>
-                    </>
-                  )}
-                </span>
-              )}
-              <span className="flex items-center gap-1.5 text-sm font-medium">
-                <span
-                  aria-hidden="true"
-                  className={`size-2 shrink-0 rounded-full ${notice.kind === "done" ? "bg-primary" : "bg-destructive"}`}
-                />
-                {notice.kind === "done" ? "Agent finished" : "Agent needs input"}
-              </span>
-              {noticeChatName(notice.agent, notice.place) && (
-                <span
-                  className="line-clamp-2 text-xs break-words text-muted-foreground"
-                  title={notice.agent}
-                >
-                  {notice.agent}
-                </span>
-              )}
-            </button>
-            <button
-              aria-label="Dismiss notification"
-              className="py-3 pr-3 pl-2 text-muted-foreground"
-              onClick={() => dismiss.current(notice.sessionId)}
-            >
-              ×
-            </button>
-          </NoticeCard>
-        ))}
-        {problem && (
+      <SidebarNoticeContext value={notice}>{children}</SidebarNoticeContext>
+      {!sidebar && problem && (
+        <aside
+          aria-label="Agent notifications"
+          className="fixed top-24 right-4 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
+        >
           <div role="status" className="rounded-lg border bg-card p-3 text-xs shadow-lg">
             {problem.message}
             <div className="mt-2 flex justify-end gap-2">
@@ -353,90 +274,58 @@ export function NotificationProvider({
               </Button>
             </div>
           </div>
-        )}
-      </aside>
+        </aside>
+      )}
     </NotificationContext>
   );
 }
 
-/** Whether this window is on screen with focus, which is when its cards can be read. */
+const SidebarNoticeContext = createContext<{ problem: Problem | null; dismiss: () => void }>({
+  problem: null,
+  dismiss: () => undefined,
+});
+
+/**
+ * "Notifications are off for Concors" and the like, as a card in the sidebar's stack, in the
+ * style of the Sign in card: one left edge for the text and the button, the × on the first line.
+ */
+export function SidebarNotice() {
+  const { problem, dismiss } = useContext(SidebarNoticeContext);
+  if (!problem) return null;
+  return (
+    <section role="status" className="mx-2 mb-1 shrink-0 rounded-xl border bg-muted/50 p-3 text-sm">
+      <div className="flex items-start justify-between gap-3">
+        <p className="font-medium text-foreground">{problem.message}</p>
+        {/* One title line tall, so the larger button centres on that line. */}
+        <div className="flex h-lh items-center">
+          <SidebarTooltip place="above" content="Dismiss">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground"
+              aria-label="Dismiss"
+              onClick={dismiss}
+            >
+              <X className="size-4" />
+            </Button>
+          </SidebarTooltip>
+        </div>
+      </div>
+      {problem.settings && (
+        <div className="mt-3">
+          <Button
+            variant="outline"
+            onClick={() => void openNotificationSettings().catch(() => undefined)}
+          >
+            Open System Settings
+          </Button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Whether this window is on screen with focus. */
 function windowInFront() {
   return document.visibilityState === "visible" && document.hasFocus();
 }
-function subscribeWindow(listener: () => void) {
-  window.addEventListener("focus", listener);
-  window.addEventListener("blur", listener);
-  document.addEventListener("visibilitychange", listener);
-  return () => {
-    window.removeEventListener("focus", listener);
-    window.removeEventListener("blur", listener);
-    document.removeEventListener("visibilitychange", listener);
-  };
-}
-
-/**
- * A card that goes away by itself once it has been readable for `CARD_TIMEOUT_MS`: the window in
- * front, and neither the pointer nor keyboard focus on the card, as toasts pause.
- */
-function NoticeCard({
-  id,
-  onExpire,
-  children,
-}: {
-  id: string;
-  onExpire: (id: string) => void;
-  children: React.ReactNode;
-}) {
-  const [run] = useState(() => countdown(CARD_TIMEOUT_MS));
-  const front = useSyncExternalStore(subscribeWindow, windowInFront);
-  const [pointer, setPointer] = useState(false);
-  const [focus, setFocus] = useState(false);
-  const running = front && !pointer && !focus;
-  useEffect(() => (running ? run(() => onExpire(id)) : undefined), [run, running, onExpire, id]);
-  return (
-    <div
-      className="flex items-start rounded-lg border bg-card shadow-lg"
-      onPointerEnter={() => setPointer(true)}
-      onPointerLeave={() => setPointer(false)}
-      onFocus={() => setFocus(true)}
-      onBlur={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setFocus(false);
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/** The workspace's own icon, so cards from different workspaces look different at a glance. */
-function NoticeWorkspaceIcon({
-  connection,
-  notice,
-}: {
-  connection: DaemonConnection | null;
-  notice: Notice;
-}) {
-  const cache = connection ? projectIcons(connection) : null;
-  const icons = useSyncExternalStore(
-    cache?.subscribe ?? noSubscription,
-    cache?.getSnapshot ?? noIcons,
-  );
-  const workspace = connection?.workspace;
-  // The Supervisor wears the mark its sidebar item has, not a workspace's initial.
-  if (workspace?.supervisor && workspace.supervisor.id === notice.place.projectId)
-    return <Network className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />;
-  const project = workspace?.projects.find((p) => p.id === notice.place.projectId);
-  const icon =
-    project && workspace ? icons.get(projectIconKey(workspace.epoch, project)) : undefined;
-  return (
-    <ProjectImage
-      source={icon?.source ?? null}
-      isGit={icon?.isGit ?? false}
-      name={notice.place.workspace}
-      size={16}
-    />
-  );
-}
-const empty = new Map<string, ProjectIcon>();
-const noIcons = () => empty;
-const noSubscription = () => () => undefined;

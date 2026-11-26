@@ -51,8 +51,8 @@ OpenCode or other configured harness and sign-in; Supervisor does not create ano
    button; **Review queue** opens the chat to resume it. An open request in the same chat shows
    instead. Once the queue is resumed or emptied, the chat goes back to where it belongs.
    Done shows the last day's finishes and any not yet opened; older ones fold under **Earlier**.
-   While Overview is open, the sessions it lists raise no notification cards. Desktop keeps
-   Overview beside the chat; a phone opens it in a drawer. Gists need a daemon with
+   While Overview is open in a window in front, the sessions it lists raise no banner. Desktop
+   keeps Overview beside the chat; a phone opens it in a drawer. Gists need a daemon with
    `supervisor-briefs-v1`.
 9. Type **@** in the message to mention an agent or workspace, as **/** lists commands, the
    sessions most recently active first. The message reads `@Name`, and carries the agent's ID, so a

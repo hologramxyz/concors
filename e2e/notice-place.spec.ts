@@ -9,7 +9,7 @@ import { chooseProvider } from "./support/agents.ts";
 import { tab } from "./support/tabs.ts";
 import { DaemonConnection, describeDaemonEndpoint } from "../packages/daemon-client/src/index.ts";
 
-test("an agent's notice names its workspace and tab apart from what the agent was doing", async ({
+test("an agent's banner names its workspace and tab, and opens its chat", async ({
   page,
   context,
 }) => {
@@ -23,8 +23,15 @@ test("an agent's notice names its workspace and tab apart from what the agent wa
     class TestNotification {
       static permission = "granted";
       static requestPermission = async () => "granted";
+      static records: TestNotification[] = [];
       onclick: (() => void) | null = null;
       closed = false;
+      constructor(
+        public title: string,
+        public options: { body?: string } = {},
+      ) {
+        TestNotification.records.push(this);
+      }
       close() {
         this.closed = true;
       }
@@ -69,17 +76,23 @@ test("an agent's notice names its workspace and tab apart from what the agent wa
     await page.getByRole("button", { name: "Engineering", exact: true }).click();
     await control.requestAgent({ kind: "send", sessionId: agent.id, text: "hello" }, randomUUID());
 
-    const notices = page.getByRole("complementary", { name: "Agent notifications" });
-    const place = notices.locator("[data-notice-place]");
-    // The pointer on the card holds it past its five seconds, however slow the checks below are.
-    await place.hover();
-    await expect(place).toHaveText("MarketingLaunch");
-    await expect(place).toHaveAttribute("title", "Marketing › Launch");
-    await expect(notices).toContainText("Agent finished");
-    await notices.screenshot({ path: test.info().outputPath("notice-place.png") });
-    await notices.getByRole("button", { name: /Marketing/ }).click();
+    const banners = () =>
+      page.evaluate(() =>
+        (
+          Notification as unknown as { records: { title: string; options: { body?: string } }[] }
+        ).records.map((r) => ({ title: r.title, body: r.options.body })),
+      );
+    await expect
+      .poll(banners)
+      .toEqual([{ title: "Agent finished in Marketing", body: "hello in Launch" }]);
+    // Agent events show no card in the app; the banner, the sound and the unread dot say them.
+    await expect(page.getByRole("complementary", { name: "Agent notifications" })).toHaveCount(0);
+    await page.evaluate(() =>
+      (
+        Notification as unknown as { records: { onclick: (() => void) | null }[] }
+      ).records[0]?.onclick?.(),
+    );
     await expect(page.getByRole("log")).toContainText("Hello from Codex");
-    await expect(place).toHaveCount(0);
   } finally {
     control.disconnect();
     await rm(first, { recursive: true, force: true });
