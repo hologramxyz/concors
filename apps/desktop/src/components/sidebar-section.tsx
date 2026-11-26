@@ -7,19 +7,22 @@ export function SidebarSection({
   children,
   compact = false,
   icon,
+  label = false,
 }: {
   title: string;
   action?: ReactNode;
   children: ReactNode;
   compact?: boolean;
   icon?: ReactNode;
+  /** Titled in the small label style, a divider between groups rather than a heading. */
+  label?: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
   const id = useId();
   return (
     <section aria-label={title}>
       <div
-        className={`group/section flex items-center gap-1 rounded-md hover:bg-sidebar-accent/70 has-[:focus-visible:not([data-pointer-focus])]:bg-sidebar-accent/70 ${compact ? "h-[32px] justify-center" : "h-8"}`}
+        className={`group/section flex items-center gap-1 rounded-md hover:bg-sidebar-accent/70 has-[:focus-visible:not([data-pointer-focus])]:bg-sidebar-accent/70 ${compact ? "h-[32px] justify-center" : label ? "h-7" : "h-8"}`}
       >
         {compact && action ? (
           <>
@@ -33,13 +36,13 @@ export function SidebarSection({
               aria-expanded={expanded}
               aria-controls={id}
               onClick={() => setExpanded(!expanded)}
-              className={`flex items-center rounded-md text-ui font-medium text-muted-foreground group-hover/section:text-sidebar-foreground ${compact ? "sidebar-rail-control" : "h-8 w-full gap-2 px-2 py-1.5"}`}
+              className={`flex items-center rounded-md font-medium text-muted-foreground group-hover/section:text-sidebar-foreground ${label ? "text-xs" : "text-ui"} ${compact ? "sidebar-rail-control" : `${label ? "h-7" : "h-8"} w-full gap-2 px-2 py-1.5`}`}
             >
               {compact ? (
                 <span aria-hidden="true">{icon}</span>
               ) : (
                 <ChevronRight
-                  className={`size-4 transition-transform ${expanded ? "rotate-90" : ""}`}
+                  className={`${label ? "size-3.5" : "size-4"} transition-transform ${expanded ? "rotate-90" : ""}`}
                 />
               )}
               <span className={compact ? "sr-only" : undefined}>{title}</span>

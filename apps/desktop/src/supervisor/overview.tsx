@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { ChevronRight, Folder, ListChecks, MessageCircle, X } from "lucide-react";
+import { ChevronRight, ListChecks, MessageCircle, X } from "lucide-react";
 import {
   agentProviderName,
   modelName,
@@ -8,10 +8,9 @@ import {
   type WorkspaceSnapshot,
 } from "@concors/protocol";
 import { cn } from "cn";
-import { chatAgentStatus } from "@/agents/agent-status";
 import { useAgents } from "@/agents/context";
 import { useListedAgents } from "@/notifications/context";
-import { ProviderIcon } from "@/agents/provider-icon";
+import { NoticeChat, RowProvider } from "@/agents/timeline-item";
 import { Button } from "@/components/ui/button";
 import { SidebarEmpty, SidebarSection } from "@/components/sidebar-section";
 import { SidebarTooltip } from "@/components/sidebar-tooltip";
@@ -23,7 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { shortAge } from "@/lib/format-date";
-import { RowDot, RowWorking, SidebarDot } from "@/workspace/sidebar-tabs";
+import { RowWorking, SidebarDot } from "@/workspace/sidebar-tabs";
 import { chatState, useMinuteClock } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
 import {
@@ -190,6 +189,7 @@ export function SupervisorOverview({
             <SidebarSection
               key={group}
               title={group}
+              label
               action={
                 recent.length > 0 && (
                   <span className="shrink-0 pr-2 text-xs text-muted-foreground tabular-nums">
@@ -198,7 +198,7 @@ export function SupervisorOverview({
                 )
               }
             >
-              <ul className="space-y-0.5">
+              <ul className="space-y-1">
                 {recent.map(item)}
                 {earlier.length > 0 && (
                   // Finishes from past days, folded as the sidebar folds closed chats: history,
@@ -222,7 +222,7 @@ export function SupervisorOverview({
                       <span className="flex-1">Earlier</span>
                     </button>
                     {earlierOpen && (
-                      <ul aria-label="Earlier" className="mt-0.5 space-y-0.5">
+                      <ul aria-label="Earlier" className="mt-1 space-y-1">
                         {earlier.map(item)}
                       </ul>
                     )}
@@ -261,10 +261,8 @@ export function SupervisorOverview({
       aria-label="Overview"
       className="flex w-[340px] shrink-0 flex-col border-l bg-sidebar text-ui text-sidebar-foreground"
     >
-      {/* The Files panel's header: icon, title, and a close button with its tooltip. */}
-      <div className="m-2 flex h-9 shrink-0 items-center gap-2 px-1 select-none">
-        <ListChecks className="size-4" />
-        <h2 className="min-w-0 flex-1 truncate font-medium">Overview</h2>
+      {/* The Files panel's close button with its tooltip; the toolbar's button already names it. */}
+      <div className="m-2 flex h-9 shrink-0 items-center justify-end px-1 select-none">
         <SidebarTooltip place="title-bar" content="Close overview">
           <Button size="icon-sm" variant="ghost" aria-label="Close overview" onClick={onClose}>
             <X className="size-4" />
@@ -277,10 +275,12 @@ export function SupervisorOverview({
 }
 
 /**
- * One session, laid out as a sidebar row that goes on: its dot, name and age (a spinner while it
- * works), then which model in which workspace, then its one-liners, because they are the reason to
- * look: what it needs from you, what it is doing or what it did. A paused queue offers "Review
- * queue", which opens the session where it is resumed. An approval says only what it
+ * One session, led by the Supervisor chat's notice line so the two read as one row: its provider's
+ * mark, "Workspace / Chat" with the chat's name in the stronger weight, how it ended or what is
+ * queued, then its age (a spinner while it works, the unseen dot before an unopened finish). Under
+ * it, in the text's column, its one-liners, because they are the reason to look: what it needs from
+ * you, what it is doing or what it did, two lines at most; last, its model, quietest of all. A
+ * paused queue offers "Review queue", which opens the session where it is resumed. An approval says only what it
  * would do, in at most two lines so several fit at once; a longer one unfolds in place, as Earlier
  * does, since nobody should approve what they cannot read in full.
  */
@@ -343,136 +343,137 @@ function OverviewItem({
   // quieter, since it is the request rather than anything the session said. An approval or a
   // paused queue says what it needs and nothing more, as the Supervisor chat's rows do.
   const said = approval || paused ? "" : row.update || (row.group === "Done" ? "" : task);
-  const asked = !row.update;
+  // The whole row opens its session, as a notice row's toggle lies under its line: the button
+  // spans the row and the row's own controls sit above it.
+  const control = "pointer-events-auto";
   return (
-    <li className="group/row rounded-md hover:bg-sidebar-accent/70 has-[:focus-visible]:bg-sidebar-accent/70">
+    <li className="relative rounded-md hover:bg-sidebar-accent/70 has-[:focus-visible]:bg-sidebar-accent/70">
       <button
         type="button"
         onClick={onOpen}
         aria-label={`Open ${name}`}
         data-overview-row={row.group}
-        className={cn(
-          "flex w-full min-w-0 items-start gap-2 rounded-md py-1.5 pr-2 pl-2 text-left text-ui outline-none",
-          foldable && "pb-0",
-        )}
-      >
+        className="absolute inset-0 rounded-md outline-none"
+      />
+      <div className="pointer-events-none relative flex min-w-0 items-start gap-2 px-2 py-1.5 text-ui">
         <span className="flex h-5 shrink-0 items-center">
-          {/* Everything under Needs you waits on a person, so it wears the attention dot even when
-              the chat's own state is quiet, as a paused queue behind a failure already seen is. */}
-          <RowDot
-            state={
-              row.group === "Needs you" ? "attention" : state === "working" ? undefined : state
-            }
-            status={chatAgentStatus(agent)}
-          />
+          <RowProvider sessionId={agent.id} />
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex h-5 min-w-0 items-center gap-2">
-            <span className="min-w-0 flex-1 truncate">{name}</span>
-            {row.group === "In progress" && state === "working" ? (
-              <RowWorking />
-            ) : (
-              <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                {shortAge(row.updatedAt, now)}
-              </span>
-            )}
-          </span>
-          <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="flex size-3.5 shrink-0 items-center justify-center opacity-80">
-              <ProviderIcon provider={agent.provider} size={12} />
-            </span>
-            <span className="min-w-0 truncate">{model}</span>
-            {/* The workspace behind the sidebar's folder icon, so it does not run into the model. */}
-            {workspace && (
-              <>
-                <span className="flex size-3.5 shrink-0 items-center justify-center opacity-80">
-                  <Folder className="size-3" aria-hidden="true" />
-                </span>
-                <span className="min-w-0 truncate">{workspace}</span>
-              </>
-            )}
+        <div className="min-w-0 flex-1">
+          {/* The Supervisor chat's notice line: "Workspace / Chat", then how it ended or what waits. */}
+          <div className="flex h-5 min-w-0 items-center gap-2">
+            <NoticeChat
+              title
+              chat={{ workspace, label: name }}
+              sessionId={agent.id}
+              className="shrink"
+            />
             {extras.map((part) => (
-              <span key={part} className="shrink-0">
+              <span
+                key={part}
+                className={cn(
+                  "shrink-0 text-xs",
+                  part === "Failed" ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
                 {part}
               </span>
             ))}
-          </span>
+            {row.group === "In progress" && state === "working" ? (
+              <span className="ml-auto flex shrink-0">
+                <RowWorking />
+              </span>
+            ) : (
+              <span className="ml-auto flex shrink-0 items-center gap-2">
+                {state === "done" && <SidebarDot dot="done" />}
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {shortAge(row.updatedAt, now)}
+                </span>
+              </span>
+            )}
+          </div>
           {row.needs && !foldable && (
             <span
               ref={approval ? measure : undefined}
               className={cn(
-                "mt-1 block leading-5 break-words text-muted-foreground",
+                "block leading-5 break-words text-muted-foreground",
                 approval && "line-clamp-2",
               )}
             >
               <NeedsText needs={row.needs} short={short} />
             </span>
           )}
+          {approval && foldable && (
+            // A disclosure as the Earlier fold, its chevron leading the text column.
+            <button
+              type="button"
+              aria-expanded={unfolded}
+              onClick={() => setUnfolded(!unfolded)}
+              className={cn(
+                control,
+                "mobile-hit-area flex w-full min-w-0 items-start gap-1.5 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              )}
+            >
+              <span className="flex h-5 shrink-0 items-center text-muted-foreground">
+                <ChevronRight
+                  aria-hidden="true"
+                  className={cn(
+                    "size-3.5 transition-transform motion-reduce:transition-none",
+                    unfolded && "rotate-90",
+                  )}
+                />
+              </span>
+              <span
+                ref={measure}
+                className={cn(
+                  "min-w-0 flex-1 leading-5 break-words text-muted-foreground",
+                  !unfolded && "line-clamp-2",
+                )}
+              >
+                <NeedsText needs={approval} short={short} />
+              </span>
+            </button>
+          )}
           {said && (
             <span
               className={cn(
-                "block leading-5 break-words",
-                row.needs ? "text-xs" : "mt-1",
-                row.needs || asked ? "text-muted-foreground" : "text-sidebar-foreground/90",
+                "block leading-5 break-words text-muted-foreground",
+                row.needs ? "text-xs" : "line-clamp-2",
               )}
             >
               {said}
             </span>
           )}
-        </span>
-      </button>
-      {approval && foldable && (
-        // A disclosure laid out as the Earlier fold: its chevron in the dot's column.
-        <div className="pt-1 pr-2 pb-1.5 pl-2">
-          <button
-            type="button"
-            aria-expanded={unfolded}
-            onClick={() => setUnfolded(!unfolded)}
-            className="mobile-hit-area flex w-full min-w-0 items-start gap-2 rounded text-left text-ui outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <span className="flex size-[20px] shrink-0 items-center justify-center text-muted-foreground">
-              <ChevronRight
-                aria-hidden="true"
+          {paused && (
+            <div className="mt-1.5 mb-1 flex">
+              {/* Outlined as the Supervisor chat's "Review queue" and the approval card's Decline. */}
+              <Button size="xs" variant="outline" className={control} onClick={onOpen}>
+                Review queue
+              </Button>
+            </div>
+          )}
+          {onAsk && (
+            <div className="mt-1.5 mb-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              {request && <QuickApproval agent={agent} pending={request} className={control} />}
+              <button
+                type="button"
+                disabled={!canAsk}
+                onClick={onAsk}
                 className={cn(
-                  "size-3.5 transition-transform motion-reduce:transition-none",
-                  unfolded && "rotate-90",
+                  control,
+                  "mobile-hit-area flex items-center gap-1 rounded text-xs text-muted-foreground outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
                 )}
-              />
-            </span>
-            <span
-              ref={measure}
-              className={cn(
-                "min-w-0 flex-1 leading-5 break-words text-muted-foreground",
-                !unfolded && "line-clamp-2",
-              )}
-            >
-              <NeedsText needs={approval} short={short} />
-            </span>
-          </button>
+              >
+                <MessageCircle className="size-3.5" />
+                Ask Supervisor
+              </button>
+            </div>
+          )}
+          <span className="block truncate text-[11px] leading-4 text-muted-foreground">
+            {model}
+          </span>
         </div>
-      )}
-      {paused && (
-        <div className="flex pr-2 pb-2 pl-9">
-          {/* Outlined as the Supervisor chat's "Review queue" and the approval card's Decline. */}
-          <Button size="xs" variant="outline" onClick={onOpen}>
-            Review queue
-          </Button>
-        </div>
-      )}
-      {onAsk && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 pr-2 pb-2 pl-9">
-          {request && <QuickApproval agent={agent} pending={request} />}
-          <button
-            type="button"
-            disabled={!canAsk}
-            onClick={onAsk}
-            className="flex items-center gap-1 rounded text-xs text-muted-foreground outline-none hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-          >
-            <MessageCircle className="size-3.5" />
-            Ask Supervisor
-          </button>
-        </div>
-      )}
+      </div>
     </li>
   );
 }
@@ -492,6 +493,11 @@ function NeedsText({
 }) {
   return (
     <>
+      {/* Everything under Needs you waits on a person, so its state wears the attention dot, as the
+          Supervisor chat's Needs block does, even when the chat's own state is quiet. */}
+      <span className="mr-1.5 inline-flex h-5 items-center align-top">
+        <SidebarDot dot="attention" />
+      </span>
       <span
         className={
           needs.action === "Failed"

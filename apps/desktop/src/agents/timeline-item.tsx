@@ -769,26 +769,39 @@ function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: Superviso
 /**
  * The chat a notice is about, as Supervisor's notice links it: "Workspace / Chat", the chat's name
  * opening it. On a phone the workspace's name gives way (mobile.css).
+ *
+ * Overview's rows lead with the same line, as `title`: there the whole row opens the chat, so the
+ * name is plain text in the stronger weight, and it keeps its width while the workspace gives way
+ * first, on a phone too, since the row has no other place that names the workspace.
  */
-function NoticeChat({
+export function NoticeChat({
   chat,
   sessionId,
   className,
+  title = false,
 }: {
-  chat: SupervisorReference;
+  chat: Pick<SupervisorReference, "workspace" | "label">;
   sessionId: string;
   className: string;
+  title?: boolean;
 }) {
   const openSession = useContext(SessionLinkContext);
   return (
     <span className={`flex min-w-0 items-center text-muted-foreground ${className}`}>
       {chat.workspace && (
-        <span data-answered-workspace className="flex min-w-0 items-center">
+        <span
+          data-answered-workspace={title ? undefined : true}
+          className={`flex min-w-0 items-center ${title ? "overflow-hidden" : ""}`}
+        >
           <span className="min-w-0 truncate">{chat.workspace}</span>
           <span className="shrink-0 whitespace-pre"> / </span>
         </span>
       )}
-      {openSession ? (
+      {title ? (
+        <span className="max-w-full shrink-0 truncate font-medium text-sidebar-foreground">
+          {chat.label}
+        </span>
+      ) : openSession ? (
         <button
           type="button"
           onClick={() => openSession(sessionId)}
@@ -1045,7 +1058,7 @@ function PausedRow({
  * The chat a notice is about, by its provider's mark as Overview's rows show it. A chat the app
  * no longer lists keeps the slot empty, so the row's text still lines up with the others.
  */
-function RowProvider({ sessionId }: { sessionId: string }) {
+export function RowProvider({ sessionId }: { sessionId: string }) {
   const agent = useAgents().find((a) => a.id === sessionId);
   return (
     <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground opacity-80">
