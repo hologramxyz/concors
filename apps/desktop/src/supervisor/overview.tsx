@@ -455,7 +455,7 @@ function OverviewItem({
             <span
               ref={approval ? measure : undefined}
               className={cn(
-                "block leading-5 break-words text-muted-foreground",
+                "mt-1 block leading-5 break-words text-muted-foreground",
                 approval && "line-clamp-2",
               )}
             >
@@ -470,7 +470,7 @@ function OverviewItem({
               onClick={() => setUnfolded(!unfolded)}
               className={cn(
                 control,
-                "mobile-hit-area flex w-full min-w-0 items-start gap-1.5 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                "mobile-hit-area mt-1 flex w-full min-w-0 items-start gap-1.5 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
               )}
             >
               <span className="flex h-5 shrink-0 items-center text-muted-foreground">
@@ -496,10 +496,11 @@ function OverviewItem({
           {said && (
             <span
               className={cn(
-                "block leading-5 break-words text-muted-foreground",
-                // Needs you keeps its small print; an unopened finish keeps two lines, as it is news;
-                // the rest say their gist in one.
-                row.needs ? "text-xs" : unseenDone(row) ? "line-clamp-2" : "truncate",
+                // A step smaller than the title above it, so the title reads as one.
+                "mt-1 block text-xs leading-5 break-words text-muted-foreground",
+                // Needs you keeps its line as it is; an unopened finish keeps two lines, as it is
+                // news; the rest say their gist in one.
+                row.needs ? "" : unseenDone(row) ? "line-clamp-2" : "truncate",
               )}
             >
               {said}
@@ -528,12 +529,20 @@ function OverviewItem({
                 )}
               >
                 <MessageCircle className="size-3.5" />
-                Ask Supervisor
+                {/* Trimmed to its capitals, so the icon centres on the letters rather than on a line
+                    box that runs below them. */}
+                <span className="[text-box:trim-both_cap_alphabetic]">Ask Supervisor</span>
               </button>
             </div>
           )}
-          {/* The provider's mark before the model's name, as the composer's model picker has them. */}
-          <span className="flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground">
+          {/* The provider's mark before the model's name, as the composer's model picker has them;
+              set off from the line above it as lines in a row are, unless actions already are. */}
+          <span
+            className={cn(
+              "flex min-w-0 items-center gap-1.5 text-[11px] leading-4 text-muted-foreground",
+              !paused && !onAsk && "mt-1",
+            )}
+          >
             <span className="flex size-3.5 shrink-0 items-center justify-center opacity-80">
               <ProviderIcon provider={agent.provider} size={12} />
             </span>
