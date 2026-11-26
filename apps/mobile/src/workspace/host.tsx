@@ -42,6 +42,7 @@ import { useAppearance } from "../appearance-provider";
 import { disablePush, enablePush, pushEnabled } from "../platform/notifications";
 import { Button, Copy } from "../ui";
 import { WorkspaceRenderer } from "./renderer";
+import { openPreviewInApp } from "./open-preview";
 import { AISharingDrawer } from "./ai-sharing-drawer";
 import { useAISharingPrompt } from "./use-ai-sharing-prompt";
 import type { WorkspaceRendererHandle } from "./renderer-types";
@@ -452,7 +453,8 @@ function SignedInWorkspace() {
         if (!confirmed) throw new Error("This preview is no longer available.");
         const url = transport.previewUrl(action.preview);
         if (!url) throw new Error("This machine connection does not support browser previews.");
-        await openExternalLink(url, true);
+        if (Platform.OS === "web") await openExternalLink(url, true);
+        else openPreviewInApp(url);
         return;
       }
     }

@@ -21,8 +21,7 @@ import { ProviderRegistry } from "./providers/registry.ts";
 import { TEMPORARY_FOLDERS, isProjectFolder } from "./native-sessions.ts";
 
 // Every test here spawns a daemon plus a fake provider; Windows CI runners need well over the
-// 5 s default before the first turn streams.
-vi.setConfig({ testTimeout: 15_000 });
+// 5 s default before the first turn streams. vitest.config.ts allows for that, more on Windows.
 
 let server: DaemonServer | undefined;
 let directory = "";
