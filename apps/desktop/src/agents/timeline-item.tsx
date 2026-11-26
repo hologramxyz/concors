@@ -799,11 +799,15 @@ export function NoticeChat({
     title,
     children != null && children !== false,
   );
+  // Overview's line is trimmed to its capitals, as the workspace's letter tile is, so the row
+  // centres them on the icon rather than the line, whose baseline the font sets a little high. The
+  // name's padding keeps descenders inside its clip and leaves its centre where it is.
+  const capitals = title ? "[text-box:trim-both_cap_alphabetic]" : "";
   if (title || compact)
     return (
       <span ref={line} className={`flex min-w-0 items-center text-muted-foreground ${className}`}>
         {workspace && (
-          <span className="flex shrink-0 items-center whitespace-pre">
+          <span className={`shrink-0 whitespace-pre ${capitals}`}>
             {workspace}
             {" / "}
           </span>
@@ -811,7 +815,7 @@ export function NoticeChat({
         {title ? (
           <span
             ref={name as RefObject<HTMLSpanElement>}
-            className="min-w-0 truncate font-medium text-sidebar-foreground"
+            className={`min-w-0 truncate py-1 font-medium text-sidebar-foreground ${capitals}`}
           >
             {chat.label}
           </span>

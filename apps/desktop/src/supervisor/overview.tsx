@@ -374,7 +374,7 @@ function OverviewItem({
                   <span
                     key={part}
                     className={cn(
-                      "text-xs",
+                      "text-xs [text-box:trim-both_cap_alphabetic]",
                       part === "Failed" ? "text-destructive" : "text-muted-foreground",
                     )}
                   >
@@ -389,7 +389,7 @@ function OverviewItem({
             ) : (
               <span className="ml-auto flex shrink-0 items-center gap-2">
                 {state === "done" && <SidebarDot dot="done" />}
-                <span className="text-xs text-muted-foreground tabular-nums">
+                <span className="text-xs text-muted-foreground tabular-nums [text-box:trim-both_cap_alphabetic]">
                   {shortAge(row.updatedAt, now)}
                 </span>
               </span>

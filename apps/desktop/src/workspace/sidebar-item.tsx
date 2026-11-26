@@ -155,8 +155,16 @@ export function WorkspaceSidebarItem({
       )}
     >
       {image}
+      {/* Names are trimmed to their cap height, as the icon's letter is, so the row centres the
+          capitals on the icon rather than the line, whose baseline the font sets a little high.
+          The padding keeps descenders inside the clip and leaves the centre where it is. */}
       {!compact && (
-        <span className={cn("truncate", current === false && "text-sidebar-foreground/80")}>
+        <span
+          className={cn(
+            "truncate py-1 [text-box:trim-both_cap_alphabetic]",
+            current === false && "text-sidebar-foreground/80",
+          )}
+        >
           {mobile ? (
             project.name
           ) : (
@@ -168,7 +176,9 @@ export function WorkspaceSidebarItem({
         </span>
       )}
       {!compact && parent && (
-        <span className="min-w-0 shrink-[2] truncate text-muted-foreground">{parent}</span>
+        <span className="min-w-0 shrink-[2] truncate py-1 text-muted-foreground [text-box:trim-both_cap_alphabetic]">
+          {parent}
+        </span>
       )}
       {toggles && !compact && (
         // Desktop's fold chevron, shown for good where touch has no hover to reveal it, at the
