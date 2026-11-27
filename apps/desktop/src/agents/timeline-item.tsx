@@ -1,5 +1,5 @@
-import { mentionSegments, splitSupervisorReferences } from "@/supervisor/reference-text";
-import { MentionIcon } from "@/supervisor/mention-menu";
+import { copyChips, mentionSegments, splitSupervisorReferences } from "@/supervisor/reference-text";
+import { MentionChip } from "@/supervisor/mention-menu";
 import { ApprovalAction, WatchedApproval } from "@/supervisor/quick-approval";
 import {
   pendingNotice,
@@ -35,16 +35,7 @@ import { SupervisorReferences, type SupervisorReference } from "@/supervisor/ref
 import { SessionLinkContext } from "@/supervisor/session-link";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import { MessageAttachments } from "./attachment-preview";
-import {
-  memo,
-  useContext,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  type ClipboardEvent,
-  type RefObject,
-} from "react";
+import { memo, useContext, useId, useLayoutEffect, useMemo, useRef, type RefObject } from "react";
 import { FileLinkContext } from "@/files/context";
 import { formatDuration } from "./duration";
 import { extractToolCallFilePath } from "./paseo/extract-tool-call-file-path";
@@ -87,21 +78,6 @@ import {
   type StepKind,
 } from "./step-groups";
 
-/**
- * Copies a sent message's selection with each mention chip as the "@Name" it was written as: left
- * to the browser, a chip's icon box would break the line before it.
- */
-function copyMentions(event: ClipboardEvent<HTMLParagraphElement>) {
-  const selection = window.getSelection();
-  if (!selection?.rangeCount) return;
-  const fragment = selection.getRangeAt(0).cloneContents();
-  const chips = fragment.querySelectorAll<HTMLElement>("[data-mention]");
-  if (!chips.length) return;
-  for (const chip of chips) chip.replaceWith(`@${chip.dataset["mention"] ?? ""}`);
-  event.clipboardData.setData("text/plain", fragment.textContent ?? "");
-  event.preventDefault();
-}
-
 /** Memoized: merges keep unchanged items' identity, so a streamed delta re-renders one row
  * instead of re-parsing every message's Markdown while the user scrolls. */
 export const TimelineItem = memo(function TimelineItem({
@@ -143,36 +119,26 @@ export const TimelineItem = memo(function TimelineItem({
         {item.kind === "user" && <MessageAttachments item={item} className="mb-2" />}
         <div className="chat-markdown break-words">
           {item.kind === "user" ? (
-            <p className="whitespace-pre-wrap" onCopy={copyMentions}>
-              {/* A mention is a chip in the inline-code look, led by the mark the @ list gives
-                  it, on the text's baseline and never split across lines. A screen reader hears
-                  "mention" and the name; a copy reads "@Name" as written. The IDs travel with
-                  the message; a gone target keeps the list's fallback mark. */}
+            <p className="whitespace-pre-wrap" onCopy={copyChips}>
+              {/* A mention is a chip (see `MentionChip`). A screen reader hears "mention" and the
+                  name; a copy reads "@Name" as written. The IDs travel with the message. */}
               {mentionSegments(message?.text ?? "", message?.references ?? []).map(
                 (part, index) => {
                   const reference =
                     part.mention &&
                     message?.references.find((ref) => `@${ref.label}` === part.text);
                   return reference ? (
-                    <span
+                    <MentionChip
                       key={index}
                       data-mention={reference.label}
-                      className="relative inline-flex h-[20px] items-center rounded-sm bg-muted pr-[4px] pl-[22px] font-medium whitespace-nowrap before:sr-only before:content-['mention,_']"
+                      reference={reference}
+                      className="before:sr-only before:content-['mention,_']"
                     >
-                      {/* The name, trimmed to its capitals, is the chip's only flex item, so the
-                          chip sits on the text's baseline in every engine, centred in its 20px.
-                          The 16px mark is inset 2px on its left, top and bottom, then 4px to the
-                          name: whole pixels, so the edges round alike at any device scale. */}
-                      <span className="absolute top-[2px] left-[2px] select-none *:size-auto">
-                        <MentionIcon reference={reference} />
+                      <span aria-hidden="true" className="sr-only">
+                        @
                       </span>
-                      <span className="[text-box:trim-both_cap_alphabetic]">
-                        <span aria-hidden="true" className="sr-only">
-                          @
-                        </span>
-                        {reference.label}
-                      </span>
-                    </span>
+                      {reference.label}
+                    </MentionChip>
                   ) : (
                     part.text
                   );

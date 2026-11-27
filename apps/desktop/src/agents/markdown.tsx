@@ -1,3 +1,5 @@
+import { MentionChip } from "@/supervisor/mention-menu";
+import { copyChips } from "@/supervisor/reference-text";
 import { SessionLinkContext, sessionLink } from "@/supervisor/session-link";
 import { useContext } from "react";
 import { FileLinkContext, FileLinkTargetContext } from "@/files/context";
@@ -148,13 +150,25 @@ function MarkdownLink({ children: content, href, node: _node, ...props }: LinkPr
   const openFile = useContext(FileLinkContext);
   const fileTarget = useContext(FileLinkTargetContext);
   const connection = useContext(TerminalConnectionContext);
-  const { sourcePath } = useContext(MarkdownScope);
+  const { sourcePath, item } = useContext(MarkdownScope);
   const preview = href && connection ? localPreviewLink(href) : null;
   const previewUrl =
     preview && connection?.endpoint.kind === "remote"
       ? connection.previewUrl(preview.preview)
       : null;
   const targetSession = sessionLink(href);
+  // A chat Supervisor links in its reply reads as a mention does in a sent message. Its notices,
+  // and the replies they quote, keep the plain link.
+  if (targetSession && openSession && item?.kind === "assistant")
+    return (
+      <MentionChip
+        data-chat-link=""
+        reference={{ id: targetSession, kind: "Agent", label: codeText(content) }}
+        open={() => openSession(targetSession)}
+      >
+        {content}
+      </MentionChip>
+    );
   if (targetSession && openSession)
     return (
       <button
@@ -268,7 +282,7 @@ export function AgentMarkdown({
   const openFile = useContext(FileLinkContext);
   return (
     <MarkdownScope value={{ item, sourcePath, source: children }}>
-      <div className="chat-markdown min-w-0 break-words">
+      <div className="chat-markdown min-w-0 break-words" onCopy={copyChips}>
         <Markdown
           remarkPlugins={openFile ? WITH_FILE_MENTIONS : PLAIN}
           // Image sources are only matched against the images the daemon kept, never loaded.

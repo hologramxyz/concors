@@ -1,6 +1,14 @@
 import { ChevronRight } from "lucide-react";
 import { Popover } from "radix-ui";
-import { useContext, useEffect, useId, useRef, type RefObject } from "react";
+import {
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  type ComponentProps,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { useAgents } from "@/agents/context";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { ProviderIcon } from "@/agents/provider-icon";
@@ -27,6 +35,53 @@ export function MentionIcon({ reference }: { reference: SupervisorReference }) {
           size={16}
         />
       )}
+    </span>
+  );
+}
+
+/**
+ * A mention as a chip, in the inline-code look, led by the mark the @ list gives it, on the text's
+ * baseline and never split across lines: a mention in a sent message, and a chat Supervisor links
+ * in a reply, which `open` makes a button that opens it. A gone target keeps the list's fallback
+ * mark. `children` is the name, trimmed to its capitals as the chip's only flex item, so the chip
+ * sits on the text's baseline in every engine, centred in its 20px. The 16px mark is inset 2px on
+ * its left, top and bottom, then 4px to the name: whole pixels, so the edges round alike at any
+ * device scale.
+ */
+export function MentionChip({
+  reference,
+  open,
+  className = "",
+  children,
+  ...props
+}: {
+  reference: SupervisorReference;
+  open?: () => void;
+  children: ReactNode;
+} & Omit<ComponentProps<"span">, "children">) {
+  const chip = `relative inline-flex h-[20px] items-center rounded-sm bg-muted pr-[4px] pl-[22px] font-medium whitespace-nowrap ${className}`;
+  const content = (
+    <>
+      <span className="absolute top-[2px] left-[2px] select-none *:size-auto">
+        <MentionIcon reference={reference} />
+      </span>
+      <span className="[text-box:trim-both_cap_alphabetic]">{children}</span>
+    </>
+  );
+  if (open)
+    return (
+      <button
+        {...(props as ComponentProps<"button">)}
+        type="button"
+        className={`${chip} cursor-pointer underline-offset-2 hover:underline`}
+        onClick={open}
+      >
+        {content}
+      </button>
+    );
+  return (
+    <span {...props} className={chip}>
+      {content}
     </span>
   );
 }

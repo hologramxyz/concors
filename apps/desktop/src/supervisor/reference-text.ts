@@ -1,3 +1,4 @@
+import type { ClipboardEvent } from "react";
 import { z } from "zod";
 import { SUPERVISOR_REFERENCES_MARKER as marker } from "@concors/protocol";
 
@@ -146,4 +147,25 @@ export function mentionSegments(text: string, references: readonly SupervisorRef
     .split(new RegExp(`(${escaped.join("|")})`))
     .filter(Boolean)
     .map((part) => ({ text: part, mention: labels.includes(part) }));
+}
+
+/**
+ * Copies a selection with each chip as the text it stands for: a mention as the "@Name" it was
+ * written as, a linked chat as its link text. Left to the browser, a chip's icon box would break
+ * the line before it.
+ */
+export function copyChips(event: ClipboardEvent<HTMLElement>) {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) return;
+  const fragment = selection.getRangeAt(0).cloneContents();
+  const chips = fragment.querySelectorAll<HTMLElement>("[data-mention], [data-chat-link]");
+  if (!chips.length) return;
+  for (const chip of chips)
+    chip.replaceWith(
+      "mention" in chip.dataset
+        ? `@${chip.dataset["mention"] ?? ""}`
+        : (chip.lastElementChild?.textContent ?? ""),
+    );
+  event.clipboardData.setData("text/plain", fragment.textContent ?? "");
+  event.preventDefault();
 }
