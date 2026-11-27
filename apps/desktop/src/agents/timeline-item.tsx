@@ -745,25 +745,30 @@ function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: Superviso
           aria-labelledby={`${id}-action ${id}-mark`}
           className="absolute inset-0 rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         />
-        <RowWorkspace sessionId={notice.sessionId} />
-        <NoticeChat chat={chat} sessionId={notice.sessionId} className="max-w-1/2 shrink-0" />
-        <span
-          ref={target}
-          id={`${id}-action`}
-          aria-hidden
-          className={`min-w-0 truncate ${command ? "font-mono text-ui" : ""}`}
-        >
-          {line}
+        {/* The state word sits on the chat's baseline, its chevron centred on it (see FinishedRow). */}
+        <span className="flex w-full min-w-0 items-baseline gap-2">
+          <RowWorkspace sessionId={notice.sessionId} />
+          <NoticeChat chat={chat} sessionId={notice.sessionId} className="max-w-1/2 shrink-0" />
+          <span
+            ref={target}
+            id={`${id}-action`}
+            aria-hidden
+            className={`min-w-0 self-center truncate ${command ? "font-mono text-ui" : ""}`}
+          >
+            {line}
+          </span>
+          <span className="flex shrink-0 items-center gap-2">
+            <span id={`${id}-mark`} aria-hidden className="text-xs text-muted-foreground">
+              Answered
+            </span>
+            {expandable && (
+              // Rotated, it would sit above the toggle and take its clicks.
+              <ChevronRight
+                className={`pointer-events-none size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
+              />
+            )}
+          </span>
         </span>
-        <span id={`${id}-mark`} aria-hidden className="shrink-0 text-xs text-muted-foreground">
-          Answered
-        </span>
-        {expandable && (
-          // Rotated, it would sit above the toggle and take its clicks.
-          <ChevronRight
-            className={`pointer-events-none size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
-          />
-        )}
       </div>
       <Collapse open={open}>
         <div className="pt-1 pb-2">
@@ -1223,20 +1228,28 @@ function FinishedRow({
             className="absolute inset-0 rounded-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
           />
         )}
-        <RowWorkspace sessionId={notice.sessionId} />
-        <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
-        <span
-          id={`${id}-mark`}
-          className={`shrink-0 text-xs ${failed ? "text-destructive" : "text-muted-foreground"}`}
-        >
-          {word}
+        {/* The state word is smaller than the chat's name, so centring both would lift its
+            letters off the name's baseline. The line aligns them by baseline instead, inside the
+            row that centres it (a phone's row is taller than its line); the workspace's icon stays
+            centred on the line, and the chevron on the word. */}
+        <span className="flex w-full min-w-0 items-baseline gap-2">
+          <RowWorkspace sessionId={notice.sessionId} />
+          <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
+          <span className="flex shrink-0 items-center gap-2">
+            <span
+              id={`${id}-mark`}
+              className={`text-xs ${failed ? "text-destructive" : "text-muted-foreground"}`}
+            >
+              {word}
+            </span>
+            {expandable && (
+              // Rotated, it would sit above the toggle and take its clicks.
+              <ChevronRight
+                className={`pointer-events-none size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
+              />
+            )}
+          </span>
         </span>
-        {expandable && (
-          // Rotated, it would sit above the toggle and take its clicks.
-          <ChevronRight
-            className={`pointer-events-none size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
-          />
-        )}
       </div>
       {notice.quote !== null && (
         <div className="ml-[7px] min-w-0 border-l pl-4">{open ? full : folded}</div>
@@ -1289,9 +1302,12 @@ function PausedRow({
   return (
     <article aria-label={`${chat.label} ${word.toLowerCase()}`} className="text-sm">
       <div className="mobile-tap-target relative flex w-full min-w-0 items-center gap-2 py-0.5">
-        <RowWorkspace sessionId={notice.sessionId} />
-        <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
-        <span className="shrink-0 text-xs text-muted-foreground">{word}</span>
+        {/* On the chat's baseline, as FinishedRow's state word. */}
+        <span className="flex w-full min-w-0 items-baseline gap-2">
+          <RowWorkspace sessionId={notice.sessionId} />
+          <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
+          <span className="shrink-0 text-xs text-muted-foreground">{word}</span>
+        </span>
       </div>
     </article>
   );
@@ -1306,7 +1322,7 @@ export function RowWorkspace({ sessionId }: { sessionId: string }) {
   const agent = useAgents().find((a) => a.id === sessionId);
   const image = useContext(WorkspaceImageContext)(agent?.projectId ?? "");
   return (
-    <span className="flex size-3.5 shrink-0 items-center justify-center text-muted-foreground opacity-80">
+    <span className="flex size-3.5 shrink-0 items-center justify-center self-center text-muted-foreground opacity-80">
       <ProjectImage
         key={image?.source ?? "fallback"}
         source={image?.source ?? null}
