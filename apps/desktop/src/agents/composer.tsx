@@ -56,7 +56,11 @@ import { usageView } from "./context-window";
 import { usePlanUsage } from "./use-plan-usage";
 import { AgentModelPicker } from "./model-picker";
 import { useModelMenuActions } from "./model-menu-actions";
-import { modelMenuFooter, nativeComposerControls } from "./native-composer-controls";
+import {
+  mentionAtCaret,
+  modelMenuFooter,
+  nativeComposerControls,
+} from "./native-composer-controls";
 import { accountName } from "./account-name";
 import { useProviderUpdate } from "./provider-update-state";
 import { openExternal } from "@/tauri/open-external";
@@ -147,6 +151,10 @@ export function AgentComposer({
   const [editAck, setEditAck] = useState(0);
   const [recall, setRecall] = useState<PromptRecall>(NO_RECALL);
   const nativeEditSequence = useRef(0);
+  // The phone's Mention drawer, opened from the native toolbar: where the caret was, and where it
+  // goes when the field comes back.
+  const [mentionAt, setMentionAt] = useState<number | null>(null);
+  const [refocus, setRefocus] = useState<number | undefined>();
   const nativeField = useRef<HTMLDivElement>(null);
   const expanded = native ? nativeExpanded : webExpanded;
   const [keyboardHelp, setKeyboardHelp] = useState(false);
@@ -327,17 +335,28 @@ export function AgentComposer({
     setReferences((refs) => [...refs, reference]);
     return true;
   };
-  // The phone app's native field cannot open a menu as `@` is typed, so it gets a button instead.
-  const mentionPicker = native && references.length > 0 && (
+  // The phone app's native field cannot open a menu as `@` is typed, so its toolbar has an "@" that
+  // opens the names in a drawer. The chosen one goes where the caret was.
+  const mentionable = native && references.length > 0;
+  const mentionDisabled = !connected || busy || uncertain || !!deferred;
+  const mentionPicker = mentionable && (
     <SupervisorReferencePicker
       references={references}
       closed={closedReferences}
-      disabled={!connected || busy || uncertain || !!deferred}
+      open={mentionAt !== null}
+      onOpenChange={(open) => {
+        if (open || mentionAt === null) return;
+        setMentionAt(null);
+        // Picking a name has already said where the caret goes.
+        setRefocus((at) => at ?? mentionAt);
+      }}
       onSelect={(reference) => {
-        if (remember(reference))
-          setDraft(
-            (text) => `${text && !/\s$/.test(text) ? `${text} ` : text}@${reference.label} `,
-          );
+        if (mentionAt === null) return;
+        const next = mentionAtCaret(draft, mentionAt, reference.label);
+        if (next && remember(reference)) {
+          setDraft(next.text);
+          setRefocus(next.caret);
+        }
       }}
     />
   );
@@ -833,6 +852,8 @@ export function AgentComposer({
             })
           : [],
       }),
+      mention: mentionable,
+      refocus,
       dictationHelp,
       usage: usageView(agent, planUsage),
     },
@@ -849,8 +870,10 @@ export function AgentComposer({
           setDraft(event.text);
           setEditAck(event.sequence);
         }
-      } else if (event.kind === "focus") setNativeExpanded(event.focused);
-      else if (event.kind === "height") setNativeHeight(event.height);
+      } else if (event.kind === "focus") {
+        setNativeExpanded(event.focused);
+        if (event.focused) setRefocus(undefined);
+      } else if (event.kind === "height") setNativeHeight(event.height);
       else if (event.kind === "attachments") {
         if (!advanced || !connected || busy || attaching || uncertain) return;
         if (uploads)
@@ -881,6 +904,13 @@ export function AgentComposer({
         } else if (event.control === "context" || event.control === "context-refresh") {
           // Like the desktop popover: plan usage is read while the sheet is open, not before.
           planUsage.refresh(agent.id, event.control === "context-refresh");
+        } else if (event.control === "mention") {
+          const text = event.text ?? draft;
+          const at = Math.min(Math.max(0, Number(event.value) || 0), text.length);
+          setRefocus(undefined);
+          // Without the drawer the field must still come back, or it stays waiting for it.
+          if (mentionable && !mentionDisabled) setMentionAt(at);
+          else setRefocus(at);
         } else if (event.control === "model-open") {
           // Like the desktop menu: it opens on the current provider, and asks then if it's signed in.
           setNativeProviderPage(agent.provider);
@@ -1404,12 +1434,7 @@ export function AgentComposer({
               ))}
             </div>
           )}
-          {mentionPicker && (
-            // Under any attachments, flush with the bar's left edge, the chips' gap above it.
-            <div className="flex items-center pb-2" data-composer-attachments>
-              {mentionPicker}
-            </div>
-          )}
+          {mentionPicker}
           {dictation.active ? (
             <DictationRecording
               state={dictation}

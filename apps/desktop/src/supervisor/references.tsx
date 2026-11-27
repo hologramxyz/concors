@@ -2,7 +2,7 @@ import { useContext, useState } from "react";
 import { useAgents } from "@/agents/context";
 import { ProjectImage } from "@/workspace/project-image";
 import { WorkspaceImageContext, projectImageProps } from "@/workspace/use-project-icons";
-import { AtSign, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -10,35 +10,35 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { mentionGroups, type SupervisorReference } from "./reference-text";
 import { MentionIcon } from "./mention-menu";
 
 /**
  * Mentions for the phone app's native message field, which cannot open a list as `@` is typed:
- * a Mention chip opens the same names in a drawer. Everywhere else `@` in the message does this.
- * Closed chats come last, folded under Closed as in the typed list.
+ * the "@" in its toolbar opens the same names in this drawer. Everywhere else `@` in the message
+ * does this. Closed chats come last, folded under Closed as in the typed list.
  */
 export function SupervisorReferencePicker({
   references,
   closed,
-  disabled,
+  open,
+  onOpenChange,
   onSelect,
 }: {
   references: readonly SupervisorReference[];
   closed: ReadonlySet<string>;
-  disabled: boolean;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onSelect: (ref: SupervisorReference) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [closedOpen, setClosedOpen] = useState<boolean | null>(null);
   const agents = useAgents();
   const workspaceImage = useContext(WorkspaceImageContext);
   const groups = mentionGroups(references, closed, query, closedOpen, references.length);
   const changeOpen = (next: boolean) => {
-    setOpen(next);
+    onOpenChange(next);
     setQuery("");
     setClosedOpen(null);
   };
@@ -77,19 +77,6 @@ export function SupervisorReferencePicker({
   };
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
-      <DialogTrigger asChild>
-        {/* The pull request page's filter chip, unpressed, on the page colour so the timeline
-            under the floating composer does not show through. Its hit area makes the tap 44pt. */}
-        <button
-          type="button"
-          className="mobile-hit-area flex h-7 shrink-0 items-center gap-1.5 rounded-md border bg-background pr-2.5 pl-1.5 text-ui text-muted-foreground hover:bg-muted/70 hover:text-foreground disabled:opacity-50 max-sm:h-8.5 max-sm:rounded-[calc(var(--radius-md)+(0.125rem+1px)*var(--concentric))]"
-          aria-label="Mention an agent or workspace"
-          disabled={disabled}
-        >
-          <AtSign className="size-3.5" aria-hidden="true" />
-          Mention
-        </button>
-      </DialogTrigger>
       <DialogContent className="gap-3" onOpenAutoFocus={(event) => event.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Mention</DialogTitle>

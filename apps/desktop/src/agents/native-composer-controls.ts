@@ -354,3 +354,19 @@ export function nativeComposerControls({
     ...pages,
   ];
 }
+
+/**
+ * Writes `@Name` into the phone's native draft where its caret was when Mention was pressed, a
+ * space apart from the words on either side, and says where the caret goes: just after the name
+ * and its space. Null when the message would grow past what it can hold.
+ */
+export function mentionAtCaret(text: string, caret: number, label: string) {
+  const at = Math.min(Math.max(0, caret), text.length);
+  const before = text.slice(0, at);
+  const after = text.slice(at);
+  // Reuse a space that already follows rather than doubling it; the caret goes past it either way.
+  const reuse = /^\s/.test(after);
+  const name = `${before && !/\s$/.test(before) ? " " : ""}@${label}${reuse ? "" : " "}`;
+  const next = before + name + after;
+  return next.length > 16000 ? null : { text: next, caret: at + name.length + (reuse ? 1 : 0) };
+}

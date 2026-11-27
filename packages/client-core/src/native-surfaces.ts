@@ -25,6 +25,7 @@ export const NativeIconSchema = z.enum([
   "mic",
   "machine",
   "account",
+  "at",
 ]);
 export type NativeIcon = z.infer<typeof NativeIconSchema>;
 // Model IDs and encoded feature values must survive both sides of the native bridge.
@@ -142,6 +143,13 @@ export const NativeSurfaceContentSchema = z.discriminatedUnion("kind", [
     uploads: z.boolean().optional(),
     /** The toolbar's buttons, and the pages their sheets open: at most one per feature (64). */
     controls: z.array(NativeControlSchema).max(72),
+    /** The Supervisor chat's toolbar has an "@" that opens its Mention drawer. */
+    mention: z.boolean().optional(),
+    /**
+     * The field takes focus again with the caret here: the composer is coming back from the
+     * Mention drawer, which hid it. Cleared once the field reports focus.
+     */
+    refocus: z.number().int().nonnegative().max(16000).optional(),
     /** Why the microphone cannot start dictation right now; without it, pressing "dictate" does. */
     dictationHelp: z.string().max(500).nullable().optional(),
     /** Null when the provider reports neither context nor plan usage: there is no sheet. */

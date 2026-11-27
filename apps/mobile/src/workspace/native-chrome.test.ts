@@ -65,6 +65,15 @@ it("bounds the native UI protocol and carries the final text with submission", (
     NativeSurfaceEventSchema.safeParse({ kind: "press", control: "send", text: "final keystroke" })
       .success,
   ).toBe(true);
+  // Mention carries the draft and where its caret was, so the name lands there.
+  expect(
+    NativeSurfaceEventSchema.safeParse({
+      kind: "press",
+      control: "mention",
+      text: "ask",
+      value: "3",
+    }).success,
+  ).toBe(true);
   expect(
     NativeSurfaceEventSchema.safeParse({ kind: "text", text: "x".repeat(16001), sequence: 1 })
       .success,
