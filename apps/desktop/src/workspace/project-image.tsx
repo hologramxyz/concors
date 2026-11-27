@@ -18,6 +18,10 @@ export function ProjectImage({
   // The sidebar tile's corner, scaled down with the tile: a theme with rounder corners would
   // otherwise turn a small tile into a circle.
   const radius = `min(var(--radius-sm), ${size * 0.15}px)`;
+  // Below the 14px chip a fixed letter crowds the tile and the folder looks small beside tiles,
+  // so there both follow the tile: the letter as the 20px sidebar tile has it (12px, 0.6 of the
+  // tile), and the folder's outline, 22 of its icon's 24 units with the stroke, as wide as a tile.
+  const small = size < 14;
   return (
     <span
       className="relative flex shrink-0 items-center justify-center"
@@ -28,8 +32,8 @@ export function ProjectImage({
       {(!loaded || failed) &&
         (isGit ? (
           <span
-            className={`flex size-full items-center justify-center bg-sidebar-accent font-semibold text-sidebar-foreground ${size < 20 ? "text-[10px]" : "text-xs"}`}
-            style={{ borderRadius: radius }}
+            className={`flex size-full items-center justify-center bg-sidebar-accent font-semibold text-sidebar-foreground ${small ? "" : size < 20 ? "text-[10px]" : "text-xs"}`}
+            style={{ borderRadius: radius, ...(small ? { fontSize: size * 0.6 } : {}) }}
           >
             {/* Trimmed to the letter's cap height, so the letter itself is centred, not its line:
                 the font's ascent and descent would leave a capital above the middle. */}
@@ -37,8 +41,12 @@ export function ProjectImage({
           </span>
         ) : (
           <Folder
-            className="text-muted-foreground"
-            style={{ width: size * 0.8, height: size * 0.8 }}
+            className="shrink-0 text-muted-foreground"
+            style={
+              small
+                ? { width: (size * 24) / 22, height: (size * 24) / 22 }
+                : { width: size * 0.8, height: size * 0.8 }
+            }
           />
         ))}
       {source && !failed && (
