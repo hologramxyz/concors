@@ -87,8 +87,6 @@ import {
   type StepKind,
 } from "./step-groups";
 
-/** Memoized: merges keep unchanged items' identity, so a streamed delta re-renders one row
- * instead of re-parsing every message's Markdown while the user scrolls. */
 /**
  * Copies a sent message's selection with each mention chip as the "@Name" it was written as: left
  * to the browser, a chip's icon box would break the line before it.
@@ -104,6 +102,8 @@ function copyMentions(event: ClipboardEvent<HTMLParagraphElement>) {
   event.preventDefault();
 }
 
+/** Memoized: merges keep unchanged items' identity, so a streamed delta re-renders one row
+ * instead of re-parsing every message's Markdown while the user scrolls. */
 export const TimelineItem = memo(function TimelineItem({
   item,
   workedFor,
@@ -157,15 +157,21 @@ export const TimelineItem = memo(function TimelineItem({
                     <span
                       key={index}
                       data-mention={reference.label}
-                      className="rounded-sm bg-muted px-1 py-[0.1rem] font-medium whitespace-nowrap before:sr-only before:content-['mention,_']"
+                      className="relative inline-flex items-center rounded-sm bg-muted py-[calc((16px-1cap)/2+0.125rem)] pr-1 pl-[calc(0.5rem+16px)] font-medium whitespace-nowrap before:sr-only before:content-['mention,_']"
                     >
-                      <span className="mr-1 inline-block align-middle select-none">
+                      {/* The name, trimmed to its capitals, is the chip's only flex item, so the
+                          chip sits on the text's baseline in every engine. The 16px mark is laid
+                          in the left padding (side padding, mark, gap), centred on the name's
+                          capitals, with the same room above and below them. */}
+                      <span className="absolute top-1/2 left-1 -translate-y-1/2 select-none *:size-auto">
                         <MentionIcon reference={reference} />
                       </span>
-                      <span aria-hidden="true" className="sr-only">
-                        @
+                      <span className="[text-box:trim-both_cap_alphabetic]">
+                        <span aria-hidden="true" className="sr-only">
+                          @
+                        </span>
+                        {reference.label}
                       </span>
-                      {reference.label}
                     </span>
                   ) : (
                     part.text
