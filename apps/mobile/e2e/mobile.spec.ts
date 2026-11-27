@@ -1034,6 +1034,25 @@ test("flat tab actions configure and close inactive leaves without changing the 
   await paneCount(ui, 2);
 });
 
+test("a phone tab that shares its desktop tab renames itself, leaving its sibling's name", async ({
+  page,
+}) => {
+  const ui = await enter(page);
+  const strip = ui.locator(".mobile-tab-strip");
+  const label = (value: string) => strip.locator(`[data-tab-id="${value}"]`);
+  const chatLabel = await label(activeChat).innerText();
+  await tabActions(ui, activeTerminal);
+  await ui.getByRole("menuitem", { name: "Rename", exact: true }).click();
+  const dialog = ui.getByRole("dialog", { name: "Rename", exact: true });
+  await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Dev logs");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(label(activeTerminal)).toContainText("Dev logs");
+  // The chat beside it on desktop keeps its own name.
+  await expect(label(activeChat)).toHaveText(chatLabel);
+  await page.screenshot({ path: test.info().outputPath("mobile-pane-renamed.png") });
+});
+
 test("tab menus pin, fork and delete chats with desktop's actions, and undo a delete", async ({
   page,
 }) => {

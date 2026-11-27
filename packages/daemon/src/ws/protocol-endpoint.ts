@@ -4,6 +4,10 @@ import { SUPERVISOR_CAPABILITY } from "@concors/protocol";
 import { ScheduleManager } from "../schedules/manager.ts";
 import { ScheduleStore } from "../schedules/store.ts";
 import { ScheduleTools } from "../schedules/tools.ts";
+import { TriggerManager } from "../triggers/manager.ts";
+import { TriggerStore } from "../triggers/store.ts";
+import { registerTriggerHttp } from "../triggers/http.ts";
+import { WEBHOOK_TRIGGERS_CAPABILITY } from "@concors/protocol";
 import {
   ATTACHMENT_UPLOADS_CAPABILITY,
   DICTATION_CAPABILITY,
@@ -93,6 +97,7 @@ export function registerProtocolEndpoint(
       .map((a) => a.id),
   );
   const scheduleClients = new WeakSet<WebSocket>();
+  const triggerClients = new WeakSet<WebSocket>();
   const dictationClients = new Set<WebSocket>();
   /** Clients that read attachment lists past the old bounds; the rest get them shortened. */
   const uploadClients = new WeakSet<WebSocket>();
@@ -201,6 +206,7 @@ export function registerProtocolEndpoint(
     (event) => {
       if (event.type === "agent.state") {
         schedules?.observe(event.agent);
+        queueMicrotask(() => triggers?.observe(event.agent));
         if (event.agent.supervisor) supervisorSessions.add(event.agent.id);
       }
       // An exception here would be uncaught and end the daemon with every agent on the machine.
@@ -236,6 +242,22 @@ export function registerProtocolEndpoint(
         if (scheduleClients.has(target)) send(target, { type: "schedule.list", schedules: list });
     },
   );
+  const triggers = new TriggerManager(
+    new TriggerStore(
+      basename(attachments) === "attachments"
+        ? join(dirname(attachments), "triggers.sqlite")
+        : ":memory:",
+    ),
+    options.workspace,
+    agents,
+    providers,
+    (triggers) => {
+      for (const target of subscribers)
+        if (triggerClients.has(target)) send(target, { type: "trigger.list", triggers });
+    },
+  );
+  agents.triggerLabel = (id) => triggers.label(id);
+  registerTriggerHttp(app, triggers);
   const workspaceChanged = () => {
     for (const target of subscribers)
       send(target, { type: "workspace.snapshot", snapshot: options.workspace.snapshot() });
@@ -270,6 +292,7 @@ export function registerProtocolEndpoint(
   });
   app.addHook("onClose", async () => {
     const closingSchedules = schedules.close();
+    await triggers.close();
     await scheduleTools.close();
     supervisor?.close();
     await supervisorTools.close();
@@ -348,6 +371,7 @@ export function registerProtocolEndpoint(
         if (message.capabilities?.includes("agent-providers-v2")) agentV2.add(socket);
         if (message.capabilities?.includes(SUPERVISOR_CAPABILITY)) supervisorClients.add(socket);
         if (message.capabilities?.includes(SCHEDULES_CAPABILITY)) scheduleClients.add(socket);
+        if (message.capabilities?.includes(WEBHOOK_TRIGGERS_CAPABILITY)) triggerClients.add(socket);
         if (dictation && message.capabilities?.includes(DICTATION_CAPABILITY))
           dictationClients.add(socket);
         if (message.capabilities?.includes(ATTACHMENT_UPLOADS_CAPABILITY))
@@ -421,6 +445,7 @@ export function registerProtocolEndpoint(
         message.type === "provider.request" ||
         message.type === "theme.request" ||
         message.type === "schedule.request" ||
+        message.type === "trigger.request" ||
         message.type === "supervisor.request" ||
         message.type === "resource.request" ||
         message.type === "pull-request.request" ||
@@ -448,7 +473,8 @@ export function registerProtocolEndpoint(
               requestId: message.requestId,
               outcome: { status: "error", message: "Update Concors to use Supervisor" },
             });
-        } else if (message.type === "schedule.request") send(socket, schedules.request(message));
+        } else if (message.type === "trigger.request") send(socket, triggers.request(message));
+        else if (message.type === "schedule.request") send(socket, schedules.request(message));
         else if (message.type === "resource.request")
           void resources.request(message).then((result) => send(socket, result));
         else if (message.type === "pull-request.request")
@@ -496,6 +522,8 @@ export function registerProtocolEndpoint(
         subscribers.add(socket);
         if (scheduleClients.has(socket))
           send(socket, { type: "schedule.list", schedules: schedules.list() });
+        if (triggerClients.has(socket))
+          send(socket, { type: "trigger.list", triggers: triggers.list() });
         for (const session of options.workspace.terminals())
           send(socket, { type: "terminal.state", session });
         send(socket, { type: "agent.list", agents: [] });

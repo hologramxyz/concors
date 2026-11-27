@@ -1,5 +1,6 @@
 import { SupervisorNav } from "@/supervisor/nav";
 import { SchedulesNav } from "@/schedules/nav";
+import { WebhooksNav } from "@/webhooks/nav";
 import { PullRequestsNav } from "@/pull-requests/nav";
 import { NewWorkspaceMenu } from "@/workspace/new-workspace-menu";
 import { recentlyClosed } from "@/workspace/closed-workspaces";
@@ -35,6 +36,7 @@ interface AppSidebarProps {
   onOpenSettings: () => void;
   onOpenSupervisor: () => void;
   onOpenSchedules: () => void;
+  onOpenWebhooks: () => void;
   /** Opens the Pull requests page, for one workspace or one of its repositories when given. */
   onOpenPullRequests: (projectId?: string, repository?: string) => void;
   onOpenSearch: () => void;
@@ -125,6 +127,7 @@ export function AppSidebar(props: AppSidebarProps) {
               compact={false}
               onClick={props.onOpenSchedules}
             />
+            <WebhooksNav selected={props.view === "webhooks"} onClick={props.onOpenWebhooks} />
             <PullRequestsNav
               workspace={props.workspace}
               selected={props.view === "pull-requests"}

@@ -3,6 +3,8 @@ import { SupervisorNav } from "@/supervisor/nav";
 import { SupervisorPage } from "@/supervisor/page";
 import { SchedulesNav } from "@/schedules/nav";
 import { SchedulesPage } from "@/schedules/page";
+import { WebhooksNav } from "@/webhooks/nav";
+import { WebhooksPage } from "@/webhooks/page";
 import { PullRequestsNav } from "@/pull-requests/nav";
 import { PullRequestsPage } from "@/pull-requests/page";
 import { allPullRequests, type PullRequestsView } from "@/pull-requests/view";
@@ -162,6 +164,7 @@ function MobileWorkspaceContent({
   const [page, setPage] = useState<
     | { kind: "supervisor" }
     | { kind: "schedules" }
+    | { kind: "webhooks" }
     | { kind: "pull-requests"; view: PullRequestsView }
     | null
   >(() =>
@@ -724,6 +727,13 @@ function MobileWorkspaceContent({
                             setSidebarOpen(false);
                           }}
                         />
+                        <WebhooksNav
+                          selected={page?.kind === "webhooks"}
+                          onClick={() => {
+                            setPage({ kind: "webhooks" });
+                            setSidebarOpen(false);
+                          }}
+                        />
                         <PullRequestsNav
                           workspace={workspace}
                           selected={page?.kind === "pull-requests"}
@@ -844,7 +854,9 @@ function MobileWorkspaceContent({
                                 ? "Supervisor"
                                 : page.kind === "schedules"
                                   ? "Schedules"
-                                  : "Pull requests"}
+                                  : page.kind === "webhooks"
+                                    ? "Webhooks"
+                                    : "Pull requests"}
                             </h1>
                           ) : project && workspace ? (
                             <WorkspaceSwitcher
@@ -967,6 +979,19 @@ function MobileWorkspaceContent({
                                   workspace={workspace}
                                   connected={!!ready}
                                   connectionFailed={connectionFailed}
+                                  onOpenAgent={openAgent}
+                                />
+                              </div>
+                            ) : page?.kind === "webhooks" ? (
+                              <div className="h-full overflow-y-auto">
+                                <WebhooksPage
+                                  key={host.machineId}
+                                  workspace={workspace}
+                                  connected={!!ready}
+                                  hostname={
+                                    host.machines.find((m) => m.id === host.machineId)?.hostname ??
+                                    null
+                                  }
                                   onOpenAgent={openAgent}
                                 />
                               </div>
@@ -1097,7 +1122,12 @@ function MobileWorkspaceContent({
                         Process CPU and RAM usage on the selected machine.
                       </DialogDescription>
                     </DialogHeader>
-                    {resourcesOpen && <ResourcesView />}
+                    {/* The sheet clips; its list scrolls here, under filter and sort. */}
+                    {resourcesOpen && (
+                      <div className="mobile-resources-body">
+                        <ResourcesView />
+                      </div>
+                    )}
                   </DialogContent>
                 </Dialog>
                 <SettingsDrawer
@@ -1156,6 +1186,9 @@ function MobileWorkspaceContent({
                       setSidebarOpen(false);
                     } else if (view === "schedules") {
                       setPage({ kind: "schedules" });
+                      setSidebarOpen(false);
+                    } else if (view === "webhooks") {
+                      setPage({ kind: "webhooks" });
                       setSidebarOpen(false);
                     } else if (view === "pull-requests") openPullRequests();
                     else if (view === "resources") {

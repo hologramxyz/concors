@@ -9,30 +9,8 @@ import { sourceRevision } from "./source-revision.mjs";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const assets = path.join(root, "assets");
 await mkdir(assets, { recursive: true });
-const source = await readFile(
-  new URL("../../desktop/src-tauri/icons/source.svg", import.meta.url),
-  "utf8",
-);
-const mark = source.replace(/<rect[^>]*\/>/, "");
-await sharp(Buffer.from(source))
-  .resize(1024, 1024)
-  .flatten({ background: "#f4f3ef" })
-  .png()
-  .toFile(path.join(assets, "icon.png"));
-await sharp(Buffer.from(mark))
-  .resize(640, 640)
-  .extend({ top: 192, bottom: 192, left: 192, right: 192, background: "#00000000" })
-  .png()
-  .toFile(path.join(assets, "adaptive-icon.png"));
-await sharp(Buffer.from(mark.replace('color="#20211f"', 'color="#ffffff"')))
-  .resize(96, 96)
-  .png()
-  .toFile(path.join(assets, "notification-icon.png"));
-await sharp(Buffer.from(mark)).resize(512, 512).png().toFile(path.join(assets, "splash.png"));
-await sharp(Buffer.from(mark.replace('color="#20211f"', 'color="#ededed"')))
-  .resize(512, 512)
-  .png()
-  .toFile(path.join(assets, "splash-dark.png"));
+// The app icon, launch marks and notification icon are checked in, not made here, so a hand-tuned
+// one from brand/incoming/mobile/ survives builds. `pnpm brand:apply` makes them (app-icons.mjs).
 
 // Reuse the licensed desktop marks in the native composer; no duplicated logo geometry.
 for (const provider of ["codex", "claude", "opencode"]) {

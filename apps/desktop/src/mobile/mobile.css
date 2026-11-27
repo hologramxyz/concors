@@ -1338,6 +1338,21 @@ body {
   overflow: hidden !important;
   background: var(--background);
 }
+/* Resources: the sheet clips, so its list scrolls in here; filter and sort stay at the top. */
+.mobile-resources-body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: max(16px, var(--mobile-safe-bottom));
+}
+.mobile-resources-body [data-resource-controls] {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-block: 4px 8px;
+  background: var(--background);
+}
 .mobile-search-drawer {
   height: min(80dvh, 680px);
   display: flex !important;

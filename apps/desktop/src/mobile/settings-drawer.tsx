@@ -274,32 +274,33 @@ export function SettingsDrawer({
                   description="Agent requests can share prompts, code, attachments and tool context with the configured AI services. Your choice is saved on this device for this account and machine. Changes to the configured services require permission again."
                 >
                   <p className="py-3 text-sm text-muted-foreground">
-                    {host.aiSharing === "blocked"
-                      ? "New agent requests from this iPhone are blocked."
-                      : host.aiSharing === "allowed"
-                        ? "You have allowed sharing with this machine’s configured services."
-                        : "You will be asked before an agent action shares data."}{" "}
+                    {host.aiSharing === "allowed"
+                      ? "You have allowed sharing with this machine’s configured services. Agents need it: withdrawing asks again right away."
+                      : "Not allowed yet. Agents on this machine need it to work from this iPhone."}{" "}
                     Work already running on your machine continues until you stop it there.
                   </p>
                   <div className="flex flex-wrap gap-3 pb-3">
-                    <Button
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() =>
-                        void run(() => hostAction({ kind: "ai-sharing", action: "withdraw" }))
-                      }
-                    >
-                      Withdraw permission
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() =>
-                        void run(() => hostAction({ kind: "ai-sharing", action: "review" }))
-                      }
-                    >
-                      Ask on the next request
-                    </Button>
+                    {host.aiSharing === "allowed" ? (
+                      <Button
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() =>
+                          void run(() => hostAction({ kind: "ai-sharing", action: "withdraw" }))
+                        }
+                      >
+                        Withdraw permission
+                      </Button>
+                    ) : (
+                      // Straight to the permission screen, from here.
+                      <Button
+                        disabled={busy}
+                        onClick={() =>
+                          void run(() => hostAction({ kind: "ai-sharing", action: "review" }))
+                        }
+                      >
+                        Allow AI sharing
+                      </Button>
+                    )}
                   </div>
                 </Section>
               )}

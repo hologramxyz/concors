@@ -212,6 +212,23 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     await tab(`${tabId}:${paneId}`).click();
     await expect(input).toHaveValue("Keep this draft while switching tabs");
 
+    // Renaming one leaf of a split tab names that pane alone: the desktop tab and its other
+    // panes keep their names.
+    const splitName = splitTab().name;
+    await actions(`${tabId}:${second}`);
+    await ui.getByRole("menuitem", { name: "Rename", exact: true }).click();
+    await ui.getByLabel("Name", { exact: true }).fill("Second look");
+    await ui.getByRole("button", { name: "Save", exact: true }).click();
+    await expect
+      .poll(() => {
+        const node = splitTab().nodes.find((node) => node.id === second);
+        return node?.kind === "pane" ? node.name : null;
+      })
+      .toBe("Second look");
+    expect(splitTab().name).toBe(splitName);
+    expect(splitTab().nodes.find((node) => node.id === paneId)).toEqual(session);
+    await expect(picker).toHaveAttribute("data-value", `${tabId}:${paneId}`);
+
     // An inactive tab changes only its own leaf, not the active view or sibling sessions.
     // One pane of a split tab is renamed alone: the tab and its siblings keep their names.
     await actions(`${tabId}:${second}`);

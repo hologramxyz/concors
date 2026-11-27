@@ -140,6 +140,7 @@ describe("WebSocket handshake", () => {
         status: "ready",
         capabilities: [
           "agent-schedules-v1",
+          "webhook-triggers-v1",
           "schedule-files",
           "supervisor-v1",
           "supervisor-briefs-v1",

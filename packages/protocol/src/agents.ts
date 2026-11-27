@@ -307,6 +307,7 @@ export const AgentInfoSchema = z.object({
 export type AgentInfo = z.infer<typeof AgentInfoSchema>;
 export const AgentOriginSchema = z.object({ supervisorId: Id, deliveryId: Id });
 export const AgentItemSchema = z.object({
+  trigger: z.object({ triggerId: Id, eventId: Id, source: z.string().max(40) }).optional(),
   origin: AgentOriginSchema.optional(),
   id: z.string(),
   sessionId: Id,

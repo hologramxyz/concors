@@ -109,6 +109,47 @@ async function refused(
   return status;
 }
 
+it("forwards webhook secrets without a JWT only on the machine's hook path", async () => {
+  const f = await fixture();
+  const response = await httpFetch(f.url + "/hooks/unknown?source=ci", {
+    method: "POST",
+    headers: {
+      host: f.headers.host,
+      authorization: "Bearer webhook-secret",
+      "idempotency-key": "abc",
+      "x-concors-source": "stream",
+      "x-concors-webhook-secret": "spoof",
+    },
+    body: "payload",
+  });
+  expect(response.status).toBe(401);
+  expect(f.forwarded.find((r) => r.url === "/hooks/unknown?source=ci")?.headers).toMatchObject({
+    authorization: "Bearer host-secret",
+    "x-concors-webhook-secret": "Bearer webhook-secret",
+    "idempotency-key": "abc",
+    "x-concors-source": "stream",
+  });
+  f.forwarded.length = 0;
+  expect(
+    (
+      await httpFetch(f.url + "/echo", {
+        method: "POST",
+        headers: { host: f.headers.host, authorization: "Bearer webhook-secret" },
+        body: "payload",
+      })
+    ).status,
+  ).toBe(401);
+  expect(f.forwarded).toHaveLength(0);
+  expect(
+    (
+      await httpFetch(f.url + "/hooks/unknown", {
+        method: "GET",
+        headers: { host: f.headers.host },
+      })
+    ).status,
+  ).toBe(401);
+});
+
 it("expires an already authenticated socket and keeps the private host alive", async () => {
   const f = await fixture("3s");
   const ws = new WebSocket(f.url.replace("http:", "ws:") + "/ws", [`concors.bearer.${f.token}`], {

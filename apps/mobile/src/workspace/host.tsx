@@ -42,6 +42,7 @@ import { useAppearance } from "../appearance-provider";
 import { disablePush, enablePush, pushEnabled } from "../platform/notifications";
 import { Button, Copy } from "../ui";
 import { WorkspaceRenderer } from "./renderer";
+import { openPreviewInApp } from "./open-preview";
 import { AISharingDrawer } from "./ai-sharing-drawer";
 import { useAISharingPrompt } from "./use-ai-sharing-prompt";
 import type { WorkspaceRendererHandle } from "./renderer-types";
@@ -201,6 +202,8 @@ function SignedInWorkspace() {
           )
         : null;
     relay.current = current;
+    // Asked on connecting, not on the first message: agents need it, and so does opening a chat.
+    void permission?.ensure();
     return () => {
       current?.dispose();
       permission?.dispose();
@@ -392,8 +395,12 @@ function SignedInWorkspace() {
       case "ai-sharing":
         if (!requiresAISharing) return;
         if (aiPermission.current) {
-          if (action.action === "withdraw") await aiPermission.current.withdraw();
-          else await aiPermission.current.review();
+          // Sharing is required to use agents: withdrawing asks again straight away.
+          if (action.action === "withdraw") {
+            const permission = aiPermission.current;
+            await permission.withdraw();
+            void permission.ensure();
+          } else void aiPermission.current.review();
         } else {
           // Settings can remain open while the transport is reconnecting.
           const blocked = action.action === "withdraw";
@@ -446,7 +453,8 @@ function SignedInWorkspace() {
         if (!confirmed) throw new Error("This preview is no longer available.");
         const url = transport.previewUrl(action.preview);
         if (!url) throw new Error("This machine connection does not support browser previews.");
-        await openExternalLink(url, true);
+        if (Platform.OS === "web") await openExternalLink(url, true);
+        else openPreviewInApp(url);
         return;
       }
     }

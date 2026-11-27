@@ -3,6 +3,8 @@ import { SupervisorPage } from "@/supervisor/page";
 import { SupervisorActions } from "@/supervisor/actions";
 import { X } from "lucide-react";
 import { SchedulesPage } from "@/schedules/page";
+import { WebhooksPage } from "@/webhooks/page";
+import { webhookHostname } from "@/webhooks/helpers";
 import { PullRequestsPage } from "@/pull-requests/page";
 import { allPullRequests, type PullRequestsView } from "@/pull-requests/view";
 import { StartupScreen } from "@/startup/startup-screen";
@@ -534,6 +536,7 @@ function AppContent() {
                           onOpenSchedules={() => {
                             setView("schedules");
                           }}
+                          onOpenWebhooks={() => setView("webhooks")}
                           onOpenPullRequests={(projectId, repository) => {
                             setPullRequestsView({
                               projectId: projectId ?? null,
@@ -732,6 +735,16 @@ function AppContent() {
                                 connection.workspaceReady && connection.state.status === "ready"
                               }
                               connectionFailed={connection.failed}
+                              onOpenAgent={openAgent}
+                            />
+                          ) : view === "webhooks" ? (
+                            <WebhooksPage
+                              key={selectedMachineId}
+                              workspace={workspace}
+                              connected={
+                                connection.workspaceReady && connection.state.status === "ready"
+                              }
+                              hostname={webhookHostname(selectedHost)}
                               onOpenAgent={openAgent}
                             />
                           ) : view === "pull-requests" ? (

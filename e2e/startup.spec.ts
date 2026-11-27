@@ -1,5 +1,11 @@
+import { readFileSync } from "node:fs";
 import { test, expect, signedIn } from "./signed-in.ts";
 import { managedHost } from "./support/managed-host.ts";
+
+/** The first shape of the logo mark, which index.html's startup screen is built with. */
+const MARK_PATH = /\sd="([^"]+)"/.exec(
+  readFileSync(new URL("../brand/incoming/sources/logo-mark.svg", import.meta.url), "utf8"),
+)?.[1];
 
 /** The app's entry script: the source module from a dev server, the hashed bundle from a build. */
 const ENTRY = /\/(src\/main\.tsx|assets\/index-[\w-]+\.js)(\?.*)?$/;
@@ -106,7 +112,8 @@ test("the first HTML paint already has the mark and saved dark appearance before
   const splash = page.getByRole("status", { name: "Opening Concors", exact: true });
   await expect(splash).toBeVisible();
   await expect(splash).toHaveCSS("background-color", "rgb(17, 17, 17)");
-  expect(await splash.locator("path").getAttribute("d")).toMatch(/^M12 24L48/);
+  expect(MARK_PATH).toBeTruthy();
+  expect(await splash.locator("path").first().getAttribute("d")).toBe(MARK_PATH);
   const shimmer = splash.locator(".concors-startup-shimmer");
   expect(await shimmer.evaluate((node) => getComputedStyle(node, "::after").animationName)).toBe(
     "none",

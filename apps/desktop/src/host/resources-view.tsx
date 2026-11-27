@@ -94,19 +94,20 @@ function ResourceContent() {
         </div>
       )}
       {showControls && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div data-resource-controls className="flex flex-wrap items-center gap-2">
           <Input
             aria-label="Filter resources"
             placeholder="Filter by process, PID, or folder…"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            className="min-w-0 flex-1"
+            // A phone gives the filter its own row, so its hint is not cut short.
+            className={`min-w-0 flex-1 ${compact ? "basis-full" : ""}`}
           />
           <select
             aria-label="Sort processes"
             value={sort}
             onChange={(event) => setSort(event.target.value)}
-            className="rounded-md border bg-background px-2 text-sm"
+            className={`rounded-md border bg-background px-2 text-sm ${compact ? "h-9 flex-1" : ""}`}
           >
             <option value="memory">RAM usage</option>
             <option value="cpu">CPU usage</option>
@@ -146,6 +147,7 @@ function ResourceContent() {
             <ResourceProcessRow
               key={item.id}
               item={item}
+              compact={compact}
               canStop={!!supported}
               onPreview={() => openPreview(item)}
               onStop={() => {

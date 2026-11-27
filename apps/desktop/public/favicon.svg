@@ -1,4 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" color="#20211f"><rect width="96" height="96" rx="12" fill="#f4f3ef"/><path fill="currentColor" fill-rule="evenodd" d="M12 24L48 10L84 24V33H12ZM19.5 27H76.5L48 16.5Z
-      M18 35H30L28 39.5H20ZM42 35H54L52 39.5H44ZM66 35H78L76 39.5H68Z
-      M20 41.5H28L29.25 72.5H18.75ZM44 41.5H52L53.25 72.5H42.75ZM68 41.5H76L77.25 72.5H66.75Z
-      M17 75H79V77.5H17ZM12 79H84V81.5H12ZM7 83H89V85.5H7Z"/></svg>
+<svg class="concors-favicon" color="#20211f" width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+<style>@media (prefers-color-scheme: dark) { .concors-favicon { color: #f4f3ef } .concors-favicon-tile { fill: #20211f } }</style>
+<rect class="concors-favicon-tile" width="32" height="32" fill="#F4F3EF"/>
+<path d="M11.8806 9.20288H11.8815C7.82295 11.5461 5.59249 15.2821 6.89911 17.5466C8.20646 19.811 12.5571 19.7473 16.6159 17.4041V17.4031L18.8044 21.1941H18.8054C14.1057 23.9075 8.69595 23.3365 6.72235 19.9187C4.74951 16.5008 6.95882 11.5306 11.6579 8.81714L11.8806 9.20288ZM13.195 10.405C17.8947 7.69188 23.3046 8.26353 25.278 11.6814C27.2512 15.0994 25.041 20.0695 20.3415 22.783L20.1179 22.3962C24.1767 20.0528 26.4075 16.3179 25.1003 14.0535C23.7928 11.7891 19.4424 11.8527 15.3835 14.196L13.195 10.405Z" fill="currentColor"/>
+</svg>

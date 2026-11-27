@@ -136,18 +136,21 @@ daemon**, `EXPO_PUBLIC_DEMO=false`, and use a development/preview build. Restart
 with `--clear` after switching modes. The welcome screen offers **Connect to desktop**.
 This is a real workspace connection, not a demo account or a simulated machine.
 
-Connecting opens the workspace directly. In the native iOS app, the first action that can
-send data to AI services asks for permission in a compact bottom drawer. The short message
-names the recipients and data; **Details** expands the complete disclosure. **Allow sharing**
-is the only way to approve; declining or dismissing the drawer blocks the request. Approval
-is saved for this account and machine, and configuration changes require permission again.
-Settings → Account → AI data sharing lets you withdraw it. Existing work on the machine
-continues until stopped there. This consent UI is absent from desktop, Android and web previews.
+Connecting opens the workspace directly. In the native iOS app, permission to send data to
+AI services is required to use agents: as soon as the app connects to a machine whose services
+are not allowed yet, a full-screen permission screen appears. It has no close button, cannot be
+swiped away and offers no decline; it appears again on every launch until **Allow sharing** is
+tapped. The short message names the recipients and data; **Details** expands the complete
+disclosure. Approval is saved for this account and machine, and configuration changes require
+permission again. Settings → Account → AI data sharing shows the status and can withdraw it,
+which brings the permission screen back right away. Existing work on the machine continues
+until stopped there. This consent UI is absent from desktop, Android and web previews.
 Managed access still requires authentication, and direct access still requires the private
 endpoint. Disconnecting closes this viewer, not the remote sessions.
 
-[Drawer layout preview](../../docs/images/ios-ai-sharing-drawer.png) renders the shared content
-in a browser; the iOS app presents it in its native, content-sized SwiftUI sheet.
+[Layout preview](../../docs/images/ios-ai-sharing-drawer.png) renders the shared content in a
+browser (it predates the full-screen screen and still shows a decline button); the iOS app
+presents it in a full-screen modal.
 
 The host uses the same `DaemonConnection` protocol as desktop and obtains the actual
 machine ID from its workspace snapshot. Cloud login is not needed for the workspace;
@@ -417,8 +420,9 @@ in-memory drafts. Switching panes does not.
 - Billing/provisioning views are source-shared. **Store policy review is a release
   gate**, not an assumption that desktop checkout can ship unchanged in every store.
 
-`pnpm assets` builds the shared offline workspace and generates icons from the desktop
-SVG. Generated HTML and native `ios/`/`android/` projects are ignored. No mobile client
+`pnpm assets` builds the shared offline workspace. The app icon, launch marks and notification
+icon are checked in; `pnpm brand:apply` makes them from `brand/incoming/` (see its README).
+Generated HTML and native `ios/`/`android/` projects are ignored. No mobile client
 imports daemon or Tauri runtime implementations.
 
 ### Path-hosted private web previews
