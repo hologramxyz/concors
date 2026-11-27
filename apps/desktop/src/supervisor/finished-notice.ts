@@ -226,3 +226,11 @@ function inlineCode(code: string): string {
   const pad = code.startsWith("`") || code.endsWith("`") ? " " : "";
   return `${ticks}${pad}${code}${pad}${ticks}`;
 }
+
+/**
+ * How many characters to take off the end of the text a clamp cuts, so its "…" follows a word, not
+ * a stop: trailing full stops, commas, colons, semicolons and spaces go; "?" and "!" stay.
+ */
+export function ellipsisTrim(text: string): number {
+  return /[.,:;\s]*$/.exec(text)?.[0].length ?? 0;
+}

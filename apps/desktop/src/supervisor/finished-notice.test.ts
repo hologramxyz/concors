@@ -15,6 +15,7 @@ import {
   finishedWord,
   quoteImages,
   quotePreview,
+  ellipsisTrim,
 } from "./finished-notice";
 import { markFailureSeen } from "@/agents/seen-updates";
 import type { TimelineEntry } from "@/agents/thinking";
@@ -394,6 +395,25 @@ describe("quotePreview", () => {
     expect(quotePreview("See [the notes](https://example.com), **now**, in `notes.md`.")).toBe(
       "See [the notes](https://example.com), **now**, in `notes.md`.",
     );
+  });
+});
+
+describe("ellipsisTrim", () => {
+  it("takes stops and spaces off a cut so its ellipsis follows a word", () => {
+    const shown = (text: string) => text.slice(0, text.length - ellipsisTrim(text)) + "…";
+    expect(shown("on narrow phones.")).toBe("on narrow phones…");
+    expect(shown("the score counter, ")).toBe("the score counter…");
+    expect(shown("What changed:")).toBe("What changed…");
+    expect(shown("first; second;")).toBe("first; second…");
+    expect(shown("Wait...")).toBe("Wait…");
+    expect(shown("a:;. ")).toBe("a…");
+  });
+
+  it("keeps a question or an exclamation, and a word as it is", () => {
+    expect(ellipsisTrim("Ship it?")).toBe(0);
+    expect(ellipsisTrim("Done!")).toBe(0);
+    expect(ellipsisTrim("which overlapped")).toBe(0);
+    expect(ellipsisTrim("")).toBe(0);
   });
 });
 

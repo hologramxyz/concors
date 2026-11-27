@@ -23,6 +23,7 @@ import {
   imagesLine,
   quoteImages,
   quotePreview,
+  ellipsisTrim,
   type FinishedNotice,
 } from "@/supervisor/finished-notice";
 import {
@@ -1051,6 +1052,57 @@ function OpenChatAction({ sessionId, label }: { sessionId: string; label: string
  * past six lines it is clamped, and the row opens it in place. Without a reply a quiet row stands
  * alone, since its link already opens the chat.
  */
+/** The last character a two-line clamp shows in `element`, as its text node and the offset after it. */
+function clampEnd(element: HTMLElement) {
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  let lines = 0;
+  let bottom = -Infinity;
+  let end: { node: Text; offset: number } | null = null;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node as Text;
+    for (let offset = 0; offset < text.length; offset++) {
+      range.setStart(text, offset);
+      range.setEnd(text, offset + 1);
+      const rect = range.getClientRects()[0];
+      if (!rect?.width) continue;
+      // A glyph below everything on the line so far starts the next line.
+      if (rect.top >= bottom) {
+        if (++lines > 2) return end;
+        bottom = rect.bottom;
+      } else bottom = Math.max(bottom, rect.bottom);
+      end = { node: text, offset: offset + 1 };
+    }
+  }
+  return end;
+}
+
+/**
+ * Takes the stops a two-line clamp would leave before its "…" (see `ellipsisTrim`) out of the
+ * shown text, so a cut sentence never reads "phones.…". Left alone if taking them out lets more of
+ * the text up onto the second line. Returns what puts them back, unless React has since rewritten
+ * the text.
+ */
+function trimClampEnd(element: HTMLElement): (() => void) | null {
+  const end = clampEnd(element);
+  if (!end) return null;
+  const { node, offset } = end;
+  const original = node.data;
+  const drop = ellipsisTrim(original.slice(0, offset));
+  if (!drop) return null;
+  const trimmed = original.slice(0, offset - drop) + original.slice(offset);
+  node.data = trimmed;
+  const after = clampEnd(element);
+  const restore = () => {
+    if (node.data === trimmed) node.data = original;
+  };
+  if (after?.node !== node || after.offset !== offset - drop) {
+    restore();
+    return null;
+  }
+  return restore;
+}
+
 function FinishedRow({
   notice,
   chat,
@@ -1067,15 +1119,24 @@ function FinishedRow({
   const [clamped, setClamped] = useState(false);
   const quote = useRef<HTMLDivElement>(null);
   // Whether the closed quote is cut short (two lines, or six in a row that needs the person),
-  // measured again as the chat or the text changes.
+  // measured again as the chat or the text changes. A folded row's "…" follows a word, never a stop.
   useLayoutEffect(() => {
     const element = quote.current;
     if (!element || open) return;
-    const check = () => setClamped(element.scrollHeight > element.clientHeight + 1);
+    let restore: (() => void) | null = null;
+    const check = () => {
+      restore?.();
+      const cut = element.scrollHeight > element.clientHeight + 1;
+      setClamped(cut);
+      restore = cut && !needed ? trimClampEnd(element) : null;
+    };
     check();
     const observer = new ResizeObserver(check);
     observer.observe(element);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      restore?.();
+    };
   }, [open, notice.quote, needed]);
   const shown = useMemo(
     () => (notice.quote === null ? null : quoteImages(notice.quote)),
