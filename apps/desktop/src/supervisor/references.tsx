@@ -52,9 +52,15 @@ export function SupervisorReferencePicker({
       >
         <MentionIcon reference={ref} />
         <span className="min-w-0 truncate">{ref.label}</span>
-        <span className="ml-auto shrink-0 truncate text-xs text-muted-foreground">
-          {ref.kind === "Agent" ? ref.workspace : "Workspace"}
-        </span>
+        {/* As in the typed list: a workspace's icon says what it is, and a chat's workspace is
+            the quietest meta type, given only the room the name leaves. */}
+        {ref.kind === "Agent" ? (
+          <span className="min-w-0 flex-1 truncate text-right text-[11px] text-muted-foreground">
+            {ref.workspace}
+          </span>
+        ) : (
+          <span className="sr-only">Workspace</span>
+        )}
       </button>
     );
   };

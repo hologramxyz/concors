@@ -2,6 +2,7 @@ import { ChevronRight } from "lucide-react";
 import { Popover } from "radix-ui";
 import { useContext, useEffect, useId, useRef, type RefObject } from "react";
 import { useAgents } from "@/agents/context";
+import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { ProviderIcon } from "@/agents/provider-icon";
 import { ProjectImage } from "@/workspace/project-image";
 import { WorkspaceImageContext } from "@/workspace/use-project-icons";
@@ -120,7 +121,7 @@ export function MentionMenu({
             className="chat-scroll flex max-h-80 flex-col-reverse overflow-auto rounded-2xl border bg-popover py-1 shadow-lg"
           >
             {matches.map((reference, index) => {
-              return (
+              const row = (
                 <button
                   type="button"
                   role="option"
@@ -135,11 +136,25 @@ export function MentionMenu({
                 >
                   <MentionIcon reference={reference} />
                   <span className="min-w-0 truncate">{reference.label}</span>
-                  <span className="ml-auto shrink-0 truncate text-xs text-muted-foreground">
-                    {reference.kind === "Agent" ? reference.workspace : "Workspace"}
-                  </span>
+                  {/* The workspace's own icon says what it is; only a screen reader hears it.
+                      A chat's workspace is the quietest meta type, given only the room the name leaves
+                      over. */}
+                  {reference.kind === "Agent" ? (
+                    <span className="min-w-0 flex-1 truncate text-right text-[11px] text-muted-foreground">
+                      {reference.workspace}
+                    </span>
+                  ) : (
+                    <span className="sr-only">Workspace</span>
+                  )}
                 </button>
               );
+              // The menus' separator sets the closed rows apart from the open ones beneath them.
+              return index === closedFrom && index > 0
+                ? [
+                    <DropdownMenuSeparator key="separator" aria-hidden className="mx-0 shrink-0" />,
+                    row,
+                  ]
+                : row;
             })}
             {closedFrom !== null && closedHeader}
           </div>
