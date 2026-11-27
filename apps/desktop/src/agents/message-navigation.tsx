@@ -248,7 +248,8 @@ export function MessageNavigation({
               aria-label="Browse your messages"
               className="message-list-trigger"
             >
-              <List className="size-4" />
+              {/* The phone header's round buttons' icon size (.mobile-icon svg). */}
+              <List className="size-[20px]" />
             </button>
           </DialogTrigger>
           <DialogContent closeLabel="Close messages" className="overflow-hidden">

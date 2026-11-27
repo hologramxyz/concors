@@ -44,8 +44,9 @@ import { useSupervisorBriefs, useSupervisorDeliveries } from "./use-overview";
 
 /**
  * Opens Overview. It counts what needs you, in the destructive colour the sidebar's dots use; a
- * finish nobody has seen is only a dot, since it can wait. On a phone it is the icon alone. Both
- * come from the rows Overview lists, so a closed chat it leaves out raises neither.
+ * finish nobody has seen is only a dot, since it can wait. Both come from the rows Overview lists,
+ * so a closed chat it leaves out raises neither. A phone names it too, in the weight of the title
+ * beside it, so it is not taken for the round button below that lists your messages.
  */
 export function SupervisorOverviewButton({
   workspace,
@@ -72,26 +73,24 @@ export function SupervisorOverviewButton({
       <Button
         type="button"
         variant={open ? "secondary" : "ghost"}
-        size={compact ? "icon" : "sm"}
+        size="sm"
         aria-expanded={open}
         aria-label={label}
         onClick={onClick}
-        className="relative text-muted-foreground hover:text-foreground"
+        className={cn(
+          "relative text-muted-foreground hover:text-foreground",
+          compact && "font-normal",
+        )}
       >
         <ListChecks className="size-4" />
-        {!compact && "Overview"}
+        Overview
         {blockers > 0 ? (
-          <span
-            className={cn(
-              "rounded-full bg-destructive px-1.5 text-[11px] leading-4 font-medium text-white tabular-nums",
-              compact && "absolute -top-0.5 -right-0.5",
-            )}
-          >
+          <span className="rounded-full bg-destructive px-1.5 text-[11px] leading-4 font-medium text-white tabular-nums">
             {blockers}
           </span>
         ) : (
           unseen && (
-            <span className={cn(compact && "absolute top-1 right-1")}>
+            <span>
               <SidebarDot dot="done" />
             </span>
           )
