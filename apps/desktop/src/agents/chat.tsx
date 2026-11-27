@@ -715,7 +715,9 @@ export function Chat({
               role="log"
               aria-label="Chat timeline"
               aria-live="off"
-              className={`chat-scroll selectable min-h-0 min-w-0 flex-1 overflow-y-auto ${compact ? "px-3" : "px-[24px]"} py-4 [overflow-anchor:none] ${HIDE_NATIVE_SCROLLBAR}`}
+              // Positioned, so it clips what is placed absolutely inside it (the live line's
+              // screen-reader copy); out past the column's foot, that gave the column a scrollbar.
+              className={`chat-scroll selectable relative min-h-0 min-w-0 flex-1 overflow-y-auto ${compact ? "px-3" : "px-[24px]"} py-4 [overflow-anchor:none] ${HIDE_NATIVE_SCROLLBAR}`}
               onScroll={onScroll}
             >
               <div className="mx-auto max-w-chat space-y-5">

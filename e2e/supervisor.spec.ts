@@ -445,3 +445,61 @@ test("a finished chat's reply folds to two lines in Supervisor, and opens in pla
     await cleanup();
   }
 });
+
+test("the Supervisor's chat column never overflows, whatever the live line says", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const cleanup = await seedSupervisorWorkspaces("ws://127.0.0.1:7429/ws", { delegate: false });
+  const supervisor = page.getByTestId("supervisor-page");
+  const interrupt = supervisor.getByRole("button", { name: "Interrupt agent", exact: true });
+  try {
+    await page.setViewportSize({ width: 1262, height: 800 });
+    await signedIn(page, "Simone", undefined, { supervisorLanding: true });
+    await page.goto("/");
+    await expect(supervisor).toBeVisible();
+    const composer = supervisor.getByRole("textbox", { name: "Message Codex", exact: true });
+    const log = supervisor.getByRole("log");
+    const worked = log.getByText(/^Worked for/);
+    let turns = await worked.count();
+    // Long enough that the list scrolls, with a user bubble that holds a mention.
+    for (const text of ["long-reply one", "long-reply two", "long-reply three"]) {
+      await composer.fill(text);
+      await composer.press("Enter");
+      await expect(worked).toHaveCount(++turns, { timeout: 15_000 });
+    }
+    await composer.fill("Ask @ga");
+    await page
+      .getByRole("listbox", { name: "Mention" })
+      .getByRole("option", { name: /Game QA/ })
+      .click();
+    await composer.pressSequentially("to rerun the tests");
+    await composer.press("Enter");
+    await expect(worked).toHaveCount(++turns, { timeout: 15_000 });
+    await expect(log.locator("[data-mention]").last()).toBeVisible();
+    expect(await log.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    // The column holds the list and the composer, and its own scrollbar is a real one: any
+    // overflow (a hidden screen-reader copy left below the list, say) narrows both by its width.
+    const column = supervisor.locator(".agent-conversation");
+    const overflow = () => column.evaluate((el) => el.scrollHeight - el.clientHeight);
+    expect(await overflow()).toBe(0);
+    const liveLine = log.locator("[data-live-line]");
+    // The voice line: the chat's own words while the turn has no step to name.
+    await composer.fill("hold the voice line");
+    await composer.press("Enter");
+    await expect(liveLine).toContainText(/\w…/);
+    await expect(liveLine).not.toContainText("Running");
+    expect(await overflow()).toBe(0);
+    await interrupt.click();
+    await expect(liveLine).toHaveCount(0);
+    // The step line: a command running.
+    await composer.fill("rich hold");
+    await composer.press("Enter");
+    await expect(liveLine).toContainText("Running a command");
+    expect(await overflow()).toBe(0);
+  } finally {
+    // The Supervisor outlives each spec's cleanup; a turn left holding would refuse the next one.
+    if (await interrupt.count()) await interrupt.click();
+    await cleanup();
+  }
+});
