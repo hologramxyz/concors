@@ -1,7 +1,7 @@
 import {
   MAX_SUPERVISOR_REFERENCES,
   insertMention,
-  matchReferences,
+  mentionGroups,
   mentionQuery,
   mentionedReferences,
   splitSupervisorReferences,
@@ -10,7 +10,7 @@ import {
 } from "@/supervisor/reference-text";
 import { SupervisorReferencePicker } from "@/supervisor/references";
 import { MentionMenu } from "@/supervisor/mention-menu";
-import { SupervisorReferences } from "@/supervisor/reference-context";
+import { SupervisorClosedReferences, SupervisorReferences } from "@/supervisor/reference-context";
 import { AgentDraftScopeContext, useAgentDraft, type InputDraft as Draft } from "./draft";
 import { NO_RECALL, recallStep, type PromptRecall } from "./prompt-history";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -135,6 +135,7 @@ export function AgentComposer({
   history?: readonly string[];
 }) {
   const references = useContext(SupervisorReferences);
+  const closedReferences = useContext(SupervisorClosedReferences);
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
   const visible = useContext(TabVisibility);
@@ -330,6 +331,7 @@ export function AgentComposer({
   const mentionPicker = native && references.length > 0 && (
     <SupervisorReferencePicker
       references={references}
+      closed={closedReferences}
       disabled={!connected || busy || uncertain || !!deferred}
       onSelect={(reference) => {
         if (remember(reference))
@@ -530,11 +532,21 @@ export function AgentComposer({
   // The list keeps the order it opened with: agents re-sort by activity as they work, and the
   // highlighted row must stay the one the person arrowed to.
   const [mentionOrder, setMentionOrder] = useState<readonly SupervisorReference[] | null>(null);
+  // Closed chats wait under a fold the person can open; it shuts again with the list.
+  const [mentionClosedOpen, setMentionClosedOpen] = useState<boolean | null>(null);
   if (mentionTyped && !mentionOrder) setMentionOrder(references);
   if (!mentionTyped && mentionOrder) setMentionOrder(null);
-  const mentionMatches = mentionTyped
-    ? matchReferences(mentionOrder ?? references, mentionTyped.query)
-    : [];
+  if (!mentionTyped && mentionClosedOpen !== null) setMentionClosedOpen(null);
+  const mentionList = mentionTyped
+    ? mentionGroups(
+        mentionOrder ?? references,
+        closedReferences,
+        mentionTyped.query,
+        mentionClosedOpen,
+      )
+    : null;
+  // The keys move through every row in view, the closed ones too once they show.
+  const mentionMatches = mentionList?.rows ?? [];
   const mentionIndex = Math.min(mentionActive, mentionMatches.length - 1);
   const chooseMention = (reference: SupervisorReference) => {
     if (!mentionTyped || !remember(reference)) return;
@@ -1393,7 +1405,8 @@ export function AgentComposer({
             </div>
           )}
           {mentionPicker && (
-            <div className="flex items-center px-2 pb-2" data-composer-attachments>
+            // Under any attachments, flush with the bar's left edge, the chips' gap above it.
+            <div className="flex items-center pb-2" data-composer-attachments>
               {mentionPicker}
             </div>
           )}
@@ -1739,6 +1752,9 @@ export function AgentComposer({
         <MentionMenu
           anchor={form}
           matches={mentionMatches}
+          closedFrom={mentionList?.closedMatches ? mentionList.open.length : null}
+          closedOpen={!!mentionList?.closedOpen}
+          onToggleClosed={() => setMentionClosedOpen(!mentionList?.closedOpen)}
           active={mentionIndex}
           surface={owner}
           onActive={setMentionActive}

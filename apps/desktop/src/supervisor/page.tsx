@@ -17,7 +17,9 @@ import { AgentDraftScopeContext, useAgentDraft } from "@/agents/draft";
 import { MAX_SUPERVISOR_REFERENCES, referenceLabel } from "./reference-text";
 import { useAgents } from "@/agents/context";
 import { SupervisorOverview } from "./overview";
+import { closedChatIds } from "@/agents/closed-chats";
 import {
+  SupervisorClosedReferences,
   SupervisorReferences,
   supervisorAgentName,
   supervisorReferences,
@@ -54,6 +56,10 @@ export function SupervisorPage({
   const references = useMemo(
     () => supervisorReferences({ projects: projectList ?? [], closedProjects: closedList }, agents),
     [projectList, closedList, agents],
+  );
+  const closedReferences = useMemo(
+    () => closedChatIds({ projects: projectList ?? [] }, agents),
+    [projectList, agents],
   );
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
@@ -145,20 +151,22 @@ export function SupervisorPage({
               <div className="flex min-h-0 min-w-0 flex-1">
                 <div data-pane-id={pane.id} className="flex min-h-0 min-w-0 flex-1 flex-col">
                   <SupervisorReferences value={references}>
-                    <WorkspaceFileLinks
-                      projects={workspace?.projects ?? []}
-                      onShowProject={onOpenProject}
-                    >
-                      <ChatPane
-                        key={project.id}
-                        project={project}
-                        tab={tab}
-                        node={pane}
-                        canEdit={connected}
-                        // Keep the normal desktop new-chat layout and the phone's bottom composer.
-                        start={compact ? undefined : <></>}
-                      />
-                    </WorkspaceFileLinks>
+                    <SupervisorClosedReferences value={closedReferences}>
+                      <WorkspaceFileLinks
+                        projects={workspace?.projects ?? []}
+                        onShowProject={onOpenProject}
+                      >
+                        <ChatPane
+                          key={project.id}
+                          project={project}
+                          tab={tab}
+                          node={pane}
+                          canEdit={connected}
+                          // Keep the normal desktop new-chat layout and the phone's bottom composer.
+                          start={compact ? undefined : <></>}
+                        />
+                      </WorkspaceFileLinks>
+                    </SupervisorClosedReferences>
                   </SupervisorReferences>
                 </div>
                 {overviewOpen && (

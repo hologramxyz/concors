@@ -385,3 +385,77 @@ it("folds seen finishes from before the last day under Earlier, never news or wo
     ["Blocked", "Needs you", false],
   ]);
 });
+
+describe("closed chats", () => {
+  it("leaves out closed finishes and work in progress unless they need you or Supervisor sent them work", () => {
+    // Each finish is one nobody has opened, which would otherwise keep its dot.
+    const fresh = () => ({
+      status: "done" as const,
+      attention: {
+        id: id(),
+        kind: "done" as const,
+        seen: false,
+        createdAt: "2026-11-18T10:00:00.000Z",
+      },
+    });
+    const finished = agent("Closed finish", { ...fresh(), turnId: "turn-1" });
+    const working = agent("Closed and working", { status: "working", turnId: "turn-2" });
+    const blocked = agent("Closed approval", {
+      status: "needs_input",
+      turnId: "turn-3",
+      pending: [approval],
+    });
+    const sent = agent("Closed but sent work", { ...fresh(), turnId: "turn-4" });
+    const open = agent("Open finish", { ...fresh(), turnId: "turn-5" });
+    const all = [finished, working, blocked, sent, open];
+    const closed = new Set([finished.id, working.id, blocked.id, sent.id]);
+    const rows = overviewRows(
+      all,
+      [delivered(sent, "Fix the build", "done")],
+      new Set([open.id]),
+      null,
+      Date.now(),
+      closed,
+    );
+    const groups = Object.fromEntries(rows.map((row) => [row.agent.name, row.group]));
+    expect(groups).toEqual({
+      "Closed approval": "Needs you",
+      "Closed but sent work": "Done",
+      "Open finish": "Done",
+    });
+    // What the Overview button counts and dots is what the groups list.
+    expect(rows.filter((row) => row.group === "Needs you")).toHaveLength(1);
+    expect(rows.filter(unseenDone).map((row) => row.agent.name)).toEqual([
+      "Closed but sent work",
+      "Open finish",
+    ]);
+    // Open, the same finish is back.
+    expect(overviewRows(all, [], new Set(), null, Date.now(), new Set())).toHaveLength(all.length);
+  });
+
+  it("counts Done's latest five among what is left once closed chats are out", () => {
+    const finishes = Array.from({ length: 8 }, (_, index) =>
+      agent(`Agent ${index}`, {
+        turnId: `turn-${index}`,
+        updatedAt: new Date(Date.UTC(2026, 10, 18, 10, index)).toISOString(),
+      }),
+    );
+    const closed = new Set(finishes.slice(5).map((row) => row.id));
+    const rows = overviewRows(
+      finishes,
+      [],
+      new Set(finishes.map((row) => row.id)),
+      null,
+      Date.parse("2026-11-18T11:00:00.000Z"),
+      closed,
+    );
+    expect(doneInView(rows, false)).toMatchObject({ hidden: 0 });
+    expect(rows.map((row) => row.agent.name)).toEqual([
+      "Agent 4",
+      "Agent 3",
+      "Agent 2",
+      "Agent 1",
+      "Agent 0",
+    ]);
+  });
+});

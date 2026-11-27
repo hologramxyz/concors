@@ -5,6 +5,7 @@ import type {
   WorkspaceSnapshot,
 } from "@concors/protocol";
 import { approvalParts, approvalSummary } from "@/agents/approval-summary";
+import { closedChatIds } from "@/agents/closed-chats";
 import { chatState } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
 import { waitingWords } from "./paused-notice";
@@ -15,7 +16,9 @@ import { waitingWords } from "./paused-notice";
  * question, approval, unseen failure or paused queue with instructions waiting needs you, as the
  * Supervisor chat marks them; a reply in progress or queued work is in progress; everything else
  * that has replied, in an open tab or sent work by Supervisor, is done. Chats that never replied
- * stay out.
+ * stay out, and so do closed chats (no open pane shows them) unless they need you or Supervisor
+ * sent them work: someone who closed a chat is done with it, but an agent waiting on a person
+ * must not be left stuck where nobody looks.
  */
 export type OverviewGroup = "Needs you" | "In progress" | "Done";
 export const overviewGroups: readonly OverviewGroup[] = ["Needs you", "In progress", "Done"];
@@ -57,6 +60,23 @@ export function workspaceAgents(agents: readonly AgentInfo[], workspace: Workspa
     [...(workspace?.projects ?? []), ...(workspace?.closedProjects ?? [])].map((p) => p.id),
   );
   return agents.filter((agent) => projects.has(agent.projectId));
+}
+
+/**
+ * Which sessions an open tab shows as a chat, and which are closed: no open pane shows them, as
+ * the sidebar's Closed fold means it.
+ */
+export function overviewChats(workspace: WorkspaceSnapshot | null, agents: readonly AgentInfo[]) {
+  const shown = new Set(
+    (workspace?.projects ?? []).flatMap((project) =>
+      project.tabs.flatMap((tab) =>
+        tab.nodes.flatMap((node) =>
+          node.kind === "pane" && node.profile === "chat" && node.sessionId ? [node.sessionId] : [],
+        ),
+      ),
+    ),
+  );
+  return { shown, closed: closedChatIds(workspace, agents) };
 }
 
 const firstLine = (text: string) => text.trim().split("\n")[0]?.trim() ?? "";
@@ -102,6 +122,8 @@ export function overviewRows(
   shown: ReadonlySet<string> = new Set(),
   briefs: ReadonlyMap<string, SupervisorBrief> | null = null,
   now = Date.now(),
+  /** Sessions no open pane shows, which only Needs you and Supervisor's own work keep listed. */
+  closed: ReadonlySet<string> = new Set(),
 ): OverviewRow[] {
   // Deliveries arrive newest first. The one in progress says what the agent is doing; without
   // one, the latest says what it was last asked.
@@ -118,11 +140,13 @@ export function overviewRows(
     const queued = agent.queue?.length ?? 0;
     const group: OverviewGroup | null = needsYou(agent)
       ? "Needs you"
-      : state === "working" || queued
-        ? "In progress"
-        : delivery || state === "done" || (shown.has(agent.id) && agent.turnId)
-          ? "Done"
-          : null;
+      : closed.has(agent.id) && !delivery
+        ? null
+        : state === "working" || queued
+          ? "In progress"
+          : delivery || state === "done" || (shown.has(agent.id) && agent.turnId)
+            ? "Done"
+            : null;
     if (!group) return [];
     // A brief describes one turn; an earlier turn's says nothing about the current one.
     const brief = briefs?.get(agent.id);

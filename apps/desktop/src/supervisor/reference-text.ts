@@ -73,6 +73,38 @@ export function matchReferences(
     .map(({ ref }) => ref);
 }
 
+/**
+ * The mention list in two parts: open chats and workspaces, ranked and limited as
+ * `matchReferences` does, then the closed chats, folded under Closed. The fold is shut until it is
+ * opened, unless a name is being typed: then the closed chats that match show without opening it,
+ * since a name typed is a chat looked for. `unfolded` is the person's own choice, null until they
+ * make one. `closedMatches` says whether the fold has anything in it at all.
+ */
+export function mentionGroups(
+  references: readonly SupervisorReference[],
+  closed: ReadonlySet<string>,
+  query: string,
+  unfolded: boolean | null,
+  limit = 8,
+) {
+  const isClosed = (ref: SupervisorReference) => ref.kind === "Agent" && closed.has(ref.id);
+  const open = matchReferences(
+    references.filter((ref) => !isClosed(ref)),
+    query,
+    limit,
+  );
+  const closedMatches = matchReferences(references.filter(isClosed), query, limit);
+  const closedOpen = closedMatches.length > 0 && (unfolded ?? !!query.trim());
+  return {
+    open,
+    closed: closedOpen ? closedMatches : [],
+    closedOpen,
+    closedMatches: closedMatches.length,
+    /** Every row in order, for the keys that move through them. */
+    rows: closedOpen ? [...open, ...closedMatches] : open,
+  };
+}
+
 /** Replaces the typed `@partial` with the full mention and a space, and says where the caret goes. */
 export function insertMention(text: string, start: number, caret: number, label: string) {
   const after = text.slice(caret);

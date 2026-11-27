@@ -38,7 +38,7 @@ OpenCode or other configured harness and sign-in; Supervisor does not create ano
    their results, send dependent follow-ups, and have another agent review the final work. New
    agents open in named tabs without changing your focus. Its event-driven wait can continue after
    you resolve a target approval. Ask it to stop watching a chat when you no longer need updates.
-8. Open **Overview** in the header to triage every session without opening each one. Sections
+8. Open **Overview** in the header to triage your sessions without opening each one. Sections
    (Needs you, In progress, Done) list each session once, with its status, where it runs, and its
    one-liners, with replies shown up to two lines: what it needs (a question, a failure, a paused queue), its latest update while it works, and
    the gist of its final reply once done. An approval row shows only the action ("Approve: pnpm
@@ -53,10 +53,13 @@ OpenCode or other configured harness and sign-in; Supervisor does not create ano
    Done shows the last day's finishes and any not yet opened; older ones fold under **Earlier**.
    While Overview is open in a window in front, the sessions it lists raise no banner. Desktop
    keeps Overview beside the chat; a phone opens it in a drawer. Gists need a daemon with
-   `supervisor-briefs-v1`.
+   `supervisor-briefs-v1`. A chat you closed (no open pane shows it) stays out of In progress and
+   Done, and of the button's count and dot, unless Supervisor sent it work; it still shows under
+   Needs you while it waits on you.
 9. Type **@** in the message to mention an agent or workspace, as **/** lists commands, the
    sessions most recently active first. The message reads `@Name`, and carries the agent's ID, so a
-   rename doesn't change what it refers to.
+   rename doesn't change what it refers to. Closed chats come last, folded under **Closed**; a
+   typed name that matches one shows it without unfolding. The phone's Mention drawer does the same.
 10. Change the harness, then switch back. Each harness's conversation returns in the same chat UI.
 
 The mobile browser acceptance test runs the real shared UI through the native protocol relay.

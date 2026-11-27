@@ -28,13 +28,14 @@ import { chatState, useMinuteClock } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
 import {
   doneInView,
-  needsYou,
+  overviewChats,
   overviewGroups,
   overviewRows,
   workspaceAgents,
   unseenDone,
   type OverviewRow,
 } from "./overview-model";
+import { supervisorPane } from "./pane";
 import { ApprovalAction, QuickApproval } from "./quick-approval";
 import { shortPath } from "@/agents/short-path";
 import { useHomePath } from "@/workspace/home-path";
@@ -43,7 +44,8 @@ import { useSupervisorBriefs, useSupervisorDeliveries } from "./use-overview";
 
 /**
  * Opens Overview. It counts what needs you, in the destructive colour the sidebar's dots use; a
- * finish nobody has seen is only a dot, since it can wait. On a phone it is the icon alone.
+ * finish nobody has seen is only a dot, since it can wait. On a phone it is the icon alone. Both
+ * come from the rows Overview lists, so a closed chat it leaves out raises neither.
  */
 export function SupervisorOverviewButton({
   workspace,
@@ -56,9 +58,14 @@ export function SupervisorOverviewButton({
   compact?: boolean;
   onClick: () => void;
 }) {
-  const agents = workspaceAgents(useAgents(), workspace);
-  const blockers = agents.filter(needsYou).length;
-  const unseen = agents.some((agent) => !agent.supervisor && chatState(agent) === "done");
+  const all = useAgents();
+  const agents = workspaceAgents(all, workspace);
+  const { deliveries } = useSupervisorDeliveries(supervisorPane(workspace)?.sessionId ?? null);
+  const { shown, closed } = overviewChats(workspace, all);
+  const now = useMinuteClock();
+  const rows = overviewRows(agents, deliveries, shown, null, now, closed);
+  const blockers = rows.filter((row) => row.group === "Needs you").length;
+  const unseen = rows.some(unseenDone);
   const label = blockers ? `Overview, ${blockers} need you` : unseen ? "Overview, new" : "Overview";
   return (
     <SidebarTooltip place="title-bar" content={compact ? null : "Your sessions at a glance"}>
@@ -146,19 +153,12 @@ export function SupervisorOverview({
     asked.current = true;
     onClose();
   };
-  const known = workspaceAgents(useAgents(), workspace);
+  const all = useAgents();
+  const known = workspaceAgents(all, workspace);
   const { deliveries, warning } = useSupervisorDeliveries(supervisorId);
   const projects = [...(workspace?.projects ?? []), ...(workspace?.closedProjects ?? [])];
   const names = new Map(projects.map((project) => [project.id, project.name]));
-  const shown = new Set(
-    (workspace?.projects ?? []).flatMap((project) =>
-      project.tabs.flatMap((tab) =>
-        tab.nodes.flatMap((node) =>
-          node.kind === "pane" && node.profile === "chat" && node.sessionId ? [node.sessionId] : [],
-        ),
-      ),
-    ),
-  );
+  const { shown, closed } = overviewChats(workspace, all);
   const now = useMinuteClock();
   const [earlierOpen, setEarlierOpen] = useState(false);
   const [doneAll, setDoneAllState] = useState(doneAllKept);
@@ -166,12 +166,12 @@ export function SupervisorOverview({
     doneAllKept = next;
     setDoneAllState(next);
   };
-  const listed = overviewRows(known, deliveries, shown, null, now);
+  const listed = overviewRows(known, deliveries, shown, null, now, closed);
   // Folded rows need no gist until Earlier is opened.
   const briefs = useSupervisorBriefs(
     listed.filter((row) => earlierOpen || !row.earlier).map((row) => row.agent),
   );
-  const rows = overviewRows(known, deliveries, shown, briefs, now);
+  const rows = overviewRows(known, deliveries, shown, briefs, now, closed);
   // While the panel is open, what it lists needs no card on top of it.
   useListedAgents(rows.map((row) => row.agent.id).sort());
   const open = (agent: AgentInfo) => {

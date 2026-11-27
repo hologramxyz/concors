@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AtSign, Bot, Folder } from "lucide-react";
+import { AtSign, Bot, ChevronRight, Folder } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -9,27 +9,54 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { matchReferences, type SupervisorReference } from "./reference-text";
+import { mentionGroups, type SupervisorReference } from "./reference-text";
 
 /**
  * Mentions for the phone app's native message field, which cannot open a list as `@` is typed:
- * a button opens the same names in a drawer. Everywhere else `@` in the message does this.
+ * a button opens the same names in a drawer. Everywhere else `@` in the message does this. Closed
+ * chats come last, folded under Closed as in the typed list.
  */
 export function SupervisorReferencePicker({
   references,
+  closed,
   disabled,
   onSelect,
 }: {
   references: readonly SupervisorReference[];
+  closed: ReadonlySet<string>;
   disabled: boolean;
   onSelect: (ref: SupervisorReference) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const shown = matchReferences(references, query, references.length);
+  const [closedOpen, setClosedOpen] = useState<boolean | null>(null);
+  const groups = mentionGroups(references, closed, query, closedOpen, references.length);
   const changeOpen = (next: boolean) => {
     setOpen(next);
     setQuery("");
+    setClosedOpen(null);
+  };
+  const option = (ref: SupervisorReference) => {
+    const Icon = ref.kind === "Agent" ? Bot : Folder;
+    return (
+      <button
+        key={ref.kind + ref.id}
+        type="button"
+        role="option"
+        aria-selected={false}
+        className="flex w-full items-center gap-3 rounded-md px-2 py-2.5 text-left text-sm hover:bg-accent/60"
+        onClick={() => {
+          onSelect(ref);
+          changeOpen(false);
+        }}
+      >
+        <Icon className="size-4 shrink-0 text-muted-foreground" />
+        <span className="min-w-0 truncate">{ref.label}</span>
+        <span className="ml-auto shrink-0 truncate text-xs text-muted-foreground">
+          {ref.kind === "Agent" ? ref.workspace : "Workspace"}
+        </span>
+      </button>
+    );
   };
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
@@ -59,29 +86,28 @@ export function SupervisorReferencePicker({
           aria-label="Mention"
           className="chat-scroll -mx-2 max-h-80 overflow-y-auto"
         >
-          {shown.map((ref) => {
-            const Icon = ref.kind === "Agent" ? Bot : Folder;
-            return (
-              <button
-                key={ref.kind + ref.id}
-                type="button"
-                role="option"
-                aria-selected={false}
-                className="flex w-full items-center gap-3 rounded-md px-2 py-2.5 text-left text-sm hover:bg-accent/60"
-                onClick={() => {
-                  onSelect(ref);
-                  changeOpen(false);
-                }}
-              >
-                <Icon className="size-4 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 truncate">{ref.label}</span>
-                <span className="ml-auto shrink-0 truncate text-xs text-muted-foreground">
-                  {ref.kind === "Agent" ? ref.workspace : "Workspace"}
-                </span>
-              </button>
-            );
-          })}
-          {!shown.length && <p className="px-2 py-3 text-sm text-muted-foreground">No matches.</p>}
+          {groups.open.map(option)}
+          {groups.closedMatches > 0 && (
+            // The sidebar's Closed fold, a full tap tall.
+            <button
+              type="button"
+              aria-expanded={groups.closedOpen}
+              onClick={() => setClosedOpen(!groups.closedOpen)}
+              className="flex min-h-[44px] w-full items-center gap-3 rounded-md px-2 text-left text-xs text-muted-foreground hover:bg-accent/60"
+            >
+              <span className="flex size-4 shrink-0 items-center justify-center">
+                <ChevronRight
+                  aria-hidden="true"
+                  className={`size-3.5 transition-transform motion-reduce:transition-none ${groups.closedOpen ? "rotate-90" : ""}`}
+                />
+              </span>
+              <span className="flex-1">Closed</span>
+            </button>
+          )}
+          {groups.closed.map(option)}
+          {!groups.open.length && !groups.closedMatches && (
+            <p className="px-2 py-3 text-sm text-muted-foreground">No matches.</p>
+          )}
         </div>
       </DialogContent>
     </Dialog>

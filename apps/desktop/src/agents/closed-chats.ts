@@ -20,6 +20,45 @@ function resumableEngine(agent: AgentInfo): ResumableEngine | null {
     : null;
 }
 
+/** The conversations one pane switched between share a group; a lone chat is its own. */
+function chatGroups(agents: readonly AgentInfo[]) {
+  const groups = new Map<string, AgentInfo[]>();
+  for (const agent of agents) {
+    const key = agent.providerGroupId ?? agent.id;
+    groups.set(key, [...(groups.get(key) ?? []), agent]);
+  }
+  return groups;
+}
+
+/**
+ * The chats an open pane shows, with every conversation sharing a group with one. Any other chat
+ * is closed, as `closedChats` and Supervisor's lists mean it, whether or not it can be resumed.
+ */
+export function openChats(
+  workspace: Pick<WorkspaceSnapshot, "projects"> | null,
+  agents: readonly AgentInfo[],
+): Set<string> {
+  const shown = new Set<string>();
+  for (const project of workspace?.projects ?? [])
+    for (const tab of project.tabs)
+      for (const node of tab.nodes)
+        if (node.kind === "pane" && node.sessionId) shown.add(node.sessionId);
+  const open = new Set<string>();
+  for (const members of chatGroups(agents).values())
+    if (members.some((agent) => shown.has(agent.id)))
+      for (const agent of members) open.add(agent.id);
+  return open;
+}
+
+/** The chats no open pane shows, open workspace or not: what Supervisor's lists keep apart. */
+export function closedChatIds(
+  workspace: Pick<WorkspaceSnapshot, "projects"> | null,
+  agents: readonly AgentInfo[],
+): Set<string> {
+  const open = openChats(workspace, agents);
+  return new Set(agents.filter((agent) => !open.has(agent.id)).map((agent) => agent.id));
+}
+
 /**
  * Chats that no pane shows any more, most recently active first. The conversations one pane
  * switched between share a group and come back as the latest of them, so a pane is listed once;
@@ -30,20 +69,11 @@ export function closedChats(
   agents: readonly AgentInfo[],
 ): ClosedChat[] {
   if (!workspace) return [];
-  const shown = new Set<string>();
-  for (const project of workspace.projects)
-    for (const tab of project.tabs)
-      for (const node of tab.nodes)
-        if (node.kind === "pane" && node.sessionId) shown.add(node.sessionId);
+  const open = openChats(workspace, agents);
   const projects = new Map(workspace.projects.map((project) => [project.id, project]));
-  const groups = new Map<string, AgentInfo[]>();
-  for (const agent of agents) {
-    const key = agent.providerGroupId ?? agent.id;
-    groups.set(key, [...(groups.get(key) ?? []), agent]);
-  }
   const chats: ClosedChat[] = [];
-  for (const members of groups.values()) {
-    if (members.some((agent) => shown.has(agent.id))) continue;
+  for (const members of chatGroups(agents).values()) {
+    if (members.some((agent) => open.has(agent.id))) continue;
     const latest = members
       .filter(
         (agent) =>
