@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AtSign, Bot, ChevronRight, Folder } from "lucide-react";
+import { AtSign, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   Dialog,
@@ -10,6 +10,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { mentionGroups, type SupervisorReference } from "./reference-text";
+import { MentionIcon } from "./mention-menu";
 
 /**
  * Mentions for the phone app's native message field, which cannot open a list as `@` is typed:
@@ -37,7 +38,6 @@ export function SupervisorReferencePicker({
     setClosedOpen(null);
   };
   const option = (ref: SupervisorReference) => {
-    const Icon = ref.kind === "Agent" ? Bot : Folder;
     return (
       <button
         key={ref.kind + ref.id}
@@ -50,7 +50,7 @@ export function SupervisorReferencePicker({
           changeOpen(false);
         }}
       >
-        <Icon className="size-4 shrink-0 text-muted-foreground" />
+        <MentionIcon reference={ref} />
         <span className="min-w-0 truncate">{ref.label}</span>
         <span className="ml-auto shrink-0 truncate text-xs text-muted-foreground">
           {ref.kind === "Agent" ? ref.workspace : "Workspace"}

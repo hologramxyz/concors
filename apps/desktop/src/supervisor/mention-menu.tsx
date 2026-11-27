@@ -1,7 +1,36 @@
-import { Bot, ChevronRight, Folder } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { Popover } from "radix-ui";
-import { useEffect, useId, useRef, type RefObject } from "react";
+import { useContext, useEffect, useId, useRef, type RefObject } from "react";
+import { useAgents } from "@/agents/context";
+import { ProviderIcon } from "@/agents/provider-icon";
+import { ProjectImage } from "@/workspace/project-image";
+import { WorkspaceImageContext } from "@/workspace/use-project-icons";
 import type { SupervisorReference } from "./reference-text";
+
+/**
+ * A mention's mark, as its tab or sidebar row shows it: a chat by its provider's mark (only chats
+ * can be mentioned; terminals cannot), a workspace by the sidebar's image for it. Muted, at the
+ * icon size both lists had.
+ */
+export function MentionIcon({ reference }: { reference: SupervisorReference }) {
+  const agent = useAgents().find((a) => a.id === reference.id);
+  const image = useContext(WorkspaceImageContext)(reference.id);
+  return (
+    <span className="flex size-4 shrink-0 items-center justify-center text-muted-foreground">
+      {reference.kind === "Agent" ? (
+        <ProviderIcon provider={agent?.provider ?? ""} />
+      ) : (
+        <ProjectImage
+          key={image?.source ?? "fallback"}
+          source={image?.source ?? null}
+          isGit={image?.isGit ?? false}
+          name={image?.name ?? reference.label}
+          size={16}
+        />
+      )}
+    </span>
+  );
+}
 
 /**
  * The agents and workspaces an `@` being typed can name, listed above the composer as the slash
@@ -89,7 +118,6 @@ export function MentionMenu({
             className="chat-scroll flex max-h-80 flex-col-reverse overflow-auto rounded-2xl border bg-popover py-1 shadow-lg"
           >
             {matches.map((reference, index) => {
-              const Icon = reference.kind === "Agent" ? Bot : Folder;
               const row = (
                 <button
                   type="button"
@@ -103,7 +131,7 @@ export function MentionMenu({
                   onClick={() => onChoose(reference)}
                   className={`flex w-full shrink-0 items-center gap-3 px-4 py-2.5 text-left text-sm ${active === index ? "bg-accent" : "hover:bg-accent/60"}`}
                 >
-                  <Icon className="size-4 shrink-0 text-muted-foreground" />
+                  <MentionIcon reference={reference} />
                   <span className="min-w-0 truncate">{reference.label}</span>
                   <span className="ml-auto shrink-0 truncate text-xs text-muted-foreground">
                     {reference.kind === "Agent" ? reference.workspace : "Workspace"}
