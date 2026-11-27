@@ -1,5 +1,5 @@
-import { MentionChip } from "@/supervisor/mention-menu";
-import { copyChips } from "@/supervisor/reference-text";
+import { MentionIcon } from "@/supervisor/mention-menu";
+import { copyChips, type SupervisorReference } from "@/supervisor/reference-text";
 import { SessionLinkContext, sessionLink } from "@/supervisor/session-link";
 import { useContext } from "react";
 import { FileLinkContext, FileLinkTargetContext } from "@/files/context";
@@ -145,6 +145,41 @@ function MarkdownImage({ src, alt }: ComponentProps<"img">) {
   );
 }
 
+/**
+ * A linked chat's name, led by its tab's mark. The mark is 16px, 4px before the name, centred on
+ * the name's capitals (it sits 3px below the baseline), and kept on one line with the name's first
+ * word. Only the name is underlined, as the link was, so the line never runs under the mark or the
+ * gap.
+ */
+function ChatLinkName({
+  reference,
+  content,
+}: {
+  reference: SupervisorReference;
+  content: ReactNode;
+}) {
+  const parts = Children.toArray(content);
+  const [first, ...rest] = parts;
+  const [, word = "", after = ""] =
+    typeof first === "string" ? (/^(\S*)([\s\S]*)$/.exec(first) ?? []) : [];
+  const lead = typeof first === "string" ? word : first;
+  const tail = typeof first === "string" ? [after, ...rest] : rest;
+  return (
+    <>
+      <span className="whitespace-nowrap">
+        <span
+          data-link-icon=""
+          className="mr-[4px] inline-block size-[16px] align-[-3px] select-none *:size-auto"
+        >
+          <MentionIcon reference={reference} />
+        </span>
+        <span className="underline underline-offset-2">{lead}</span>
+      </span>
+      <span className="underline underline-offset-2">{tail}</span>
+    </>
+  );
+}
+
 function MarkdownLink({ children: content, href, node: _node, ...props }: LinkProps) {
   const openSession = useContext(SessionLinkContext);
   const openFile = useContext(FileLinkContext);
@@ -157,17 +192,21 @@ function MarkdownLink({ children: content, href, node: _node, ...props }: LinkPr
       ? connection.previewUrl(preview.preview)
       : null;
   const targetSession = sessionLink(href);
-  // A chat Supervisor links in its reply reads as a mention does in a sent message. Its notices,
-  // and the replies they quote, keep the plain link.
+  // A chat Supervisor links in its reply keeps the plain link, led by its tab's mark: not a
+  // mention, so not a mention's chip. Its notices, and the replies they quote, show no mark.
   if (targetSession && openSession && item?.kind === "assistant")
     return (
-      <MentionChip
+      <button
+        type="button"
         data-chat-link=""
-        reference={{ id: targetSession, kind: "Agent", label: codeText(content) }}
-        open={() => openSession(targetSession)}
+        className="text-link"
+        onClick={() => openSession(targetSession)}
       >
-        {content}
-      </MentionChip>
+        <ChatLinkName
+          reference={{ id: targetSession, kind: "Agent", label: codeText(content) }}
+          content={content}
+        />
+      </button>
     );
   if (targetSession && openSession)
     return (

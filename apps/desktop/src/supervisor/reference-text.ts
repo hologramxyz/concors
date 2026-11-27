@@ -150,9 +150,9 @@ export function mentionSegments(text: string, references: readonly SupervisorRef
 }
 
 /**
- * Copies a selection with each chip as the text it stands for: a mention as the "@Name" it was
- * written as, a linked chat as its link text. Left to the browser, a chip's icon box would break
- * the line before it.
+ * Copies a selection with each mention chip as the "@Name" it was written as, and each linked chat
+ * Supervisor shows as its link text. Left to the browser, a chip's icon box would break the line
+ * before it.
  */
 export function copyChips(event: ClipboardEvent<HTMLElement>) {
   const selection = window.getSelection();
@@ -160,12 +160,14 @@ export function copyChips(event: ClipboardEvent<HTMLElement>) {
   const fragment = selection.getRangeAt(0).cloneContents();
   const chips = fragment.querySelectorAll<HTMLElement>("[data-mention], [data-chat-link]");
   if (!chips.length) return;
-  for (const chip of chips)
-    chip.replaceWith(
-      "mention" in chip.dataset
-        ? `@${chip.dataset["mention"] ?? ""}`
-        : (chip.lastElementChild?.textContent ?? ""),
-    );
+  for (const chip of chips) {
+    if ("mention" in chip.dataset) {
+      chip.replaceWith(`@${chip.dataset["mention"] ?? ""}`);
+      continue;
+    }
+    for (const icon of chip.querySelectorAll("[data-link-icon]")) icon.remove();
+    chip.replaceWith(chip.textContent ?? "");
+  }
   event.clipboardData.setData("text/plain", fragment.textContent ?? "");
   event.preventDefault();
 }

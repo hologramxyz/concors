@@ -50,26 +50,31 @@ const buttons = (html: string) =>
     .map((match) => match[0])
     .filter((button) => !button.includes("aria-label"));
 
-it("shows a chat Supervisor links as a chip with its provider's mark, still a button", () => {
+it("shows a chat Supervisor links as its link, led by its provider's mark, still a button", () => {
   const html = reply(`**Star Catcher / [Game QA](concors://session/${CHAT})** is blocked.`);
-  const [chip] = buttons(html);
+  const [link] = buttons(html);
   expect(buttons(html)).toHaveLength(1);
-  expect(chip).toContain('type="button"');
-  expect(chip).toContain("bg-muted");
-  expect(chip).toContain("font-medium");
-  expect(chip).toContain("<svg");
-  expect(chip).not.toContain("lucide-bot");
-  // The link's own text, with no "@": a link to a chat, not a mention.
-  expect(chip).toMatch(/<span class="\[text-box:trim-both_cap_alphabetic\]">Game QA<\/span>/);
-  expect(chip).not.toContain("@");
-  expect(chip).not.toContain("underline-offset-2 underline");
+  expect(link).toContain('type="button"');
+  expect(link).toContain('class="text-link"');
+  // The chat's own mark, not the fallback, leading the name on one line with its first word.
+  expect(link).toContain("<svg");
+  expect(link).not.toContain("lucide-bot");
+  expect(link).toMatch(
+    /<span class="whitespace-nowrap"><span data-link-icon="".*?<\/span><span class="underline underline-offset-2">Game<\/span><\/span><span class="underline underline-offset-2"> QA<\/span>/,
+  );
+  // Not a mention: no chip, no "@".
+  expect(link).not.toContain("bg-muted");
+  expect(link).not.toContain("rounded");
+  expect(link).not.toContain("font-medium");
+  expect(link).not.toContain("@");
 });
 
-it("keeps the chip with the fallback mark when the chat is gone", () => {
-  const [chip] = buttons(reply(`Ask [Old chat](concors://session/${GONE}) again.`));
-  expect(chip).toContain("lucide-bot");
-  expect(chip).toContain("Old chat");
-  expect(chip).toContain('type="button"');
+it("leads with the fallback mark when the chat is gone", () => {
+  const [link] = buttons(reply(`Ask [Old chat](concors://session/${GONE}) again.`));
+  expect(link).toContain("lucide-bot");
+  expect(link).toContain("Old");
+  expect(link).toContain(" chat");
+  expect(link).toContain('type="button"');
 });
 
 it("leaves a link inside inline code as written", () => {
