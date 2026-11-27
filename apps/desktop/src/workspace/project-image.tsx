@@ -20,7 +20,7 @@ export function ProjectImage({
   const radius = `min(var(--radius-sm), ${size * 0.15}px)`;
   // Below the 14px chip a fixed letter crowds the tile and the folder looks small beside tiles,
   // so there both follow the tile: the letter as the 20px sidebar tile has it (12px, 0.6 of the
-  // tile), and the folder's outline, 22 of its icon's 24 units with the stroke, as wide as a tile.
+  // tile), and the folder drawn at the box's own size.
   const small = size < 14;
   return (
     <span
@@ -43,9 +43,7 @@ export function ProjectImage({
           <Folder
             className="shrink-0 text-muted-foreground"
             style={
-              small
-                ? { width: (size * 24) / 22, height: (size * 24) / 22 }
-                : { width: size * 0.8, height: size * 0.8 }
+              small ? { width: size, height: size } : { width: size * 0.8, height: size * 0.8 }
             }
           />
         ))}
