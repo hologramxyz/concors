@@ -157,13 +157,13 @@ export const TimelineItem = memo(function TimelineItem({
                     <span
                       key={index}
                       data-mention={reference.label}
-                      className="relative inline-flex items-center rounded-sm bg-muted py-[calc((16px-1cap)/2+0.125rem)] pr-1 pl-[calc(0.5rem+16px)] font-medium whitespace-nowrap before:sr-only before:content-['mention,_']"
+                      className="relative inline-flex h-[20px] items-center rounded-sm bg-muted pr-[4px] pl-[22px] font-medium whitespace-nowrap before:sr-only before:content-['mention,_']"
                     >
                       {/* The name, trimmed to its capitals, is the chip's only flex item, so the
-                          chip sits on the text's baseline in every engine. The 16px mark is laid
-                          in the left padding (side padding, mark, gap), centred on the name's
-                          capitals, with the same room above and below them. */}
-                      <span className="absolute top-1/2 left-1 -translate-y-1/2 select-none *:size-auto">
+                          chip sits on the text's baseline in every engine, centred in its 20px.
+                          The 16px mark is inset 2px on its left, top and bottom, then 4px to the
+                          name: whole pixels, so the edges round alike at any device scale. */}
+                      <span className="absolute top-[2px] left-[2px] select-none *:size-auto">
                         <MentionIcon reference={reference} />
                       </span>
                       <span className="[text-box:trim-both_cap_alphabetic]">
