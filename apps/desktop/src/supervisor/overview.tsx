@@ -526,6 +526,7 @@ function OverviewItem({
               return foldable ? (
                 <button
                   type="button"
+                  data-overview-fold=""
                   aria-expanded={unfolded}
                   onClick={() => setUnfolded(!unfolded)}
                   className={cn(

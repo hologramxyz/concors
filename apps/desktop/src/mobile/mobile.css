@@ -113,6 +113,15 @@ body {
   padding-block: 11px;
   margin-block: -11px;
 }
+/* Overview's approval line takes its one line of height, as a line that fits does, so the answers
+   under it sit as close on every row; the drawer's 44px floor for its buttons is lifted for it alone.
+   Its tap area then reaches only into the gaps around it: up to the title row (mt-1) and down to
+   the answers (my-2.5), so both keep their own taps. */
+[role="dialog"] button[data-overview-fold] {
+  min-height: 0;
+  --mobile-hit-room-top: 0.25rem;
+  --mobile-hit-room-bottom: 0.625rem;
+}
 /* The pull request page's state switch and its workspace chips sit 0.75rem apart (mt-3), so each
    row's areas take half of that. The room counts from inside a control's border, so a chip's 1px
    border is added; a tab has no border but the switch's padding and border below it. */
