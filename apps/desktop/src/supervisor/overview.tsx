@@ -223,9 +223,22 @@ export function SupervisorOverview({
               key={group}
               title={group}
               label
-              action={
+              // Done is history: it starts folded to its header so what runs and what needs you
+              // lead, and a folded Done still shows a finish nobody has opened by the rows' dot.
+              defaultExpanded={group !== "Done"}
+              action={(expanded) =>
                 recent.length > 0 && (
                   <span className="shrink-0 pr-2 text-xs text-muted-foreground tabular-nums">
+                    {/* Beside the count as a row's sits beside its time, centred on the digits'
+                        lower half: its foot is raised half the x-height less half its size. */}
+                    {!expanded && grouped.some(unseenDone) && (
+                      <span
+                        data-header-unseen=""
+                        className="mr-2 inline-flex align-[calc(0.5ex-2.5px)]"
+                      >
+                        <SidebarDot dot="done" />
+                      </span>
+                    )}
                     {recent.length}
                   </span>
                 )

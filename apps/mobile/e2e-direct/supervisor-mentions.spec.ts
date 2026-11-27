@@ -20,7 +20,14 @@ test("the phone shows Overview in a drawer and mentions an agent with @", async 
     await expect(drawer.getByRole("region", { name: "Needs you" })).toContainText(
       "Approve: pnpm test",
     );
-    await expect(drawer.getByRole("region", { name: "Done" })).toContainText("Hello from Codex");
+    // Done starts folded to its header, its dot standing for the finish nobody has opened.
+    const done = drawer.getByRole("region", { name: "Done" });
+    const doneToggle = done.getByRole("button", { name: "Done", exact: true });
+    await expect(doneToggle).toHaveAttribute("aria-expanded", "false");
+    await expect(done.locator("[data-header-unseen]")).toBeVisible();
+    await doneToggle.click();
+    await expect(done.locator("[data-header-unseen]")).toHaveCount(0);
+    await expect(done.getByText("Hello from Codex").first()).toBeVisible();
     await page.screenshot({
       path: test.info().outputPath("mobile-overview.png"),
       animations: "disabled",

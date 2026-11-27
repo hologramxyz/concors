@@ -3,21 +3,26 @@ import { ChevronRight } from "lucide-react";
 
 export function SidebarSection({
   title,
-  action,
+  action: actionOf,
   children,
   compact = false,
   icon,
   label = false,
+  defaultExpanded = true,
 }: {
   title: string;
-  action?: ReactNode;
+  /** Beside the title; given as a function, it is drawn for whether the section is open. */
+  action?: ReactNode | ((expanded: boolean) => ReactNode);
   children: ReactNode;
   compact?: boolean;
   icon?: ReactNode;
   /** Titled in the small label style, a divider between groups rather than a heading. */
   label?: boolean;
+  /** Whether the section starts open; it is not remembered once toggled. */
+  defaultExpanded?: boolean;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const action = typeof actionOf === "function" ? actionOf(expanded) : actionOf;
   const id = useId();
   return (
     <section aria-label={title}>

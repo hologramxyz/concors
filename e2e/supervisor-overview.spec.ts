@@ -27,8 +27,23 @@ test("Overview shows each session's status, what it needs, and the gist of its o
     await expect(working).toContainText("HUD polish");
     // A working session shows its latest update as it streams, refreshed while it works.
     await expect(working).toContainText("Hello from");
-    // A finished session says what it produced, so it need not be opened to find out.
+    // Done starts folded to its header, which shows the rows' dot for a finish nobody opened.
     const done = overview.getByRole("region", { name: "Done" });
+    const doneToggle = done.getByRole("button", { name: "Done", exact: true });
+    const headerDot = done.locator("[data-header-unseen]");
+    await expect(doneToggle).toHaveAttribute("aria-expanded", "false");
+    await expect(done.getByRole("button", { name: /Release editor/ })).toBeHidden();
+    await expect(headerDot).toBeVisible();
+    await page.screenshot({
+      path: test.info().outputPath("desktop-overview-done-folded.png"),
+      animations: "disabled",
+    });
+    // Its header opens it, and the open group's rows carry the dot instead.
+    await doneToggle.click();
+    await expect(doneToggle).toHaveAttribute("aria-expanded", "true");
+    await expect(headerDot).toHaveCount(0);
+    await expect(done.getByRole("button", { name: /Release editor/ })).toBeVisible();
+    // A finished session says what it produced, so it need not be opened to find out.
     await expect(done).toContainText("Release editor");
     await expect(done).toContainText("Hello from Codex");
     await page.screenshot({
