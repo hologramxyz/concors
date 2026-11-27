@@ -498,7 +498,13 @@ function Control({
         ) : icon === "pi" ? (
           <Text modifiers={[font({ size: 20 })]}>π</Text>
         ) : (
-          <Image systemName={symbols[icon]} size={18} />
+          <Image
+            systemName={symbols[icon]}
+            size={18}
+            // "at" fills its box where "plus" and the sliders leave a margin: at 14pt it stands as
+            // tall as they do (about 14.5pt), and semibold keeps its stroke as heavy as theirs.
+            modifiers={icon === "at" ? [font({ size: 14, weight: "semibold" })] : undefined}
+          />
         )}
       </ControlFace>
     </Button>
