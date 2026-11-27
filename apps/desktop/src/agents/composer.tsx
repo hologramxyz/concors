@@ -1478,7 +1478,10 @@ export function AgentComposer({
                 >
                   {tinted.flatMap((range, index) => [
                     draft.slice(tinted[index - 1]?.end ?? 0, range.start),
-                    <span key={range.start} className="rounded-sm bg-muted">
+                    <span
+                      key={range.start}
+                      className="rounded-sm bg-muted box-decoration-clone shadow-[-1px_0_var(--color-muted),1px_0_var(--color-muted)]"
+                    >
                       {draft.slice(range.start, range.end)}
                     </span>,
                   ])}

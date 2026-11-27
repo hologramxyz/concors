@@ -18,7 +18,10 @@ async function tintAgainstText(page: Page) {
       el.style.color = layer === "box" ? ink : layer ? "transparent" : "";
       copy.style.color = layer === "copy" ? ink : "";
       for (const tint of copy.querySelectorAll("span"))
-        (tint as HTMLElement).style.background = layer ? "transparent" : "";
+        Object.assign((tint as HTMLElement).style, {
+          background: layer ? "transparent" : "",
+          boxShadow: layer ? "none" : "",
+        });
       if (!layer) delete el.dataset["ink"];
     }, layer);
   const where = async () => {
@@ -101,6 +104,93 @@ function expectTintOnText(measured: Awaited<ReturnType<typeof tintAgainstText>>,
   }
 }
 
+/**
+ * How far each piece of tint is painted beyond the tint its text box alone would paint, side by
+ * side: the box's words hidden, shot with the tint's sides and without them. An edge is where the
+ * tint is at least half as strong as its middle, on the middle row and column of each piece.
+ */
+async function tintPadding(page: Page) {
+  const box = page.locator("textarea[data-agent-composer]");
+  const shoot = async (sides: boolean) => {
+    await box.evaluate((el, sides) => {
+      el.blur();
+      el.style.color = "transparent";
+      for (const tint of el.previousElementSibling?.querySelectorAll("span") ?? [])
+        (tint as HTMLElement).style.boxShadow = sides ? "" : "none";
+    }, sides);
+    const clip = await box.boundingBox();
+    if (!clip) throw new Error("The message box is not on screen");
+    const shot = (await page.screenshot({ clip, animations: "disabled" })).toString("base64");
+    return { shot, clip };
+  };
+  const shots = { padded: await shoot(true), bare: await shoot(false) };
+  await box.evaluate((el) => {
+    el.style.color = "";
+    for (const tint of el.previousElementSibling?.querySelectorAll("span") ?? [])
+      (tint as HTMLElement).style.boxShadow = "";
+  });
+  return box.evaluate(async (el, { padded, bare }) => {
+    const copy = el.previousElementSibling as HTMLElement;
+    const at = el.getBoundingClientRect();
+    const rects = [...copy.querySelectorAll("span")].flatMap((tint) => [...tint.getClientRects()]);
+    const edges = async ({ shot, clip }: typeof padded) => {
+      const blob = await (await fetch(`data:image/png;base64,${shot}`)).blob();
+      const bitmap = await createImageBitmap(blob);
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("No canvas to read the shot");
+      context.drawImage(bitmap, 0, 0);
+      const image = context.getImageData(0, 0, bitmap.width, bitmap.height);
+      const scale = image.width / clip.width;
+      const back = [...image.data.subarray(0, 3)];
+      const strength = (x: number, y: number) => {
+        const i = (y * image.width + x) * 4;
+        return Math.max(
+          ...[0, 1, 2].map((c) => Math.abs((image.data[i + c] ?? 0) - (back[c] ?? 0))),
+        );
+      };
+      return rects.map((rect) => {
+        const [left, right] = [rect.left - at.left, rect.right - at.left];
+        const [top, bottom] = [rect.top - at.top, rect.bottom - at.top];
+        const row = Math.round(((top + bottom) / 2) * scale);
+        const column = Math.round(((left + right) / 2) * scale);
+        const half = strength(column, row) / 2;
+        const reach = (from: number, to: number, step: number, at: (n: number) => number) => {
+          let edge = from;
+          for (let n = from; n !== to; n += step) if (at(n) >= half) edge = n;
+          return edge;
+        };
+        const across = (x: number) => strength(x, row);
+        const down = (y: number) => strength(column, y);
+        return {
+          left: reach(column, Math.floor((left - 4) * scale), -1, across) / scale,
+          right: (reach(column, Math.ceil((right + 4) * scale), 1, across) + 1) / scale,
+          top: reach(row, Math.floor((top - 4) * scale), -1, down) / scale,
+          bottom: (reach(row, Math.ceil((bottom + 4) * scale), 1, down) + 1) / scale,
+        };
+      });
+    };
+    const [wide, plain] = [await edges(padded), await edges(bare)];
+    return wide.map((piece, index) => {
+      const own = plain[index] ?? piece;
+      return {
+        left: own.left - piece.left,
+        right: piece.right - own.right,
+        top: own.top - piece.top,
+        bottom: piece.bottom - own.bottom,
+      };
+    });
+  }, shots);
+}
+
+/** The tint reaches 1px past its text on either side, and no further up or down. */
+function expectTintPadded(padding: Awaited<ReturnType<typeof tintPadding>>, lines: number) {
+  expect(padding).toHaveLength(lines);
+  for (const piece of padding) {
+    expect(piece).toEqual({ left: 1, right: 1, top: 0, bottom: 0 });
+  }
+}
+
 test("@ in the Supervisor's message lists agents and writes the chosen mention", async ({
   page,
 }) => {
@@ -143,11 +233,14 @@ test("@ in the Supervisor's message lists agents and writes the chosen mention",
     await composer.press("Enter");
     await composer.pressSequentially("to update the notes");
     await expect(composer).toHaveValue("And @Release editor to update the notes");
-    // The chosen mention is tinted on a copy behind the box, exactly over its own text: on one
-    // line, and wrapped across two.
+    // The chosen mention is tinted on a copy behind the box, exactly over its own text and 1px
+    // past it on either side: on one line, and wrapped across two.
     const one = await tintAgainstText(page);
     console.warn(`tint one line: ${JSON.stringify(one)}`);
     expectTintOnText(one, 1);
+    const onePadding = await tintPadding(page);
+    console.warn(`tint padding one line: ${JSON.stringify(onePadding)}`);
+    expectTintPadded(onePadding, 1);
     let words = "";
     for (let n = 0; n < 60; n++) {
       words += "wrap ";
@@ -166,6 +259,9 @@ test("@ in the Supervisor's message lists agents and writes the chosen mention",
     const wrapped = await tintAgainstText(page);
     console.warn(`tint wrapped: ${JSON.stringify(wrapped)}`);
     expectTintOnText(wrapped, 2);
+    const wrappedPadding = await tintPadding(page);
+    console.warn(`tint padding wrapped: ${JSON.stringify(wrappedPadding)}`);
+    expectTintPadded(wrappedPadding, 2);
     // Not sent: the Supervisor conversation is shared by every spec on this daemon. How a sent
     // mention reads is covered by src/supervisor/sent-mentions.test.ts.
     await composer.fill("");
