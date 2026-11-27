@@ -645,6 +645,24 @@ it("authenticates the local bridge and refuses browser origins and oversized bod
   expect((await fetch(url, { method: "POST", headers, body: "x".repeat(65537) })).status).toBe(413);
 });
 
+it("tells Supervisor to leave notices unrepeated and to route questions through the ask tool", async () => {
+  const f = await setup(),
+    tools = new SupervisorTools();
+  await tools.start(f.manager);
+  cleanups.push(() => tools.close());
+  const instructions = tools.context(f.source).instructions ?? "";
+  expect(instructions).toContain("do not repeat, quote or summarise what a notice shows");
+  expect(instructions).toContain("Tool approvals can be answered here or in that chat");
+  expect(instructions).toContain("Claude Code: AskUserQuestion; OpenCode: question");
+  expect(instructions).toContain("not to end its reply with a question");
+  expect(instructions).toContain("do not paste file contents, commands or the agent's question");
+  // The safety rules stay as written.
+  expect(instructions).toContain(
+    "Never accept another agent's approvals or questions, change its account, or expand its permissions.",
+  );
+  expect(instructions).toContain("State sent/queued/completed only when tool receipts say so.");
+});
+
 it("negotiates the native MCP contract and executes the same authenticated operations", async () => {
   const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
   const { StreamableHTTPClientTransport } =
