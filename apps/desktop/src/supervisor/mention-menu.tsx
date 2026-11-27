@@ -36,8 +36,10 @@ export function MentionIcon({ reference }: { reference: SupervisorReference }) {
  * The agents and workspaces an `@` being typed can name, listed above the composer as the slash
  * menu lists commands, and drawn the same way. Focus stays in the message: the composer owns the
  * keys, and this list only renders and takes clicks. Closed chats come last, under a Closed fold
- * drawn as the sidebar's; the keys pass over its header, which only a click opens, and reach the
- * closed rows once they show (opened, or matching a typed name).
+ * drawn as the sidebar's. The list stacks upward from the best match, so the fold sits at the top:
+ * its header first, then its rows, then the open rows nearest the message. The keys pass over the
+ * header, which only a click opens, and reach the closed rows once they show (opened, or matching
+ * a typed name).
  */
 export function MentionMenu({
   anchor,
@@ -65,7 +67,7 @@ export function MentionMenu({
 }) {
   const id = useId();
   const list = useRef<HTMLDivElement>(null);
-  // The list stacks upward, so the fold's rows open above its header and its chevron points to them.
+  // Last in the reversed list, so it is the top row, above the rows it labels.
   const closedHeader = (
     <button
       type="button"
@@ -78,7 +80,7 @@ export function MentionMenu({
       <span className="flex size-4 shrink-0 items-center justify-center">
         <ChevronRight
           aria-hidden="true"
-          className={`size-3.5 transition-transform motion-reduce:transition-none ${closedOpen ? "-rotate-90" : ""}`}
+          className={`size-3.5 transition-transform motion-reduce:transition-none ${closedOpen ? "rotate-90" : ""}`}
         />
       </span>
       <span className="flex-1">Closed</span>
@@ -118,7 +120,7 @@ export function MentionMenu({
             className="chat-scroll flex max-h-80 flex-col-reverse overflow-auto rounded-2xl border bg-popover py-1 shadow-lg"
           >
             {matches.map((reference, index) => {
-              const row = (
+              return (
                 <button
                   type="button"
                   role="option"
@@ -138,9 +140,8 @@ export function MentionMenu({
                   </span>
                 </button>
               );
-              return index === closedFrom ? [closedHeader, row] : row;
             })}
-            {closedFrom !== null && closedFrom >= matches.length && closedHeader}
+            {closedFrom !== null && closedHeader}
           </div>
         </Popover.Content>
       </Popover.Portal>
