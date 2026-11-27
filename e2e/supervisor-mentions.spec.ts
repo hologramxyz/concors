@@ -37,6 +37,12 @@ test("@ in the Supervisor's message lists agents and writes the chosen mention",
     await expect(mentions.getByRole("option", { name: /Release editor/ })).toBeVisible();
     await composer.press("Escape");
     await expect(mentions).toHaveCount(0);
+    // Typing straight after choosing a mention lands after it, however fast the keys come.
+    await composer.fill("And @rel");
+    await expect(mentions.getByRole("option", { name: /Release editor/ })).toBeVisible();
+    await composer.press("Enter");
+    await composer.pressSequentially("to update the notes");
+    await expect(composer).toHaveValue("And @Release editor to update the notes");
     // Not sent: the Supervisor conversation is shared by every spec on this daemon. How a sent
     // mention reads is covered by src/supervisor/sent-mentions.test.ts.
     await composer.fill("");

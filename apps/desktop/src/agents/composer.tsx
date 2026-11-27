@@ -567,6 +567,18 @@ export function AgentComposer({
   // The keys move through every row in view, the closed ones too once they show.
   const mentionMatches = mentionList?.rows ?? [];
   const mentionIndex = Math.min(mentionActive, mentionMatches.length - 1);
+  // Where the caret goes once the chosen mention is in the box. It is placed as the new text
+  // commits, before the next key is handled: a frame later, keys typed in between would land at
+  // the end and the caret would then jump back before them.
+  const mentionCaret = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const at = mentionCaret.current;
+    const field = textarea.current;
+    if (at === null || !field) return;
+    mentionCaret.current = null;
+    field.focus();
+    field.setSelectionRange(at, at);
+  }, [draft]);
   const chooseMention = (reference: SupervisorReference) => {
     if (!mentionTyped || !remember(reference)) return;
     const next = insertMention(draft, mentionTyped.start, caret, reference.label);
@@ -575,10 +587,7 @@ export function AgentComposer({
     setMentionActive(0);
     // The finished `@Name ` would match itself; the list returns once something else is typed.
     setMentionDismissed(next.text);
-    requestAnimationFrame(() => {
-      textarea.current?.focus();
-      textarea.current?.setSelectionRange(next.caret, next.caret);
-    });
+    mentionCaret.current = next.caret;
   };
   const chooseCommand = (command: AgentCommand, complete = false) => {
     setSlashActive(0);
