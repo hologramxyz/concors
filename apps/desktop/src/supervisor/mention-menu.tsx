@@ -5,7 +5,7 @@ import { useAgents } from "@/agents/context";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { ProviderIcon } from "@/agents/provider-icon";
 import { ProjectImage } from "@/workspace/project-image";
-import { WorkspaceImageContext } from "@/workspace/use-project-icons";
+import { WorkspaceImageContext, projectImageProps } from "@/workspace/use-project-icons";
 import type { SupervisorReference } from "./reference-text";
 
 /**
@@ -23,9 +23,7 @@ export function MentionIcon({ reference }: { reference: SupervisorReference }) {
       ) : (
         <ProjectImage
           key={image?.source ?? "fallback"}
-          source={image?.source ?? null}
-          isGit={image?.isGit ?? false}
-          name={image?.name ?? reference.label}
+          {...projectImageProps(image, reference.label)}
           size={16}
         />
       )}
@@ -68,6 +66,8 @@ export function MentionMenu({
 }) {
   const id = useId();
   const list = useRef<HTMLDivElement>(null);
+  const agents = useAgents();
+  const workspaceImage = useContext(WorkspaceImageContext);
   // Last in the reversed list, so it is the top row, above the rows it labels.
   const closedHeader = (
     <button
@@ -121,6 +121,9 @@ export function MentionMenu({
             className="chat-scroll flex max-h-80 flex-col-reverse overflow-auto rounded-2xl border bg-popover py-1 shadow-lg"
           >
             {matches.map((reference, index) => {
+              const place = workspaceImage(
+                agents.find((agent) => agent.id === reference.id)?.projectId ?? "",
+              );
               const row = (
                 <button
                   type="button"
@@ -137,11 +140,16 @@ export function MentionMenu({
                   <MentionIcon reference={reference} />
                   <span className="min-w-0 truncate">{reference.label}</span>
                   {/* The workspace's own icon says what it is; only a screen reader hears it.
-                      A chat's workspace is the quietest meta type, given only the room the name leaves
-                      over. */}
+                      A chat's workspace is the quietest meta type, led by the sidebar's image for
+                      it, and given only the room the name leaves over; the name shortens first. */}
                   {reference.kind === "Agent" ? (
-                    <span className="min-w-0 flex-1 truncate text-right text-[11px] text-muted-foreground">
-                      {reference.workspace}
+                    <span className="flex min-w-0 flex-1 items-center justify-end gap-1 text-[11px] text-muted-foreground">
+                      <ProjectImage
+                        key={place?.source ?? "fallback"}
+                        {...projectImageProps(place, reference.workspace)}
+                        size={12}
+                      />
+                      <span className="min-w-0 truncate">{reference.workspace}</span>
                     </span>
                   ) : (
                     <span className="sr-only">Workspace</span>

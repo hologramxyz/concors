@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useContext, useState } from "react";
+import { useAgents } from "@/agents/context";
+import { ProjectImage } from "@/workspace/project-image";
+import { WorkspaceImageContext, projectImageProps } from "@/workspace/use-project-icons";
 import { AtSign, ChevronRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
@@ -31,6 +34,8 @@ export function SupervisorReferencePicker({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [closedOpen, setClosedOpen] = useState<boolean | null>(null);
+  const agents = useAgents();
+  const workspaceImage = useContext(WorkspaceImageContext);
   const groups = mentionGroups(references, closed, query, closedOpen, references.length);
   const changeOpen = (next: boolean) => {
     setOpen(next);
@@ -38,6 +43,7 @@ export function SupervisorReferencePicker({
     setClosedOpen(null);
   };
   const option = (ref: SupervisorReference) => {
+    const place = workspaceImage(agents.find((agent) => agent.id === ref.id)?.projectId ?? "");
     return (
       <button
         key={ref.kind + ref.id}
@@ -53,10 +59,15 @@ export function SupervisorReferencePicker({
         <MentionIcon reference={ref} />
         <span className="min-w-0 truncate">{ref.label}</span>
         {/* As in the typed list: a workspace's icon says what it is, and a chat's workspace is
-            the quietest meta type, given only the room the name leaves. */}
+            the quietest meta type, led by its image, given only the room the name leaves. */}
         {ref.kind === "Agent" ? (
-          <span className="min-w-0 flex-1 truncate text-right text-[11px] text-muted-foreground">
-            {ref.workspace}
+          <span className="flex min-w-0 flex-1 items-center justify-end gap-1 text-[11px] text-muted-foreground">
+            <ProjectImage
+              key={place?.source ?? "fallback"}
+              {...projectImageProps(place, ref.workspace)}
+              size={12}
+            />
+            <span className="min-w-0 truncate">{ref.workspace}</span>
           </span>
         ) : (
           <span className="sr-only">Workspace</span>

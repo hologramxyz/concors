@@ -45,6 +45,13 @@ export interface WorkspaceImage {
   name: string;
 }
 
+/** `ProjectImage`'s props for a lookup's result: the plain folder for a workspace it does not know. */
+export const projectImageProps = (image: WorkspaceImage | null, name = "") => ({
+  source: image?.source ?? null,
+  isGit: image?.isGit ?? false,
+  name: image?.name ?? name,
+});
+
 /**
  * The sidebar's image for a workspace, by its ID, for rows away from the sidebar that name the
  * workspace, so a workspace wears one icon across the window. Null for a workspace it does not
