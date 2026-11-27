@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { ChevronRight, ListChecks, MessageCircle, X } from "lucide-react";
 import {
   agentProviderName,
@@ -36,6 +36,7 @@ import {
   unseenDone,
   type OverviewRow,
 } from "./overview-model";
+import { ellipsisTrim } from "./finished-notice";
 import { supervisorPane } from "./pane";
 import { ApprovalAction, QuickApproval } from "./quick-approval";
 import { shortPath } from "@/agents/short-path";
@@ -353,8 +354,9 @@ export function SupervisorOverview({
  * it, in the text's column, its one-liners, because they are the reason to look: what it needs from
  * you, what it is doing or what it did, two lines at most; last, its model, quietest of all. A
  * paused queue offers "Review queue", which opens the session where it is resumed. An approval says only what it
- * would do, in at most two lines so several fit at once; a longer one unfolds in place, as Earlier
- * does, since nobody should approve what they cannot read in full.
+ * would do, on one line so several fit at once and each starts where the others do; a longer one
+ * unfolds in place from the chevron after its cut, since nobody should approve what they cannot
+ * read in full.
  */
 function OverviewItem({
   row,
@@ -382,20 +384,31 @@ function OverviewItem({
   const request = agent.pending[0]?.kind === "approval" ? agent.pending[0] : undefined;
   const approval = request && row.needs ? row.needs : null;
   const [unfolded, setUnfolded] = useState(false);
-  const [clamped, setClamped] = useState(false);
-  // Whether two lines cut the action short, measured again as the panel or the text changes.
-  const measure = useCallback(
-    (text: HTMLElement | null) => {
-      if (!text || unfolded) return;
-      const check = () => setClamped(text.scrollHeight > text.clientHeight + 1);
-      check();
-      const observer = new ResizeObserver(check);
-      observer.observe(text);
-      return () => observer.disconnect();
-    },
-    [unfolded],
-  );
-  const foldable = !!approval && (clamped || unfolded);
+  const [cut, setCut] = useState(false);
+  // Held as state, not a ref: the line becomes a button once it is cut, which mounts it afresh.
+  const [action, setAction] = useState<HTMLSpanElement | null>(null);
+  // Whether one line cuts what the approval would do short, measured again as the panel or the
+  // text changes; a cut one's "…" follows a word, never a stop (see `trimTruncateEnd`).
+  const approvalText = approval ? `${approval.verb ?? ""} ${approval.text}` : "";
+  useLayoutEffect(() => {
+    const element = action;
+    if (!element || unfolded) return;
+    let restore: (() => void) | null = null;
+    const check = () => {
+      restore?.();
+      const over = element.scrollWidth > element.clientWidth + 0.5;
+      setCut(over);
+      restore = over ? trimTruncateEnd(element) : null;
+    };
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      restore?.();
+    };
+  }, [action, unfolded, approvalText]);
+  const foldable = !!approval && (cut || unfolded);
   const name = supervisorAgentName(agent);
   const task = briefLine(row.task);
   const state = chatState(agent);
@@ -472,48 +485,61 @@ function OverviewItem({
               </span>
             )}
           </div>
-          {row.needs && !foldable && (
-            <span
-              ref={approval ? measure : undefined}
-              className={cn(
-                "mt-1 block leading-5 break-words text-muted-foreground",
-                approval && "line-clamp-2",
-              )}
-            >
+          {row.needs && !approval && (
+            <span className="mt-1 block leading-5 break-words text-muted-foreground">
               <NeedsText needs={row.needs} short={short} />
             </span>
           )}
-          {approval && foldable && (
-            // A disclosure as the Earlier fold, its chevron leading the text column.
-            <button
-              type="button"
-              aria-expanded={unfolded}
-              onClick={() => setUnfolded(!unfolded)}
-              className={cn(
-                control,
-                "mobile-hit-area mt-1 flex w-full min-w-0 items-start gap-1.5 rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              )}
-            >
-              <span className="flex h-5 shrink-0 items-center text-muted-foreground">
-                <ChevronRight
-                  aria-hidden="true"
-                  className={cn(
-                    "size-3.5 transition-transform motion-reduce:transition-none",
-                    unfolded && "rotate-90",
+          {approval &&
+            (() => {
+              // Every approval reads the same way, so the dot and "Approve:" stand at the same place
+              // in each row: what it would do on one line after them, cut with "…" when too long,
+              // and then, right after it, the chevron that unfolds it in place, wrapped under its
+              // own first letter, since nobody should approve what they cannot read in full. A line
+              // that fits leaves the row's own button, which opens the session, under it.
+              const content = (
+                <>
+                  <span className="shrink-0 whitespace-pre">
+                    <NeedsText needs={approval} short={short} lead />{" "}
+                  </span>
+                  <span
+                    ref={setAction}
+                    className={cn("min-w-0", unfolded ? "break-words" : "truncate")}
+                  >
+                    <ApprovalAction needs={approval} short={short} />
+                  </span>
+                  {foldable && (
+                    // As the chevron after "Finished" on a Supervisor chat row, right after its word.
+                    <span className="flex h-5 shrink-0 items-center">
+                      <ChevronRight
+                        aria-hidden="true"
+                        className={cn(
+                          "size-3 text-muted-foreground transition-transform motion-reduce:transition-none",
+                          unfolded && "rotate-90",
+                        )}
+                      />
+                    </span>
                   )}
-                />
-              </span>
-              <span
-                ref={measure}
-                className={cn(
-                  "min-w-0 flex-1 leading-5 break-words text-muted-foreground",
-                  !unfolded && "line-clamp-2",
-                )}
-              >
-                <NeedsText needs={approval} short={short} />
-              </span>
-            </button>
-          )}
+                </>
+              );
+              const line = "mt-1 flex w-full min-w-0 items-start leading-5 text-muted-foreground";
+              return foldable ? (
+                <button
+                  type="button"
+                  aria-expanded={unfolded}
+                  onClick={() => setUnfolded(!unfolded)}
+                  className={cn(
+                    control,
+                    line,
+                    "mobile-hit-area rounded text-left outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  )}
+                >
+                  {content}
+                </button>
+              ) : (
+                <span className={line}>{content}</span>
+              );
+            })()}
           {said && (
             <span
               className={cn(
@@ -584,9 +610,12 @@ function OverviewItem({
 function NeedsText({
   needs,
   short,
+  lead = false,
 }: {
   needs: NonNullable<OverviewRow["needs"]>;
   short: (path: string) => string;
+  /** Only the dot and the action, for a line that sets what it is about apart. */
+  lead?: boolean;
 }) {
   return (
     <>
@@ -603,8 +632,60 @@ function NeedsText({
         }
       >
         {needs.action}:
-      </span>{" "}
-      <ApprovalAction needs={needs} short={short} />
+      </span>
+      {!lead && (
+        <>
+          {" "}
+          <ApprovalAction needs={needs} short={short} />
+        </>
+      )}
     </>
   );
+}
+
+/**
+ * Takes the stops a one-line cut would leave before its "…" (see `ellipsisTrim`) out of the shown
+ * text, writing the "…" itself after the word, so a cut path never reads "permission-3.…". Only
+ * when the cut falls in the last text, so nothing after it shows; left alone if the line would still
+ * overflow. Returns what puts the text back, unless React has since rewritten it.
+ */
+function trimTruncateEnd(element: HTMLElement): (() => void) | null {
+  const style = getComputedStyle(element);
+  const context = document.createElement("canvas").getContext("2d");
+  if (!context) return null;
+  context.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  // The line ends where its "…" begins.
+  const edge =
+    element.getBoundingClientRect().right -
+    parseFloat(style.paddingRight) -
+    context.measureText("…").width;
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  let end: { node: Text; offset: number } | null = null;
+  let last: Text | null = null;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    const text = node as Text;
+    last = text;
+    for (let offset = 0; offset < text.length; offset++) {
+      range.setStart(text, offset);
+      range.setEnd(text, offset + 1);
+      const rect = range.getClientRects()[0];
+      if (rect?.width && rect.right <= edge + 0.5) end = { node: text, offset: offset + 1 };
+    }
+  }
+  if (!end || end.node !== last) return null;
+  const { node, offset } = end;
+  const original = node.data;
+  const drop = ellipsisTrim(original.slice(0, offset));
+  if (!drop) return null;
+  const trimmed = `${original.slice(0, offset - drop)}…`;
+  node.data = trimmed;
+  const restore = () => {
+    if (node.data === trimmed) node.data = original;
+  };
+  if (element.scrollWidth > element.clientWidth + 0.5) {
+    restore();
+    return null;
+  }
+  return restore;
 }
