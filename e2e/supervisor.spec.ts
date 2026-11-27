@@ -385,3 +385,63 @@ test("the Supervisor's own tool calls say what they did to which chat, never its
     await cleanup();
   }
 });
+
+test("a finished chat's reply folds to two lines in Supervisor, and opens in place", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  // Supervisor sends the fixture's chats their work, and so watches them from then on.
+  const cleanup = await seedSupervisorWorkspaces("ws://127.0.0.1:7429/ws");
+  const control = new DaemonConnection({
+    endpoint: describeDaemonEndpoint("ws://127.0.0.1:7429/ws"),
+    client: { kind: "test", name: "finished rows", version: "0.0.0" },
+  });
+  const off = control.subscribeWorkspace(() => undefined);
+  try {
+    await control.connect();
+    await expect.poll(() => control.workspace).not.toBeNull();
+    await signedIn(page, undefined, undefined, { supervisorLanding: true });
+    await page.goto("/");
+    const sent = await control.requestAgent(
+      { kind: "send", sessionId: cleanup.notes, text: "long-reply please" },
+      crypto.randomUUID(),
+    );
+    expect(sent.outcome.status).toBe("ok");
+    const steps = Array.from({ length: 10 }, (_, i) => `${i + 1}. Checked step ${i + 1}.`);
+    const reply = `Release notes reviewed:\n\n${steps.join("\n")}\n\nAll ten steps pass.`;
+    const row = page
+      .getByRole("article", { name: "Release editor finished" })
+      .filter({ hasText: "Release notes reviewed" });
+    const quote = row.locator("[data-finished-quote]");
+    const toggle = row.getByRole("button", { name: "Finished", exact: true });
+    // Folded: two lines of the reply's text, its list read as lines, ending where it is cut.
+    await expect(quote).toContainText("Release notes reviewed:");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(row.getByRole("list")).toHaveCount(0);
+    const lines = await quote.evaluate((el) => {
+      const style = getComputedStyle(el);
+      const line = parseFloat(getComputedStyle(el.querySelector("p") ?? el).lineHeight);
+      const inner =
+        el.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      return Math.round(inner / line);
+    });
+    expect(lines).toBe(2);
+    await page.screenshot({ path: test.info().outputPath("finished-row-folded.png") });
+    // Its text opens the reply in place, as written; the chevron's toggle closes it again.
+    await quote.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(row.getByRole("list")).toBeVisible();
+    await expect(row).toContainText("All ten steps pass.");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(row.getByRole("list")).toHaveCount(0);
+    // Copy gives the whole reply, folded or not.
+    await row.getByRole("button", { name: "Copy quote", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(reply);
+  } finally {
+    off();
+    control.disconnect();
+    await cleanup();
+  }
+});

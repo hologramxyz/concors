@@ -22,6 +22,7 @@ import {
   finishedWord,
   imagesLine,
   quoteImages,
+  quotePreview,
   type FinishedNotice,
 } from "@/supervisor/finished-notice";
 import {
@@ -1060,10 +1061,13 @@ function FinishedRow({
   latest: boolean;
 }) {
   const agent = useAgents().find((a) => a.id === notice.sessionId);
+  const failed = notice.state === "failed";
+  const needed = failed && latest && agent?.status === "failed" && chatDot(agent) === "attention";
   const [open, setOpen] = useState(false);
   const [clamped, setClamped] = useState(false);
   const quote = useRef<HTMLDivElement>(null);
-  // Whether six lines cut the quote short, measured again as the chat or the text changes.
+  // Whether the closed quote is cut short (two lines, or six in a row that needs the person),
+  // measured again as the chat or the text changes.
   useLayoutEffect(() => {
     const element = quote.current;
     if (!element || open) return;
@@ -1072,27 +1076,32 @@ function FinishedRow({
     const observer = new ResizeObserver(check);
     observer.observe(element);
     return () => observer.disconnect();
-  }, [open, notice.quote]);
+  }, [open, notice.quote, needed]);
   const shown = useMemo(
     () => (notice.quote === null ? null : quoteImages(notice.quote)),
     [notice.quote],
   );
-  const failed = notice.state === "failed";
-  const needed = failed && latest && agent?.status === "failed" && chatDot(agent) === "attention";
-  // A failure dealt with keeps its error out of sight until asked for.
-  const folded = failed && !needed;
-  const expandable = folded ? notice.quote !== null : clamped || open;
+  // The two lines a folded row shows: the reply's text as one paragraph, then its images' count.
+  const preview = useMemo(
+    () =>
+      [quotePreview(shown?.text ?? ""), shown?.images ? imagesLine(shown.images) : ""]
+        .filter(Boolean)
+        .join("  \n"),
+    [shown],
+  );
   const word = finishedWord(notice.state);
   const id = useId();
-  const body = notice.quote !== null && (!folded || open) && (
+  // The reply as the agent wrote it, or within six lines while a row that needs the person is
+  // closed.
+  const full = notice.quote !== null && (
     <div className="flex min-w-0 items-start gap-2">
       <div className="min-w-0 flex-1 py-0.5 text-muted-foreground">
         {/* Each line as the agent wrote it: Markdown would run a quote's lines together. */}
         {shown?.text && (
           <div
-            ref={quote}
+            ref={needed ? quote : undefined}
             data-finished-quote
-            className={`[&_p]:whitespace-pre-line ${open ? "" : "line-clamp-6"}`}
+            className={`[&_p]:whitespace-pre-line ${needed && !open ? "line-clamp-6" : ""}`}
           >
             <AgentMarkdown>{shown.text}</AgentMarkdown>
           </div>
@@ -1114,12 +1123,33 @@ function FinishedRow({
         sessionId={notice.sessionId}
         state={word}
         failed
-        toggle={expandable ? { open, onToggle: () => setOpen((v) => !v) } : null}
+        toggle={clamped || open ? { open, onToggle: () => setOpen((v) => !v) } : null}
       >
-        {body}
+        {full}
         <OpenChatAction sessionId={notice.sessionId} label="Open chat" />
       </NeedsBlock>
     );
+  // Every other row folds its reply to two lines of its text, which open it in place, as the
+  // chevron does. A reply that fits shows whole, with nothing to open.
+  const expandable = notice.quote !== null && (clamped || open || notice.cut);
+  const folded = notice.quote !== null && !open && (
+    <div className="flex min-w-0 items-start gap-2">
+      <div
+        ref={quote}
+        data-finished-quote={shown?.text ? "" : undefined}
+        className={`mobile-tap-target line-clamp-2 min-w-0 flex-1 py-0.5 text-muted-foreground ${expandable ? "cursor-pointer" : ""}`}
+        onClick={(event) => {
+          // A link in the text, or a selection being made, is not a request to open the row.
+          if (!expandable || (event.target as Element).closest("a, button")) return;
+          if (!window.getSelection()?.isCollapsed) return;
+          setOpen(true);
+        }}
+      >
+        <AgentMarkdown>{preview}</AgentMarkdown>
+      </div>
+      <CopyButton label="Copy quote" text={notice.quote} />
+    </div>
+  );
   return (
     <article aria-label={`${chat.label} ${word.toLowerCase()}`} className="text-sm">
       <div className="mobile-tap-target relative flex w-full min-w-0 items-center gap-2 py-0.5">
@@ -1147,7 +1177,9 @@ function FinishedRow({
           />
         )}
       </div>
-      {body && <div className="ml-[7px] min-w-0 border-l pl-4">{body}</div>}
+      {notice.quote !== null && (
+        <div className="ml-[7px] min-w-0 border-l pl-4">{open ? full : folded}</div>
+      )}
     </article>
   );
 }

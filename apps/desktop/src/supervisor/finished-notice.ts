@@ -172,3 +172,57 @@ function withoutHoles(line: string): string {
 export function imagesLine(images: number): string {
   return `${images} ${images === 1 ? "image" : "images"} in the chat`;
 }
+
+/**
+ * A quoted reply as one paragraph of its lines, for a row folded to two lines: each line as the
+ * agent wrote it, without the blocks around it. A heading, list item or quote keeps its words, a
+ * numbered item its number; a code block's lines read as inline code and a table's rows as their
+ * cells; rules and blank lines go. Links, emphasis and inline code keep their inline look.
+ */
+export function quotePreview(quote: string): string {
+  const lines: string[] = [];
+  let fence: string | null = null;
+  for (const line of quote.split("\n")) {
+    const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+    if (fence) {
+      if (marker?.startsWith(fence)) fence = null;
+      else if (line.trim()) lines.push(inlineCode(line.trim()));
+      continue;
+    }
+    if (marker) {
+      fence = marker;
+      continue;
+    }
+    let text = line.trim().replace(/^(>\s?)+/, "");
+    // Rules, a setext heading's underline and a table's alignment row carry no words.
+    if (
+      !text ||
+      /^([-*_=]\s*){3,}$/.test(text) ||
+      /^\|?(\s*:?-+:?\s*\|)+\s*:?-*:?\s*\|?$/.test(text)
+    )
+      continue;
+    text = text
+      .replace(/^#{1,6}\s+/, "")
+      .replace(/\s+#+$/, "")
+      .replace(/^[-*+]\s+(\[[ xX]\]\s+)?/, "")
+      .replace(/^(\d+)([.)])\s+/, "$1\\$2 ");
+    if (text.startsWith("|"))
+      text = text
+        .replace(/^\|/, "")
+        .replace(/\|$/, "")
+        .split(/(?<!\\)\|/)
+        .map((cell) => cell.trim())
+        .join(" | ");
+    // Nothing left to open a block of its own when the lines are joined.
+    lines.push(text.replace(/^([<#>=+-])/, "\\$1"));
+  }
+  return lines.join("  \n");
+}
+
+/** A line of code as inline code, fenced past any run of backticks in it. */
+function inlineCode(code: string): string {
+  const longest = Math.max(0, ...(code.match(/`+/g) ?? []).map((run) => run.length));
+  const ticks = "`".repeat(longest + 1);
+  const pad = code.startsWith("`") || code.endsWith("`") ? " " : "";
+  return `${ticks}${pad}${code}${pad}${ticks}`;
+}

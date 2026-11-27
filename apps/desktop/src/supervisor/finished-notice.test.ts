@@ -14,6 +14,7 @@ import {
   finishedRuns,
   finishedWord,
   quoteImages,
+  quotePreview,
 } from "./finished-notice";
 import { markFailureSeen } from "@/agents/seen-updates";
 import type { TimelineEntry } from "@/agents/thinking";
@@ -277,6 +278,36 @@ describe("the finished row", () => {
     expect(text(only)).toBe("Star Catcher / Game QA Finished 2 images in the chat");
   });
 
+  const reply = (text: string) =>
+    render(notice(`${sentence()}\n\nAgent’s reply:\n\n${quoted(text)}`));
+
+  it("folds a long reply to two lines of its text, its blocks read as lines", () => {
+    const html = reply(
+      "Fixed the HUD.\n\n## Changes\n\n- Score counter\n- Pause menu\n\n```ts\nhud.layout();\n```\n\nThe pause menu still needs a look.",
+    );
+    expect(html).toContain("line-clamp-2");
+    for (const block of ["<pre", "<h2", "<ul", "<li"]) expect(html).not.toContain(block);
+    expect(text(html)).toBe(
+      "Star Catcher / Game QA Finished Fixed the HUD. Changes Score counter Pause menu hud.layout(); The pause menu still needs a look.",
+    );
+    expect(html).toContain("<code>hud.layout();</code>");
+    // The copy button copies the reply as written, not the folded lines.
+    expect(html).toContain('aria-label="Copy quote"');
+  });
+
+  it("shows a short reply whole, with nothing to open", () => {
+    const html = reply("Done. All 48 tests pass.");
+    expect(text(html)).toBe("Star Catcher / Game QA Finished Done. All 48 tests pass.");
+    expect(html).not.toContain("aria-expanded");
+  });
+
+  it("folds a reply that is only a code block to its lines as inline code", () => {
+    const html = reply("```sh\npnpm install\npnpm test --filter game\npnpm build\n```");
+    expect(html).not.toContain("<pre");
+    expect(html).toContain("<code>pnpm install</code><br/>");
+    expect(html).toContain("<code>pnpm test --filter game</code>");
+  });
+
   it("keeps a finished or stopped turn on one quiet line, with no action", () => {
     const done = render(notice(`${sentence()}\n\nAgent’s reply:\n\n> All good.`));
     expect(text(done)).toBe("Star Catcher / Game QA Finished All good.");
@@ -321,13 +352,15 @@ describe("the finished row", () => {
       },
     ],
   ])(
-    "is a quiet row after %s: Failed small in the error colour, its error folded",
+    "is a quiet row after %s: Failed small in the error colour, its error in two lines",
     (_, extra, agents) => {
       const html = render({ ...failure(), ...extra }, agents());
-      expect(text(html)).toBe("Star Catcher / Game QA Failed");
+      expect(text(html)).toBe("Star Catcher / Game QA Failed Provider exited with code 1");
       expect(html).toMatch(/text-xs text-destructive">Failed</);
+      expect(html).toContain("line-clamp-2");
       expect(html).not.toContain("font-semibold");
-      expect(html).toContain('aria-expanded="false"');
+      // One line of error fits: nothing to open.
+      expect(html).not.toContain("aria-expanded");
       expect(html).not.toContain("Open chat");
     },
   );
@@ -337,6 +370,30 @@ describe("the finished row", () => {
     markFailureSeen(seen);
     const html = render(failure(), [failedChat("2026-11-24T13:00:00.000Z")]);
     expect(text(html)).toContain("Open chat");
+  });
+});
+
+describe("quotePreview", () => {
+  it("keeps each line's words and drops the blocks around them", () => {
+    expect(
+      quotePreview("# Title\n\n- one\n* [x] two\n\n1. first\n2) second\n\n> quoted\n\n---\nlast"),
+    ).toBe(["Title", "one", "two", "1\\. first", "2\\) second", "quoted", "last"].join("  \n"));
+  });
+
+  it("reads a code block's lines as inline code, fenced past their own backticks", () => {
+    expect(quotePreview("```sh\npnpm test\n\nrun `x`\n```")).toBe("`pnpm test`  \n`` run `x` ``");
+  });
+
+  it("reads a table's rows as their cells", () => {
+    expect(quotePreview("| Page | State |\n| --- | :-: |\n| Levels | Two broken links |")).toBe(
+      "Page | State  \nLevels | Two broken links",
+    );
+  });
+
+  it("keeps links, emphasis and inline code as written", () => {
+    expect(quotePreview("See [the notes](https://example.com), **now**, in `notes.md`.")).toBe(
+      "See [the notes](https://example.com), **now**, in `notes.md`.",
+    );
   });
 });
 
