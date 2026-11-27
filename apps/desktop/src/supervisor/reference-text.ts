@@ -121,6 +121,20 @@ export function mentionedReferences(text: string, references: readonly Superviso
   return references.filter((ref) => text.includes(`@${ref.label}`));
 }
 
+/**
+ * Where the live mentions are in a draft: each `@Name` of a chosen reference still in the text,
+ * cut exactly as a sent message cuts its chips, so what is tinted is what will be sent.
+ */
+export function mentionRanges(text: string, selected: readonly SupervisorReference[]) {
+  const ranges: { start: number; end: number }[] = [];
+  let at = 0;
+  for (const part of mentionSegments(text, mentionedReferences(text, selected))) {
+    if (part.mention) ranges.push({ start: at, end: at + part.text.length });
+    at += part.text.length;
+  }
+  return ranges;
+}
+
 /** The text in plain and mentioned pieces, so a sent message can show its mentions. */
 export function mentionSegments(text: string, references: readonly SupervisorReference[]) {
   const labels = [...new Set(references.map((ref) => `@${ref.label}`))].sort(

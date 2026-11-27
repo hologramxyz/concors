@@ -3,6 +3,7 @@ import {
   insertMention,
   mentionGroups,
   mentionQuery,
+  mentionRanges,
   mentionedReferences,
   splitSupervisorReferences,
   withSupervisorReferences,
@@ -10,6 +11,7 @@ import {
 } from "@/supervisor/reference-text";
 import { SupervisorReferencePicker } from "@/supervisor/references";
 import { MentionMenu } from "@/supervisor/mention-menu";
+import { useMentionBackdrop } from "./use-mention-backdrop";
 import { SupervisorClosedReferences, SupervisorReferences } from "@/supervisor/reference-context";
 import { AgentDraftScopeContext, useAgentDraft, type InputDraft as Draft } from "./draft";
 import { NO_RECALL, recallStep, type PromptRecall } from "./prompt-history";
@@ -188,6 +190,7 @@ export function AgentComposer({
     picker = useRef<HTMLInputElement>(null);
   const form = useRef<HTMLFormElement>(null);
   const toolbar = useRef<HTMLDivElement>(null);
+  const mentionBackdrop = useRef<HTMLDivElement>(null);
   useClippedControls(toolbar, !compact);
   useComposerWheel(form, !compact);
   const shortcutLabel = useShortcutLabels();
@@ -302,6 +305,11 @@ export function AgentComposer({
     () => !!form.current?.closest("[data-pane-id]")?.contains(document.activeElement),
   );
   useTextareaAutosize(textarea, draft, visible && !native && !dictation.active, expanded);
+  // Live mentions are tinted on a copy of the message drawn behind the box, which stays the
+  // real input: the words, caret, selection and copying are all the box's own.
+  const tinting = !native && references.length > 0;
+  useMentionBackdrop(textarea, mentionBackdrop, tinting);
+  const tinted = tinting ? mentionRanges(draft, selectedReferences ?? []) : [];
   // The dictated words were added at the end, so restore the caret and show the end.
   useLayoutEffect(() => {
     const el = textarea.current;
@@ -1462,6 +1470,23 @@ export function AgentComposer({
             </>
           ) : (
             <>
+              {tinting && (
+                <div
+                  ref={mentionBackdrop}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute overflow-hidden text-transparent select-none"
+                >
+                  {tinted.flatMap((range, index) => [
+                    draft.slice(tinted[index - 1]?.end ?? 0, range.start),
+                    <span key={range.start} className="rounded-sm bg-muted">
+                      {draft.slice(range.start, range.end)}
+                    </span>,
+                  ])}
+                  {draft.slice(tinted.at(-1)?.end ?? 0)}
+                  {/* A box ending in a line break shows an empty last line; so does this. */}
+                  {draft.endsWith("\n") && "\u200b"}
+                </div>
+              )}
               <textarea
                 ref={textarea}
                 data-agent-composer
@@ -1610,7 +1635,7 @@ export function AgentComposer({
                     if (!uncertain) void followUp(undefined, !compact && (e.metaKey || e.ctrlKey));
                   }
                 }}
-                className={`agent-composer-input ${compact ? "max-h-48" : "max-h-[min(40cqh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none ${preparing ? "" : "read-only:opacity-50 disabled:opacity-50"}`}
+                className={`agent-composer-input relative ${compact ? "max-h-48" : "max-h-[min(40cqh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none ${preparing ? "" : "read-only:opacity-50 disabled:opacity-50"}`}
               />
               <div
                 ref={toolbar}

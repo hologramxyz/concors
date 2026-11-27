@@ -1,8 +1,9 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   insertMention,
   matchReferences,
   mentionQuery,
+  mentionRanges,
   mentionSegments,
   mentionedReferences,
   type SupervisorReference,
@@ -47,4 +48,42 @@ it("inserts the mention in place, keeps only mentions still written, and marks t
     { text: "@Game QA", mention: true },
     { text: " to rerun", mention: false },
   ]);
+});
+
+describe("mentionRanges", () => {
+  const cut = (text: string, refs: readonly SupervisorReference[]) =>
+    mentionRanges(text, refs).map(({ start, end }) => text.slice(start, end));
+
+  it("tints a chosen mention, @ included, and nothing else", () => {
+    const text = "Ask @Game QA to rerun";
+    expect(mentionRanges(text, [qa])).toEqual([{ start: 4, end: 12 }]);
+    expect(cut(text, [qa])).toEqual(["@Game QA"]);
+  });
+
+  it("leaves a hand-typed @Name alone when nothing was chosen for it", () => {
+    expect(mentionRanges("Ask @Game QA to rerun", [])).toEqual([]);
+    expect(cut("Ask @Game QA in @Star Catcher", [qa])).toEqual(["@Game QA"]);
+  });
+
+  it("drops the tint once a letter inside the mention is edited, as sending does", () => {
+    expect(mentionRanges("Ask @Game Q to rerun", [qa])).toEqual([]);
+    expect(mentionRanges("Ask @Gme QA to rerun", [qa])).toEqual([]);
+  });
+
+  it("tints every occurrence once, however many references share the name", () => {
+    const twin: SupervisorReference = { ...qa, id: "00000000-0000-4000-8000-000000000009" };
+    expect(cut("@Game QA and @Game QA", [qa, twin])).toEqual(["@Game QA", "@Game QA"]);
+    expect(mentionRanges("@Game QA and @Game QA", [qa, twin])).toEqual([
+      { start: 0, end: 8 },
+      { start: 13, end: 21 },
+    ]);
+  });
+
+  it("tints a mention at the very start and at the very end", () => {
+    const text = "@Game QA then @Star Catcher";
+    expect(mentionRanges(text, [qa, game])).toEqual([
+      { start: 0, end: 8 },
+      { start: 14, end: 27 },
+    ]);
+  });
 });
