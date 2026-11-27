@@ -9,10 +9,12 @@ import {
   DONE_LIMIT,
   DONE_SHOWN,
   doneInView,
+  earlierFold,
   needsYou,
   overviewRows,
   unseenDone,
   workspaceAgents,
+  type OverviewRow,
 } from "./overview-model";
 import { markFailureSeen } from "@/agents/seen-updates";
 
@@ -384,6 +386,40 @@ it("folds seen finishes from before the last day under Earlier, never news or wo
     ["Unread", "Done", false],
     ["Blocked", "Needs you", false],
   ]);
+});
+
+describe("Earlier fold", () => {
+  const now = Date.parse("2026-11-20T12:00:00.000Z");
+  const finish = (name: string, updatedAt: string) => agent(name, { turnId: name, updatedAt });
+  const rows = (agents: AgentInfo[]) =>
+    overviewRows(agents, [], new Set(agents.map((item) => item.id)), null, now);
+  const names = (list: readonly OverviewRow[]) => list.map((row) => row.agent.name);
+  // Seven seen finishes, all from past days.
+  const old = Array.from({ length: 7 }, (_, index) =>
+    finish(`Old ${index}`, `2026-11-1${index}T09:00:00.000Z`),
+  );
+
+  it("lists past days' finishes directly when none is from today", () => {
+    const done = rows(old);
+    expect(done.every((row) => row.group === "Done" && row.earlier)).toBe(true);
+    const { listed, earlier } = earlierFold(done);
+    expect(earlier).toEqual([]);
+    expect(names(listed)).toEqual(["Old 6", "Old 5", "Old 4", "Old 3", "Old 2", "Old 1", "Old 0"]);
+    // The five most recent, the rest behind "Show all".
+    expect(doneInView(listed, false)).toMatchObject({ hidden: 2 });
+    expect(names(doneInView(listed, false).shown)).toEqual(names(listed.slice(0, 5)));
+  });
+
+  it("keeps them under Earlier beside a finish from today", () => {
+    const today = finish("Today", "2026-11-20T09:00:00.000Z");
+    const { listed, earlier } = earlierFold(rows([today, ...old]));
+    expect(names(listed)).toEqual(["Today"]);
+    expect(earlier).toHaveLength(7);
+  });
+
+  it("lists nothing when the group is empty", () => {
+    expect(earlierFold([])).toEqual({ listed: [], earlier: [] });
+  });
 });
 
 describe("closed chats", () => {

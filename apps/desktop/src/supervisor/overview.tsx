@@ -28,6 +28,7 @@ import { chatState, useMinuteClock } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
 import {
   doneInView,
+  earlierFold,
   overviewChats,
   overviewGroups,
   overviewRows,
@@ -167,8 +168,11 @@ export function SupervisorOverview({
   };
   const listed = overviewRows(known, deliveries, shown, null, now, closed);
   // Folded rows need no gist until Earlier is opened.
+  const unopened = new Set(
+    earlierOpen ? [] : earlierFold(listed.filter((row) => row.group === "Done")).earlier,
+  );
   const briefs = useSupervisorBriefs(
-    listed.filter((row) => earlierOpen || !row.earlier).map((row) => row.agent),
+    listed.filter((row) => !unopened.has(row)).map((row) => row.agent),
   );
   const rows = overviewRows(known, deliveries, shown, briefs, now, closed);
   // While the panel is open, what it lists needs no card on top of it.
@@ -189,8 +193,7 @@ export function SupervisorOverview({
       )}
       {overviewGroups.map((group) => {
         const grouped = rows.filter((row) => row.group === group);
-        const recent = grouped.filter((row) => !row.earlier);
-        const earlier = grouped.filter((row) => row.earlier);
+        const { listed: recent, earlier } = earlierFold(grouped);
         // Done shows its latest few and every unopened finish until it is asked for all; the rest,
         // Earlier included, wait behind "Show all", which then reads "Show fewer".
         const folded = group === "Done" ? doneInView(recent, false) : { shown: recent, hidden: 0 };

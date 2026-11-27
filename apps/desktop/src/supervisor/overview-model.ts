@@ -173,6 +173,17 @@ export function overviewRows(
   return rows.filter((row) => !done.includes(row));
 }
 
+/**
+ * A group's rows split into those it lists and those folded under Earlier. Earlier keeps past days
+ * apart from today's finishes; with none from today there is nothing to keep them from, so the
+ * group lists them itself rather than show its header over a lone fold.
+ */
+export function earlierFold(rows: readonly OverviewRow[]) {
+  const listed = rows.filter((row) => !row.earlier);
+  const earlier = rows.filter((row) => row.earlier);
+  return listed.length ? { listed, earlier } : { listed: earlier, earlier: [] };
+}
+
 /** How many of Done's rows show until it is expanded: enough for a glance at what just finished. */
 export const DONE_SHOWN = 5;
 
