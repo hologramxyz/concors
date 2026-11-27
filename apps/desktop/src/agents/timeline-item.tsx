@@ -601,12 +601,14 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
       {item.status === "interrupted" && !declined && (
         <span className="shrink-0 text-xs text-muted-foreground">Stopped</span>
       )}
-      {hasDetails && (
-        <ChevronRight
-          className={`size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
-        />
-      )}
     </>
+  );
+  // Right after the words it opens, with no gap of its own: the icon's box already holds a few
+  // pixels of empty space before its stroke, so a gap would set it apart from the row it belongs to.
+  const chevron = hasDetails && (
+    <ChevronRight
+      className={`size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
+    />
   );
   return (
     <article aria-label="Tool call" data-tool-status={item.status} className="text-sm">
@@ -626,12 +628,17 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
           <span id={`${id}-lead`} aria-hidden className="contents">
             {lead}
           </span>
-          <span id={`${id}-path`} className="contents">
-            <FilePathLink path={file} label={short(file)} />
-            {more}
-          </span>
-          <span id={`${id}-rest`} aria-hidden className="contents">
-            {rest}
+          <span className="flex min-w-0 items-center">
+            <span className="flex min-w-0 items-center gap-2">
+              <span id={`${id}-path`} className="contents">
+                <FilePathLink path={file} label={short(file)} />
+                {more}
+              </span>
+              <span id={`${id}-rest`} aria-hidden className="contents">
+                {rest}
+              </span>
+            </span>
+            {chevron}
           </span>
         </div>
       ) : (
@@ -643,22 +650,27 @@ function StepRow({ item, live }: { item: TimelineEntry; live: boolean }) {
           className="flex w-full min-w-0 items-center gap-2 py-0.5 text-left"
         >
           {lead}
-          {file ? (
-            // Outside the workspace: as a chat message shows a file it cannot open.
-            <>
-              <FilePathLink path={file} label={short(file)} />
-              {more}
-            </>
-          ) : (
-            <span
-              ref={target}
-              className={`min-w-0 truncate ${kind === "command" ? "text-muted-foreground" : ""} ${running ? "agent-shimmer" : ""}`}
-              title={stepPaths(item, kind)}
-            >
-              {control ? control.target : stepTarget(item, kind, short)}
+          <span className="flex min-w-0 items-center">
+            <span className="flex min-w-0 items-center gap-2">
+              {file ? (
+                // Outside the workspace: as a chat message shows a file it cannot open.
+                <>
+                  <FilePathLink path={file} label={short(file)} />
+                  {more}
+                </>
+              ) : (
+                <span
+                  ref={target}
+                  className={`min-w-0 truncate ${kind === "command" ? "text-muted-foreground" : ""} ${running ? "agent-shimmer" : ""}`}
+                  title={stepPaths(item, kind)}
+                >
+                  {control ? control.target : stepTarget(item, kind, short)}
+                </span>
+              )}
+              {rest}
             </span>
-          )}
-          {rest}
+            {chevron}
+          </span>
         </button>
       )}
       {error && !open && (
@@ -757,7 +769,7 @@ function AnsweredRow({ notice, chat }: { notice: AnsweredNotice; chat: Superviso
           >
             {line}
           </span>
-          <span className="flex shrink-0 items-center gap-2">
+          <span className="flex shrink-0 items-center">
             <span id={`${id}-mark`} aria-hidden className="text-xs text-muted-foreground">
               Answered
             </span>
@@ -1015,18 +1027,21 @@ function NeedsBlock({
             />
           )}
           {!failed && <SidebarDot dot="attention" />}
-          <span
-            id={`${id}-mark`}
-            className={`text-xs font-semibold ${failed ? "text-destructive" : "text-foreground"}`}
-          >
-            {state}
+          {/* The chevron right after the state, as on a step row (see StepRow). */}
+          <span className="flex items-center">
+            <span
+              id={`${id}-mark`}
+              className={`text-xs font-semibold ${failed ? "text-destructive" : "text-foreground"}`}
+            >
+              {state}
+            </span>
+            {toggle && (
+              // Rotated, it would sit above the toggle and take its clicks.
+              <ChevronRight
+                className={`pointer-events-none size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${toggle.open ? "rotate-90" : ""}`}
+              />
+            )}
           </span>
-          {toggle && (
-            // Rotated, it would sit above the toggle and take its clicks.
-            <ChevronRight
-              className={`pointer-events-none size-3 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none ${toggle.open ? "rotate-90" : ""}`}
-            />
-          )}
         </div>
         {children}
       </div>
@@ -1231,11 +1246,11 @@ function FinishedRow({
         {/* The state word is smaller than the chat's name, so centring both would lift its
             letters off the name's baseline. The line aligns them by baseline instead, inside the
             row that centres it (a phone's row is taller than its line); the workspace's icon stays
-            centred on the line, and the chevron on the word. */}
+            centred on the line, and the chevron on the word, right after it (see StepRow). */}
         <span className="flex w-full min-w-0 items-baseline gap-2">
           <RowWorkspace sessionId={notice.sessionId} />
           <NoticeChat chat={chat} sessionId={notice.sessionId} className="shrink" />
-          <span className="flex shrink-0 items-center gap-2">
+          <span className="flex shrink-0 items-center">
             <span
               id={`${id}-mark`}
               className={`text-xs ${failed ? "text-destructive" : "text-muted-foreground"}`}
@@ -1438,7 +1453,9 @@ function AnsweredGroup({ items }: { items: AgentItem[] }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="mobile-tap-target flex max-w-full items-center gap-2 py-0.5 text-left text-muted-foreground transition-colors hover:text-foreground motion-reduce:transition-none"
+        // The chevron right after the words, as on a step row (see StepRow); the gap it gave up
+        // stays clickable after it, so the toggle is no narrower.
+        className="mobile-tap-target flex max-w-full items-center py-0.5 pr-2 text-left text-muted-foreground transition-colors hover:text-foreground motion-reduce:transition-none"
       >
         <span className="min-w-0 truncate">{answeredSummary(items)}</span>
         <ChevronRight
@@ -1491,37 +1508,40 @@ export function LiveLine({
         disabled={!hasDetails}
         onClick={() => setOpen((v) => !v)}
         aria-expanded={hasDetails ? open : undefined}
-        className="flex w-full min-w-0 items-center gap-2 py-0.5 text-left text-muted-foreground"
+        className="flex w-full min-w-0 items-center py-0.5 text-left text-muted-foreground"
       >
-        <BrailleSpinner />
-        <span ref={line} className="agent-shimmer min-w-0 truncate">
-          {waiting ??
-            control?.verb ??
-            (kind && kind !== "thinking" ? (
-              LIVE_VERBS[kind]
-            ) : voice ? (
+        {/* The chevron right after the words, as on a step row (see StepRow). */}
+        <span className="flex min-w-0 items-center gap-2">
+          <BrailleSpinner />
+          <span ref={line} className="agent-shimmer min-w-0 truncate">
+            {waiting ??
+              control?.verb ??
+              (kind && kind !== "thinking" ? (
+                LIVE_VERBS[kind]
+              ) : voice ? (
+                <>
+                  {/* Read out once a wait: the rotation shows, the status says its first line. */}
+                  <span aria-hidden="true">{voice.line}…</span>
+                  <span className="sr-only">{voice.first}…</span>
+                </>
+              ) : (
+                "Working…"
+              ))}
+            {!waiting && kind && kind !== "thinking" && (!control || control.target) && (
               <>
-                {/* Read out once a wait: the rotation shows, the status says its first line. */}
-                <span aria-hidden="true">{voice.line}…</span>
-                <span className="sr-only">{voice.first}…</span>
+                {" "}
+                {/* What it acts on in full ink; "a command" stays as quiet as its verb. */}
+                <span
+                  className={kind === "command" ? "" : "text-foreground"}
+                  title={stepPaths(step, kind)}
+                >
+                  {control ? control.target : stepTarget(step, kind, short)}
+                </span>
               </>
-            ) : (
-              "Working…"
-            ))}
-          {!waiting && kind && kind !== "thinking" && (!control || control.target) && (
-            <>
-              {" "}
-              {/* What it acts on in full ink; "a command" stays as quiet as its verb. */}
-              <span
-                className={kind === "command" ? "" : "text-foreground"}
-                title={stepPaths(step, kind)}
-              >
-                {control ? control.target : stepTarget(step, kind, short)}
-              </span>
-            </>
-          )}
+            )}
+          </span>
+          <Elapsed startedAt={startedAt} />
         </span>
-        <Elapsed startedAt={startedAt} />
         {hasDetails && (
           <ChevronRight
             className={`size-3 shrink-0 transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
@@ -1560,16 +1580,20 @@ function StepGroup({ item, steps }: { item: AgentItem; steps: TimelineEntry[] })
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex max-w-full items-center gap-2 py-0.5 text-left text-muted-foreground transition-colors hover:text-foreground motion-reduce:transition-none"
+        className="flex max-w-full items-center py-0.5 pr-2 text-left text-muted-foreground transition-colors hover:text-foreground motion-reduce:transition-none"
       >
-        <span className="min-w-0 truncate">
-          {stepSummary(running ? steps.filter((step) => step.status !== "running") : steps)}
+        {/* The chevron right after what comes before it, as on a step row (see StepRow); the
+            button's end padding keeps the gap it gave up clickable. */}
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="min-w-0 truncate">
+            {stepSummary(running ? steps.filter((step) => step.status !== "running") : steps)}
+          </span>
+          {item.status === "interrupted" ? (
+            <span className="shrink-0 text-xs">Stopped</span>
+          ) : (
+            !running && <Check className="size-3.5 shrink-0" aria-label="Done" />
+          )}
         </span>
-        {item.status === "interrupted" ? (
-          <span className="shrink-0 text-xs">Stopped</span>
-        ) : (
-          !running && <Check className="size-3.5 shrink-0" aria-label="Done" />
-        )}
         <ChevronRight
           className={`size-3 shrink-0 transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`}
         />
@@ -1673,13 +1697,17 @@ function Thinking({ item, running }: { item: AgentItem; running: boolean }) {
         disabled={!expandable}
         onClick={() => setOpen((value) => !value)}
         aria-expanded={expandable ? open : undefined}
-        className="flex max-w-full items-center gap-2 py-0.5 text-left transition-colors enabled:hover:text-foreground"
+        className="flex max-w-full items-center py-0.5 pr-2 text-left transition-colors enabled:hover:text-foreground"
       >
-        <Brain className="size-3.5 shrink-0" />
-        <span className={`shrink-0 ${running ? "agent-shimmer" : ""}`}>
-          {running ? "Thinking" : "Thought"}
+        {/* The chevron right after the words, as on a step row (see StepRow); the button's end
+            padding keeps the gap it gave up clickable. */}
+        <span className="flex min-w-0 items-center gap-2">
+          <Brain className="size-3.5 shrink-0" />
+          <span className={`shrink-0 ${running ? "agent-shimmer" : ""}`}>
+            {running ? "Thinking" : "Thought"}
+          </span>
+          {!open && preview && <span className="min-w-0 truncate opacity-75">{preview}</span>}
         </span>
-        {!open && preview && <span className="min-w-0 truncate opacity-75">{preview}</span>}
         {expandable && (
           <ChevronRight
             className={`size-3 shrink-0 transition-transform ${open ? "rotate-90" : ""}`}
