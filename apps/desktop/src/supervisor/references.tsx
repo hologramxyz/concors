@@ -17,8 +17,8 @@ import { MentionIcon } from "./mention-menu";
 
 /**
  * Mentions for the phone app's native message field, which cannot open a list as `@` is typed:
- * a button opens the same names in a drawer. Everywhere else `@` in the message does this. Closed
- * chats come last, folded under Closed as in the typed list.
+ * a Mention chip opens the same names in a drawer. Everywhere else `@` in the message does this.
+ * Closed chats come last, folded under Closed as in the typed list.
  */
 export function SupervisorReferencePicker({
   references,
@@ -78,13 +78,16 @@ export function SupervisorReferencePicker({
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
       <DialogTrigger asChild>
+        {/* The pull request page's filter chip, unpressed, on the page colour so the timeline
+            under the floating composer does not show through. Its hit area makes the tap 44pt. */}
         <button
           type="button"
-          className="agent-control"
+          className="mobile-hit-area flex h-7 shrink-0 items-center gap-1.5 rounded-md border bg-background pr-2.5 pl-1.5 text-ui text-muted-foreground hover:bg-muted/70 hover:text-foreground disabled:opacity-50 max-sm:h-8.5 max-sm:rounded-[calc(var(--radius-md)+(0.125rem+1px)*var(--concentric))]"
           aria-label="Mention an agent or workspace"
           disabled={disabled}
         >
-          <AtSign className="size-4" />
+          <AtSign className="size-3.5" aria-hidden="true" />
+          Mention
         </button>
       </DialogTrigger>
       <DialogContent className="gap-3" onOpenAutoFocus={(event) => event.preventDefault()}>
