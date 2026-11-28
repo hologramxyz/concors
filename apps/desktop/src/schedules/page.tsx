@@ -177,7 +177,7 @@ export function SchedulesPage({
                       <h3 className="font-medium break-words">{schedule.name}</h3>
                       <Badge variant="secondary">
                         <span
-                          className={`size-1.5 rounded-full ${schedule.enabled ? "bg-foreground" : "bg-muted-foreground/50"}`}
+                          className={`size-[5px] rounded-full ${schedule.enabled ? "bg-foreground" : "bg-muted-foreground/50"}`}
                           aria-hidden="true"
                         />
                         {schedule.enabled ? "Active" : "Paused"}
@@ -188,7 +188,7 @@ export function SchedulesPage({
                           role="status"
                         >
                           <span
-                            className={`size-1.5 rounded-full ${runStatusColor[last.status]}`}
+                            className={`size-[5px] rounded-full ${runStatusColor[last.status]}`}
                             aria-hidden="true"
                           />
                           {runLabel[last.status]}
@@ -320,7 +320,7 @@ export function SchedulesPage({
                           <div className="min-w-0">
                             <span className="inline-flex items-center gap-2">
                               <span
-                                className={`size-1.5 shrink-0 rounded-full ${runStatusColor[run.status]}`}
+                                className={`size-[5px] shrink-0 rounded-full ${runStatusColor[run.status]}`}
                                 aria-hidden="true"
                               />
                               <span>{runLabel[run.status]}</span>

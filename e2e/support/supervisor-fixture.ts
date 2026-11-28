@@ -135,7 +135,7 @@ export async function seedSupervisorWorkspaces(
         await send(ui, "Review the HUD and hold for feedback", "working");
         await send(notes, "Check the release notes", "done");
       }
-      return Object.assign(() => rm(directory, { recursive: true, force: true }), ids);
+      return Object.assign(cleanup(url, directory, ids), ids);
     }
     await send(supervisor, delegationPrompt, "done");
     await expect
@@ -156,5 +156,52 @@ export async function seedSupervisorWorkspaces(
     off();
     transport.disconnect();
   }
-  return Object.assign(() => rm(directory, { recursive: true, force: true }), ids);
+  return Object.assign(cleanup(url, directory, ids), ids);
+}
+
+/**
+ * Specs share one daemon, which runs at most eight agents at once. The fixture leaves its agents
+ * waiting for approval or working on purpose, so a spec that only removed its folder left them
+ * running: by a shard's later Supervisor specs the daemon was full, and new chats failed with
+ * "Up to eight agents can run at once". Cleaning up stops and deletes the workers it started;
+ * Supervisor's own conversation is shared between specs and stays.
+ */
+function cleanup(
+  url: string,
+  directory: string,
+  ids: { tests: string; ui: string; notes: string },
+) {
+  return async () => {
+    const transport = new DaemonConnection({
+      endpoint: describeDaemonEndpoint(url),
+      client: { kind: "test", name: "fixture cleanup", version: "0.0.0" },
+    });
+    const off = transport.subscribeWorkspace(() => undefined);
+    try {
+      await transport.connect();
+      await expect.poll(() => transport.workspace).not.toBeNull();
+      for (const sessionId of [ids.tests, ids.ui, ids.notes]) {
+        const agent = transport.agents.find((item) => item.id === sessionId);
+        if (agent?.turnId && ["starting", "working", "needs_input"].includes(agent.status))
+          await transport.requestAgent(
+            { kind: "interrupt", sessionId, turnId: agent.turnId },
+            crypto.randomUUID(),
+          );
+        await transport.requestAgent({ kind: "delete", sessionId }, crypto.randomUUID());
+      }
+      // Stopped or gone: either way none of them holds one of the daemon's eight places.
+      await expect
+        .poll(() =>
+          transport.agents
+            .filter((agent) => [ids.tests, ids.ui, ids.notes].includes(agent.id))
+            .filter((agent) => ["starting", "working", "needs_input"].includes(agent.status))
+            .map((agent) => `${agent.name}: ${agent.status}`),
+        )
+        .toEqual([]);
+    } finally {
+      off();
+      transport.disconnect();
+      await rm(directory, { recursive: true, force: true });
+    }
+  };
 }

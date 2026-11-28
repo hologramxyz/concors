@@ -5,6 +5,8 @@ import { referenceLabel, type SupervisorReference } from "./reference-text";
 export type { SupervisorReference } from "./reference-text";
 
 export const SupervisorReferences = createContext<readonly SupervisorReference[]>([]);
+/** The mentionable chats no open pane shows, which the mention list folds under Closed. */
+export const SupervisorClosedReferences = createContext<ReadonlySet<string>>(new Set());
 
 export function supervisorAgentName(agent: AgentInfo) {
   return agent.paneName || agent.tabName || agent.name;

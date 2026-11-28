@@ -99,7 +99,7 @@ export function ResourceStatus({
           role="img"
           aria-label={indicator.label}
           data-connection={indicator.label.toLowerCase()}
-          className={`size-1.5 shrink-0 rounded-full ${indicator.color}`}
+          className={`size-[5px] shrink-0 rounded-full ${indicator.color}`}
         />
         <span className="truncate">{machine}</span>
       </span>

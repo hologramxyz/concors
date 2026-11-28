@@ -1,13 +1,19 @@
 import { sessionProjects } from "@concors/protocol";
 import { PendingInput } from "./pending-input";
+import { approvalItemId } from "./approval-details";
 import { AgentAccountPrompt } from "./account-prompt";
 import { AgentLimitPrompt } from "./limit-prompt";
 import { completedTurnFooters } from "./duration";
 import { canFork, forkReplies, useForkChat } from "./fork";
 import { AgentComposer } from "./composer";
 import { LiveLine, TimelineItem } from "./timeline-item";
+import { genericLive, useLiveVoice } from "./live-voice";
 import { HIDE_NATIVE_SCROLLBAR, OverlayScrollbar } from "./overlay-scrollbar";
-import { liveStep, stepGroups } from "./step-groups";
+import { liveLineRow, liveStep, stepGroups } from "./step-groups";
+import { answeredRuns } from "@/supervisor/answered-notice";
+import { finishedRuns } from "@/supervisor/finished-notice";
+import { pausedRuns } from "@/supervisor/paused-notice";
+import { SupervisorReferences, type SupervisorReference } from "@/supervisor/reference-context";
 import { useViewedAgent } from "@/notifications/context";
 import { CompactLayoutContext, PaneVisibilityContext } from "@/components/compact-layout";
 import {
@@ -505,7 +511,8 @@ export function Chat({
     ? undefined
     : conversation.items.findLast((item) => item.kind === "assistant")?.id;
   const forkChat = useForkChat();
-  const { view, step } = useTimelineRows(conversation.items, footers.hidden, agent);
+  const references = useContext(SupervisorReferences);
+  const { view, step } = useTimelineRows(conversation.items, footers.hidden, agent, references);
   const subAgentRows = useMemo(
     () => knownSubAgentRows(conversation.items, conversation.subAgents),
     [conversation.items, conversation.subAgents],
@@ -605,6 +612,7 @@ export function Chat({
     <PendingInput
       key={pending.id}
       pending={pending}
+      item={conversation.items.find((item) => item.id === approvalItemId(pending))}
       disabled={!connected || busy}
       reveal={atBottom}
       onRespond={(value) =>
@@ -676,18 +684,19 @@ export function Chat({
     />
   );
   const showLive = !!active && !conversation.hasNewer;
+  // One live line, after the last row: notices that cut the turn's runs do not add more.
+  const liveRow = liveLineRow(view);
+  const waitingFor = !active
+    ? undefined
+    : agent.status !== "needs_input"
+      ? undefined
+      : agent.pending.some((pending) => pending.kind === "approval")
+        ? "Waiting for your approval"
+        : "Waiting for your input";
+  // Kept by the chat, not the line, so the line moving between runs keeps its words.
+  const voice = useLiveVoice(showLive && genericLive(step, waitingFor));
   const liveLine = showLive && (
-    <LiveLine
-      step={step}
-      waiting={
-        agent.status !== "needs_input"
-          ? undefined
-          : agent.pending.some((pending) => pending.kind === "approval")
-            ? "Waiting for your approval"
-            : "Waiting for your input"
-      }
-      startedAt={agent.turnStartedAt}
-    />
+    <LiveLine step={step} waiting={waitingFor} voice={voice} startedAt={agent.turnStartedAt} />
   );
   return (
     <SubAgentViewContext value={agent?.controls?.childHistory ? setSubAgent : null}>
@@ -706,7 +715,9 @@ export function Chat({
               role="log"
               aria-label="Chat timeline"
               aria-live="off"
-              className={`chat-scroll selectable min-h-0 min-w-0 flex-1 overflow-y-auto ${compact ? "px-3" : "px-[24px]"} py-4 [overflow-anchor:none] ${HIDE_NATIVE_SCROLLBAR}`}
+              // Positioned, so it clips what is placed absolutely inside it (the live line's
+              // screen-reader copy); out past the column's foot, that gave the column a scrollbar.
+              className={`chat-scroll selectable relative min-h-0 min-w-0 flex-1 overflow-y-auto ${compact ? "px-3" : "px-[24px]"} py-4 [overflow-anchor:none] ${HIDE_NATIVE_SCROLLBAR}`}
               onScroll={onScroll}
             >
               <div className="mx-auto max-w-chat space-y-5">
@@ -763,10 +774,10 @@ export function Chat({
                       }
                     />
                     {/* The run the turn is on ends in its live line, which becomes its ✓ in place. */}
-                    {item.live && showLive && <div className="mt-1">{liveLine}</div>}
+                    {showLive && item.id === liveRow && <div className="mt-1">{liveLine}</div>}
                   </div>
                 ))}
-                {showLive && !view.at(-1)?.live && liveLine}
+                {showLive && liveRow === undefined && liveLine}
                 {conversation.hasNewer && (
                   <div className="h-5 text-center text-xs text-muted-foreground" role="status">
                     {conversation.loading === "newer" ? "Loading newer messages…" : ""}
@@ -893,12 +904,14 @@ function HistoryError({ message, onRetry }: { message: string; onRetry: () => vo
 /**
  * What the timeline shows: `timelineView`, with each run of quiet steps folded into a summary
  * line, and the step the turn in progress is on, which its live line shows. A call an open request
- * names keeps its own card.
+ * names keeps its own card. In Supervisor, runs of answered-request notices fold the same way.
  */
 function useTimelineRows(
   items: AgentItem[],
   hidden: ReadonlySet<string>,
   agent: AgentInfo | undefined,
+  /** Supervisor's chats, by which its answered-request notices name theirs (none elsewhere). */
+  references: readonly SupervisorReference[],
 ) {
   const status = agent?.status;
   const turnId = agent?.turnId ?? null;
@@ -907,6 +920,12 @@ function useTimelineRows(
     const view = timelineView(items, hidden);
     const live = status === "working" || status === "needs_input" ? turnId : null;
     const waiting = new Set(pending?.flatMap((p) => (p.sourceItemId ? [p.sourceItemId] : [])));
-    return { view: stepGroups(view, live, waiting), step: liveStep(view, live, waiting) };
-  }, [items, hidden, status, turnId, pending]);
+    const chats = new Set(references.flatMap((ref) => (ref.kind === "Agent" ? [ref.id] : [])));
+    return {
+      view: finishedRuns(
+        pausedRuns(answeredRuns(stepGroups(view, live, waiting), (id) => chats.has(id))),
+      ),
+      step: liveStep(view, live, waiting),
+    };
+  }, [items, hidden, status, turnId, pending, references]);
 }

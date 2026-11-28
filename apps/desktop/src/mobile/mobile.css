@@ -113,6 +113,15 @@ body {
   padding-block: 11px;
   margin-block: -11px;
 }
+/* Overview's approval line takes its one line of height, as a line that fits does, so the answers
+   under it sit as close on every row; the drawer's 44px floor for its buttons is lifted for it alone.
+   Its tap area then reaches only into the gaps around it: up to the title row (mt-1) and down to
+   the answers (my-2.5), so both keep their own taps. */
+[role="dialog"] button[data-overview-fold] {
+  min-height: 0;
+  --mobile-hit-room-top: 0.25rem;
+  --mobile-hit-room-bottom: 0.625rem;
+}
 /* The pull request page's state switch and its workspace chips sit 0.75rem apart (mt-3), so each
    row's areas take half of that. The room counts from inside a control's border, so a chip's 1px
    border is added; a tab has no border but the switch's padding and border below it. */
@@ -278,6 +287,17 @@ body {
 }
 .mobile-pane-row:has([aria-current="page"]) {
   background: var(--accent);
+}
+/* A workspace icon's badge is cut out of the row it is on: the sheet, the selected row's fill, or
+   a pressed row's fill laid over either (see .workspace-badge-surface). */
+.mobile-pane-row {
+  --badge-base: var(--popover);
+}
+.mobile-pane-row:has([aria-current="page"]) {
+  --badge-base: var(--accent);
+}
+.mobile-pane-choice:active {
+  --badge-overlay: var(--muted);
 }
 .mobile-pane-choice {
   min-width: 0;
@@ -1044,6 +1064,15 @@ body {
 .mobile-main:has(.mobile-notice) [aria-label="Chat timeline"] {
   padding-top: 16px;
 }
+/* A step's line is the only way to see what it ran, so each one is a fingertip tall on a phone.
+   The rows sit too close for an invisible hit area, so the lines themselves grow. Cards (which
+   carry aria-busy) keep their own padding; the row is its article's first child, not its details. */
+.mobile-pane article[aria-label="Tool call"]:not([aria-busy]) > :first-child,
+.mobile-pane article[aria-label="Tool calls"]:not([aria-busy]) > button,
+.mobile-pane article[aria-label="Thinking summary"] > button,
+.mobile-pane [data-live-line] > button {
+  min-height: 44px;
+}
 .mobile-pane [data-agent-composer] {
   font-size: 16px;
   max-height: 128px;
@@ -1278,6 +1307,11 @@ body {
   width: 44px;
   height: 44px;
   min-height: 44px;
+}
+/* The header's round buttons' icon size (.mobile-icon svg), so the cross fills the circle as theirs do. */
+[data-mobile-drawer] [data-slot="dialog-close"] svg {
+  width: 20px;
+  height: 20px;
 }
 [data-mobile-drawer] [data-slot="dialog-footer"] {
   margin: 4px -20px -20px;

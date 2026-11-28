@@ -91,12 +91,14 @@ export function AgentStatusIcon({
         <span
           data-agent-status-badge
           data-testid={agent.running ? runningTestId : undefined}
-          className={`absolute -right-1 -bottom-1 flex size-3 items-center justify-center rounded-full ring-1 ${surface}`}
+          className={`absolute -right-1 -bottom-1 flex size-[10px] items-center justify-center rounded-full ring-1 ${surface}`}
         >
           {agent.running ? (
             <AgentLoadingIcon className="size-3" />
           ) : (
-            <span className={`size-2 rounded-full ${agent.dot && AGENT_DOT_COLOR[agent.dot]}`} />
+            <span
+              className={`size-[6px] rounded-full ${agent.dot && AGENT_DOT_COLOR[agent.dot]}`}
+            />
           )}
         </span>
       )}

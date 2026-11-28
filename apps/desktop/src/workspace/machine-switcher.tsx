@@ -112,7 +112,7 @@ export function MachineSwitcher({
           <span
             role="img"
             aria-label={`${selected.label}: ${connected ? "Connected" : "Disconnected"}`}
-            className={`absolute right-1 bottom-1 size-1.5 rounded-full ring-2 ring-sidebar ${connected ? "bg-emerald-500" : "bg-muted-foreground/60"}`}
+            className={`absolute right-1 bottom-1 size-[5px] rounded-full shadow-[0_0_0_2px_var(--sidebar)] ring-2 ring-transparent group-hover/machine:ring-sidebar-accent group-aria-expanded/machine:ring-sidebar-accent ${connected ? "bg-emerald-500" : "bg-muted-foreground/60"}`}
           />
         ) : (
           <span className="flex min-w-0 items-center gap-1">
@@ -183,7 +183,7 @@ export function MachineSwitcher({
                 ) : (
                   !isSelected && (
                     <span
-                      className={`size-1.5 shrink-0 rounded-full ${machineState === "connectable" ? "bg-emerald-500" : machineState === "provisioning" ? "bg-amber-500" : "bg-muted-foreground/50"}`}
+                      className={`size-[5px] shrink-0 rounded-full ${machineState === "connectable" ? "bg-emerald-500" : machineState === "provisioning" ? "bg-amber-500" : "bg-muted-foreground/50"}`}
                     />
                   )
                 )}

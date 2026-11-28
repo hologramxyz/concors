@@ -5,11 +5,13 @@ import {
   diffStat,
   exitCode,
   firstErrorLine,
+  liveLineRow,
   liveStep,
   shellOutput,
   stepGroups,
   stepKind,
   stepSummary,
+  stepTarget,
 } from "./step-groups";
 import { timelineView } from "./thinking";
 
@@ -284,10 +286,26 @@ describe("approvals", () => {
     ]);
   });
 
-  it("keeps declined and cancelled answers as lines", () => {
-    const declined = permission("Decline");
-    const rows = stepGroups([command("a"), declined, command("b")], null);
-    expect(rows.map((row) => row.id)).toContain(declined.id);
+  it("shows a declined permission on its step, beside one allowed", () => {
+    for (const text of ["Decline", "Dismissed"]) {
+      const declined = permission(text);
+      const rows = stepGroups(
+        [command("a"), declined, command("b"), permission(), command("c")],
+        null,
+      );
+      expect(rows.map((row) => row.id)).not.toContain(declined.id);
+      expect(marks(rows)).toEqual([
+        ["Run command", "Declined"],
+        ["Run command", "Allowed once"],
+        ["Run command", null],
+      ]);
+    }
+  });
+
+  it("keeps a cancelled turn's answer as a line", () => {
+    const cancelled = permission("Turn canceled");
+    const rows = stepGroups([command("a"), cancelled, command("b")], null);
+    expect(rows.map((row) => row.id)).toContain(cancelled.id);
   });
 
   it("does not let a granted permission split a run", () => {
@@ -478,5 +496,97 @@ describe("step details", () => {
   it("shows a command's first line, marking that more follow", () => {
     expect(commandLine("pnpm test")).toBe("pnpm test");
     expect(commandLine("cat > a.js <<'EOF'\nconst a = 1;\nEOF")).toBe("cat > a.js <<'EOF' …");
+  });
+});
+
+describe("stepTarget", () => {
+  it("names a command as a command, keeping its text for the opened row", () => {
+    const git = item({
+      title: "Run command",
+      text: "git fetch -q origin $(git ls-remote origin refs/heads/main)",
+      presentation: { type: "shell", command: "git fetch -q origin $(git ls-remote origin)" },
+    });
+    expect(stepTarget(git, "command")).toBe("a command");
+    // Whatever the command, failed or running, its line does not quote it.
+    const script = item({
+      text: "export PATH=$HOME/.bun/bin:$PATH TMPDIR=/dev/shm\nbun test",
+      status: "failed",
+      presentation: { type: "shell", command: "export PATH=$HOME/.bun/bin:$PATH\nbun test" },
+    });
+    expect(stepTarget(script, "command")).toBe("a command");
+  });
+
+  it("keeps the words other steps already read in", () => {
+    const read = item({
+      text: "/w/src/app.ts",
+      presentation: {
+        type: "files",
+        fileOperation: "read",
+        files: [{ path: "/w/src/app.ts", diff: "" }],
+      },
+    });
+    expect(stepTarget(read, "read", (path) => path.replace("/w/", ""))).toBe("src/app.ts");
+    expect(stepTarget(item({ text: "vitest config" }), "search")).toBe("vitest config");
+    expect(stepTarget(item({ title: "mcp__github__create_issue" }), "tool")).toBe("Create issue");
+  });
+});
+
+describe("liveLineRow", () => {
+  // A Supervisor notice: recorded under its watch's own turn, so it cuts the live turn's runs.
+  const notice = (id: string) =>
+    item({
+      id,
+      kind: "system",
+      title: "Agent result",
+      text: "Sandbox finished.",
+      turnId: "supervisor:watch",
+    });
+
+  it("puts one live line after the last row when two notices split a running turn", () => {
+    const items = [
+      item({ kind: "user", text: "Check on my chats" }),
+      command("ls"),
+      command("pwd"),
+      notice("notice-1"),
+      command("git status"),
+      command("git diff"),
+      notice("notice-2"),
+      command("pnpm test"),
+      command("pnpm lint"),
+      command("pnpm build", { status: "running" }),
+    ];
+    const view = stepGroups(timelineView(items), "turn");
+    // Each run the notices cut is still marked live, and keeps its steps.
+    const live = view.filter((entry) => entry.live);
+    expect(live).toHaveLength(3);
+    expect(live.map((entry) => entry.steps?.length)).toEqual([2, 2, 2]);
+    // The line goes only after the last row.
+    expect(liveLineRow(view)).toBe(view.at(-1)?.id);
+    expect(view.filter((entry) => entry.id === liveLineRow(view))).toHaveLength(1);
+  });
+
+  it("follows the whole timeline when a notice is the last row", () => {
+    const items = [
+      command("ls"),
+      command("pwd"),
+      notice("notice-1"),
+      command("git status"),
+      command("git diff"),
+      notice("notice-2"),
+    ];
+    const view = stepGroups(timelineView(items), "turn");
+    expect(view.filter((entry) => entry.live)).toHaveLength(2);
+    expect(view.at(-1)?.id).toBe("notice-2");
+    expect(liveLineRow(view)).toBeUndefined();
+  });
+
+  it("keeps a normal chat's line on its live run", () => {
+    const view = stepGroups(
+      timelineView([command("ls"), command("pwd"), command("git status", { status: "running" })]),
+      "turn",
+    );
+    expect(view).toHaveLength(1);
+    expect(view[0]?.live).toBe(true);
+    expect(liveLineRow(view)).toBe(view[0]?.id);
   });
 });

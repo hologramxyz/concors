@@ -2,6 +2,43 @@ import type { AgentProviderId } from "@concors/protocol";
 import type { AgentPlanUsage } from "@concors/protocol";
 import type { AgentProvider, AgentProviderFactory } from "../manager.ts";
 
+/** The command a fixture asks to run: one short, one long enough to wrap, any other a stand-in. */
+const approvalCommand = (text: string) =>
+  text === "Please approve the test command"
+    ? "pnpm test"
+    : text === "Please approve the long command"
+      ? 'cd "/tmp/concors-fixture/star-catcher" && for i in $(seq 1 60); do if [ -s haiku.txt ]; then echo READY; exit 0; fi; sleep 10; done; echo TIMEOUT'
+      : "echo test";
+
+/**
+ * A tool request as Claude Code sends one: the tool's input as the command, the tool as the
+ * reason. The haiku prompts ask to write a file or to edit one, the described command to run its
+ * shell tool with a description and a timeout; any other asks to run a command as Codex does.
+ */
+const fileRequest = (text: string, cwd: string) => {
+  const file_path = `${cwd}/haiku.txt`;
+  const input =
+    text === "Please approve the haiku write"
+      ? {
+          file_path,
+          content: "Maple leaves let go\ndrifting on the cooling wind\ndusk arrives sooner\n",
+        }
+      : text === "Please approve the haiku edit"
+        ? { file_path, old_string: "dusk arrives sooner", new_string: "night arrives sooner" }
+        : null;
+  if (text === "Please approve the described command")
+    return {
+      reason: "Bash",
+      command: JSON.stringify({
+        command: "pnpm --filter @concors/desktop test",
+        description: "Run the desktop unit tests",
+        timeout: 120000,
+      }),
+    };
+  if (!input) return null;
+  return { reason: "content" in input ? "Write" : "Edit", command: JSON.stringify(input) };
+};
+
 /** Deterministic provider used only by integration tests and the acceptance-test server. */
 export class TestAgentProvider implements AgentProvider {
   static turns = 0;
@@ -247,6 +284,16 @@ export class TestAgentProvider implements AgentProvider {
       void this.supervisorDelegationFixture(turnId).catch(() => this.finish("failed", turnId));
       return { turn: { id: turnId, status: "inProgress", items: [] } };
     }
+    if (this.tools?.env?.CONCORS_CONTROL_URL && text === "Send the approval samples") {
+      const turnId = this.turnId;
+      void this.supervisorApprovalSamples(turnId).catch(() => this.finish("failed", turnId));
+      return { turn: { id: turnId, status: "inProgress", items: [] } };
+    }
+    if (this.tools?.env?.CONCORS_CONTROL_URL && text === "primitive-control-run") {
+      const turnId = this.turnId;
+      void this.supervisorControlRun(turnId).catch(() => this.finish("failed", turnId));
+      return { turn: { id: turnId, status: "inProgress", items: [] } };
+    }
     if (text === "primitive-usage-limit") {
       // The account ran out: how Codex fails a turn when the plan's limit is reached.
       const turnId = this.turnId;
@@ -347,22 +394,41 @@ export class TestAgentProvider implements AgentProvider {
         },
       });
       this.finish();
-    } else if (text.includes("approve")) {
-      this.emit("item/started", {
+    } else if (text === "primitive-failed-command") {
+      // A command that exits non-zero with an error line, as a failed test run reports one.
+      this.emit("item/completed", {
         item: {
-          id: `tool-${this.turnId}`,
+          id: `failed-${this.turnId}`,
           type: "commandExecution",
-          command: text === "Please approve the test command" ? "pnpm test" : "echo test",
-          status: "inProgress",
+          command: "pnpm --filter @concors/desktop test src/agents/step-groups.test.ts",
+          cwd: this.cwd,
+          aggregatedOutput:
+            "FAIL src/agents/step-groups.test.ts\nError: expected 'Ran a command' to be 'Ran pnpm test'\nTests  1 failed | 35 passed (36)",
+          exitCode: 1,
+          status: "failed",
         },
       });
+      this.reply(this.turnId, "The step-groups test failed; I will look at it.");
+    } else if (text.includes("approve")) {
+      const file = fileRequest(text, this.cwd);
+      if (!file)
+        this.emit("item/started", {
+          item: {
+            id: `tool-${this.turnId}`,
+            type: "commandExecution",
+            command: approvalCommand(text),
+            status: "inProgress",
+          },
+        });
       void this.onRequest(
         "item/commandExecution/requestApproval",
         {
           threadId: this.threadId,
           turnId: this.turnId,
           itemId: `tool-${this.turnId}`,
-          command: text === "Please approve the test command" ? "pnpm test" : "echo test",
+          ...(file ?? { command: approvalCommand(text) }),
+          // A command runs in a folder, which the long one's details say.
+          ...(text === "Please approve the long command" ? { cwd: this.cwd } : {}),
         },
         "approval-1",
       )
@@ -402,7 +468,23 @@ export class TestAgentProvider implements AgentProvider {
         .then(() => this.finish())
         .catch(() => undefined);
     } else if (text.includes("fail")) this.finish("failed");
-    else {
+    else if (text.includes("long-summary")) {
+      // One long opening sentence, which Overview keeps whole and clamps at two lines.
+      this.reply(
+        this.turnId,
+        "Reviewed the release notes for 2.4, fixed three broken links, tightened the upgrade section and flagged the pricing table, which still lists last year's plans and needs a decision from you.",
+      );
+    } else if (text.includes("haiku") || text.includes("long-reply")) {
+      // A final reply over several lines, as Supervisor's notice of a finished chat quotes it.
+      const haiku = "Maple leaves let go\ndrifting on the cooling wind\ndusk arrives sooner";
+      const steps = Array.from({ length: 10 }, (_, i) => `${i + 1}. Checked step ${i + 1}.`);
+      this.reply(
+        this.turnId,
+        text.includes("haiku")
+          ? `I saved this haiku to \`haiku.txt\`:\n\n${haiku}`
+          : `Release notes reviewed:\n\n${steps.join("\n")}\n\nAll ten steps pass.`,
+      );
+    } else {
       if (text.includes("background")) {
         // A sub-agent left working in the background, as Claude Code runs them: the turn that
         // started it ends first, and it keeps reporting into that turn until it is done.
@@ -486,15 +568,6 @@ export class TestAgentProvider implements AgentProvider {
             id: `file-mentions-${this.turnId}`,
             type: "agentMessage",
             text: "Files are in notes:\n\n- notes/plan.md\n- `src/main.ts`\n- todo.md\n\nBuilt on Node.js; the shot is /tmp/concors-shot.png.",
-          },
-        });
-      }
-      if (text.includes("show-image")) {
-        this.emit("item/completed", {
-          item: {
-            id: `image-${this.turnId}`,
-            type: "agentMessage",
-            text: "Here is the page:\n\n![The pricing page](shot.png)\n\nAnd ![a missing one](gone.png).",
           },
         });
       }
@@ -605,7 +678,11 @@ export class TestAgentProvider implements AgentProvider {
             item: {
               id: `message-${this.turnId}`,
               type: "agentMessage",
-              text: "Hello from Codex",
+              // The images are the turn's last reply, so Supervisor's notice of it quotes them;
+              // the second sits in a sentence.
+              text: text.includes("show-image")
+                ? "Here is the page:\n\n![The pricing page](shot.png)\n\nAnd ![a missing one](gone.png)."
+                : "Hello from Codex",
             },
           });
           this.finish();
@@ -637,6 +714,63 @@ export class TestAgentProvider implements AgentProvider {
       turnId,
       "I sent work to **Game QA**, **HUD polish**, and the **Release editor**. I’ll bring blockers and results back here.",
     );
+  }
+  /**
+   * Supervisor sends the fixture's workers one approval each: a file to write, a file to edit and
+   * a long command, so its chat shows a pending request of every shape the approval card draws.
+   */
+  private async supervisorApprovalSamples(turnId: string) {
+    const { sessions } = (await this.supervisorControl({ kind: "sessions" })) as {
+      sessions: { id: string; name: string }[];
+    };
+    for (const [name, text] of [
+      ["Game QA", "Please approve the haiku write"],
+      ["HUD polish", "Please approve the haiku edit"],
+      ["Release editor", "Please approve the long command"],
+    ] as const) {
+      const target = sessions.find((session) => session.name === name);
+      if (!target) throw new Error("Fixture worker not found");
+      await this.supervisorControl({ kind: "send", sessionId: target.id, text });
+    }
+    this.reply(turnId, "I asked **Game QA**, **HUD polish** and the **Release editor** to start.");
+  }
+  /**
+   * Supervisor's calls as Claude Code reports them, on the fixture's real chats: shown, not run,
+   * so the workers' state stays as the delegation fixture left it.
+   */
+  private async supervisorControlRun(turnId: string) {
+    const { sessions } = (await this.supervisorControl({ kind: "sessions" })) as {
+      sessions: { id: string; projectId: string; name: string }[];
+    };
+    const chat = (name: string) => {
+      const found = sessions.find((session) => session.name === name);
+      if (!found) throw new Error("Fixture worker not found");
+      return found;
+    };
+    const qa = chat("Game QA"),
+      hud = chat("HUD polish"),
+      notes = chat("Release editor");
+    const operations = [
+      { kind: "sessions", query: "touch targets" },
+      { kind: "send", sessionId: hud.id, text: "Check touch targets on the pause menu too" },
+      { kind: "start", projectId: qa.projectId, provider: "codex", name: "Level QA" },
+      { kind: "send", sessionId: qa.id, text: "Run the full suite", whenBusy: "steer" },
+      { kind: "wait", sessionIds: [qa.id, hud.id], timeoutMs: 20000 },
+      { kind: "read", sessionId: notes.id },
+      { kind: "capabilities" },
+    ];
+    for (const [index, operation] of operations.entries())
+      this.emit("item/completed", {
+        item: {
+          id: `control-${index}-${turnId}`,
+          type: "mcpToolCall",
+          status: "completed",
+          tool: "mcp__concors-supervisor__concors_control",
+          arguments: { operation },
+          result: "ok",
+        },
+      });
+    this.reply(turnId, "Both chats are on it.");
   }
   private reply(turnId: string, text: string) {
     if (this.turnId !== turnId || this.closed) return;

@@ -119,7 +119,7 @@ export function PreviewsSidebar({ compact = false }: { compact?: boolean }) {
                     {compact && usage.warning && (
                       <span
                         aria-hidden="true"
-                        className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-amber-500"
+                        className="absolute -top-0.5 -right-0.5 size-[5px] rounded-full bg-amber-500"
                       />
                     )}
                   </span>

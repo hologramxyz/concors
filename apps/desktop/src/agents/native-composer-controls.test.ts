@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { AgentControlsSchema, type AgentInfo, type AgentSettings } from "@concors/protocol";
-import { modelMenuFooter, nativeComposerControls } from "./native-composer-controls";
+import {
+  mentionAtCaret,
+  modelMenuFooter,
+  nativeComposerControls,
+} from "./native-composer-controls";
 
 const agent = (patch: Partial<AgentInfo> = {}) =>
   ({ id: "a", provider: "codex", supportsPlan: true, ...patch }) as AgentInfo;
@@ -329,5 +333,34 @@ describe("the options sheet", () => {
       expect(item.label).not.toContain(":");
       for (const option of item.options ?? []) expect(option.label).not.toContain(":");
     }
+  });
+});
+
+describe("a mention from the phone's toolbar", () => {
+  it("goes where the caret was, a space from the words on either side", () => {
+    expect(mentionAtCaret("", 0, "Game QA")).toEqual({ text: "@Game QA ", caret: 9 });
+    expect(mentionAtCaret("ask ", 4, "Star Catcher")).toEqual({
+      text: "ask @Star Catcher ",
+      caret: 18,
+    });
+    expect(mentionAtCaret("ask", 3, "Game QA")).toEqual({ text: "ask @Game QA ", caret: 13 });
+    expect(mentionAtCaret("ask to check", 4, "Game QA")).toEqual({
+      text: "ask @Game QA to check",
+      caret: 13,
+    });
+    expect(mentionAtCaret("ask  to check", 4, "Game QA")).toEqual({
+      text: "ask @Game QA to check",
+      caret: 13,
+    });
+    // A selected word keeps its place: the name goes after it, and typing goes after the name.
+    expect(mentionAtCaret("Ask now ", 7, "Game QA")).toEqual({
+      text: "Ask now @Game QA ",
+      caret: 17,
+    });
+  });
+
+  it("keeps a caret past the end at the end, and never grows the message past its limit", () => {
+    expect(mentionAtCaret("hi", 99, "HUD")).toEqual({ text: "hi @HUD ", caret: 8 });
+    expect(mentionAtCaret("x".repeat(15995), 15995, "Game QA")).toBeNull();
   });
 });

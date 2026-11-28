@@ -98,3 +98,31 @@ it("carries a header button's workspace sheet, with each row's mark and dot", ()
     }).success,
   ).toBe(false);
 });
+
+it("shows the Supervisor's Mention button and brings the field back at a caret it bounds", () => {
+  const composer = {
+    kind: "composer",
+    draft: "ask ",
+    editAck: 3,
+    expanded: true,
+    editable: true,
+    placeholder: "Reply…",
+    active: false,
+    canSend: true,
+    canStop: false,
+    hasAttachments: false,
+    attachEnabled: true,
+    controls: [],
+    usage: null,
+  };
+  const parsed = NativeSurfaceContentSchema.parse({ ...composer, mention: true, refocus: 4 });
+  expect(parsed).toMatchObject({ mention: true, refocus: 4 });
+  // Without the flag, as every other chat sends it, there is no button and nothing to refocus.
+  expect(NativeSurfaceContentSchema.parse(composer)).not.toHaveProperty("mention");
+  expect(NativeSurfaceContentSchema.safeParse({ ...composer, refocus: -1 }).success).toBe(false);
+  expect(NativeSurfaceContentSchema.safeParse({ ...composer, refocus: 16001 }).success).toBe(false);
+  expect(NativeControlSchema.shape.icon.safeParse("at").success).toBe(true);
+  expect(
+    NativeSurfaceEventSchema.parse({ kind: "press", control: "mention", text: "ask ", value: "4" }),
+  ).toMatchObject({ control: "mention", value: "4" });
+});

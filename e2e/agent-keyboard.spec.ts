@@ -253,7 +253,7 @@ test("Up and Down bring back the prompts sent in the chat without losing what wa
       await expect(composer).toHaveValue("");
       await expect(page.getByRole("log")).toContainText(prompt.split("\n")[0] ?? prompt);
       // Each turn ends before the next prompt, so neither waits in the queue.
-      await expect(page.getByRole("log").getByText("Working…")).toHaveCount(0);
+      await expect(page.getByRole("log").locator("[data-live-line]")).toHaveCount(0);
     }
 
     await composer.press("ArrowUp");

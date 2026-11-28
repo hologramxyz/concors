@@ -1,8 +1,9 @@
 import {
   MAX_SUPERVISOR_REFERENCES,
   insertMention,
-  matchReferences,
+  mentionGroups,
   mentionQuery,
+  mentionRanges,
   mentionedReferences,
   splitSupervisorReferences,
   withSupervisorReferences,
@@ -10,7 +11,8 @@ import {
 } from "@/supervisor/reference-text";
 import { SupervisorReferencePicker } from "@/supervisor/references";
 import { MentionMenu } from "@/supervisor/mention-menu";
-import { SupervisorReferences } from "@/supervisor/reference-context";
+import { useMentionBackdrop } from "./use-mention-backdrop";
+import { SupervisorClosedReferences, SupervisorReferences } from "@/supervisor/reference-context";
 import { AgentDraftScopeContext, useAgentDraft, type InputDraft as Draft } from "./draft";
 import { NO_RECALL, recallStep, type PromptRecall } from "./prompt-history";
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -56,7 +58,11 @@ import { usageView } from "./context-window";
 import { usePlanUsage } from "./use-plan-usage";
 import { AgentModelPicker } from "./model-picker";
 import { useModelMenuActions } from "./model-menu-actions";
-import { modelMenuFooter, nativeComposerControls } from "./native-composer-controls";
+import {
+  mentionAtCaret,
+  modelMenuFooter,
+  nativeComposerControls,
+} from "./native-composer-controls";
 import { accountName } from "./account-name";
 import { useProviderUpdate } from "./provider-update-state";
 import { openExternal } from "@/tauri/open-external";
@@ -135,6 +141,7 @@ export function AgentComposer({
   history?: readonly string[];
 }) {
   const references = useContext(SupervisorReferences);
+  const closedReferences = useContext(SupervisorClosedReferences);
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
   const visible = useContext(TabVisibility);
@@ -146,6 +153,10 @@ export function AgentComposer({
   const [editAck, setEditAck] = useState(0);
   const [recall, setRecall] = useState<PromptRecall>(NO_RECALL);
   const nativeEditSequence = useRef(0);
+  // The phone's Mention drawer, opened from the native toolbar: where the caret was, and where it
+  // goes when the field comes back.
+  const [mentionAt, setMentionAt] = useState<number | null>(null);
+  const [refocus, setRefocus] = useState<number | undefined>();
   const nativeField = useRef<HTMLDivElement>(null);
   const expanded = native ? nativeExpanded : webExpanded;
   const [keyboardHelp, setKeyboardHelp] = useState(false);
@@ -179,6 +190,7 @@ export function AgentComposer({
     picker = useRef<HTMLInputElement>(null);
   const form = useRef<HTMLFormElement>(null);
   const toolbar = useRef<HTMLDivElement>(null);
+  const mentionBackdrop = useRef<HTMLDivElement>(null);
   useClippedControls(toolbar, !compact);
   useComposerWheel(form, !compact);
   const shortcutLabel = useShortcutLabels();
@@ -293,6 +305,11 @@ export function AgentComposer({
     () => !!form.current?.closest("[data-pane-id]")?.contains(document.activeElement),
   );
   useTextareaAutosize(textarea, draft, visible && !native && !dictation.active, expanded);
+  // Live mentions are tinted on a copy of the message drawn behind the box, which stays the
+  // real input: the words, caret, selection and copying are all the box's own.
+  const tinting = !native && references.length > 0;
+  useMentionBackdrop(textarea, mentionBackdrop, tinting);
+  const tinted = tinting ? mentionRanges(draft, selectedReferences ?? []) : [];
   // The dictated words were added at the end, so restore the caret and show the end.
   useLayoutEffect(() => {
     const el = textarea.current;
@@ -326,16 +343,28 @@ export function AgentComposer({
     setReferences((refs) => [...refs, reference]);
     return true;
   };
-  // The phone app's native field cannot open a menu as `@` is typed, so it gets a button instead.
-  const mentionPicker = native && references.length > 0 && (
+  // The phone app's native field cannot open a menu as `@` is typed, so its toolbar has an "@" that
+  // opens the names in a drawer. The chosen one goes where the caret was.
+  const mentionable = native && references.length > 0;
+  const mentionDisabled = !connected || busy || uncertain || !!deferred;
+  const mentionPicker = mentionable && (
     <SupervisorReferencePicker
       references={references}
-      disabled={!connected || busy || uncertain || !!deferred}
+      closed={closedReferences}
+      open={mentionAt !== null}
+      onOpenChange={(open) => {
+        if (open || mentionAt === null) return;
+        setMentionAt(null);
+        // Picking a name has already said where the caret goes.
+        setRefocus((at) => at ?? mentionAt);
+      }}
       onSelect={(reference) => {
-        if (remember(reference))
-          setDraft(
-            (text) => `${text && !/\s$/.test(text) ? `${text} ` : text}@${reference.label} `,
-          );
+        if (mentionAt === null) return;
+        const next = mentionAtCaret(draft, mentionAt, reference.label);
+        if (next && remember(reference)) {
+          setDraft(next.text);
+          setRefocus(next.caret);
+        }
       }}
     />
   );
@@ -530,12 +559,34 @@ export function AgentComposer({
   // The list keeps the order it opened with: agents re-sort by activity as they work, and the
   // highlighted row must stay the one the person arrowed to.
   const [mentionOrder, setMentionOrder] = useState<readonly SupervisorReference[] | null>(null);
+  // Closed chats wait under a fold the person can open; it shuts again with the list.
+  const [mentionClosedOpen, setMentionClosedOpen] = useState<boolean | null>(null);
   if (mentionTyped && !mentionOrder) setMentionOrder(references);
   if (!mentionTyped && mentionOrder) setMentionOrder(null);
-  const mentionMatches = mentionTyped
-    ? matchReferences(mentionOrder ?? references, mentionTyped.query)
-    : [];
+  if (!mentionTyped && mentionClosedOpen !== null) setMentionClosedOpen(null);
+  const mentionList = mentionTyped
+    ? mentionGroups(
+        mentionOrder ?? references,
+        closedReferences,
+        mentionTyped.query,
+        mentionClosedOpen,
+      )
+    : null;
+  // The keys move through every row in view, the closed ones too once they show.
+  const mentionMatches = mentionList?.rows ?? [];
   const mentionIndex = Math.min(mentionActive, mentionMatches.length - 1);
+  // Where the caret goes once the chosen mention is in the box. It is placed as the new text
+  // commits, before the next key is handled: a frame later, keys typed in between would land at
+  // the end and the caret would then jump back before them.
+  const mentionCaret = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const at = mentionCaret.current;
+    const field = textarea.current;
+    if (at === null || !field) return;
+    mentionCaret.current = null;
+    field.focus();
+    field.setSelectionRange(at, at);
+  }, [draft]);
   const chooseMention = (reference: SupervisorReference) => {
     if (!mentionTyped || !remember(reference)) return;
     const next = insertMention(draft, mentionTyped.start, caret, reference.label);
@@ -544,10 +595,7 @@ export function AgentComposer({
     setMentionActive(0);
     // The finished `@Name ` would match itself; the list returns once something else is typed.
     setMentionDismissed(next.text);
-    requestAnimationFrame(() => {
-      textarea.current?.focus();
-      textarea.current?.setSelectionRange(next.caret, next.caret);
-    });
+    mentionCaret.current = next.caret;
   };
   const chooseCommand = (command: AgentCommand, complete = false) => {
     setSlashActive(0);
@@ -821,6 +869,8 @@ export function AgentComposer({
             })
           : [],
       }),
+      mention: mentionable,
+      refocus,
       dictationHelp,
       usage: usageView(agent, planUsage),
     },
@@ -837,8 +887,10 @@ export function AgentComposer({
           setDraft(event.text);
           setEditAck(event.sequence);
         }
-      } else if (event.kind === "focus") setNativeExpanded(event.focused);
-      else if (event.kind === "height") setNativeHeight(event.height);
+      } else if (event.kind === "focus") {
+        setNativeExpanded(event.focused);
+        if (event.focused) setRefocus(undefined);
+      } else if (event.kind === "height") setNativeHeight(event.height);
       else if (event.kind === "attachments") {
         if (!advanced || !connected || busy || attaching || uncertain) return;
         if (uploads)
@@ -869,6 +921,13 @@ export function AgentComposer({
         } else if (event.control === "context" || event.control === "context-refresh") {
           // Like the desktop popover: plan usage is read while the sheet is open, not before.
           planUsage.refresh(agent.id, event.control === "context-refresh");
+        } else if (event.control === "mention") {
+          const text = event.text ?? draft;
+          const at = Math.min(Math.max(0, Number(event.value) || 0), text.length);
+          setRefocus(undefined);
+          // Without the drawer the field must still come back, or it stays waiting for it.
+          if (mentionable && !mentionDisabled) setMentionAt(at);
+          else setRefocus(at);
         } else if (event.control === "model-open") {
           // Like the desktop menu: it opens on the current provider, and asks then if it's signed in.
           setNativeProviderPage(agent.provider);
@@ -1392,11 +1451,7 @@ export function AgentComposer({
               ))}
             </div>
           )}
-          {mentionPicker && (
-            <div className="flex items-center px-2 pb-2" data-composer-attachments>
-              {mentionPicker}
-            </div>
-          )}
+          {mentionPicker}
           {dictation.active ? (
             <DictationRecording
               state={dictation}
@@ -1415,6 +1470,26 @@ export function AgentComposer({
             </>
           ) : (
             <>
+              {tinting && (
+                <div
+                  ref={mentionBackdrop}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute overflow-hidden text-transparent select-none"
+                >
+                  {tinted.flatMap((range, index) => [
+                    draft.slice(tinted[index - 1]?.end ?? 0, range.start),
+                    <span
+                      key={range.start}
+                      className="rounded-sm bg-muted box-decoration-clone shadow-[-1px_0_var(--color-muted),1px_0_var(--color-muted)]"
+                    >
+                      {draft.slice(range.start, range.end)}
+                    </span>,
+                  ])}
+                  {draft.slice(tinted.at(-1)?.end ?? 0)}
+                  {/* A box ending in a line break shows an empty last line; so does this. */}
+                  {draft.endsWith("\n") && "\u200b"}
+                </div>
+              )}
               <textarea
                 ref={textarea}
                 data-agent-composer
@@ -1563,7 +1638,7 @@ export function AgentComposer({
                     if (!uncertain) void followUp(undefined, !compact && (e.metaKey || e.ctrlKey));
                   }
                 }}
-                className={`agent-composer-input ${compact ? "max-h-48" : "max-h-[min(40cqh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none ${preparing ? "" : "read-only:opacity-50 disabled:opacity-50"}`}
+                className={`agent-composer-input relative ${compact ? "max-h-48" : "max-h-[min(40cqh,26rem)]"} min-h-16 w-full resize-none bg-transparent px-3 py-3 outline-none ${preparing ? "" : "read-only:opacity-50 disabled:opacity-50"}`}
               />
               <div
                 ref={toolbar}
@@ -1739,6 +1814,9 @@ export function AgentComposer({
         <MentionMenu
           anchor={form}
           matches={mentionMatches}
+          closedFrom={mentionList?.closedMatches ? mentionList.open.length : null}
+          closedOpen={!!mentionList?.closedOpen}
+          onToggleClosed={() => setMentionClosedOpen(!mentionList?.closedOpen)}
           active={mentionIndex}
           surface={owner}
           onActive={setMentionActive}

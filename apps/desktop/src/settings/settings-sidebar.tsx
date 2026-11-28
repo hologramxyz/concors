@@ -1,6 +1,7 @@
 import { ArrowLeft } from "lucide-react";
 import { cn } from "cn";
 import { useWindowChrome } from "@/window/context";
+import { SidebarNotice } from "@/notifications/provider";
 
 import { SETTINGS_NAV_GROUPS, type SettingsPage } from "./navigation";
 
@@ -75,6 +76,9 @@ export function SettingsSidebar({ page, onBack, onNavigate, hidden }: SettingsSi
               </ul>
             </section>
           ))}
+        </div>
+        <div className="shrink-0 pb-1">
+          <SidebarNotice />
         </div>
       </nav>
     </div>

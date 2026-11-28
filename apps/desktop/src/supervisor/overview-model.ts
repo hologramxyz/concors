@@ -5,15 +5,20 @@ import type {
   WorkspaceSnapshot,
 } from "@concors/protocol";
 import { approvalParts, approvalSummary } from "@/agents/approval-summary";
+import { closedChatIds } from "@/agents/closed-chats";
 import { chatState } from "@/workspace/sidebar-rows";
 import { briefLine } from "./brief";
+import { waitingWords } from "./paused-notice";
 
 /**
  * Overview lists sessions, not tasks: one row each, under the group a person acts on, saying what
  * it needs and what it last said, so nobody has to open sessions one by one to triage them. A
- * question, approval or unseen failure needs you; a reply in progress or queued work is in
- * progress; everything else that has replied, in an open tab or sent work by Supervisor, is done.
- * Chats that never replied stay out.
+ * question, approval, unseen failure or paused queue with instructions waiting needs you, as the
+ * Supervisor chat marks them; a reply in progress or queued work is in progress; everything else
+ * that has replied, in an open tab or sent work by Supervisor, is done. Chats that never replied
+ * stay out, and so do closed chats (no open pane shows them) unless they need you or Supervisor
+ * sent them work: someone who closed a chat is done with it, but an agent waiting on a person
+ * must not be left stuck where nobody looks.
  */
 export type OverviewGroup = "Needs you" | "In progress" | "Done";
 export const overviewGroups: readonly OverviewGroup[] = ["Needs you", "In progress", "Done"];
@@ -57,7 +62,32 @@ export function workspaceAgents(agents: readonly AgentInfo[], workspace: Workspa
   return agents.filter((agent) => projects.has(agent.projectId));
 }
 
+/**
+ * Which sessions an open tab shows as a chat, and which are closed: no open pane shows them, as
+ * the sidebar's Closed fold means it.
+ */
+export function overviewChats(workspace: WorkspaceSnapshot | null, agents: readonly AgentInfo[]) {
+  const shown = new Set(
+    (workspace?.projects ?? []).flatMap((project) =>
+      project.tabs.flatMap((tab) =>
+        tab.nodes.flatMap((node) =>
+          node.kind === "pane" && node.profile === "chat" && node.sessionId ? [node.sessionId] : [],
+        ),
+      ),
+    ),
+  );
+  return { shown, closed: closedChatIds(workspace, agents) };
+}
+
 const firstLine = (text: string) => text.trim().split("\n")[0]?.trim() ?? "";
+
+/** A queue held paused with instructions in it, which waits on someone to resume it. */
+export const queuePaused = (agent: AgentInfo) => !!agent.queuePaused && !!agent.queue?.length;
+
+/** Whether a session belongs under Needs you, which the Overview button also counts. */
+export const needsYou = (agent: AgentInfo) =>
+  !agent.supervisor &&
+  (agent.pending.length > 0 || chatState(agent) === "attention" || queuePaused(agent));
 
 function needs(agent: AgentInfo): OverviewRow["needs"] {
   const pending = agent.pending[0];
@@ -76,9 +106,12 @@ function needs(agent: AgentInfo): OverviewRow["needs"] {
       text: pending.questions.map((q) => q.question).join(" ") || pending.title,
     };
   if (pending) return { action: "Respond", text: pending.summary || pending.title };
-  if (agent.status === "failed")
+  // A failure already seen needs nothing more; its paused queue, if any, still does.
+  if (agent.status === "failed" && chatState(agent) === "attention")
     return { action: "Failed", text: firstLine(agent.error ?? "") || "The turn failed." };
   if (agent.status === "needs_input") return { action: "Respond", text: "It is waiting for you." };
+  if (queuePaused(agent))
+    return { action: "Queue paused", text: waitingWords(agent.queue?.length ?? 0) };
   return null;
 }
 
@@ -89,6 +122,8 @@ export function overviewRows(
   shown: ReadonlySet<string> = new Set(),
   briefs: ReadonlyMap<string, SupervisorBrief> | null = null,
   now = Date.now(),
+  /** Sessions no open pane shows, which only Needs you and Supervisor's own work keep listed. */
+  closed: ReadonlySet<string> = new Set(),
 ): OverviewRow[] {
   // Deliveries arrive newest first. The one in progress says what the agent is doing; without
   // one, the latest says what it was last asked.
@@ -103,9 +138,10 @@ export function overviewRows(
     const state = chatState(agent);
     const delivery = asked.get(agent.id);
     const queued = agent.queue?.length ?? 0;
-    const group: OverviewGroup | null =
-      agent.pending.length || state === "attention"
-        ? "Needs you"
+    const group: OverviewGroup | null = needsYou(agent)
+      ? "Needs you"
+      : closed.has(agent.id) && !delivery
+        ? null
         : state === "working" || queued
           ? "In progress"
           : delivery || state === "done" || (shown.has(agent.id) && agent.turnId)
@@ -135,4 +171,33 @@ export function overviewRows(
     .filter((row) => row.group === "Done" && chatState(row.agent) !== "done")
     .slice(DONE_LIMIT);
   return rows.filter((row) => !done.includes(row));
+}
+
+/**
+ * A group's rows split into those it lists and those folded under Earlier. Earlier keeps past days
+ * apart from today's finishes; with none from today there is nothing to keep them from, so the
+ * group lists them itself rather than show its header over a lone fold.
+ */
+export function earlierFold(rows: readonly OverviewRow[]) {
+  const listed = rows.filter((row) => !row.earlier);
+  const earlier = rows.filter((row) => row.earlier);
+  return listed.length ? { listed, earlier } : { listed: earlier, earlier: [] };
+}
+
+/** How many of Done's rows show until it is expanded: enough for a glance at what just finished. */
+export const DONE_SHOWN = 5;
+
+/** A finish nobody has opened yet, which keeps its dot. */
+export const unseenDone = (row: OverviewRow) =>
+  row.group === "Done" && chatState(row.agent) === "done";
+
+/**
+ * The Done rows in view, in the order given: the most recent few until `all` is asked for, plus
+ * every finish nobody has opened, however far down, since those are news. `hidden` counts the rest.
+ */
+export function doneInView(rows: readonly OverviewRow[], all: boolean) {
+  const shown = all
+    ? [...rows]
+    : rows.filter((row, index) => index < DONE_SHOWN || unseenDone(row));
+  return { shown, hidden: rows.length - shown.length };
 }

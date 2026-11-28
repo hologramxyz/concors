@@ -21,6 +21,7 @@ import { activeOrganization, type SignedInAuth } from "@/auth/auth-state";
 import { AccountMenu } from "@/components/account-menu";
 import { MobileAppCard } from "@/components/mobile-app";
 import { GuestSignInCard } from "@/auth/guest-sign-in-card";
+import { SidebarNotice } from "@/notifications/provider";
 import { UpdateBadge } from "@/update/update-badge";
 import { MachineSwitcher } from "@/workspace/machine-switcher";
 import type { Host } from "@/workspace/machines";
@@ -173,6 +174,7 @@ export function AppSidebar(props: AppSidebarProps) {
           </>
         </div>
         <SidebarChatLimit workspace={props.workspace} execute={props.execute} />
+        <SidebarNotice />
         {props.guest && (
           <GuestSignInCard
             onSignIn={props.onSignIn}

@@ -203,7 +203,10 @@ export function WorkspaceSwitcher({
                     />
                     <AttentionBadge attention={attention} label={attentionLabel} />
                   </span>
-                  <span className="block min-w-0 truncate">{item.name}</span>
+                  {/* Trimmed to its capitals, as the sidebar's names are, so they centre on the icon. */}
+                  <span className="block min-w-0 truncate py-1 [text-box:trim-both_cap_alphabetic]">
+                    {item.name}
+                  </span>
                   {parent && (
                     <span className="block min-w-0 shrink-[2] truncate text-muted-foreground">
                       {parent}

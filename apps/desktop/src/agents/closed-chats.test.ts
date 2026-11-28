@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import type { AgentInfo, WorkspaceSnapshot } from "@concors/protocol";
-import { closedChats, searchClosedChats } from "./closed-chats";
+import { closedChatIds, closedChats, openChats, searchClosedChats } from "./closed-chats";
 
 const workspace: WorkspaceSnapshot = {
   schemaVersion: 1,
@@ -92,4 +92,15 @@ it("finds chats by name, first message, agent, model and workspace", () => {
   expect(ids("kimi")).toEqual(["b"]);
   expect(ids("hologram")).toEqual(["a", "b"]);
   expect(ids("missing")).toEqual([]);
+});
+
+it("calls a chat closed when no open pane shows it or another conversation of its pane", () => {
+  const chats = [
+    agent("open", { providerGroupId: "pane" }),
+    agent("earlier", { providerGroupId: "pane" }),
+    agent("gone"),
+    agent("elsewhere", { projectId: "closed-workspace" }),
+  ];
+  expect([...openChats(workspace, chats)].sort()).toEqual(["earlier", "open"]);
+  expect([...closedChatIds(workspace, chats)].sort()).toEqual(["elsewhere", "gone"]);
 });

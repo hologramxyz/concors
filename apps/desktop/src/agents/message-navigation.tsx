@@ -1,5 +1,5 @@
 import { useContext, useEffect, useId, useRef, useState, type RefObject } from "react";
-import { List } from "lucide-react";
+import { TextSearch } from "lucide-react";
 import { Popover } from "radix-ui";
 import { CompactLayoutContext } from "@/components/compact-layout";
 import {
@@ -248,7 +248,8 @@ export function MessageNavigation({
               aria-label="Browse your messages"
               className="message-list-trigger"
             >
-              <List className="size-4" />
+              {/* The phone header's round buttons' icon size (.mobile-icon svg). */}
+              <TextSearch className="size-[20px]" />
             </button>
           </DialogTrigger>
           <DialogContent closeLabel="Close messages" className="overflow-hidden">
@@ -270,7 +271,8 @@ export function MessageNavigation({
               aria-label="Browse your messages"
               className="message-list-trigger"
             >
-              <List className="size-4" />
+              {/* Large enough that the magnifier reads; the box stays 36px. */}
+              <TextSearch className="size-[16px]" />
             </Popover.Trigger>
           </ControlTooltip>
           {/*

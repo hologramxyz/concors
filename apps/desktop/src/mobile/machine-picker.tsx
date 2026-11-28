@@ -60,7 +60,7 @@ export function MobileMachinePicker({
                     trailing: (
                       <span
                         aria-hidden="true"
-                        className={`size-1.5 rounded-full ${availability === "connectable" ? "bg-emerald-500" : availability === "provisioning" ? "bg-amber-500" : "bg-muted-foreground/50"}`}
+                        className={`size-[5px] rounded-full ${availability === "connectable" ? "bg-emerald-500" : availability === "provisioning" ? "bg-amber-500" : "bg-muted-foreground/50"}`}
                       />
                     ),
                   }),

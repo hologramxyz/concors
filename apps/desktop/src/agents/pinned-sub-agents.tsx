@@ -5,6 +5,7 @@ import type { RunningSubAgent } from "./running-sub-agents";
 import { stepCount, subAgentLabel } from "./running-sub-agents";
 import type { SubAgentTarget } from "./sub-agent-context";
 import { useElapsed } from "./use-elapsed";
+import { quietSubAgentStep } from "./tool-label";
 
 /**
  * The sub-agents working right now, held above the composer so they stay in view however far the
@@ -92,8 +93,12 @@ function PinnedRow({
           </span>
           {current && (
             <span className="truncate text-xs text-muted-foreground">
-              {current.title}
-              {current.text ? ` ${current.text}` : ""}
+              {quietSubAgentStep(current) ?? (
+                <>
+                  {current.title}
+                  {current.text ? ` ${current.text}` : ""}
+                </>
+              )}
             </span>
           )}
         </span>

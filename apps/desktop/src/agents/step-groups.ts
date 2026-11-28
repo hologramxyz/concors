@@ -1,6 +1,6 @@
 import type { AgentItem } from "@concors/protocol";
 import type { TimelineEntry } from "./thinking";
-import { parseToolTitle } from "./tool-label";
+import { parseToolTitle, toolDisplayName } from "./tool-label";
 
 /**
  * A finished turn's quiet steps, folded into one summary line each run. A quiet step is a call
@@ -75,12 +75,20 @@ export function createdPaths(item: AgentItem): ReadonlySet<string> {
   );
 }
 
-/** "Allowed once" for a permission the user granted; nothing for one declined or cancelled. */
+/** The mark of a request the person turned down, which its step row reads as its verb. */
+export const DECLINED = "Declined";
+
+/**
+ * "Allowed once" for a permission the user granted, "Declined" for one they turned down (the
+ * daemon saves the Decline button's label, or "Dismissed"); nothing for a cancelled turn, which
+ * stays a line of its own.
+ */
 export function approvalMark(item: AgentItem): string | undefined {
   if (item.kind !== "system" || item.title !== "Permission") return undefined;
   const text = item.text.trim();
   const allow = /^Allow\s+(.+)$/i.exec(text);
   if (allow) return `Allowed ${allow[1]}`;
+  if (/^(Decline|Dismiss)/i.test(text)) return DECLINED;
   return /^(Approve|Apply)/i.test(text) ? "Approved" : undefined;
 }
 
@@ -138,6 +146,16 @@ export function liveStep(
   return view
     .flatMap((entry) => (entry.turnId === liveTurn ? (entry.group ?? [entry]) : []))
     .findLast((item) => item.status === "running" && stepKind(item) && !waiting.has(item.id));
+}
+
+/**
+ * The row the turn in progress's live line follows, or undefined when it follows the whole
+ * timeline. Only the timeline's last row can hold it: a run that a Supervisor notice cut off is
+ * marked live as well, and the line is shown once, after everything.
+ */
+export function liveLineRow(view: readonly TimelineEntry[]): string | undefined {
+  const last = view.at(-1);
+  return last?.live ? last.id : undefined;
 }
 
 /**
@@ -353,4 +371,27 @@ export function shellOutput(detail: string): string {
 export function commandLine(command: string): string {
   const [first = "", ...rest] = command.trim().split("\n");
   return rest.length ? `${first.trimEnd()} …` : first;
+}
+
+/** A command step's words beside its verb: "Ran a command", "Running a command". */
+const COMMAND_TARGET = "a command";
+
+/**
+ * What a step acted on: the file, the query, or the tool's name. A command reads "a command":
+ * someone scanning the chat needs to know one ran and how it ended, not its text, which the row
+ * shows once opened. A file is written as `short` writes it (see `useShortPath`).
+ */
+export function stepTarget(
+  item: AgentItem,
+  kind: StepKind,
+  short: (path: string) => string = (path) => path,
+): string {
+  if (kind === "command") return COMMAND_TARGET;
+  if (kind === "read" || kind === "edit" || kind === "create") {
+    const files = item.presentation?.files ?? [];
+    if (files.length > 1) return `${short(files[0]?.path ?? "")} and ${files.length - 1} more`;
+    return short(files[0]?.path ?? item.text);
+  }
+  if (kind === "tool") return toolDisplayName(item.title);
+  return item.text;
 }

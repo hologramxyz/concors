@@ -1132,6 +1132,36 @@ html[data-pane-resizing="row"] * {
 .tab-strip-fade[data-visible="true"] {
   opacity: 1;
 }
+/* A workspace icon's attention badge, cut out of whatever fills its row: the opaque surface behind
+   the row, with the row's own translucent fill laid over it as the selected tab's badge does. A row
+   sets both as it sets its fill. */
+.workspace-badge-surface {
+  background:
+    linear-gradient(var(--badge-overlay, transparent), var(--badge-overlay, transparent)),
+    var(--badge-base, var(--sidebar));
+  box-shadow:
+    0 0 0 1px var(--badge-overlay, transparent),
+    0 0 0 1px var(--badge-base, var(--sidebar));
+}
+/* The sidebar's workspace rows (sidebar-item.tsx), state for state: hovered, focused or with a
+   menu or card open, then selected, which keeps its full fill on hover and with its menu open. */
+[data-workspace-row]:where(
+  :hover,
+  :has(:focus-visible:not([data-pointer-focus])),
+  :has([aria-haspopup="menu"][aria-expanded="true"]),
+  :has([data-state="open"])
+) {
+  --badge-overlay: color-mix(in oklab, var(--sidebar-accent) 70%, transparent);
+}
+[data-workspace-row][data-selected] {
+  --badge-overlay: var(--sidebar-accent);
+}
+[data-workspace-row][data-selected]:where(
+    :has(:focus-visible:not([data-pointer-focus])),
+    :has([data-state="open"])
+  ) {
+  --badge-overlay: color-mix(in oklab, var(--sidebar-accent) 70%, transparent);
+}
 /* A status badge on the selected tab: opaque enough to cut into the logo, in the tab's exact color. */
 .tab-badge-surface {
   background: linear-gradient(var(--raised-fill), var(--raised-fill)), var(--background);

@@ -7,7 +7,6 @@ import {
   type WorkspaceProject,
   type WorkspaceTab,
 } from "@concors/protocol";
-import { TerminalConnectionContext } from "@/terminal/connection-context";
 import type { MobileTarget } from "@concors/client-core";
 import {
   RowMenuGroup,
@@ -28,11 +27,15 @@ import { FormDialog } from "@/workspace/form-dialog";
 import { Button } from "@/components/ui/button";
 import { paneProfiles } from "@/workspace/tab-profiles";
 import { useTerminalProfiles } from "@/terminal/profiles-context";
+import { TerminalConnectionContext } from "@/terminal/connection-context";
+import { useTerminalSessions } from "@/terminal/use-terminal-sessions";
+import { renameOperation, renameTarget } from "@/workspace/tab-rename";
+import { paneTitle, tabTitle } from "@/workspace/tab-title";
 import { useAgents } from "@/agents/context";
 import { chatName } from "@/agents/chat-actions";
 import { DeleteChatDialog, type ChatToDelete } from "@/agents/chat-limit";
 import { useChatMenu } from "./chat-menu-context";
-import { tabPanes, type PaneNode } from "./selection";
+import type { PaneNode } from "./selection";
 
 /** A menu item that opens a dialog of its own. */
 export type TabStep = "rename" | "close" | "delete";
@@ -90,22 +93,35 @@ export function WorkspaceActions({
   const [error, setError] = useState<string | null>(null);
   // Desktop's chat row actions, offered when its sidebar would offer them for this tab's chat.
   const menu = useChatMenu();
-  const chat = useAgents().find((agent) => agent.id === pane.sessionId);
+  const agents = useAgents();
+  const terminals = useTerminalSessions();
+  const chat = agents.find((agent) => agent.id === pane.sessionId);
   // The chat stays set while its dialog closes, so it can ease out under the same name.
   const [deleting, setDeleting] = useState<{ chat: ChatToDelete; open: boolean } | null>(() =>
     step === "delete" && chat ? { chat: { id: chat.id, name: chatName(chat) }, open: true } : null,
   );
   const onPin = menu?.pin(chat);
   const fork = menu?.fork(chat);
-  // A phone tab is one pane. Alone in its desktop tab, renaming it renames that tab, as desktop's
-  // tab strip does. One of a split tab's panes gets a name of its own instead, which its phone tab
-  // shows, so its siblings keep theirs; daemons too old to keep pane names cannot rename those.
+  // As desktop renames: a split tab's pane, or a tab nobody named, by its pane, so split siblings
+  // are never renamed together; a daemon without pane names can rename only a tab of one pane.
   const connection = useContext(TerminalConnectionContext);
-  const split = tabPanes(tab).length > 1;
-  const canRename =
-    !split ||
-    (connection?.state.status === "ready" &&
-      !!connection.state.daemon.capabilities?.includes(PANE_RENAME_CAPABILITY));
+  const canRenamePanes =
+    connection?.state.status === "ready" &&
+    !!connection.state.daemon.capabilities?.includes(PANE_RENAME_CAPABILITY);
+  const renaming = renameTarget(tab, pane, canRenamePanes);
+  const canRename = !!renaming;
+  /** What saving this name sends; null when it would change nothing. */
+  const renameTo = (value: string) =>
+    renaming &&
+    renameOperation(
+      project,
+      tab,
+      renaming,
+      value,
+      tabTitle(tab, agents, terminals),
+      agents,
+      terminals,
+    );
   const onDelete =
     menu?.canDelete && chat
       ? () => setDeleting({ chat: { id: chat.id, name: chatName(chat) }, open: true })
@@ -152,7 +168,7 @@ export function WorkspaceActions({
               immediate={!!onStep}
               onSelect={() => begin("rename")}
             >
-              Rename tab
+              Rename
             </RowMenuItem>
           )}
           {fork && (
@@ -233,27 +249,26 @@ export function WorkspaceActions({
           )
         }
       />
-      {rename && (
+      {rename && renaming && (
         <FormDialog
-          title="Rename tab"
+          title="Rename"
           description={<span className="sr-only">The name updates on every connected client.</span>}
           fields={[
-            { name: "name", label: "Tab name", value: split ? (pane.name ?? title) : tab.name },
+            {
+              name: "name",
+              label: "Name",
+              value:
+                renaming.kind === "pane" ? paneTitle(renaming.pane, agents, terminals) : tab.name,
+            },
           ]}
+          // An empty name would clear a pane's back to its automatic one; the phone asks for a name.
+          canSubmit={(values) => !!values["name"]?.trim() && !!renameTo(values["name"])}
           onClose={() => setRename(false)}
-          onSubmit={(values) =>
-            execute(
-              split
-                ? { kind: "pane.rename", ...target, name: values["name"] ?? "" }
-                : {
-                    kind: "tab.rename",
-                    projectId: project.id,
-                    expectedVersion: project.version,
-                    tabId: tab.id,
-                    name: values["name"] ?? "",
-                  },
-            ).then(() => onComplete?.())
-          }
+          onSubmit={async (values) => {
+            const operation = renameTo(values["name"] ?? "");
+            if (operation) await execute(operation);
+            onComplete?.();
+          }}
         />
       )}
       <Dialog

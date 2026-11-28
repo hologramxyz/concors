@@ -618,7 +618,12 @@ function MobileWorkspaceContent({
         }}
       >
         <AgentDraftScopeContext value={draftScope}>
-          <NotificationProvider connection={connection} onOpen={openAgent} inAppOnly cards={false}>
+          <NotificationProvider
+            connection={connection}
+            onOpen={openAgent}
+            inAppOnly
+            sidebar={false}
+          >
             <AgentsProvider connection={connection} onStarted={openAgent}>
               <ChatMenuProvider
                 canEdit={canEdit}

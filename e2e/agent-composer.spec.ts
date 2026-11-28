@@ -115,7 +115,9 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     // One live line says what the turn is on now, with the turn's time.
     const liveLine = page.getByRole("log").locator("[data-live-line]");
     await expect(liveLine).toHaveCount(1);
-    await expect(liveLine).toContainText("Running echo fixture");
+    // It says a command is running, not which: the command waits in its opened details.
+    await expect(liveLine).toContainText("Running a command");
+    await expect(liveLine).not.toContainText("echo fixture");
     // The edit it made is done, so it reads as a quiet row, as it will once the turn ends.
     const edited = page
       .getByRole("article", { name: "Tool call", exact: true })
@@ -147,14 +149,14 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     );
     await expect(page.getByLabel("Agent plan")).toContainText("Implement the change");
     const subAgent = page.getByLabel("Sub-agent activity");
-    // While it works, the row names its task and the step it is on.
+    // While it works, the row names its task and that it is running a command, not which.
     await expect(subAgent).toContainText("Check the test coverage");
-    await expect(subAgent.locator("[data-sub-agent-current]")).toContainText(
-      "pnpm test --coverage",
-    );
+    await expect(subAgent.locator("[data-sub-agent-current]")).toHaveText("Running a command");
     await subAgent.getByRole("button", { expanded: false }).click();
     const steps = subAgent.getByRole("list", { name: "Steps" });
     await expect(steps.getByRole("listitem")).toHaveCount(2);
+    // The command itself is in its opened list of steps.
+    await expect(steps).toContainText("pnpm test --coverage");
     await expect(steps.getByRole("listitem").first()).toHaveAttribute(
       "data-step-status",
       "completed",
@@ -181,7 +183,8 @@ test("agent controls, uploads, tool details, plans, sub-agents, dictation and qu
     );
     await page.emulateMedia({ reducedMotion: "no-preference" });
     // The live line opens to the running command's output as it streams.
-    await liveLine.getByRole("button", { name: /^Running echo fixture/ }).click();
+    await liveLine.getByRole("button", { name: /^Running a command/ }).click();
+    await expect(liveLine).toContainText("echo fixture");
     await expect(liveLine.locator(".agent-shimmer").first()).toHaveCSS(
       "animation-name",
       "agent-working-fade",

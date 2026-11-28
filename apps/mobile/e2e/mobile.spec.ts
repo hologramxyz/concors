@@ -527,8 +527,8 @@ test("flat tab changes use the authoritative workspace operations", async ({ pag
   await ui.getByRole("button", { name: "New chat", exact: true }).click();
   await expect(ui.getByRole("textbox", { name: "Message Codex" })).toBeEnabled();
   await workspaceActions(ui);
-  await ui.getByRole("menuitem", { name: "Rename tab" }).click();
-  await ui.getByRole("textbox", { name: "Tab name" }).fill("Second conversation");
+  await ui.getByRole("menuitem", { name: "Rename", exact: true }).click();
+  await ui.getByRole("textbox", { name: "Name", exact: true }).fill("Second conversation");
   await ui.getByRole("button", { name: "Save", exact: true }).click();
   await expect(currentTab(ui)).toContainText("Second conversation");
   await workspaceActions(ui);
@@ -1006,8 +1006,8 @@ test("flat tab actions configure and close inactive leaves without changing the 
   if (!selected) throw new Error("New tab was not selected");
   await tabActions(ui, activeTerminal);
   await expect(ui.getByRole("dialog", { name: "Mobile launch 2", exact: true })).toBeVisible();
-  // It shares a desktop tab with the demo's chat: Rename names this pane, nothing splits or moves.
-  await expect(ui.getByRole("menuitem", { name: "Rename tab", exact: true })).toBeVisible();
+  // One pane of a split tab can be renamed on its own, as desktop's Rename pane does.
+  await expect(ui.getByRole("menuitem", { name: "Rename", exact: true })).toHaveCount(1);
   await expect(ui.getByRole("menuitem", { name: /Add pane|Move tab|Split/ })).toHaveCount(0);
   await ui.getByRole("menuitemradio", { name: "OpenCode", exact: true }).click();
   await expect(picker).toHaveAttribute("data-value", selected);
@@ -1042,9 +1042,9 @@ test("a phone tab that shares its desktop tab renames itself, leaving its siblin
   const label = (value: string) => strip.locator(`[data-tab-id="${value}"]`);
   const chatLabel = await label(activeChat).innerText();
   await tabActions(ui, activeTerminal);
-  await ui.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
-  const dialog = ui.getByRole("dialog", { name: "Rename tab", exact: true });
-  await dialog.getByRole("textbox", { name: "Tab name", exact: true }).fill("Dev logs");
+  await ui.getByRole("menuitem", { name: "Rename", exact: true }).click();
+  const dialog = ui.getByRole("dialog", { name: "Rename", exact: true });
+  await dialog.getByRole("textbox", { name: "Name", exact: true }).fill("Dev logs");
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(label(activeTerminal)).toContainText("Dev logs");
@@ -1067,14 +1067,13 @@ test("tab menus pin, fork and delete chats with desktop's actions, and undo a de
   const chat = await picker.getAttribute("data-value");
   if (!chat) throw new Error("New chat was not selected");
 
-  // A terminal has no chat to pin, fork or delete. It shares a desktop tab with the demo's first
-  // chat, so renaming names this pane alone.
+  // A terminal has no chat to pin, fork or delete; as one pane of a split tab, it is renamed alone.
   await tabActions(ui, activeTerminal);
-  expect(await menuItems()).toEqual(["Rename tab", "Close tab…"]);
+  expect(await menuItems()).toEqual(["Rename", "Close tab…"]);
   await ui.locator('[role="menu"]').press("Escape");
 
   await tabActions(ui, chat);
-  expect(await menuItems()).toEqual(["Pin", "Rename tab", "Fork chat", "Close tab…", "Delete…"]);
+  expect(await menuItems()).toEqual(["Pin", "Rename", "Fork chat", "Close tab…", "Delete…"]);
   await ui.getByRole("menuitem", { name: "Pin", exact: true }).click();
   await tabActions(ui, chat);
   await expect(ui.getByRole("menuitem", { name: "Unpin", exact: true })).toBeVisible();
@@ -1110,7 +1109,7 @@ test("tab menus pin, fork and delete chats with desktop's actions, and undo a de
     .getByRole("dialog", { name: "Workspace sidebar" })
     .getByRole("button", { name: /^Actions for .*\(fork\)$/ })
     .click();
-  expect(await menuItems()).toEqual(["Pin", "Rename tab", "Fork chat", "Delete"]);
+  expect(await menuItems()).toEqual(["Pin", "Rename", "Fork chat", "Delete"]);
 });
 test("glass controls retain their shape and composer height animates with reduced-motion support", async ({
   page,
@@ -1753,8 +1752,9 @@ test("holding a strip tab opens its menu sheet, which a screen reader reaches to
   await hold(page, { x: held.x + held.width / 2, y: held.y + held.height / 2 });
   const sheet = ui.getByRole("dialog", { name: "Mobile launch 2", exact: true });
   await expect(sheet).toBeVisible();
-  // The row menu the Tabs sheet had: a terminal has no chat to pin, fork or delete.
-  expect(await menuItems()).toEqual(["Rename tab", "Close tab…"]);
+  // The row menu the Tabs sheet had: a terminal has no chat to pin, fork or delete, and as one
+  // pane of a split tab it is renamed alone.
+  expect(await menuItems()).toEqual(["Rename", "Close tab…"]);
   await expect(sheet.getByRole("group", { name: "Tab type" })).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("mobile-tab-long-press.png") });
   // Holding is not a tap: the shown tab stays the chat.

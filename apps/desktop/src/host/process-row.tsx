@@ -41,7 +41,7 @@ export function ResourceProcessRow({
           </span>
           <span
             aria-label={item.state}
-            className={`size-1.5 shrink-0 rounded-full ${item.state === "running" ? "bg-emerald-500" : "bg-muted-foreground/50"}`}
+            className={`size-[5px] shrink-0 rounded-full ${item.state === "running" ? "bg-emerald-500" : "bg-muted-foreground/50"}`}
           />
           <ChevronRight
             className="size-3 shrink-0 text-muted-foreground group-open/process:rotate-90"

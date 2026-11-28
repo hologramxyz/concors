@@ -125,13 +125,11 @@ it("names the workspace and tab, apart from the agent, so finished agents tell a
     expect.objectContaining({
       title: "Agent finished in Marketing",
       body: "Codex in Landing",
-      agent: "Codex",
-      place: { projectId: "project", workspace: "Marketing", tab: "Landing" },
     }),
   );
 });
 
-it("shows no card or banner for a session in view elsewhere, though its sound plays", async () => {
+it("shows no banner for a session in view elsewhere, though its sound plays", async () => {
   const { sink, engine } = setup();
   sink.listed = vi.fn(() => true);
   engine.observe(agent("first", "needs_input"), false, place("Project"));

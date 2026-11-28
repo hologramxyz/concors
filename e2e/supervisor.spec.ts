@@ -7,6 +7,7 @@ import { chooseProvider } from "./support/agents.ts";
 import { mockDictation } from "./support/dictation.ts";
 import { reportNonMac } from "./support/platform.ts";
 import { seedProject } from "./support/projects.ts";
+import { seedSupervisorWorkspaces } from "./support/supervisor-fixture.ts";
 
 test("Supervisor uses the unified chat and retains its selected harness after navigation and reload", async ({
   page,
@@ -324,9 +325,13 @@ test("a notification from the Supervisor names it as the place, and opens it", a
     );
     expect(result.outcome.status).toBe("ok");
     await expect.poll(titles).toEqual(["Agent finished in Supervisor"]);
-    const card = page.getByRole("complementary", { name: "Agent notifications" });
-    await expect(card.locator("[data-notice-place]")).toHaveText("Supervisor");
-    await card.getByText("Open conversation", { exact: true }).click();
+    // No card in the app: the banner opens the chat.
+    await expect(page.getByRole("complementary", { name: "Agent notifications" })).toHaveCount(0);
+    await page.evaluate(() =>
+      (
+        Notification as unknown as { records: { onclick: (() => void) | null }[] }
+      ).records[0]?.onclick?.(),
+    );
     await expect(supervisor.getByRole("log")).toContainText("report back when you are done");
     await expect
       .poll(() => control.agents.find((agent) => agent.id === sessionId)?.attention?.seen)
@@ -334,5 +339,167 @@ test("a notification from the Supervisor names it as the place, and opens it", a
   } finally {
     off();
     control.disconnect();
+  }
+});
+
+test("the Supervisor's own tool calls say what they did to which chat, never its ID", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const cleanup = await seedSupervisorWorkspaces("ws://127.0.0.1:7429/ws", { delegate: false });
+  try {
+    await signedIn(page, "Simone", undefined, { supervisorLanding: true });
+    await page.goto("/");
+    const supervisor = page.getByTestId("supervisor-page");
+    await expect(supervisor).toBeVisible();
+    await chooseProvider(page);
+    await supervisor
+      .getByRole("textbox", { name: "Message Codex", exact: true })
+      .fill("primitive-control-run");
+    await page.getByRole("button", { name: "Send message", exact: true }).click();
+    await expect(supervisor.getByRole("log")).toContainText("Both chats are on it.");
+    const run = supervisor.getByRole("article", { name: "Tool calls", exact: true }).last();
+    await expect(run).toContainText("Used 7 tools");
+    const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-/;
+    await expect(run).not.toContainText(uuid);
+    await run.getByRole("button").first().click();
+    // The chats are named from the Supervisor's mention list.
+    for (const line of [
+      /Searched chats for\s*touch targets/,
+      /Sent instructions to\s*HUD polish/,
+      /Started\s*Level QA/,
+      /Steered\s*Game QA/,
+      /Waited on\s*Game QA and HUD polish/,
+      /Checked\s*agents and permissions/,
+      /Read\s*Release editor/,
+    ])
+      await expect(run).toContainText(line);
+    await expect(run).not.toContainText("Concors control");
+    await expect(run).not.toContainText(uuid);
+    // Opening a call still shows everything it was given.
+    const send = run.getByRole("article", { name: "Tool call", exact: true }).nth(1);
+    await send.getByRole("button").first().click();
+    await expect(send).toContainText("Check touch targets on the pause menu too");
+    await expect(send).toContainText(uuid);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("a finished chat's reply folds to two lines in Supervisor, and opens in place", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  // Supervisor sends the fixture's chats their work, and so watches them from then on.
+  const cleanup = await seedSupervisorWorkspaces("ws://127.0.0.1:7429/ws");
+  const control = new DaemonConnection({
+    endpoint: describeDaemonEndpoint("ws://127.0.0.1:7429/ws"),
+    client: { kind: "test", name: "finished rows", version: "0.0.0" },
+  });
+  const off = control.subscribeWorkspace(() => undefined);
+  try {
+    await control.connect();
+    await expect.poll(() => control.workspace).not.toBeNull();
+    await signedIn(page, undefined, undefined, { supervisorLanding: true });
+    await page.goto("/");
+    const sent = await control.requestAgent(
+      { kind: "send", sessionId: cleanup.notes, text: "long-reply please" },
+      crypto.randomUUID(),
+    );
+    expect(sent.outcome.status).toBe("ok");
+    const steps = Array.from({ length: 10 }, (_, i) => `${i + 1}. Checked step ${i + 1}.`);
+    const reply = `Release notes reviewed:\n\n${steps.join("\n")}\n\nAll ten steps pass.`;
+    const row = page
+      .getByRole("article", { name: "Release editor finished" })
+      .filter({ hasText: "Release notes reviewed" });
+    const quote = row.locator("[data-finished-quote]");
+    const toggle = row.getByRole("button", { name: "Finished", exact: true });
+    // Folded: two lines of the reply's text, its list read as lines, ending where it is cut.
+    await expect(quote).toContainText("Release notes reviewed:");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(row.getByRole("list")).toHaveCount(0);
+    const lines = await quote.evaluate((el) => {
+      const style = getComputedStyle(el);
+      const line = parseFloat(getComputedStyle(el.querySelector("p") ?? el).lineHeight);
+      const inner =
+        el.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      return Math.round(inner / line);
+    });
+    expect(lines).toBe(2);
+    await page.screenshot({ path: test.info().outputPath("finished-row-folded.png") });
+    // Its text opens the reply in place, as written; the chevron's toggle closes it again.
+    await quote.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(row.getByRole("list")).toBeVisible();
+    await expect(row).toContainText("All ten steps pass.");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(row.getByRole("list")).toHaveCount(0);
+    // Copy gives the whole reply, folded or not.
+    await row.getByRole("button", { name: "Copy quote", exact: true }).click();
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(reply);
+  } finally {
+    off();
+    control.disconnect();
+    await cleanup();
+  }
+});
+
+test("the Supervisor's chat column never overflows, whatever the live line says", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const cleanup = await seedSupervisorWorkspaces("ws://127.0.0.1:7429/ws", { delegate: false });
+  const supervisor = page.getByTestId("supervisor-page");
+  const interrupt = supervisor.getByRole("button", { name: "Interrupt agent", exact: true });
+  try {
+    await page.setViewportSize({ width: 1262, height: 800 });
+    await signedIn(page, "Simone", undefined, { supervisorLanding: true });
+    await page.goto("/");
+    await expect(supervisor).toBeVisible();
+    const composer = supervisor.getByRole("textbox", { name: "Message Codex", exact: true });
+    const log = supervisor.getByRole("log");
+    const worked = log.getByText(/^Worked for/);
+    let turns = await worked.count();
+    // Long enough that the list scrolls, with a user bubble that holds a mention.
+    for (const text of ["long-reply one", "long-reply two", "long-reply three"]) {
+      await composer.fill(text);
+      await composer.press("Enter");
+      await expect(worked).toHaveCount(++turns, { timeout: 15_000 });
+    }
+    await composer.fill("Ask @ga");
+    await page
+      .getByRole("listbox", { name: "Mention" })
+      .getByRole("option", { name: /Game QA/ })
+      .click();
+    await composer.pressSequentially("to rerun the tests");
+    await composer.press("Enter");
+    await expect(worked).toHaveCount(++turns, { timeout: 15_000 });
+    await expect(log.locator("[data-mention]").last()).toBeVisible();
+    expect(await log.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    // The column holds the list and the composer, and its own scrollbar is a real one: any
+    // overflow (a hidden screen-reader copy left below the list, say) narrows both by its width.
+    const column = supervisor.locator(".agent-conversation");
+    const overflow = () => column.evaluate((el) => el.scrollHeight - el.clientHeight);
+    expect(await overflow()).toBe(0);
+    const liveLine = log.locator("[data-live-line]");
+    // The voice line: the chat's own words while the turn has no step to name.
+    await composer.fill("hold the voice line");
+    await composer.press("Enter");
+    await expect(liveLine).toContainText(/\w…/);
+    await expect(liveLine).not.toContainText("Running");
+    expect(await overflow()).toBe(0);
+    await interrupt.click();
+    await expect(liveLine).toHaveCount(0);
+    // The step line: a command running.
+    await composer.fill("rich hold");
+    await composer.press("Enter");
+    await expect(liveLine).toContainText("Running a command");
+    expect(await overflow()).toBe(0);
+  } finally {
+    // The Supervisor outlives each spec's cleanup; a turn left holding would refuse the next one.
+    if (await interrupt.count()) await interrupt.click();
+    await cleanup();
   }
 });

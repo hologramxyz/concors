@@ -11,19 +11,21 @@ import { ChatPane } from "@/agents/chat";
 import { AgentStartedContext } from "@/agents/context";
 import { Button } from "@/components/ui/button";
 import { WorkspaceFileLinks } from "@/files/provider";
+import { WorkspaceImageContext, useWorkspaceImages } from "@/workspace/use-project-icons";
 import { SessionLinkContext } from "./session-link";
 import { AgentDraftScopeContext, useAgentDraft } from "@/agents/draft";
 import { MAX_SUPERVISOR_REFERENCES, referenceLabel } from "./reference-text";
 import { useAgents } from "@/agents/context";
 import { SupervisorOverview } from "./overview";
+import { closedChatIds } from "@/agents/closed-chats";
 import {
+  SupervisorClosedReferences,
   SupervisorReferences,
   supervisorAgentName,
   supervisorReferences,
 } from "./reference-context";
 import { supervisorPane } from "./pane";
-import { approvalParts } from "@/agents/approval-summary";
-import { shortPath } from "@/agents/short-path";
+import { askQuestion } from "./ask-question";
 import { useHomePath } from "@/workspace/home-path";
 
 /** The ordinary unified chat, including its provider picker and native mobile composer. */
@@ -46,12 +48,18 @@ export function SupervisorPage({
   const projects = [...(workspace?.projects ?? []), ...(workspace?.closedProjects ?? [])];
   const names = new Map(projects.map((project) => [project.id, project.name]));
   const agents = useAgents();
+  // Supervisor's rows name a chat's workspace by the sidebar's image for it.
+  const workspaceImages = useWorkspaceImages(workspace);
   const projectList = workspace?.projects,
     closedList = workspace?.closedProjects;
   // Kept stable between renders, so the composer's mention menu does not re-render with them.
   const references = useMemo(
     () => supervisorReferences({ projects: projectList ?? [], closedProjects: closedList }, agents),
     [projectList, closedList, agents],
+  );
+  const closedReferences = useMemo(
+    () => closedChatIds({ projects: projectList ?? [] }, agents),
+    [projectList, agents],
   );
   const connection = useContext(TerminalConnectionContext);
   const compact = useContext(CompactLayoutContext);
@@ -105,19 +113,10 @@ export function SupervisorPage({
         .slice(0, MAX_SUPERVISOR_REFERENCES - 1),
       reference,
     ]);
-    // The tool and its file in plain words ("Edit src/a.ts"), never the summary's separator; the
-    // file as Overview writes it, from the session's folder, so a long path is not cut short.
-    const { lead, tool, target, path } = approvalParts(pending);
-    const file = (value: string) => {
-      const relative = shortPath(value, [worker.directory], null);
-      return relative === value ? home(value) : relative;
-    };
-    const action = (
-      tool && target ? `${tool} ${path ? file(target) : target}` : lead.split("\n")[0]
-    )?.slice(0, 120);
-    const question = action
-      ? `Should I approve @${label}’s request “${action}”?`
-      : `What should I do about @${label}’s pending request?`;
+    // The tool and its file in plain words ("Edit src/a.ts"), never the summary's separator.
+    const workspaceRoot = projects.find((project) => project.id === worker.projectId)?.directory;
+    const roots = workspaceRoot ? [worker.directory, workspaceRoot] : [worker.directory];
+    const question = askQuestion(label, pending, roots, home);
     draft.setDraft((text) => (text.trim() ? `${text.trimEnd()}\n\n${question}` : question));
   };
   // The phone app's native field has no textarea here; it is focused natively.
@@ -130,62 +129,66 @@ export function SupervisorPage({
   return (
     <AgentStartedContext value={undefined}>
       <SessionLinkContext value={onOpenAgent}>
-        <div
-          className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-          data-testid="supervisor-page"
-        >
-          {error ? (
-            <div role="alert" className="p-6 text-sm text-destructive">
-              {error}
-              <Button variant="outline" className="ml-3" onClick={() => setRetry((n) => n + 1)}>
-                Retry
-              </Button>
-            </div>
-          ) : !supported && connected ? (
-            <p className="p-6 text-sm text-muted-foreground">
-              Update the daemon on this machine to use Supervisor.
-            </p>
-          ) : project && tab && pane ? (
-            // A chat's keys (Escape stops its turn, the dictation shortcut) act only where focus
-            // is inside its pane, which the workspace marks with this attribute; so does this page.
-            <div className="flex min-h-0 min-w-0 flex-1">
-              <div data-pane-id={pane.id} className="flex min-h-0 min-w-0 flex-1 flex-col">
-                <SupervisorReferences value={references}>
-                  <WorkspaceFileLinks
-                    projects={workspace?.projects ?? []}
-                    onShowProject={onOpenProject}
-                  >
-                    <ChatPane
-                      key={project.id}
-                      project={project}
-                      tab={tab}
-                      node={pane}
-                      canEdit={connected}
-                      // Keep the normal desktop new-chat layout and the phone's bottom composer.
-                      start={compact ? undefined : <></>}
-                    />
-                  </WorkspaceFileLinks>
-                </SupervisorReferences>
+        <WorkspaceImageContext value={workspaceImages}>
+          <div
+            className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+            data-testid="supervisor-page"
+          >
+            {error ? (
+              <div role="alert" className="p-6 text-sm text-destructive">
+                {error}
+                <Button variant="outline" className="ml-3" onClick={() => setRetry((n) => n + 1)}>
+                  Retry
+                </Button>
               </div>
-              {overviewOpen && (
-                <SupervisorOverview
-                  workspace={workspace}
-                  supervisorId={supervisorId}
-                  canAsk={canAsk}
-                  onAsk={ask}
-                  focusComposer={focusComposer}
-                  compact={compact}
-                  onClose={onCloseOverview}
-                  onOpenAgent={onOpenAgent}
-                />
-              )}
-            </div>
-          ) : (
-            <p role="status" className="p-6 text-sm text-muted-foreground">
-              {connected ? "Opening Supervisor…" : "Connect to this machine to use Supervisor."}
-            </p>
-          )}
-        </div>
+            ) : !supported && connected ? (
+              <p className="p-6 text-sm text-muted-foreground">
+                Update the daemon on this machine to use Supervisor.
+              </p>
+            ) : project && tab && pane ? (
+              // A chat's keys (Escape stops its turn, the dictation shortcut) act only where focus
+              // is inside its pane, which the workspace marks with this attribute; so does this page.
+              <div className="flex min-h-0 min-w-0 flex-1">
+                <div data-pane-id={pane.id} className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <SupervisorReferences value={references}>
+                    <SupervisorClosedReferences value={closedReferences}>
+                      <WorkspaceFileLinks
+                        projects={workspace?.projects ?? []}
+                        onShowProject={onOpenProject}
+                      >
+                        <ChatPane
+                          key={project.id}
+                          project={project}
+                          tab={tab}
+                          node={pane}
+                          canEdit={connected}
+                          // Keep the normal desktop new-chat layout and the phone's bottom composer.
+                          start={compact ? undefined : <></>}
+                        />
+                      </WorkspaceFileLinks>
+                    </SupervisorClosedReferences>
+                  </SupervisorReferences>
+                </div>
+                {overviewOpen && (
+                  <SupervisorOverview
+                    workspace={workspace}
+                    supervisorId={supervisorId}
+                    canAsk={canAsk}
+                    onAsk={ask}
+                    focusComposer={focusComposer}
+                    compact={compact}
+                    onClose={onCloseOverview}
+                    onOpenAgent={onOpenAgent}
+                  />
+                )}
+              </div>
+            ) : (
+              <p role="status" className="p-6 text-sm text-muted-foreground">
+                {connected ? "Opening Supervisor…" : "Connect to this machine to use Supervisor."}
+              </p>
+            )}
+          </div>
+        </WorkspaceImageContext>
       </SessionLinkContext>
     </AgentStartedContext>
   );

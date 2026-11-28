@@ -26,6 +26,9 @@ appId: xyz.hologram.concors.preview
     id: native-composer-mic
 - assertVisible:
     id: native-composer-context
+# Only the Supervisor chat has names to mention; the demo's chat has no "@".
+- assertNotVisible:
+    id: native-composer-at
 - takeScreenshot: apps/mobile/test-results/native/composer-expanded
 - tapOn:
     id: native-composer-model

@@ -1,11 +1,22 @@
-import { expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import type {
   AgentInfo,
   AgentPending,
   SupervisorBrief,
   SupervisorDelivery,
 } from "@concors/protocol";
-import { DONE_LIMIT, overviewRows, workspaceAgents } from "./overview-model";
+import {
+  DONE_LIMIT,
+  DONE_SHOWN,
+  doneInView,
+  earlierFold,
+  needsYou,
+  overviewRows,
+  unseenDone,
+  workspaceAgents,
+  type OverviewRow,
+} from "./overview-model";
+import { markFailureSeen } from "@/agents/seen-updates";
 
 let next = 0;
 const id = () => `00000000-0000-4000-8000-${String(++next).padStart(12, "0")}`;
@@ -126,6 +137,78 @@ it("says what a failure was until it is seen, then lists it under Done", () => {
   ).toMatchObject({ group: "Done", task: "Write docs" });
 });
 
+describe("a paused queue with instructions waiting", () => {
+  const waiting = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({
+      id: id(),
+      text: `Step ${i}`,
+      attachments: [],
+      queuedAt: "2026-11-18T10:00:00.000Z",
+    }));
+  const paused = (patch: Partial<AgentInfo> = {}) =>
+    agent("Game QA", {
+      status: "idle",
+      turnId: "turn-1",
+      queuePaused: true,
+      queue: waiting(2),
+      ...patch,
+    });
+
+  it("needs you, saying how many instructions wait, and counts on the Overview button", () => {
+    const qa = paused();
+    expect(overviewRows([qa], [delivered(qa, "Run QA", "done")])[0]).toMatchObject({
+      group: "Needs you",
+      needs: { action: "Queue paused", text: "2 instructions waiting" },
+      queued: 2,
+    });
+    expect(needsYou(qa)).toBe(true);
+  });
+
+  it("needs you while the chat still works, rather than sitting under In progress", () => {
+    const qa = paused({ status: "working" });
+    expect(overviewRows([qa], [])[0]?.group).toBe("Needs you");
+  });
+
+  it("shows an open request instead, in one row", () => {
+    const qa = paused({ status: "needs_input", pending: [approval] });
+    const rows = overviewRows([qa], []);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      group: "Needs you",
+      needs: { action: "Approve", text: "pnpm test" },
+    });
+    expect(needsYou(qa)).toBe(true);
+  });
+
+  it("names the paused queue once its chat's failure is seen", () => {
+    const qa = paused({
+      status: "failed",
+      error: "Provider exited",
+      updatedAt: "2026-11-18T11:00:00.000Z",
+    });
+    expect(overviewRows([qa], [])[0]?.needs?.action).toBe("Failed");
+    markFailureSeen(qa);
+    expect(overviewRows([qa], [])[0]).toMatchObject({
+      group: "Needs you",
+      needs: { action: "Queue paused", text: "2 instructions waiting" },
+    });
+  });
+
+  it.each([
+    ["resumed", { queuePaused: false }, "In progress"],
+    ["emptied", { queue: [] }, "Done"],
+    ["resumed while working", { queuePaused: false, status: "working" as const }, "In progress"],
+  ])("goes back where it belongs once %s", (_, patch, group) => {
+    const qa = paused(patch);
+    expect(overviewRows([qa], [delivered(qa, "Run QA", "done")])[0]?.group).toBe(group);
+    expect(needsYou(qa)).toBe(false);
+  });
+
+  it("leaves the Supervisor itself out of the count", () => {
+    expect(needsYou(paused({ supervisor: true } as Partial<AgentInfo>))).toBe(false);
+  });
+});
+
 it("lists open sessions that replied, with the prompt of a session nobody delegated", () => {
   const open = agent("Docs", { status: "done", turnId: "turn-9" });
   const fresh = agent("Empty", { turnId: null });
@@ -174,6 +257,50 @@ it("keeps only the most recent finished sessions, and every one not yet opened",
   );
   expect(withUnread).toHaveLength(DONE_LIMIT + 1);
   expect(withUnread.at(-1)?.agent.name).toBe("Unread");
+});
+
+describe("Done in view", () => {
+  // Nine finishes, newest first as overviewRows orders them; two of the older ones never opened.
+  const unseen = (at: string) => ({
+    status: "done" as const,
+    attention: { id: id(), kind: "done" as const, seen: false, createdAt: at },
+  });
+  const finished = Array.from({ length: 9 }, (_, index) => {
+    const at = `2026-11-18T10:${String(index).padStart(2, "0")}:00.000Z`;
+    return agent(`Agent ${index}`, { updatedAt: at, ...(index < 2 ? unseen(at) : {}) });
+  });
+  const rows = overviewRows(
+    finished,
+    finished.map((item) => delivered(item, "Task", "done")),
+  );
+  const names = (list: readonly { agent: AgentInfo }[]) => list.map((row) => row.agent.name);
+
+  it("shows the five most recent, in order, and every finish not yet opened", () => {
+    expect(rows.every((row) => row.group === "Done")).toBe(true);
+    const { shown, hidden } = doneInView(rows, false);
+    expect(DONE_SHOWN).toBe(5);
+    expect(names(shown)).toEqual([
+      "Agent 8",
+      "Agent 7",
+      "Agent 6",
+      "Agent 5",
+      "Agent 4",
+      "Agent 1",
+      "Agent 0",
+    ]);
+    expect(shown.filter(unseenDone).map((row) => row.agent.name)).toEqual(["Agent 1", "Agent 0"]);
+    expect(hidden).toBe(2);
+  });
+
+  it("shows every row once expanded, and folds back to the same rows", () => {
+    expect(doneInView(rows, true)).toEqual({ shown: rows, hidden: 0 });
+    expect(names(doneInView(rows, false).shown)).toHaveLength(7);
+  });
+
+  it("hides nothing when there are five or fewer", () => {
+    expect(doneInView(rows.slice(0, 5), false)).toEqual({ shown: rows.slice(0, 5), hidden: 0 });
+    expect(doneInView([], false)).toEqual({ shown: [], hidden: 0 });
+  });
 });
 
 it("names a file approval by its verb and the file inside the workspace, a command as code", () => {
@@ -259,4 +386,112 @@ it("folds seen finishes from before the last day under Earlier, never news or wo
     ["Unread", "Done", false],
     ["Blocked", "Needs you", false],
   ]);
+});
+
+describe("Earlier fold", () => {
+  const now = Date.parse("2026-11-20T12:00:00.000Z");
+  const finish = (name: string, updatedAt: string) => agent(name, { turnId: name, updatedAt });
+  const rows = (agents: AgentInfo[]) =>
+    overviewRows(agents, [], new Set(agents.map((item) => item.id)), null, now);
+  const names = (list: readonly OverviewRow[]) => list.map((row) => row.agent.name);
+  // Seven seen finishes, all from past days.
+  const old = Array.from({ length: 7 }, (_, index) =>
+    finish(`Old ${index}`, `2026-11-1${index}T09:00:00.000Z`),
+  );
+
+  it("lists past days' finishes directly when none is from today", () => {
+    const done = rows(old);
+    expect(done.every((row) => row.group === "Done" && row.earlier)).toBe(true);
+    const { listed, earlier } = earlierFold(done);
+    expect(earlier).toEqual([]);
+    expect(names(listed)).toEqual(["Old 6", "Old 5", "Old 4", "Old 3", "Old 2", "Old 1", "Old 0"]);
+    // The five most recent, the rest behind "Show all".
+    expect(doneInView(listed, false)).toMatchObject({ hidden: 2 });
+    expect(names(doneInView(listed, false).shown)).toEqual(names(listed.slice(0, 5)));
+  });
+
+  it("keeps them under Earlier beside a finish from today", () => {
+    const today = finish("Today", "2026-11-20T09:00:00.000Z");
+    const { listed, earlier } = earlierFold(rows([today, ...old]));
+    expect(names(listed)).toEqual(["Today"]);
+    expect(earlier).toHaveLength(7);
+  });
+
+  it("lists nothing when the group is empty", () => {
+    expect(earlierFold([])).toEqual({ listed: [], earlier: [] });
+  });
+});
+
+describe("closed chats", () => {
+  it("leaves out closed finishes and work in progress unless they need you or Supervisor sent them work", () => {
+    // Each finish is one nobody has opened, which would otherwise keep its dot.
+    const fresh = () => ({
+      status: "done" as const,
+      attention: {
+        id: id(),
+        kind: "done" as const,
+        seen: false,
+        createdAt: "2026-11-18T10:00:00.000Z",
+      },
+    });
+    const finished = agent("Closed finish", { ...fresh(), turnId: "turn-1" });
+    const working = agent("Closed and working", { status: "working", turnId: "turn-2" });
+    const blocked = agent("Closed approval", {
+      status: "needs_input",
+      turnId: "turn-3",
+      pending: [approval],
+    });
+    const sent = agent("Closed but sent work", { ...fresh(), turnId: "turn-4" });
+    const open = agent("Open finish", { ...fresh(), turnId: "turn-5" });
+    const all = [finished, working, blocked, sent, open];
+    const closed = new Set([finished.id, working.id, blocked.id, sent.id]);
+    const rows = overviewRows(
+      all,
+      [delivered(sent, "Fix the build", "done")],
+      new Set([open.id]),
+      null,
+      Date.now(),
+      closed,
+    );
+    const groups = Object.fromEntries(rows.map((row) => [row.agent.name, row.group]));
+    expect(groups).toEqual({
+      "Closed approval": "Needs you",
+      "Closed but sent work": "Done",
+      "Open finish": "Done",
+    });
+    // What the Overview button counts and dots is what the groups list.
+    expect(rows.filter((row) => row.group === "Needs you")).toHaveLength(1);
+    expect(rows.filter(unseenDone).map((row) => row.agent.name)).toEqual([
+      "Closed but sent work",
+      "Open finish",
+    ]);
+    // Open, the same finish is back.
+    expect(overviewRows(all, [], new Set(), null, Date.now(), new Set())).toHaveLength(all.length);
+  });
+
+  it("counts Done's latest five among what is left once closed chats are out", () => {
+    const finishes = Array.from({ length: 8 }, (_, index) =>
+      agent(`Agent ${index}`, {
+        turnId: `turn-${index}`,
+        updatedAt: new Date(Date.UTC(2026, 10, 18, 10, index)).toISOString(),
+      }),
+    );
+    const closed = new Set(finishes.slice(5).map((row) => row.id));
+    const rows = overviewRows(
+      finishes,
+      [],
+      new Set(finishes.map((row) => row.id)),
+      null,
+      Date.parse("2026-11-18T11:00:00.000Z"),
+      closed,
+    );
+    expect(doneInView(rows, false)).toMatchObject({ hidden: 0 });
+    expect(rows.map((row) => row.agent.name)).toEqual([
+      "Agent 4",
+      "Agent 3",
+      "Agent 2",
+      "Agent 1",
+      "Agent 0",
+    ]);
+  });
 });

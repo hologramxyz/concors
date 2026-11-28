@@ -98,6 +98,7 @@ const symbols = {
   mic: "mic",
   machine: "server.rack",
   account: "person.crop.circle",
+  at: "at",
 } as const;
 const providerImages = {
   model: require("../../assets/codex.png"),
@@ -497,7 +498,13 @@ function Control({
         ) : icon === "pi" ? (
           <Text modifiers={[font({ size: 20 })]}>π</Text>
         ) : (
-          <Image systemName={symbols[icon]} size={18} />
+          <Image
+            systemName={symbols[icon]}
+            size={18}
+            // "at" fills its box where "plus" and the sliders leave a margin: at 14pt it stands as
+            // tall as they do (about 14.5pt), and semibold keeps its stroke as heavy as theirs.
+            modifiers={icon === "at" ? [font({ size: 14, weight: "semibold" })] : undefined}
+          />
         )}
       </ControlFace>
     </Button>
@@ -545,7 +552,9 @@ function Composer({
   const input = useRef<TextInput>(null);
   const sequence = useRef(content.editAck);
   const [draft, setDraft] = useState(content.draft);
-  const [focused, setFocused] = useState(false);
+  // Back from the Mention drawer, which hid it: open as it was, so it does not collapse first.
+  const [focused, setFocused] = useState(content.refocus !== undefined);
+  const caret = useRef(content.draft.length);
   const [textHeight, setTextHeight] = useState(40);
   const [picking, setPicking] = useState(false);
   const presenting = useRef(false);
@@ -565,6 +574,16 @@ function Composer({
       reconcileNativeDraft(value, sequence.current, content.draft, content.editAck),
     );
   }, [content.draft, content.editAck]);
+  // The web side wrote the draft, with any chosen name in it, before asking for this. Focus brings
+  // the keyboard back; the caret is placed once the field holds that draft.
+  useEffect(() => {
+    if (content.refocus === undefined) return;
+    const at = content.refocus;
+    presenting.current = false;
+    input.current?.focus();
+    const frame = requestAnimationFrame(() => input.current?.setSelection(at, at));
+    return () => cancelAnimationFrame(frame);
+  }, [content.refocus]);
   const expanded = focused;
   // Send keeps an even 8pt to the right and bottom edges, as on the phone web build. Liquid Glass
   // draws its edge 3pt inside its frame, so 8pt there takes 11pt of padding.
@@ -803,6 +822,9 @@ function Composer({
           expanded ? { height: height - toolbarHeight } : styles.collapsedInput,
         ]}
         onContentSizeChange={(event) => setTextHeight(event.nativeEvent.contentSize.height)}
+        onSelectionChange={(event) => {
+          caret.current = event.nativeEvent.selection.end;
+        }}
         onChangeText={(text) => {
           setDraft(text);
           emit({ kind: "text", text, sequence: ++sequence.current });
@@ -839,6 +861,25 @@ function Composer({
                 onSelect={(from, value) => emit({ kind: "press", control: from, value })}
               />
             ))}
+          {content.mention ? (
+            <Control
+              icon="at"
+              corners={corners}
+              label="Mention"
+              dark={dark}
+              blocked={!content.editable || picking}
+              onPress={() => {
+                // As for +: the drawer takes the keyboard, which must not collapse the field.
+                onPresent(true);
+                emit({
+                  kind: "press",
+                  control: "mention",
+                  text: draft,
+                  value: String(Math.min(caret.current, draft.length)),
+                });
+              }}
+            />
+          ) : null}
           <View style={styles.spacer} />
           {content.usage ? (
             <ContextControl

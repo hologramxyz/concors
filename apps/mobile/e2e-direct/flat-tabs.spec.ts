@@ -194,12 +194,19 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     expect(layout().slice(0, 2)).toEqual(originalLayout);
     await expect(picker).toHaveAttribute("data-value", `${added.id}:${added.root}`);
     await actions(`${added.id}:${added.root}`);
-    await ui.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
-    await ui.getByLabel("Tab name", { exact: true }).fill("Mobile review");
+    await ui.getByRole("menuitem", { name: "Rename", exact: true }).click();
+    await ui.getByLabel("Name", { exact: true }).fill("Mobile review");
     await ui.getByRole("button", { name: "Save", exact: true }).click();
-    await expect
-      .poll(() => project().tabs.find((tab) => tab.id === added.id)?.name)
-      .toBe("Mobile review");
+    // As desktop's sidebar does, a tab nobody named is renamed by its pane, and keeps its own name.
+    const paneName = (tabId: string, paneId: string) => {
+      const node = project()
+        .tabs.find((tab) => tab.id === tabId)
+        ?.nodes.find((node) => node.id === paneId);
+      return node?.kind === "pane" ? node.name : null;
+    };
+    await expect.poll(() => paneName(added.id, added.root)).toBe("Mobile review");
+    expect(project().tabs.find((tab) => tab.id === added.id)?.name).toBe("Tab 3");
+    await expect(tab(`${added.id}:${added.root}`)).toContainText("Mobile review");
     // Renaming does not change the tab/pane identity shared with desktop.
     await expect(picker).toHaveAttribute("data-value", `${added.id}:${added.root}`);
     await tab(`${tabId}:${paneId}`).click();
@@ -209,8 +216,8 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     // panes keep their names.
     const splitName = splitTab().name;
     await actions(`${tabId}:${second}`);
-    await ui.getByRole("menuitem", { name: "Rename tab", exact: true }).click();
-    await ui.getByLabel("Tab name", { exact: true }).fill("Second look");
+    await ui.getByRole("menuitem", { name: "Rename", exact: true }).click();
+    await ui.getByLabel("Name", { exact: true }).fill("Second look");
     await ui.getByRole("button", { name: "Save", exact: true }).click();
     await expect
       .poll(() => {
@@ -223,6 +230,15 @@ test("flat mobile tabs stay synced with desktop nested splits without flattening
     await expect(picker).toHaveAttribute("data-value", `${tabId}:${paneId}`);
 
     // An inactive tab changes only its own leaf, not the active view or sibling sessions.
+    // One pane of a split tab is renamed alone: the tab and its siblings keep their names.
+    await actions(`${tabId}:${second}`);
+    await ui.getByRole("menuitem", { name: "Rename", exact: true }).click();
+    await ui.getByLabel("Name", { exact: true }).fill("Side notes");
+    await ui.getByRole("button", { name: "Save", exact: true }).click();
+    await expect.poll(() => paneName(tabId, second)).toBe("Side notes");
+    expect(splitTab().name).toBe("Renamed on desktop");
+    expect(paneName(tabId, paneId)).toBeUndefined();
+    await expect(tab(`${tabId}:${second}`)).toContainText("Side notes");
     await actions(`${tabId}:${second}`);
     await ui.getByRole("menuitemradio", { name: "OpenCode", exact: true }).click();
     await expect

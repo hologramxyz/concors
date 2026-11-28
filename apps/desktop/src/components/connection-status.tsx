@@ -44,7 +44,7 @@ export function ConnectionStatus({ state, endpoint, onReconnect }: ConnectionSta
         >
           <span
             aria-hidden="true"
-            className={cn("size-1.5 rounded-full", DOT_CLASS[tone])}
+            className={cn("size-[5px] rounded-full", DOT_CLASS[tone])}
             role="status"
           />
           <span className="text-foreground">{label}</span>

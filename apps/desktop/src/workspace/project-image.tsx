@@ -15,6 +15,13 @@ export function ProjectImage({
 }) {
   const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
+  // The sidebar tile's corner, scaled down with the tile: a theme with rounder corners would
+  // otherwise turn a small tile into a circle.
+  const radius = `min(var(--radius-sm), ${size * 0.15}px)`;
+  // Below the 14px chip a fixed letter crowds the tile and the folder looks small beside tiles,
+  // so there both follow the tile: the letter as the 20px sidebar tile has it (12px, 0.6 of the
+  // tile), and the folder drawn at the box's own size.
+  const small = size < 14;
   return (
     <span
       className="relative flex shrink-0 items-center justify-center"
@@ -25,14 +32,19 @@ export function ProjectImage({
       {(!loaded || failed) &&
         (isGit ? (
           <span
-            className={`flex size-full items-center justify-center rounded-sm bg-sidebar-accent font-semibold text-sidebar-foreground ${size < 20 ? "text-[10px]" : "text-xs"}`}
+            className={`flex size-full items-center justify-center bg-sidebar-accent font-semibold text-sidebar-foreground ${small ? "" : size < 20 ? "text-[10px]" : "text-xs"}`}
+            style={{ borderRadius: radius, ...(small ? { fontSize: size * 0.6 } : {}) }}
           >
-            {projectInitial(name)}
+            {/* Trimmed to the letter's cap height, so the letter itself is centred, not its line:
+                the font's ascent and descent would leave a capital above the middle. */}
+            <span className="[text-box:trim-both_cap_alphabetic]">{projectInitial(name)}</span>
           </span>
         ) : (
           <Folder
-            className="text-muted-foreground"
-            style={{ width: size * 0.8, height: size * 0.8 }}
+            className="shrink-0 text-muted-foreground"
+            style={
+              small ? { width: size, height: size } : { width: size * 0.8, height: size * 0.8 }
+            }
           />
         ))}
       {source && !failed && (
@@ -43,7 +55,8 @@ export function ProjectImage({
           referrerPolicy="no-referrer"
           onLoad={() => setLoaded(true)}
           onError={() => setFailed(true)}
-          className={`absolute inset-0 size-full rounded-sm object-contain ${loaded ? "" : "opacity-0"}`}
+          className={`absolute inset-0 size-full object-contain ${loaded ? "" : "opacity-0"}`}
+          style={{ borderRadius: radius }}
         />
       )}
     </span>
